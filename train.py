@@ -44,7 +44,7 @@ wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
-dataset = 'openwebtext'
+dataset = "openwebtext"
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
@@ -68,8 +68,28 @@ lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
+
+
+def get_best_device():
+    if torch.cuda.is_available():
+        device_count = torch.cuda.device_count()
+        if device_count > 0:
+            # Get device with most free memory
+            max_free_mem = 0
+            best_device = 0
+            for i in range(device_count):
+                free_mem = torch.cuda.get_device_properties(i).total_memory - torch.cuda.memory_allocated(i)
+                if free_mem > max_free_mem:
+                    max_free_mem = free_mem
+                    best_device = i
+            return f'cuda:{best_device}'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return 'mps'
+    return 'cpu'
+
+
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = get_best_device()  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -263,14 +283,14 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+        # if wandb_log:
+        #     wandb.log({
+        #         "iter": iter_num,
+        #         "train/loss": losses['train'],
+        #         "val/loss": losses['val'],
+        #         "lr": lr,
+        #         "mfu": running_mfu*100, # convert to percentage
+        #     })
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
