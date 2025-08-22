@@ -17,7 +17,9 @@ comes up with a better simple Python solution I am all ears.
 import sys
 from ast import literal_eval
 
+# print(f"args {len(sys.argv)}")
 for arg in sys.argv[1:]:
+    # print(f"arg-loop {arg}")
     if '=' not in arg:
         # assume it's the name of a config file
         assert not arg.startswith('--')
@@ -31,6 +33,8 @@ for arg in sys.argv[1:]:
         assert arg.startswith('--')
         key, val = arg.split('=')
         key = key[2:]
+        # print(f"Splitted key value pair {key}: {val}")
+        # print("globals", globals())
         if key in globals():
             try:
                 # attempt to eval it it (e.g. if bool, number, or etc)
@@ -43,5 +47,7 @@ for arg in sys.argv[1:]:
             # cross fingers
             print(f"Overriding: {key} = {attempt}")
             globals()[key] = attempt
+        elif key == 'f': # Workaround for executing on Marius' laptop :D
+            pass
         else:
             raise ValueError(f"Unknown config key: {key}")
