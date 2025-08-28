@@ -36,7 +36,9 @@ meta_pkl = "meta.pkl"
 # Character-level n-gram size for datasets that use char/ngram tokenization (1 keeps legacy behavior)
 ngram_size = 1
 # Effective batch tokens per optimizer step: batch_size * grad_accum_steps * block_size
+# number of blocks that shall be processed as a unit/batch
 batch_size = 8
+# number of tokens of a single block
 block_size = 256
 grad_accum_steps = 1
 

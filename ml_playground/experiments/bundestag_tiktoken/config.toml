@@ -78,7 +78,7 @@ always_save_checkpoint = false
 # Random seed for reproducibility (data shuffling, init, sampling).
 seed = 1337
 # Compute device backend: "cuda" (NVIDIA), "mps" (Apple Silicon), or "cpu".
-device = "mps"
+device = "cpu"
 # Numeric precision for tensors and parameters; affects speed/memory vs. stability/accuracy.
 dtype = "float32"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
