@@ -691,6 +691,19 @@ def _resolve_and_load_configs(
     except Exception as e:
         raise SystemExit(f"Experiment config invalid or not found at {cfg_path}: {e}")
 
+    # --- Developer override layer ---
+    # Project home is parent of ml_playground
+    project_home = Path(__file__).resolve().parent.parent
+    override_path = project_home / ".ldres" / "etc" / "ml_playground" / "experiments" / exp / "config.toml"
+    if override_path.exists():
+        try:
+            override_raw: dict[str, Any] = _read_toml_dict(override_path)
+            # Merge override config last (highest precedence)
+            config_raw = _deep_merge_dicts(config_raw, override_raw)
+        except Exception as e:
+            print(f"Warning: Could not read developer override config at {override_path}: {e}")
+    # --- End developer override layer ---
+
     return cfg_path, config_raw, defaults_raw
 
 

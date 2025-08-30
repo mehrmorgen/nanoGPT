@@ -215,3 +215,21 @@ top_k = 200
 top_p = 0.95
 num_samples = 1
 ```
+
+# Layered Configuration
+
+The configuration system supports three layers, merged in order of increasing precedence:
+
+1. **Default config**: `ml_playground/experiments/default_config.toml` (base settings for all experiments)
+2. **Experiment config**: `ml_playground/experiments/<experiment>/config.toml` (settings for a specific experiment)
+3. **Developer override config**: `.ldres/etc/ml_playground/experiments/<experiment>/config.toml` (custom overrides, outside version control)
+
+All three layers are merged using a deep merge strategy, so values in the developer override config take precedence over experiment and default configs. This allows developers to keep personal or machine-specific settings separate from the main codebase.
+
+**Project home** is the parent directory of `ml_playground`. The `.ldres` folder should be placed there.
+
+**Example override path:**
+```
+<project_home>/.ldres/etc/ml_playground/experiments/<experiment>/config.toml
+```
+If this file exists, its settings will override those in the experiment and default configs for `<experiment>`.
