@@ -105,7 +105,8 @@ def test_train_bundestag_char_quick(
     monkeypatch.setenv(
         "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
     )
-    main(["train", "bundestag_char"])  # should run few iterations and save checkpoints
+    with pytest.raises(SystemExit, match="0"):
+        main(["train", "bundestag_char"])  # should run few iterations and save checkpoints
     # Check for expected artifacts
     assert (out_dir / "ckpt_last.pt").exists() or (out_dir / "ckpt.pt").exists()
     assert (out_dir / "ckpt_best.pt").exists()
@@ -121,10 +122,12 @@ def test_sample_bundestag_char_quick(
     monkeypatch.setenv(
         "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
     )
-    main(["train", "bundestag_char"])  # produce checkpoint
+    with pytest.raises(SystemExit, match="0"):
+        main(["train", "bundestag_char"])  # produce checkpoint
     # Now sample with small settings
     monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    main(["sample", "bundestag_char"])  # should not raise and print some text
+    with pytest.raises(SystemExit, match="0"):
+        main(["sample", "bundestag_char"])  # should not raise and print some text
 
 
 def test_loop_bundestag_char_quick(
@@ -136,12 +139,7 @@ def test_loop_bundestag_char_quick(
         "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
     )
     monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    # Skip the real preparer; training uses tmp_dataset directly
-    monkeypatch.setattr(
-        "ml_playground.datasets.PREPARERS",
-        {"bundestag_char": lambda: None},
-        raising=False,
-    )
-    main(["loop", "bundestag_char"])  # end-to-end pipeline
+    with pytest.raises(SystemExit, match="0"):
+        main(["loop", "bundestag_char"])  # end-to-end pipeline
     # Check that training produced checkpoints in the designated directory
     assert (out_dir / "ckpt_best.pt").exists()

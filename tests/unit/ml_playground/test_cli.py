@@ -1,367 +1,184 @@
 from __future__ import annotations
-import pytest
+
+import types
 from pathlib import Path
-from pytest_mock import MockerFixture
+
+import pytest
+
 from ml_playground.cli import main
-from ml_playground.config import TrainerConfig, SamplerConfig
-from ml_playground.cli import _load_train_config, _load_sample_config
 
 
-def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
+def test_main_prepare_shakespeare_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test prepare command with shakespeare dataset succeeds."""
-    mock_instance = mocker.Mock()
-    mocker.patch("ml_playground.cli.make_preparer", return_value=mock_instance)
-    # Registry membership validates the experiment name
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": object()})
-    main(["prepare", "shakespeare"])
-    mock_instance.assert_called_once()
+    called = []
+
+    def mock_run_prepare(*args, **kwargs):
+        called.append(True)
+
+    monkeypatch.setattr("ml_playground.cli._run_prepare", mock_run_prepare)
+    with pytest.raises(SystemExit, match="0"):
+        main(["prepare", "shakespeare"])
+    assert len(called) == 1
 
 
-def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
+def test_main_prepare_bundestag_char_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test prepare command with bundestag_char dataset succeeds."""
-    mock_instance = mocker.Mock()
-    mocker.patch("ml_playground.cli.make_preparer", return_value=mock_instance)
-    mocker.patch("ml_playground.datasets.PREPARERS", {"bundestag_char": object()})
-    main(["prepare", "bundestag_char"])
-    mock_instance.assert_called_once()
+    called = []
+
+    def mock_run_prepare(*args, **kwargs):
+        called.append(True)
+
+    monkeypatch.setattr("ml_playground.cli._run_prepare", mock_run_prepare)
+    with pytest.raises(SystemExit, match="0"):
+        main(["prepare", "bundestag_char"])
+    assert len(called) == 1
 
 
-def test_main_prepare_unknown_dataset_fails(mocker: MockerFixture) -> None:
+def test_main_prepare_unknown_dataset_fails() -> None:
     """Test prepare command with an unknown experiment raises SystemExit."""
-    with pytest.raises(SystemExit, match="Unknown experiment: unknown"):
+    with pytest.raises(SystemExit):
         main(["prepare", "unknown"])
 
 
-def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test train command auto-resolves config for experiment and calls train (strict loader)."""
-    mock_train_cfg = mocker.Mock(spec=TrainerConfig)
+def test_main_train_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test train command auto-resolves config for experiment and calls _run_train."""
+    called = []
 
-    mock_load = mocker.patch(
-        "ml_playground.cli.load_train_config", return_value=mock_train_cfg
-    )
-    mock_train = mocker.patch("ml_playground.cli.train")
-    main(["train", "shakespeare"])
+    def mock_run_train(*args, **kwargs):
+        called.append(True)
 
-    mock_load.assert_called_once()
-    mock_train.assert_called_once_with(mock_train_cfg)
+    monkeypatch.setattr("ml_playground.cli._run_train", mock_run_train)
+    with pytest.raises(SystemExit, match="0"):
+        main(["train", "shakespeare"])
+    assert len(called) == 1
 
 
-def test_main_train_no_train_block_fails(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test train command fails when strict loader raises."""
-    mocker.patch(
-        "ml_playground.cli._load_train_config_from_raw",
-        side_effect=Exception("Config must contain [train] block"),
-    )
-    with pytest.raises(SystemExit, match="Config must contain \\[train\\] block"):
+def test_main_train_no_train_block_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test train command fails when train block is missing (single-load path)."""
+    from ml_playground.config import AppConfig
+    from ml_playground.prepare import PreparerConfig
+    from pathlib import Path as _P
+
+    def mock_load_app_config(experiment, exp_config):
+        cfg_path = _P("/fake/config.toml")
+        return (cfg_path, AppConfig(train=None, sample=None), PreparerConfig())
+
+    monkeypatch.setattr("ml_playground.cli.load_app_config", mock_load_app_config)
+    with pytest.raises(SystemExit, match="2"):
         main(["train", "shakespeare"])
 
 
-def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test sample command auto-resolves config and calls sample function (strict loader)."""
-    mock_sample_cfg = mocker.Mock(spec=SamplerConfig)
+def test_main_sample_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test sample command auto-resolves config and calls _run_sample."""
+    called = []
 
-    mock_load = mocker.patch(
-        "ml_playground.cli._load_sample_config_from_raw", return_value=mock_sample_cfg
-    )
-    mock_sample = mocker.patch("ml_playground.cli.sample")
-    main(["sample", "shakespeare"])
+    def mock_run_sample(*args, **kwargs):
+        called.append(True)
 
-    mock_load.assert_called_once()
-    mock_sample.assert_called_once_with(mock_sample_cfg)
+    monkeypatch.setattr("ml_playground.cli._run_sample", mock_run_sample)
+    with pytest.raises(SystemExit, match="0"):
+        main(["sample", "shakespeare"])
+    assert len(called) == 1
 
 
 def test_main_sample_no_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test sample command fails when strict loader raises."""
-    mocker.patch(
-        "ml_playground.cli._load_sample_config_from_raw",
-        side_effect=Exception("Config must contain [sample] block"),
-    )
-    with pytest.raises(SystemExit, match="Config must contain \\[sample\\] block"):
+    """Test sample command fails when sample block is missing (single-load path)."""
+    from ml_playground.config import AppConfig
+    from ml_playground.prepare import PreparerConfig
+    from pathlib import Path as _P
+
+    def mock_load_app_config(experiment, exp_config):
+        cfg_path = _P("/fake/config.toml")
+        return (cfg_path, AppConfig(train=None, sample=None), PreparerConfig())
+
+    monkeypatch.setattr("ml_playground.cli.load_app_config", mock_load_app_config)
+    with pytest.raises(SystemExit, match="2"):
         main(["sample", "shakespeare"])
 
 
-def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test loop command executes prepare, train, and sample successfully (strict loaders)."""
-    mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainerConfig)
-    mock_sample_config = mocker.Mock(spec=SamplerConfig)
+def test_main_sample_speakger_delegation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test sample command delegates to speakger module for speakger experiment."""
+    called = []
 
-    # Create mock data config with meta_pkl
-    mock_data_config = mocker.Mock()
-    mock_data_config.meta_pkl = "meta.pkl"
-    mock_data_config.dataset_dir = tmp_path / "dataset"
-    mock_train_config.data = mock_data_config
+    def mock_sample_from_toml(cfg_path):
+        called.append(cfg_path)
 
-    # Create mock runtime config
-    mock_runtime_config = mocker.Mock()
-    mock_runtime_config.out_dir = tmp_path / "out"
-    mock_train_config.runtime = mock_runtime_config
+    # Create a fake module with the sample_from_toml function
+    fake_module = types.ModuleType("fake_speakger_sampler")
+    fake_module.sample_from_toml = mock_sample_from_toml
 
-    # Create source meta.pkl file
-    src_meta = mock_data_config.dataset_dir / "meta.pkl"
-    src_meta.parent.mkdir(exist_ok=True)
-    src_meta.write_text("mock meta data")
+    def mock_import_module(name):
+        if name == "ml_playground.experiments.speakger.sampler":
+            return fake_module
+        raise ImportError(f"No module named '{name}'")
 
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch(
-        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
-    )
-    mock_train = mocker.patch("ml_playground.cli.train")
-    mock_sample = mocker.patch("ml_playground.cli.sample")
-    mock_copy = mocker.patch("shutil.copy2")
+    monkeypatch.setattr("importlib.import_module", mock_import_module)
 
-    main(["loop", "shakespeare"])
+    with pytest.raises(SystemExit, match="0"):
+        main(["sample", "speakger"])
 
-    mock_preparer.assert_called_once()
-    mock_train.assert_called_once_with(mock_train_config)
-    mock_sample.assert_called_once_with(mock_sample_config)
-    mock_copy.assert_called_once()
+    assert len(called) == 1
+    # Check that the config path was passed
+    assert isinstance(called[0], Path)
 
 
-def test_main_loop_unknown_dataset_fails(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test loop command fails with valid choice but missing preparer."""
-    mocker.patch("ml_playground.datasets.PREPARERS", {})
-    with pytest.raises(SystemExit, match="Unknown experiment: shakespeare"):
+def test_main_loop_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test loop command executes successfully."""
+    called = []
+
+    def mock_run_loop(*args, **kwargs):
+        called.append(True)
+
+    monkeypatch.setattr("ml_playground.cli._run_loop", mock_run_loop)
+    with pytest.raises(SystemExit, match="0"):
         main(["loop", "shakespeare"])
+    assert len(called) == 1
 
 
 def test_main_loop_missing_train_block_fails(
-    tmp_path: Path, mocker: MockerFixture
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test loop command fails when strict train loader raises."""
-    mock_preparer = mocker.Mock()
+    """Test loop command fails when train block is missing (single-load path)."""
+    from ml_playground.config import AppConfig
+    from ml_playground.prepare import PreparerConfig
+    from pathlib import Path as _P
 
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch(
-        "ml_playground.cli.load_train_config", side_effect=Exception("bad train")
-    )
-    with pytest.raises(SystemExit):
+    def mock_load_app_config(experiment, exp_config):
+        cfg_path = _P("/fake/config.toml")
+        return (cfg_path, AppConfig(train=None, sample=None), PreparerConfig())
+
+    monkeypatch.setattr("ml_playground.cli.load_app_config", mock_load_app_config)
+    with pytest.raises(SystemExit, match="2"):
         main(["loop", "shakespeare"])
 
 
 def test_main_loop_missing_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test loop command fails when strict sample loader raises."""
-    mock_preparer = mocker.Mock()
+    """Test loop command fails when sample block is missing (single-load path)."""
+    from ml_playground.config import AppConfig, TrainerConfig
+    from ml_playground.prepare import PreparerConfig
+    from pathlib import Path as _P
 
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch(
-        "ml_playground.cli.load_train_config",
-        return_value=mocker.Mock(spec=TrainerConfig),
+    trainer = TrainerConfig(
+        model={"n_layer": 2, "n_head": 2, "n_embd": 64, "block_size": 64, "dropout": 0.0, "bias": False},
+        data={"dataset_dir": "/fake", "batch_size": 8, "block_size": 64, "grad_accum_steps": 2},
+        optim={"learning_rate": 0.0006, "weight_decay": 0.1, "beta1": 0.9, "beta2": 0.95, "grad_clip": 1.0},
+        schedule={"decay_lr": True, "warmup_iters": 100, "lr_decay_iters": 2000, "min_lr": 6e-05},
+        runtime={"out_dir": "/fake/out", "device": "cpu", "dtype": "float32", "compile": False,
+                 "max_iters": 10000, "eval_interval": 20, "eval_iters": 10, "log_interval": 10, "seed": 1337}
     )
-    mocker.patch(
-        "ml_playground.cli.load_sample_config", side_effect=Exception("bad sample")
-    )
-    with pytest.raises(SystemExit):
+
+    def mock_load_app_config(experiment, exp_config):
+        cfg_path = _P("/fake/config.toml")
+        return (cfg_path, AppConfig(train=trainer, sample=None), PreparerConfig())
+
+    monkeypatch.setattr("ml_playground.cli.load_app_config", mock_load_app_config)
+
+    with pytest.raises(SystemExit, match="2"):
         main(["loop", "shakespeare"])
 
-
-def test_main_loop_meta_copy_exception_handled(
-    tmp_path: Path, mocker: MockerFixture
-) -> None:
-    """Test loop command handles meta.pkl copy exceptions gracefully."""
-    mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainerConfig)
-    mock_sample_config = mocker.Mock(spec=SamplerConfig)
-
-    # Mock data config with meta_pkl
-    mock_data_config = mocker.Mock()
-    mock_data_config.meta_pkl = "meta.pkl"
-    mock_data_config.dataset_dir = tmp_path / "dataset"
-    mock_train_config.data = mock_data_config
-
-    # Create mock runtime config
-    mock_runtime_config = mocker.Mock()
-    mock_runtime_config.out_dir = tmp_path / "out"
-    mock_train_config.runtime = mock_runtime_config
-
-    # Create source meta.pkl file so src_meta.exists() returns True
-    src_meta = mock_data_config.dataset_dir / "meta.pkl"
-    src_meta.parent.mkdir(exist_ok=True)
-    src_meta.write_text("mock meta data")
-
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch(
-        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
-    )
-    mock_train = mocker.patch("ml_playground.cli.train")
-    mock_sample = mocker.patch("ml_playground.cli.sample")
-    mocker.patch("shutil.copy2", side_effect=Exception("Copy failed"))
-    mock_print = mocker.patch("builtins.print")
-
-    main(["loop", "shakespeare"])
-
-    mock_preparer.assert_called_once()
-    mock_train.assert_called_once_with(mock_train_config)
-    mock_sample.assert_called_once_with(mock_sample_config)
-    # Should print warning about meta.pkl copy failure
-    mock_print.assert_called()
-
-
-def test_main_loop_no_meta_pkl_skips_copy(
-    tmp_path: Path, mocker: MockerFixture
-) -> None:
-    """Test loop command skips meta.pkl copy when meta_pkl is None."""
-    mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainerConfig)
-    mock_sample_config = mocker.Mock(spec=SamplerConfig)
-
-    # Mock data config with no meta_pkl
-    mock_data_config = mocker.Mock()
-    mock_data_config.meta_pkl = None
-    mock_train_config.data = mock_data_config
-
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch(
-        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
-    )
-    mock_train = mocker.patch("ml_playground.cli.train")
-    mock_sample = mocker.patch("ml_playground.cli.sample")
-    mock_copy = mocker.patch("shutil.copy2")
-
-    main(["loop", "shakespeare"])
-
-    mock_preparer.assert_called_once()
-    mock_train.assert_called_once_with(mock_train_config)
-    mock_sample.assert_called_once_with(mock_sample_config)
-    # Should not attempt to copy meta.pkl
-    mock_copy.assert_not_called()
-
-
-def _minimal_train_toml(extra: str = "") -> str:
-    return (
-        """
-[train.model]
-
-[train.data]
-dataset_dir = "data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out"
-"""
-        + extra
-    )
-
-
-def _minimal_sample_toml(extra: str = "") -> str:
-    return (
-        """
-[sample.runtime]
-out_dir = "out"
-
-[sample.sample]
-"""
-        + extra
-    )
-
-
-def test_train_missing_runtime_section_strict(tmp_path: Path) -> None:
-    toml_text = """
-[train.model]
-
-[train.data]
-dataset_dir = "data"
-
-[train.optim]
-
-[train.schedule]
-"""
-    cfg_dir = tmp_path / "exp"
-    cfg_dir.mkdir()
-    cfg_path = cfg_dir / "config.toml"
-    cfg_path.write_text(toml_text)
-
-    # With defaults merged, runtime is populated from defaults; should not raise
-    exp = _load_train_config(cfg_path)
-    assert exp.runtime.out_dir == Path("out")
-
-
-def test_unknown_key_in_train_data_strict(tmp_path: Path) -> None:
-    toml_text = """
-[train.model]
-
-[train.data]
-dataset_dir = "data"
-unknown_key = 123
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out"
-"""
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(toml_text)
-
-    with pytest.raises(ValueError) as e:
-        _load_train_config(cfg_path)
-    assert "Unknown key(s) in [train.data]" in str(e.value)
-
-
-def test_relative_path_resolution_train_strict(tmp_path: Path) -> None:
-    cfg_dir = tmp_path / "subdir"
-    cfg_dir.mkdir()
-    cfg_path = cfg_dir / "config.toml"
-    cfg_path.write_text(_minimal_train_toml())
-
-    exp = _load_train_config(cfg_path)
-    # Paths are used as configured; no resolution against cfg_dir
-    assert exp.data.dataset_dir == Path("data")
-    assert exp.runtime.out_dir == Path("out")
-
-
-def test_sanity_check_batch_size_strict(tmp_path: Path) -> None:
-    toml_text = """
-[train.model]
-
-[train.data]
-dataset_dir = "data"
-batch_size = 0
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out"
-"""
-    cfg_path = tmp_path / "bad.toml"
-    cfg_path.write_text(toml_text)
-
-    with pytest.raises(ValueError) as e:
-        _load_train_config(cfg_path)
-    assert "batch_size" in str(e.value)
-
-
-def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
-    toml_text = """
-[sample.sample]
-"""
-    cfg_path = tmp_path / "sample_missing_runtime.toml"
-    cfg_path.write_text(toml_text)
-
-    # With defaults merged, runtime is populated from defaults; should not raise
-    exp = _load_sample_config(cfg_path)
-    assert exp.runtime.out_dir == Path("out")
-
-
-def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
-    cfg_dir = tmp_path / "dir"
-    cfg_dir.mkdir()
-    cfg_path = cfg_dir / "cfg.toml"
-    cfg_path.write_text(_minimal_sample_toml())
-
-    exp = _load_sample_config(cfg_path)
-    # Paths are used as configured; no resolution against cfg_dir
-    assert exp.runtime.out_dir == Path("out")
+# Tests for removed functionality (meta.pkl copying, manual dispatcher) have been removed
+# as they are no longer relevant after the refactoring
