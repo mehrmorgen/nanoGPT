@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, Dict, Tuple
 import pickle
+import re
 from array import array
 from timeit import default_timer as timer
-from ml_playground.prepare import PreparerConfig
+from ml_playground.prepare import PreparerConfig, seed_text_file
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
@@ -39,16 +40,21 @@ class BundestagCharPreparer(_PreparerProto):
 
         # Inline legacy prepare logic
         input_file_path = ds_dir / "input.txt"
-        if not input_file_path.exists():
-            raise FileNotFoundError(
-                f"Missing dataset at {input_file_path}; provide an input.txt with your corpus"
-            )
+        bundled = Path(__file__).parent / "input.txt"
+        candidates = [
+            Path("/datasets/Bundestag.csv"),
+            ds_dir / "input.txt",
+            exp_dir / "page1.txt",
+            bundled,
+        ]
+        seed_text_file(input_file_path, candidates)
 
         # Perform a memory-efficient two-pass preparation:
         # 1) Scan to collect token set and total token count (so we can split train/val).
         # 2) Build vocab (stoi/itos) and stream-encode tokens writing binary files in chunks.
         # This avoids loading the entire file or large Python lists into memory.
-        # Read n-gram size from experiment config if available
+        # Read tokenizer mode and n-gram size from experiment config if available
+        mode: str = "char"
         n: int = 1
         try:
             cfg_path = exp_dir / "config.toml"
@@ -61,12 +67,19 @@ class BundestagCharPreparer(_PreparerProto):
                     _tr = _raw.get("train")
                     if isinstance(_tr, dict):
                         _dt = _tr.get("data")
-                        if isinstance(_dt, dict) and "ngram_size" in _dt:
-                            n = int(_dt.get("ngram_size", 1))
+                        if isinstance(_dt, dict):
+                            tok = _dt.get("tokenizer")
+                            if isinstance(tok, str):
+                                mode = tok.strip().lower()
+                            if "ngram_size" in _dt:
+                                n = int(_dt.get("ngram_size", 1))
         except Exception:
+            mode = "char"
             n = 1
         if n < 1:
             n = 1
+        if mode not in {"char", "word"}:
+            mode = "char"
 
         # First pass: gather token set and total token count with progress reporting.
         token_set: set[str] = set()
@@ -79,13 +92,57 @@ class BundestagCharPreparer(_PreparerProto):
         except Exception:
             total_bytes = None
 
-        print(f"[prepare] First pass: scanning {input_file_path} for tokens...")
+        print(
+            f"[prepare] First pass: scanning {input_file_path} for tokens (mode={mode})..."
+        )
         start_time = timer()
         last_report = start_time
         report_interval_seconds = 5.0
         processed_bytes = 0
 
-        if n <= 1:
+        if mode == "word":
+            pat = re.compile(r"\S+")
+            with input_file_path.open("rb") as f:
+                tail = ""
+                while True:
+                    chunk_bytes = f.read(chunk_size)
+                    if not chunk_bytes:
+                        break
+                    processed_bytes = f.tell()
+                    chunk = chunk_bytes.decode("utf-8", errors="ignore")
+                    seq = tail + chunk
+                    matches = list(pat.finditer(seq))
+                    # If last match ends at end of seq and last char is non-whitespace, carry it as tail
+                    carry_len = 0
+                    if (
+                        matches
+                        and matches[-1].end() == len(seq)
+                        and (len(seq) > 0 and not seq[-1].isspace())
+                    ):
+                        carry_len = matches[-1].end() - matches[-1].start()
+                    usable = matches[:-1] if carry_len > 0 else matches
+                    for m in usable:
+                        tok = m.group(0)
+                        token_set.add(tok)
+                        total_tokens += 1
+                    tail = seq[-carry_len:] if carry_len > 0 else ""
+                    now = timer()
+                    if now - last_report >= report_interval_seconds:
+                        last_report = now
+                        if total_bytes:
+                            pct = processed_bytes * 100.0 / total_bytes
+                            print(
+                                f"[prepare] scan progress: {processed_bytes}/{total_bytes} bytes ({pct:.1f}%), tokens_seen={len(token_set)}"
+                            )
+                        else:
+                            print(
+                                f"[prepare] scan progress: bytes_processed={processed_bytes}, tokens_seen={len(token_set)}"
+                            )
+                # flush remaining tail as a token if non-empty
+                if tail:
+                    token_set.add(tail)
+                    total_tokens += 1
+        elif n <= 1:
             # Use binary reads for accurate byte progress, decode for token extraction
             with input_file_path.open("rb") as f:
                 while True:
@@ -190,7 +247,68 @@ class BundestagCharPreparer(_PreparerProto):
         processed_tokens = 0
 
         with tmp_train.open("wb") as train_fh, tmp_val.open("wb") as val_fh:
-            if n <= 1:
+            if mode == "word":
+                pat = re.compile(r"\S+")
+                with input_file_path.open("rb") as f:
+                    tail = ""
+                    while True:
+                        chunk_bytes = f.read(chunk_size)
+                        if not chunk_bytes:
+                            break
+                        chunk = chunk_bytes.decode("utf-8", errors="ignore")
+                        seq = tail + chunk
+                        matches = list(pat.finditer(seq))
+                        carry_len = 0
+                        if (
+                            matches
+                            and matches[-1].end() == len(seq)
+                            and (len(seq) > 0 and not seq[-1].isspace())
+                        ):
+                            carry_len = matches[-1].end() - matches[-1].start()
+                        usable = matches[:-1] if carry_len > 0 else matches
+                        for m in usable:
+                            tok = m.group(0)
+                            idx = stoi.get(tok)
+                            if idx is None:
+                                continue
+                            processed_tokens += 1
+                            if train_written < train_target:
+                                train_buf.append(idx)
+                                train_written += 1
+                                if len(train_buf) >= buf_size:
+                                    _flush_buf(train_buf, train_fh, "train")
+                            else:
+                                val_buf.append(idx)
+                                val_written += 1
+                                if len(val_buf) >= buf_size:
+                                    _flush_buf(val_buf, val_fh, "val")
+                        tail = seq[-carry_len:] if carry_len > 0 else ""
+                        now = timer()
+                        if now - last_report >= report_interval_seconds:
+                            last_report = now
+                            pct = (
+                                (processed_tokens / total_tokens * 100.0)
+                                if total_tokens
+                                else 0.0
+                            )
+                            print(
+                                f"[prepare] encode progress: tokens_processed={processed_tokens}, train={train_written}, val={val_written}, {pct:.1f}%"
+                            )
+                    # flush remaining tail
+                    if tail:
+                        idx = stoi.get(tail)
+                        if idx is not None:
+                            processed_tokens += 1
+                            if train_written < train_target:
+                                train_buf.append(idx)
+                                train_written += 1
+                            else:
+                                val_buf.append(idx)
+                                val_written += 1
+                # flush remaining buffers
+                _flush_buf(train_buf, train_fh, "train")
+                _flush_buf(val_buf, val_fh, "val")
+            elif n <= 1:
                 with input_file_path.open("rb") as f:
                     while True:
                         chunk_bytes = f.read(chunk_size)
@@ -274,16 +392,19 @@ class BundestagCharPreparer(_PreparerProto):
         )
 
         # Atomically write meta and rename temp bins to final names
+        kind = "word" if mode == "word" else ("char" if n == 1 else "char_ngram")
         meta = {
             "meta_version": 1,
-            "kind": "char" if n == 1 else "char_ngram",
+            "kind": kind,
             "dtype": dtype_str,
             "stoi": stoi,
             "itos": itos,
             "vocab_size": vocab_size,
         }
-        if n != 1:
+        if mode != "word" and n != 1:
             meta["ngram_size"] = n
+        if mode == "word":
+            meta["token_sep"] = " "
 
         # write meta to temp and replace atomically
         with tmp_meta.open("wb") as fw:
