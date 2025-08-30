@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.cli import main
+from ml_playground.cli import main, _load_train_config, _load_sample_config
 
 
 def test_main_prepare_shakespeare_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -180,5 +180,139 @@ def test_main_loop_missing_sample_block_fails(
     with pytest.raises(SystemExit, match="2"):
         main(["loop", "shakespeare"])
 
-# Tests for removed functionality (meta.pkl copying, manual dispatcher) have been removed
-# as they are no longer relevant after the refactoring
+
+
+
+
+
+def _minimal_train_toml(extra: str = "") -> str:
+    return (
+        """
+[train.model]
+
+[train.data]
+dataset_dir = "data"
+
+[train.optim]
+
+[train.schedule]
+
+[train.runtime]
+out_dir = "out"
+"""
+        + extra
+    )
+
+
+def _minimal_sample_toml(extra: str = "") -> str:
+    return (
+        """
+[sample.runtime]
+out_dir = "out"
+
+[sample.sample]
+"""
+        + extra
+    )
+
+
+def test_train_missing_runtime_section_strict(tmp_path: Path) -> None:
+    toml_text = """
+[train.model]
+
+[train.data]
+dataset_dir = "data"
+
+[train.optim]
+
+[train.schedule]
+"""
+    cfg_dir = tmp_path / "exp"
+    cfg_dir.mkdir()
+    cfg_path = cfg_dir / "config.toml"
+    cfg_path.write_text(toml_text)
+
+    # With defaults merged, runtime is populated from defaults; should not raise
+    exp = _load_train_config(cfg_path)
+    assert exp.runtime.out_dir == Path("out")
+
+
+def test_unknown_key_in_train_data_strict(tmp_path: Path) -> None:
+    toml_text = """
+[train.model]
+
+[train.data]
+dataset_dir = "data"
+unknown_key = 123
+
+[train.optim]
+
+[train.schedule]
+
+[train.runtime]
+out_dir = "out"
+"""
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text(toml_text)
+
+    with pytest.raises(ValueError) as e:
+        _load_train_config(cfg_path)
+    assert "Unknown key(s) in [train.data]" in str(e.value)
+
+
+def test_relative_path_resolution_train_strict(tmp_path: Path) -> None:
+    cfg_dir = tmp_path / "subdir"
+    cfg_dir.mkdir()
+    cfg_path = cfg_dir / "config.toml"
+    cfg_path.write_text(_minimal_train_toml())
+
+    exp = _load_train_config(cfg_path)
+    # Paths are used as configured; no resolution against cfg_dir
+    assert exp.data.dataset_dir == Path("data")
+    assert exp.runtime.out_dir == Path("out")
+
+
+def test_sanity_check_batch_size_strict(tmp_path: Path) -> None:
+    toml_text = """
+[train.model]
+
+[train.data]
+dataset_dir = "data"
+batch_size = 0
+
+[train.optim]
+
+[train.schedule]
+
+[train.runtime]
+out_dir = "out"
+"""
+    cfg_path = tmp_path / "bad.toml"
+    cfg_path.write_text(toml_text)
+
+    with pytest.raises(ValueError) as e:
+        _load_train_config(cfg_path)
+    assert "batch_size" in str(e.value)
+
+
+def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
+    toml_text = """
+[sample.sample]
+"""
+    cfg_path = tmp_path / "sample_missing_runtime.toml"
+    cfg_path.write_text(toml_text)
+
+    # With defaults merged, runtime is populated from defaults; should not raise
+    exp = _load_sample_config(cfg_path)
+    assert exp.runtime.out_dir == Path("out")
+
+
+def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
+    cfg_dir = tmp_path / "dir"
+    cfg_dir.mkdir()
+    cfg_path = cfg_dir / "cfg.toml"
+    cfg_path.write_text(_minimal_sample_toml())
+
+    exp = _load_sample_config(cfg_path)
+    # Paths are used as configured; no resolution against cfg_dir
+    assert exp.runtime.out_dir == Path("out")
