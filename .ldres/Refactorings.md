@@ -36,8 +36,8 @@ Pre-commit hooks automatically run `make quality` during commits, so manual invo
 - **P14** – Plan for `mutants/` directory management 🔄 (small; mutmut removed ✅)
 - **P15** – Consolidate Python cache directories 🔄 (small, duplicate of P10; tool configs ✅)
 - **P16** – Reorganize `ml_playground/` root utilities into subpackages 🔄 (large, do last)
-- **P17** – Import compliance: remove re-exports and relative imports in `__init__.py` 🔄 (high)
-- **P18** – Consolidate LIT integration modules and docs 🔄 (medium)
+- **P17** – Import compliance: remove re-exports and relative imports in `__init__.py` ✅ (high)
+- **P18** – Consolidate LIT integration modules and docs ✅ (medium)
 
 ---
 
