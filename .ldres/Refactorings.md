@@ -609,17 +609,23 @@ from ml_playground.<package> import ...
 
 ### P18. Consolidate LIT integration modules and docs
 
-**Status:** 🔄 Planned (2025-09-30).
+**Status:** ✅ Completed (2025-09-30).
 
 **Objective**: Keep a single canonical LIT integration module and align docs.
 
 **Scope:**
-
 - Prefer `ml_playground.analysis.lit.integration` as canonical.
 - Remove `ml_playground/analysis/lit_integration.py` (legacy duplicate) and update references.
 - Update `docs/LIT.md` Make targets and invocations to the canonical module.
 
-**Commit guidance:** `refactor(analysis): consolidate LIT integration; update docs/LIT.md`
+**Completed:**
+- ✅ Removed legacy `ml_playground/analysis/lit_integration.py` file (241 lines)
+- ✅ Kept canonical `ml_playground/analysis/lit/integration.py` (273 lines)  
+- ✅ Updated public API policy test to remove forbidden import check for legacy file
+- ✅ Verified Makefile targets already use canonical module
+- ✅ No docs updates needed - docs already reference correct paths
+
+**Commit**: `refactor(analysis): consolidate LIT integration; remove legacy duplicate`
 
 ### P15. Consolidate Python cache directories (`.mypy_cache/`, `.ruff_cache/`, etc.)
 
