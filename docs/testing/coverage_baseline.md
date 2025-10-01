@@ -1,12 +1,16 @@
 # Coverage Baseline
 
-_Last updated: 2025-10-01_
+Last updated: 2025-10-02
 
 This document captures the current automated test coverage for the `ml_playground` package and describes how to regenerate the reports. Use it to prioritize work that pushes statement and branch coverage towards 100%.
 
 ---
 
-## Generating the baseline
+## Quick workflow recap
+
+1. Run `make coverage-report` from the project root (UV-managed environment active).
+2. Inspect the terminal summary and open `.cache/coverage/htmlcov/index.html` for interactive drill-down.
+3. Extract module-level metrics from `.cache/coverage/coverage.json` when updating this baseline.
 
 - **Prerequisites**
   - Run inside the project root with the UV-managed virtual environment available.
@@ -33,7 +37,7 @@ The table below lists modules below 90% statement coverage, extracted from `.cac
 | Module | Statements | Missing | Coverage |
 | --- | ---: | ---: | ---: |
 | `ml_playground/training/ema.py` | 16 | 8 | 40.00% |
-| `ml_playground/training/checkpointing/service.py` | 63 | 27 | 54.22% |
+| `ml_playground/training/checkpointing/service.py` | 63 | 20 | 66.27% |
 | `ml_playground/data_pipeline/preparer.py` | 83 | 49 | 33.66% |
 | `ml_playground/models/core/inference.py` | 43 | 18 | 56.14% |
 | `ml_playground/training/loop/runner.py` | 136 | 25 | 78.92% |
