@@ -38,7 +38,6 @@ The modules below fell under 90% statement coverage when `make coverage-report` 
 `.cache/coverage/coverage.json`):
 
 - **`ml_playground/training/ema.py`** — statements: 16, missing: 8, coverage: 40.00%.
-- **`ml_playground/training/checkpointing/service.py`** — statements: 63, missing: 20, coverage: 66.27%.
 - **`ml_playground/data_pipeline/preparer.py`** — statements: 83, missing: 49, coverage: 33.66%.
 - **`ml_playground/training/loop/runner.py`** — statements: 136, missing: 25, coverage: 78.92%.
 - **`ml_playground/core/logging_protocol.py`** — statements: 9, branch misses only, coverage: 76.47%.
