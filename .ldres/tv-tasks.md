@@ -36,10 +36,10 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
-### Open · tv-2025-10-03:PR?? · Reproducible builds epic
+### Open · tv-2025-10-03:PR37 · Reproducible builds epic
 
-- **Summary**: Draft and land the reproducible-buildsroadmap capturing UV lockfiles, deterministic
-  coverage, container parity, and environment logging.
+- **Summary**: Compile a decision brief on reproducible builds, synthesizing coverage-badge findings,
+  lockfile options, deterministic coverage strategies, and environment parity trade-offs.
 - **Branch**: `docs/reproducible-build-epic`
 - **Priority**: P0
 - **Size**: M
@@ -55,8 +55,8 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   - Commits:
     - `docs(roadmap): outline reproducible build initiative`
       (`docs/roadmap/reproducible-builds.md`, `.ldres/tv-tasks.md` cross-reference)
-- **PR**: Title `docs: propose reproducible build roadmap`; body covering Summary, Testing (`make quality`),
-  Checklist (stakeholder sign-off, issue links).
+- **PR**: `<https://github.com/mehrmorgen/nanoGPT/pull/37>` — Title `docs(roadmap): reproducible builds epic`;
+  body covering Summary, Testing (`make quality`), Checklist.
 
 ### Open · tv-2025-10-03:PR?? · Merge no-mock branch into master
 

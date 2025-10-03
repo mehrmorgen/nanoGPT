@@ -1,83 +1,101 @@
-# Reproducible Builds Epic
+# Reproducible Builds Decision Brief
 
-## Problem Statement
+## Why This Exists
 
-Although our current workflow enforces quality gates via `make quality`, repeated runs of the
-full suite can yield non-deterministic outcomes. Variance stems from sources such as RNG
-initialization, sampling order, dependency resolution, and environment drift between local
-machines and CI runners. This reduces trust in coverage metrics, complicates triage, and allows
-regressions to slip past in apparently "green" pipelines.
+Recent work on the coverage badge (`coverage-badge-rebase`, PR #35) exposed gaps in our ability to
+recreate identical results between macOS laptops and GitHub Actions. Differences in the
+`sample_batch()` path, checkpoint retention heuristics, and tokenizer doubles led to inconsistent
+coverage artifacts despite identical source revisions (`5bcb32c`, `258ac39`). The badge remains
+deferred in `/.ldres/tv-tasks.md` until we can make deterministic claims.
 
-## Goals
+This brief aggregates what we already learned, key unknowns, and industry practices so we can decide
+which investments unlock reproducible workflows for ml_playground.
 
-- Capture an auditable record of dependencies, environment variables, and toolchain versions for
-every run across local development and CI.
-- Ensure repeated executions of `make quality` (and subordinate targets) produce bitwise-stable
-artifacts, including coverage reports, badge outputs, mutation logs, and checkpoints.
-- Standardize containerized and local execution paths so CI accurately mirrors developer
-workstations.
-- Provide fast feedback on drift, flagging non-deterministic outcomes in CI dashboards.
+## Current Signals from the Codebase
 
-## Scope & Deliverables
+- **Tests now model realistic collaborators**: Coverage fixes introduced deterministic tokenizer
+  stand-ins (`tests/integration/test_datasets_shakespeare.py`, commit `5bcb32c1`) and filesystem
+  scaffolding for LIT integration tests. These changes show that removing monkeypatching improves
+  determinism but requires richer fixtures.
+- **Checkpoint management still mutates state**: `CheckpointManager` keeps in-memory lists that were
+  deduplicated to avoid retention flapping, yet we do not persist the retention policy to disk.
+- **Seed usage is uneven**: Experiment configs reference reproducibility seeds, but there is no
+  enforced policy for CLI overrides or for PyTorch/CUDA deterministic flags (`tests/conftest.py`
+  sets a seed, yet data loaders or sampling paths may still diverge).
+- **Environment capture is minimal**: `make quality` surfaces pass/fail only. We do not log Python
+  version, UV version, or CPU/GPU capabilities alongside results, making drift difficult to spot.
+- **Dependency resolution is implicit**: We rely on `uv` to materialize environments, but no
+  lockfile is committed. Contributors may resolve slightly different dependency graphs.
 
-1. **Lockfiles and Dependency Capture**
-   - Adopt UV's lockfile support end-to-end (`uv.lock`) and ensure Docker/CI pulls from the same
-     resolved versions.
-   - Store lockfiles in version control and refresh them via scripted flows to capture updates.
+## Decision Areas & Options
 
-2. **Deterministic Coverage Pipeline**
-   - Audit the coverage generation steps and remove sources of randomness (e.g., seed RNG,
-     freeze test traversal order).
-   - Produce a reproducible badge artifact by standardizing coverage data post-processing.
+### 1. Dependency Capture (uv)
 
-3. **Container Parity & Tooling**
-   - Produce a canonical container image or devcontainer definition aligned with the lockfile.
-   - Document instructions for local use of the image to run the full suite identically to CI.
+- **Status quo**: No `uv.lock`; developers run `uv sync` locally. _Risk_: transitive packages differ
+  across machines.
+- **Lockfile enforced (recommended)**: Commit `uv.lock`, require `uv sync --locked`, and add CI check
+  ensuring lockfile freshness. Reference: "How to use a uv lockfile for reproducible Python
+  environments" (PyDevTools Handbook, 2024).
+- **Hybrid**: Maintain lockfile for core dependencies but allow opt-in extras for experiments. Needs
+  policy documentation.
 
-4. **Environment Logging**
-   - Capture structured metadata (Python version, UV version, OS, GPU availability, environment
-     variables) for each run.
-   - Expose metadata via CLI flag or config file for future automation.
+### 2. Execution Parity (Local vs CI)
 
-5. **Randomness Policy**
-   - Define guidance for RNG seeding and state management across training, sampling, and evaluation
-     scripts.
-   - Bake seed management into templates and CLI parameters.
+- **Native-only**: Keep relying on macOS/Linux differences. _Observed issue_: badge pipeline diverged
+  when `sample_batch()` explored a path unique to Linux.
+- **Container or devcontainer**: Provide a Dockerfile/Devcontainer that consumes the lockfile so
+  GitHub Actions and local runs share the same base image. Docker documents using
+  `SOURCE_DATE_EPOCH` and deterministic timestamps for reproducible builds (Docker Docs, 2024).
+- **UV-only parity**: Document exact `uvx` commands and environment variables; cheaper but still
+  subject to host OS quirks.
 
-6. **Governance & Guardrails**
-   - Establish CI checks comparing current run metadata against a known-good snapshot.
-   - Provide developer documentation on the reproducible workflow and expectations prior to
-     merging branches.
+### 3. Coverage & Artifact Determinism
 
-## Risks & Mitigations
+- **Test-level seeding**: Continue seeding fixtures and ensure helper doubles expose deterministic
+  metadata (e.g., tokenizer `name`, `vocab_size`). Already partially in place (`5bcb32c1`).
+- **Run-level seeding**: Standardize a seed pipeline (Python, NumPy, PyTorch, CUDA, Dataloader) per
+  PyTorch reproducibility guidance (PyTorch Docs, 2025). Enforce via helper that raises if the seed
+  is unset.
+- **Artifact normalization**: Normalize coverage XML/JSON ordering and timestamps; consider storing
+  derived badges as deterministic SVG built with fixed timestamps (`SOURCE_DATE_EPOCH`).
 
-- **Tooling Drift**: Lockfiles may fall out of sync if manual upgrades bypass scripted flows.
-  _Mitigation_: Add CI check ensuring lockfile hash matches `uv` resolution and document refresher
-  workflow.
+### 4. Randomness & Scheduling Policy
 
-- **Performance Impact**: Additional logging and checks could slow down CI.
-  _Mitigation_: Perform deterministic coverage only on scheduled/nightly jobs, keeping smoke suites
-  fast.
+- **Ad-hoc**: Each experiment chooses its own RNG story (today's default).
+- **Central policy (preferred)**: Provide utilities to request deterministic or stochastic modes.
+  PyTorch recommends toggling `torch.backends.cudnn.deterministic` and `benchmark` flags depending on
+  needs (PyTorch Docs, 2025). Document how we interpret "deterministic enough" for ml_playground.
+- **Hybrid**: Deterministic by default in CI; allow stochastic mode locally via flag.
 
-- **Adoption Complexity**: Developers may resist container workflows.
-  _Mitigation_: Provide fallback scripts using native UV commands and clear quick-start docs.
+### 5. Environment Telemetry & Governance
 
-- **Seed Management**: Enforced RNG seeding could hide legitimate stochastic bugs.
-  _Mitigation_: Offer opt-out flags with documented rationale and log when non-deterministic mode is
-  requested.
+- **Minimal logging**: Keep relying on standard CI output (current state).
+- **Metadata artifact**: Emit JSON alongside each `make quality` run capturing Python/UV versions,
+  OS, CPU/GPU, `SOURCE_DATE_EPOCH`, git SHA, and lockfile hash. Compare against last known baseline to
+  flag drift.
+- **Policy enforcement**: Gating merges on telemetry comparison may be overkill initially; consider a
+  reporting phase first.
 
-## Acceptance Criteria
+## Open Questions & Unknowns
 
-- Lockfiles (`uv.lock`, container definitions) are versioned and referenced by both local and CI
-  tooling.
-- `make quality` produces identical coverage outputs across repeated runs on CI.
-- Metadata capture is automatically collected and surfaced in CI logs or artifacts.
-- A documented checklist exists for new experiments covering seed policy and environment capture.
-- QA sign-off on container parity by running the suite locally and in CI with matching results.
+- How strict do we need determinism? Bitwise equality, or functional parity within tolerances?
+- What is the appetite for container-based workflows among contributors?
+- How will mutation testing interact with deterministic requirements (nightly vs PR gating)?
+- Can we safely backfill lockfiles without breaking ongoing experiment work?
 
-## Next Steps
+## Recommended Experiments
 
-1. Roadmap review with team stakeholders; gather feedback and adjust priorities.
-2. Draft implementation tickets for each scoped deliverable.
-3. Update `.ldres/tv-tasks.md` with roadmap alignment and cross-links.
-4. Begin lockfile enforcement work once roadmap is approved.
+1. **Lockfile dry run**: Generate `uv lock` from `master`, exercise `uv sync --locked` locally and CI.
+2. **Coverage reproducibility spike**: Run `make coverage-test` twice on macOS and once in GitHub
+   Actions, comparing artifacts to quantify divergence.
+3. **Telemetry prototype**: Capture environment JSON and attach it to a PR run to validate reporting.
+4. **RNG policy draft**: Enumerate required seeds and flags, then run smoke tests to ensure no
+   regression.
+
+## References
+
+- PyDevTools Handbook — "How to use a uv lockfile for reproducible Python environments", 2024.
+- Docker Docs — "Reproducible builds with GitHub Actions", 2024 (SOURCE_DATE_EPOCH guidance).
+- PyTorch Docs — "Reproducibility", 2025 (seeding and deterministic algorithm notes).
+- Internal: `coverage-badge-rebase` branch commits `5bcb32c1`, `258ac39`; deferred task
+  `tv-2025-10-03:PR35` in `/.ldres/tv-tasks.md`.
