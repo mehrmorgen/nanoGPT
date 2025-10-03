@@ -2,11 +2,13 @@
 
 ## Why This Exists
 
-Recent work on the coverage badge (`coverage-badge-rebase`, PR #35) exposed gaps in our ability to
-recreate identical results between macOS laptops and GitHub Actions. Differences in the
-`sample_batch()` path, checkpoint retention heuristics, and tokenizer doubles led to inconsistent
-coverage artifacts despite identical source revisions (`5bcb32c`, `258ac39`). The badge remains
-deferred in `/.ldres/tv-tasks.md` until we can make deterministic claims.
+Recent work on the coverage badge (`coverage-badge-rebase`,
+[PR #35](https://github.com/mehrmorgen/nanoGPT/pull/35)) exposed gaps in our ability to recreate
+identical results between macOS laptops and GitHub Actions. Differences in the `sample_batch()`
+path, checkpoint retention heuristics, and tokenizer doubles led to inconsistent coverage artifacts
+despite identical source revisions (`5bcb32c`, `258ac39`). The badge remains deferred in
+[`/.ldres/tv-tasks.md`](../../.ldres/tv-tasks.md#deferred--tv-2025-10-03pr35--stabilize-coverage-badge-workflow)
+until we can make deterministic claims.
 
 This brief aggregates what we already learned, key unknowns, and industry practices so we can decide
 which investments unlock reproducible workflows for ml_playground.
@@ -34,8 +36,9 @@ which investments unlock reproducible workflows for ml_playground.
 - **Status quo**: No `uv.lock`; developers run `uv sync` locally. _Risk_: transitive packages differ
   across machines.
 - **Lockfile enforced (recommended)**: Commit `uv.lock`, require `uv sync --locked`, and add CI check
-  ensuring lockfile freshness. Reference: "How to use a uv lockfile for reproducible Python
-  environments" (PyDevTools Handbook, 2024).
+  ensuring lockfile freshness. Reference:
+  ["How to use a uv lockfile for reproducible Python environments"](https://pydevtools.com/handbook/how-to/how-to-use-a-uv-lockfile-for-reproducible-python-environments/)
+  (PyDevTools Handbook, 2024).
 - **Hybrid**: Maintain lockfile for core dependencies but allow opt-in extras for experiments. Needs
   policy documentation.
 
@@ -44,8 +47,9 @@ which investments unlock reproducible workflows for ml_playground.
 - **Native-only**: Keep relying on macOS/Linux differences. _Observed issue_: badge pipeline diverged
   when `sample_batch()` explored a path unique to Linux.
 - **Container or devcontainer**: Provide a Dockerfile/Devcontainer that consumes the lockfile so
-  GitHub Actions and local runs share the same base image. Docker documents using
-  `SOURCE_DATE_EPOCH` and deterministic timestamps for reproducible builds (Docker Docs, 2024).
+  GitHub Actions and local runs share the same base image. Docker documents using `SOURCE_DATE_EPOCH`
+  and deterministic timestamps for reproducible builds
+  ([Docker Docs, 2024](https://docs.docker.com/build/ci/github-actions/reproducible-builds/)).
 - **UV-only parity**: Document exact `uvx` commands and environment variables; cheaper but still
   subject to host OS quirks.
 
@@ -54,10 +58,12 @@ which investments unlock reproducible workflows for ml_playground.
 - **Test-level seeding**: Continue seeding fixtures and ensure helper doubles expose deterministic
   metadata (e.g., tokenizer `name`, `vocab_size`). Already partially in place (`5bcb32c1`).
 - **Run-level seeding**: Standardize a seed pipeline (Python, NumPy, PyTorch, CUDA, Dataloader) per
-  PyTorch reproducibility guidance (PyTorch Docs, 2025). Enforce via helper that raises if the seed
-  is unset.
+  PyTorch reproducibility guidance
+  ([PyTorch Docs, 2025](https://pytorch.org/docs/stable/notes/randomness.html)). Enforce via helper
+  that raises if the seed is unset.
 - **Artifact normalization**: Normalize coverage XML/JSON ordering and timestamps; consider storing
-  derived badges as deterministic SVG built with fixed timestamps (`SOURCE_DATE_EPOCH`).
+  derived badges as deterministic SVG built with fixed timestamps (`SOURCE_DATE_EPOCH`) aligned with
+  the [Reproducible Builds Definition](https://reproducible-builds.org/docs/definition/).
 
 ### 4. Randomness & Scheduling Policy
 
@@ -94,8 +100,10 @@ which investments unlock reproducible workflows for ml_playground.
 
 ## References
 
-- PyDevTools Handbook — "How to use a uv lockfile for reproducible Python environments", 2024.
-- Docker Docs — "Reproducible builds with GitHub Actions", 2024 (SOURCE_DATE_EPOCH guidance).
-- PyTorch Docs — "Reproducibility", 2025 (seeding and deterministic algorithm notes).
+- [PyDevTools Handbook — "How to use a uv lockfile for reproducible Python environments" (2024)](https://pydevtools.com/handbook/how-to/how-to-use-a-uv-lockfile-for-reproducible-python-environments/).
+- [Docker Docs — "Reproducible builds with GitHub Actions" (2024)](https://docs.docker.com/build/ci/github-actions/reproducible-builds/).
+- [PyTorch Docs — "Reproducibility" (2025)](https://pytorch.org/docs/stable/notes/randomness.html).
+- [Reproducible Builds Project — best practices and definition](https://reproducible-builds.org/docs/).
+- [SLSA Framework — Supply-chain Levels for Software Artifacts](https://slsa.dev/spec/v1.0) (alternative compliance lens).
 - Internal: `coverage-badge-rebase` branch commits `5bcb32c1`, `258ac39`; deferred task
-  `tv-2025-10-03:PR35` in `/.ldres/tv-tasks.md`.
+  `tv-2025-10-03:PR35` in [`/.ldres/tv-tasks.md`](../../.ldres/tv-tasks.md#deferred--tv-2025-10-03pr35--stabilize-coverage-badge-workflow).
