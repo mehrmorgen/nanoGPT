@@ -8,14 +8,15 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Guiding Principles
 
-- **Quality gates and TDD discipline.** `make quality` (ruff, ruff-format, pyright, mypy, pytest) runs before every
-  commit, and functional work begins with a failing test before adding the minimal implementation so that each change
-  stays paired with its tests and leaves the branch in a runnable state (see
+- **Quality gates and TDD discipline.** `uvx --from . ci-tasks quality` (pre-commit bundle: ruff, formatters, pyright,
+  mypy, pytest slices) runs before every commit, and functional work begins with a failing test before adding the minimal
+  implementation so that each change stays paired with its tests and leaves the branch in a runnable state (see
   [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
   [Testing Standards](TESTING.md)).
-- **UV-first, Make-driven workflows.** Use the provided Make targets for setup, quality gates, and runtime commands, and
-  invoke tooling through UV instead of ad-hoc pip or manual venv activation to keep environments reproducible (see the
-  [repository README](../README.md#policy) and [Developer Guidelines](Readme.md#quick-start)).
+- **UV-first Typer CLIs.** Use the `env-tasks`, `test-tasks`, and `ci-tasks` Typer apps published via UVX for setup,
+  quality gates, and runtime commands instead of ad-hoc pip, manual venv activation, or removed Make targets. This keeps
+  environments reproducible and mirrors CI behavior (see the [repository README](../README.md#policy) and
+  [Developer Guidelines](Readme.md#quick-start)).
 - **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
   global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
   strict Pydantic models forbid extras and enforce cross-field invariants (see
