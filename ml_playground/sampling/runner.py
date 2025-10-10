@@ -68,6 +68,8 @@ class Sampler:
 
         self.model = self._load_checkpoint_and_model()
         self.tokenizer = self._setup_tokenizer()
+        self._prompt_tensor: torch.Tensor | None = None
+        self._cached_prompt_ids: tuple[int, ...] | None = None
 
     def _setup_torch_env(self) -> None:
         """Seed global torch RNG state and prepare autocast context."""
@@ -96,15 +98,12 @@ class Sampler:
         checkpoint = self._load_checkpoint()
         model = self._init_model_from_checkpoint(checkpoint)
         if getattr(self.runtime_cfg, "compile", False):
-            # Prefer DI-provided compile hook if available; otherwise use torch.compile if present.
             compile_fn = getattr(self.cfg, "compile_model_fn", None)
-            if compile_fn is not None:
-                model = cast(GPT, compile_fn(model))  # type: ignore[call-arg]
-            else:
-                try:
-                    model = cast(GPT, torch.compile(model))  # type: ignore[attr-defined]
-                except AttributeError:
-                    pass
+            if compile_fn is None:
+                raise ValueError(
+                    "SamplerConfig.compile_model_fn must be provided when runtime.compile is True"
+                )
+            model = cast(GPT, compile_fn(model))  # type: ignore[call-arg]
         return model
 
     def _load_checkpoint(self) -> Checkpoint:
@@ -170,23 +169,47 @@ class Sampler:
         if not start_ids:
             return
 
-        x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[
-            None, ...
-        ]
+        prompt_ids = tuple(start_ids)
+        device = torch.device(self.runtime_cfg.device)
+        if (
+            self._prompt_tensor is None
+            or self._cached_prompt_ids != prompt_ids
+            or self._prompt_tensor.device != device
+        ):
+            self._prompt_tensor = torch.as_tensor(
+                start_ids, dtype=torch.long, device=device
+            ).unsqueeze(0)
+            self._cached_prompt_ids = prompt_ids
+
+        x = self._prompt_tensor
 
         self.logger.info("Sampling...")
         with torch.no_grad():
             with self.ctx:
-                for k in range(self.sample_cfg.num_samples):
+                for _ in range(self.sample_cfg.num_samples):
                     y = self.model.generate(
                         x,
                         self.sample_cfg.max_new_tokens,
                         temperature=self.sample_cfg.temperature,
                         top_k=self.sample_cfg.top_k,
                     )
-                    output = self.tokenizer.decode(y[0].tolist())
+                    output_tensor = y[0].detach().cpu()
+                    output = self._decode_tokens(output_tensor)
                     self.logger.info(output)
                     self.logger.info("---------------")
+
+    def _decode_tokens(self, token_tensor: torch.Tensor) -> str:
+        if token_tensor.dtype != torch.long:
+            token_tensor = token_tensor.to(torch.long)
+        if token_tensor.device.type != "cpu":
+            token_tensor = token_tensor.cpu()
+
+        decoder = getattr(self.tokenizer, "decode_tensor", None)
+        if callable(decoder):
+            return cast(str, decoder(token_tensor))
+
+        token_list = token_tensor.tolist()
+        return self.tokenizer.decode(token_list)
 
 
 def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:

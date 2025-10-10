@@ -25,7 +25,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make lint-check
+      - run: uvx --from . ci-tasks lint
 
   unit:
     name: Unit Tests
@@ -43,7 +43,21 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make unit
+      - run: |
+          mkdir -p .cache/coverage
+          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.unit
+          uv run --project . coverage run \
+            --data-file="$COVERAGE_FILE" \
+            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/unit
+          # In case coverage emitted host-suffixed shards, combine into target
+          uv run --project . coverage combine "$COVERAGE_FILE"* || true
+          ls -la .cache/coverage || true
+          test -f "$COVERAGE_FILE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fragment-unit
+          path: .cache/coverage/coverage.sqlite.unit
+          if-no-files-found: error
 
   property:
     name: Property Tests
@@ -61,7 +75,21 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make property
+      - run: |
+          mkdir -p .cache/coverage
+          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.property
+          uv run --project . coverage run \
+            --data-file="$COVERAGE_FILE" \
+            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/property
+          # In case coverage emitted host-suffixed shards, combine into target
+          uv run --project . coverage combine "$COVERAGE_FILE"* || true
+          ls -la .cache/coverage || true
+          test -f "$COVERAGE_FILE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fragment-property
+          path: .cache/coverage/coverage.sqlite.property
+          if-no-files-found: error
 
   integration:
     name: Integration Tests
@@ -79,7 +107,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make integration
+      - run: uvx --from . ci-tasks integration
 
   e2e:
     name: End-to-End Tests
@@ -97,7 +125,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make e2e
+      - run: uvx --from . ci-tasks e2e
 
   acceptance:
     name: Acceptance Tests
@@ -115,7 +143,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make acceptance
+      - run: uvx --from . ci-tasks acceptance
 
   coverage:
     name: Coverage (Unit + Property)
@@ -134,9 +162,15 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make coverage-test
-      - run: COVERAGE_FILE=$(pwd)/.cache/coverage/coverage.sqlite uv run coverage report -m --fail-under=87.00
-      - run: make coverage-report
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-fragment-unit
+          path: .cache/coverage
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-fragment-property
+          path: .cache/coverage
+      - run: uvx --from . ci-tasks coverage-report --fail-under 87
       - uses: actions/upload-artifact@v4
         if: always()
         with:

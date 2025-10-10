@@ -6,15 +6,51 @@ ______________________________________________________________________
 
 Core development practices, quality standards, and workflow for ml_playground contributors.
 
+## Guiding Principles
+
+- **Quality gates and TDD discipline.** `uvx --from . ci-tasks quality` (pre-commit bundle: ruff, formatters, pyright,
+  mypy, pytest slices) runs before every commit, and functional work begins with a failing test before adding the minimal
+  implementation so that each change stays paired with its tests and leaves the branch in a runnable state (see
+  [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
+  [Testing Standards](TESTING.md)).
+- **UV-first Typer CLIs.** Use the `env-tasks`, `test-tasks`, and `ci-tasks` Typer apps published via UVX for setup,
+  quality gates, and runtime commands instead of ad-hoc pip, manual venv activation, or removed Make targets. This keeps
+  environments reproducible and mirrors CI behavior (see the [repository README](../README.md#policy) and
+  [Developer Guidelines](Readme.md#quick-start)).
+- **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
+  global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
+  strict Pydantic models forbid extras and enforce cross-field invariants (see
+  [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
+  [`ml_playground/configuration`](../ml_playground/configuration)).
+- **Strict typing and pure, path-aware utilities.** Favor explicit type hints, `pathlib.Path` values, and deterministic,
+  side-effect-light helpers so code remains easy to reason about and resilient to filesystem drift (see
+  [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
+  [`ml_playground/core`](../ml_playground/core)).
+- **Centralized utilities over ad-hoc logic.** Reuse the shared error-handling, tokenizer, and data-preparation
+  infrastructure instead of duplicating behavior, and link to the centralized documentation when extending them (see
+  [Framework Utilities](../docs/framework_utilities.md#overview)).
+- **Deterministic, multi-layered tests.** Keep unit tests fast, isolated, and deterministic; complement them with
+  property, integration, e2e, and acceptance suites so changes are guarded at multiple levels while maintaining coverage
+  expectations (see [tests/README.md](../tests/README.md) and
+  [tests/unit/README.md](../tests/unit/README.md#principles)).
+- **Documentation with intentional abstraction.** Follow the abstraction gradient and DRY rules for README files,
+  keeping shared narratives centralized and using annotated folder trees rather than duplicating prose (see the
+  [Documentation Guidelines](DOCUMENTATION.md#abstraction-policy)).
+- **Git hygiene and reviewability.** Develop on short-lived feature branches, keep commits granular and conventional,
+  and maintain a linear, runnable history to streamline reviews and CI (see
+  [Developer Guidelines](Readme.md#core-principles-non-negotiable)).
+- **Self-contained tooling.** Run helper scripts via UV, keep them documented and explicit in their CLI contracts, and
+  avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
+
 ## Quality Gates (Mandatory)
 
 For detailed information about the centralized framework utilities, see [Framework Utilities
 Documentation](../docs/framework_utilities.md).
 
-The pre-commit hook and CI both execute `make quality`. That target expands to ruff (lint + format),
+The pre-commit hook and CI both execute `uvx --from . dev-tasks quality`. That target expands to ruff (lint + format),
 pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite. The command now runs
 pre-commit with `--jobs $(PRE_COMMIT_JOBS)`, defaulting to `min(os.cpu_count(), 8)`; override via
-`make quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
+`uvx --from . dev-tasks quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
 
 During active development you may run narrower commands to iterate quickly, for example:
 
@@ -24,16 +60,16 @@ uv run ruff check path/to/file.py
 ```
 
 When you want the convenience wrappers (parallelized pytest, cache-aware collection, etc.), use the
-Make targets directly. During tight iteration, reach for `make quality-fast` to run only the
+`dev-tasks` commands directly. During tight iteration, reach for `uvx --from . dev-tasks quality-fast` to run only the
 formatting hooks (`ruff`, `ruff-format`, `mdformat`) with the same parallelism flags before kicking
 off the heavier type and test gates:
 
 ```bash
-make coverage-report      # run property + unit suites with coverage output
-make tests-property       # property-based suites only
-make tests-unit           # deterministic unit suites
-make quality-fast         # lint/format the whole tree quickly
-make lint                 # ruff lint+format without type checking
+uvx --from . dev-tasks coverage-report      # run property + unit suites with coverage output
+uvx --from . dev-tasks property             # property-based suites only
+uvx --from . dev-tasks unit                 # deterministic unit suites
+uvx --from . dev-tasks quality-fast         # lint/format the whole tree quickly
+uvx --from . dev-tasks lint                 # ruff lint+format without type checking
 ```
 
 ## Commit Standards
@@ -64,7 +100,7 @@ make lint                 # ruff lint+format without type checking
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `make quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uvx --from . dev-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
@@ -158,7 +194,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Search tests only**:
 
   ```bash
-  rg --glob 'tests/**' "make quality"
+  rg --glob 'tests/**' "dev-tasks"
   ```
 
 ### GitHub CLI (`gh`)
@@ -232,7 +268,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Pick Make targets**:
 
   ```bash
-  awk -F: '/^[a-zA-Z0-9_-]+:/ {print $1}' Makefile | sort -u | fzf | xargs -r make
+  ./tools/dev_tasks.py --help
   ```
 
 ### Non-interactive status & logs
