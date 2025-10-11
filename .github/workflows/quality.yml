@@ -32,6 +32,14 @@ jobs:
           echo "UV_CACHE_DIR=.cache/uv" >> "$GITHUB_ENV"
           echo "PIP_CACHE_DIR=.cache/pip" >> "$GITHUB_ENV"
           echo "PRE_COMMIT_HOME=.cache/pre-commit" >> "$GITHUB_ENV"
+      - name: Prepare cache directories
+        run: |
+          mkdir -p .cache/uv
+          mkdir -p .cache/pip
+          mkdir -p .cache/pre-commit
+          mkdir -p .cache/ruff
+          mkdir -p .venv
+          mkdir -p .venv312
       - uses: actions/cache@v4
         with:
           path: |
