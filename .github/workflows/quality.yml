@@ -31,7 +31,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
       - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks lint
+      - run: uvx --from . ci-tasks quality
 
   unit:
     name: Unit Tests
