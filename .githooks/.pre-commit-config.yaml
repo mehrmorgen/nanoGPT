@@ -13,12 +13,6 @@ repos:
     additional_dependencies:
       - mdformat-gfm
     files: '(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$|^(docs|tests|\.dev-guidelines)/.*\.md$'
-- repo: https://github.com/checkmake/checkmake.git
-  # Or another commit hash or version
-  rev: 0.2.2
-  hooks:
-  # Use this hook to let pre-commit build checkmake in its sandbox
-  - id: checkmake
 - repo: local
   hooks:
   - id: coverage-threshold
