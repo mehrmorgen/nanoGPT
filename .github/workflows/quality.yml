@@ -40,6 +40,22 @@ jobs:
           key: ${{ runner.os }}-precommit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}-py${{ steps.setup-python.outputs.python-version }}
           restore-keys: |
             ${{ runner.os }}-precommit-
+      - name: Cache uv global wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+          key: ${{ runner.os }}-uvcache-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uvcache-
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Cache ruff cache
         uses: actions/cache@v4
         with:
