@@ -106,3 +106,14 @@ repos:
         echo "[vulture] OK"
     language: system
     pass_filenames: false
+  - id: acceptance
+    name: acceptance tests (quick)
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uvx --from . ci-tasks acceptance
+        echo "[acceptance] OK"
+    language: system
+    pass_filenames: false
