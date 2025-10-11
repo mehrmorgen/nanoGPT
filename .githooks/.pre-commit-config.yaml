@@ -40,20 +40,39 @@ repos:
           COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
         fi
         COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m --fail-under=87.00
+        echo "[coverage] TOTAL: $(COVERAGE_FILE=\"${COVERAGE_DIR}/coverage.sqlite\" uv run coverage report -m | tail -n 1 | awk '{print $NF}')"
     language: system
     pass_filenames: false
   - id: pyright
     name: pyright
-    entry: uv run pyright src/ml_playground
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run pyright src/ml_playground
+        echo "[pyright] OK"
     language: system
     pass_filenames: false
   - id: mypy
     name: mypy
-    entry: uv run mypy --incremental src/ml_playground
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run mypy --incremental src/ml_playground
+        echo "[mypy] OK"
     language: system
     pass_filenames: false
   - id: vulture
     name: vulture
-    entry: uv run vulture src/ml_playground --min-confidence 90
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run vulture src/ml_playground --min-confidence 90
+        echo "[vulture] OK"
     language: system
     pass_filenames: false
