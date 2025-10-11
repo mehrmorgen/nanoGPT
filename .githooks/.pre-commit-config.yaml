@@ -73,13 +73,19 @@ repos:
   rev: v1.1.387
   hooks:
   - id: pyright
-    args: [src/ml_playground]
+    args: [--ignoreexternal, src/ml_playground]
     pass_filenames: false
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.11.2
+- repo: local
   hooks:
   - id: mypy
-    args: [--incremental]
+    name: mypy
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run mypy --incremental
+    language: system
     pass_filenames: false
 - repo: https://github.com/jendrikseipp/vulture
   rev: v2.11
