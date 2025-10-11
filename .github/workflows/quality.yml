@@ -27,6 +27,11 @@ jobs:
         with:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v4
+      - name: Force cache envs for subsequent steps
+        run: |
+          echo "UV_CACHE_DIR=.cache/uv" >> "$GITHUB_ENV"
+          echo "PIP_CACHE_DIR=.cache/pip" >> "$GITHUB_ENV"
+          echo "PRE_COMMIT_HOME=.cache/pre-commit" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
         with:
           path: |
