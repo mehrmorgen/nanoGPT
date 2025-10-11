@@ -15,6 +15,36 @@ repos:
     files: '(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$|^(docs|tests|\.dev-guidelines)/.*\.md$'
 - repo: local
   hooks:
+  - id: ruff-ok
+    name: ruff (summary)
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        echo "[ruff] OK"
+    language: system
+    pass_filenames: false
+  - id: ruff-format-ok
+    name: ruff-format (summary)
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        echo "[ruff-format] OK"
+    language: system
+    pass_filenames: false
+  - id: mdformat-ok
+    name: mdformat (summary)
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        echo "[mdformat] OK"
+    language: system
+    pass_filenames: false
   - id: coverage-threshold
     name: coverage threshold (>=87.00%)
     entry: bash
