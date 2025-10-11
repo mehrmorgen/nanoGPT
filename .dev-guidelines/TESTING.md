@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Testing Standards
 
 ## Test-Driven Development (REQUIRED)
