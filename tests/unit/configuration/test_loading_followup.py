@@ -36,7 +36,7 @@ out_dir = "out/sample"
 log_interval = 7
 
 [sample.sample]
-start = "\n"
+start = "\\n"
         """,
         encoding="utf-8",
     )
