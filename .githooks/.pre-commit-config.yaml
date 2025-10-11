@@ -69,11 +69,17 @@ repos:
         uvx --from . ci-tasks e2e
     language: system
     pass_filenames: false
-- repo: https://github.com/RobertCraigie/pyright-python
-  rev: v1.1.387
+- repo: local
   hooks:
   - id: pyright
-    args: [--ignoreexternal, src/ml_playground]
+    name: pyright
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run pyright src/ml_playground
+    language: system
     pass_filenames: false
 - repo: local
   hooks:
