@@ -117,3 +117,14 @@ repos:
         echo "[acceptance] OK"
     language: system
     pass_filenames: false
+  - id: integration
+    name: integration tests (quick)
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uvx --from . ci-tasks integration
+        echo "[integration] OK"
+    language: system
+    pass_filenames: false
