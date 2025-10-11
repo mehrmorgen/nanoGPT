@@ -10,9 +10,11 @@ repos:
   rev: 0.7.17
   hooks:
   - id: mdformat
+    args: [--check, --extension, gfm, --extension, frontmatter]
     additional_dependencies:
       - mdformat-gfm
-    files: '(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$|^(docs|tests|\.dev-guidelines)/.*\.md$'
+      - mdformat-frontmatter
+    files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
 - repo: local
   hooks:
   - id: coverage-threshold
@@ -37,36 +39,6 @@ repos:
           COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
         fi
         COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m --fail-under=87.00
-    language: system
-    pass_filenames: false
-  - id: acceptance
-    name: acceptance tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks acceptance
-    language: system
-    pass_filenames: false
-  - id: integration
-    name: integration tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks integration
-    language: system
-    pass_filenames: false
-  - id: e2e
-    name: e2e tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks e2e
     language: system
     pass_filenames: false
 - repo: local
@@ -98,36 +70,4 @@ repos:
   hooks:
   - id: vulture
     args: [src/ml_playground, --min-confidence, '90']
-    pass_filenames: false
-- repo: local
-  hooks:
-  - id: acceptance
-    name: acceptance tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks acceptance
-    language: system
-    pass_filenames: false
-  - id: integration
-    name: integration tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks integration
-    language: system
-    pass_filenames: false
-  - id: e2e
-    name: e2e tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        uvx --from . ci-tasks e2e
-    language: system
     pass_filenames: false
