@@ -2,8 +2,12 @@ name: Quality Gates
 
 on:
   push:
-    branches: [ master, '**' ]
+    branches: [ master ]
   pull_request:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -24,6 +28,8 @@ jobs:
             .cache/uv
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
       - run: uv sync --all-groups --frozen
       - run: uvx --from . ci-tasks lint
 
