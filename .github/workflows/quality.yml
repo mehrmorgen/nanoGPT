@@ -16,9 +16,12 @@ jobs:
   quality:
     name: Quality (pre-commit gate)
     runs-on: ubuntu-latest
+    env:
+      PRE_COMMIT_HOME: .cache/pre-commit
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - id: setup-python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v4
@@ -30,5 +33,21 @@ jobs:
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-uv-
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: .cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}-py${{ steps.setup-python.outputs.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-precommit-
+      - name: Cache ruff cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ruff
+            .cache/ruff
+          key: ${{ runner.os }}-ruff-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-ruff-
       - run: uv sync --all-groups --frozen
       - run: uvx --from . ci-tasks quality
