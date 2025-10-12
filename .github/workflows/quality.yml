@@ -60,7 +60,7 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - run: uv sync --frozen
+      - run: uv sync --frozen --group dev --group ml
       - run: uvx --from . ci-tasks quality
       - name: Ensure coverage badges are committed
         run: |

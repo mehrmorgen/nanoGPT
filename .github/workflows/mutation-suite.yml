@@ -41,8 +41,8 @@ jobs:
           mkdir -p .cache/uv
           mkdir -p .venv
 
-      - name: Sync dependencies (dev + project)
-        run: uvx --from . env-tasks sync
+      - name: Sync dependencies (dev + ml)
+        run: uvx --from . env-tasks sync --group dev --group ml
 
       - name: Run mutation suite
         run: uvx --from . ci-tasks mutation run
