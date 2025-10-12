@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import torch
 
@@ -16,7 +17,7 @@ from ml_playground.models.core.model import GPT
 from ml_playground.training.hooks.model import initialize_model
 
 
-def test_initialize_model_creates_gpt_and_optimizer() -> None:
+def test_initialize_model_creates_gpt_and_optimizer(tmp_path: Path) -> None:
     """initialize_model should create a GPT model and optimizer."""
     cfg = TrainerConfig(
         model=ModelConfig(
@@ -28,7 +29,7 @@ def test_initialize_model_creates_gpt_and_optimizer() -> None:
             decay_lr=False, warmup_iters=0, lr_decay_iters=0, min_lr=0.0
         ),
         runtime=RuntimeConfig(
-            out_dir=".",
+            out_dir=tmp_path,
             max_iters=1,
             eval_interval=1,
             eval_iters=1,
@@ -55,7 +56,7 @@ def test_initialize_model_creates_gpt_and_optimizer() -> None:
     assert isinstance(optimizer, torch.optim.Optimizer)
 
 
-def test_initialize_model_moves_model_to_correct_device() -> None:
+def test_initialize_model_moves_model_to_correct_device(tmp_path: Path) -> None:
     """initialize_model should move the model to the configured device."""
     cfg = TrainerConfig(
         model=ModelConfig(
@@ -67,7 +68,7 @@ def test_initialize_model_moves_model_to_correct_device() -> None:
             decay_lr=False, warmup_iters=0, lr_decay_iters=0, min_lr=0.0
         ),
         runtime=RuntimeConfig(
-            out_dir=".",
+            out_dir=tmp_path,
             max_iters=1,
             eval_interval=1,
             eval_iters=1,
