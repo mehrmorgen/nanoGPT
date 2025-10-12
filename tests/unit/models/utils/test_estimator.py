@@ -10,19 +10,16 @@ def test_estimate_loss_computes_train_and_val_metrics() -> None:
 
     # Create a simple mock model that returns predictable outputs
     class MockModel(torch.nn.Module):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__()
-            self.linear = torch.nn.Linear(10, 1)
+            self.vocab_size = 10
 
         def forward(self, x, targets=None):
-            # Return logits and loss if targets provided
-            logits = self.linear(x.view(x.size(0) * x.size(1), -1)).view(
-                x.size(0), x.size(1), -1
+            logits = torch.nn.functional.one_hot(x, num_classes=self.vocab_size).to(
+                torch.float32
             )
             if targets is not None:
-                loss = torch.nn.functional.cross_entropy(
-                    logits.view(-1, logits.size(-1)), targets.view(-1)
-                )
+                loss = torch.tensor(0.5, dtype=torch.float32)
                 return logits, loss
             return logits, None
 
@@ -47,7 +44,6 @@ def test_estimate_loss_computes_train_and_val_metrics() -> None:
         batches=batches,
         eval_iters=2,
         ctx=torch.no_grad(),
-        logger=None,
     )
 
     # Should return dict with train and val losses
