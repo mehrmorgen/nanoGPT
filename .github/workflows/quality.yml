@@ -89,26 +89,110 @@ jobs:
     name: Coverage (Unit + Property)
     runs-on: ubuntu-latest
     needs: quality
+    if: ${{ always() }}
     steps:
-      - run: echo "Coverage checks executed in Quality Gates job."
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Coverage checks executed in Quality Gates job."
 
   integration-status:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: quality
+    if: ${{ always() }}
     steps:
-      - run: echo "Integration tests executed in Quality Gates job."
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Integration tests executed in Quality Gates job."
 
   e2e-status:
     name: End-to-End Tests
     runs-on: ubuntu-latest
     needs: quality
+    if: ${{ always() }}
     steps:
-      - run: echo "E2E tests executed in Quality Gates job."
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "E2E tests executed in Quality Gates job."
 
   acceptance-status:
     name: Acceptance Tests
     runs-on: ubuntu-latest
     needs: quality
+    if: ${{ always() }}
     steps:
-      - run: echo "Acceptance tests executed in Quality Gates job."
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Acceptance tests executed in Quality Gates job."
+
+  lint-status:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    needs: quality
+    if: ${{ always() }}
+    steps:
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Ruff lint executed in Quality Gates job."
+
+  property-status:
+    name: Property Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    if: ${{ always() }}
+    steps:
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Property tests executed in Quality Gates job."
+
+  unit-status:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    if: ${{ always() }}
+    steps:
+      - name: Mirror quality result
+        env:
+          UPSTREAM_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$UPSTREAM_RESULT" != "success" ]; then
+            echo "Quality job failed; see upstream logs." >&2
+            exit 1
+          fi
+          echo "Unit tests executed in Quality Gates job."
