@@ -324,10 +324,19 @@ def coverage_badge() -> None:
 
 
 @app.command()
-def quality() -> None:
+def quality(
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pre-commit arguments", metavar="PRECOMMIT_ARGS"
+    ),
+) -> None:
     """Run the full pre-commit quality gate."""
     utils.uv_run(
-        "pre-commit", "run", "--config", str(utils.PRE_COMMIT_CONFIG), "--all-files"
+        "pre-commit",
+        "run",
+        "--config",
+        str(utils.PRE_COMMIT_CONFIG),
+        "--all-files",
+        *utils.forwarded_args(args),
     )
     integration()
     acceptance()
@@ -335,7 +344,11 @@ def quality() -> None:
 
 
 @app.command("quality-fast")
-def quality_fast() -> None:
+def quality_fast(
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pre-commit arguments", metavar="PRECOMMIT_ARGS"
+    ),
+) -> None:
     """Run lint/format focused pre-commit hooks."""
     utils.uv_run(
         "pre-commit",
@@ -344,6 +357,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "ruff",
+        *utils.forwarded_args(args),
     )
     utils.uv_run(
         "pre-commit",
@@ -352,6 +366,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "ruff-format",
+        *utils.forwarded_args(args),
     )
     utils.uv_run(
         "pre-commit",
@@ -360,6 +375,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "mdformat",
+        *utils.forwarded_args(args),
     )
 
 
