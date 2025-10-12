@@ -37,6 +37,7 @@ jobs:
           mkdir -p .cache/ruff
           mkdir -p .venv
       - uses: actions/cache@v4
+        id: cache-venv
         with:
           path: |
             .venv
@@ -52,6 +53,7 @@ jobs:
             ${{ runner.os }}-precommit-
       - name: Cache uv global wheels
         uses: actions/cache@v4
+        id: cache-uv
         with:
           path: |
             .cache/uv
@@ -72,5 +74,6 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - run: uv sync --frozen
+      - if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: uv sync --frozen
       - run: uvx --from . ci-tasks quality
