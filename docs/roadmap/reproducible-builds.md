@@ -92,10 +92,10 @@ which investments unlock reproducible workflows for ml_playground.
 ## Recommended Experiments
 
 1. **Lockfile dry run**: Generate `uv lock` from `master`, exercise `uv sync --locked` locally and CI.
-2. **Coverage reproducibility spike**: Run `make coverage-test` twice on macOS and once in GitHub
+1. **Coverage reproducibility spike**: Run `make coverage-test` twice on macOS and once in GitHub
    Actions, comparing artifacts to quantify divergence.
-3. **Telemetry prototype**: Capture environment JSON and attach it to a PR run to validate reporting.
-4. **RNG policy draft**: Enumerate required seeds and flags, then run smoke tests to ensure no
+1. **Telemetry prototype**: Capture environment JSON and attach it to a PR run to validate reporting.
+1. **RNG policy draft**: Enumerate required seeds and flags, then run smoke tests to ensure no
    regression.
 
 ## References
