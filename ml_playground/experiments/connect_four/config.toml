@@ -1,0 +1,84 @@
+# Connect Four training and sampling configuration.
+
+[prepare]
+dataset_dir = "./datasets"
+
+[prepare.extras]
+num_games = 10000
+val_split = 0.1
+seed = 1337
+
+[train.model]
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 44
+dropout = 0.1
+bias = false
+
+[train.data]
+batch_size = 64
+block_size = 44
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 100
+lr_decay_iters = 5000
+min_lr = 0.0001
+
+[train.runtime]
+out_dir = "./out/connect_four"
+max_iters = 5000
+eval_interval = 100
+eval_iters = 20
+log_interval = 10
+eval_only = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[train.runtime.checkpointing]
+ckpt_last_filename = "ckpt_last.pt"
+ckpt_best_filename = "ckpt_best.pt"
+ckpt_metric = "val_loss"
+ckpt_greater_is_better = false
+ckpt_atomic = true
+ckpt_write_metadata = true
+ckpt_time_interval_minutes = 0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[sample.runtime]
+out_dir = "./out/connect_four"
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = ""
+num_samples = 1
+max_new_tokens = 1
+temperature = 0.8
+top_k = 7
