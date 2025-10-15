@@ -134,6 +134,23 @@ def handle_exception(
     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
+def _callable_name(func: Callable[..., Any]) -> str:
+    """Best-effort name resolution for arbitrary callables.
+
+    ``functools.partial`` objects and callable instances lack ``__name__`` which would
+    otherwise raise ``AttributeError`` in ``safe_call`` while logging.  Fall back to
+    the class name when a conventional function name is unavailable.
+    """
+
+    name = getattr(func, "__name__", None)
+    if isinstance(name, str):
+        return name
+    qualname = getattr(func, "__qualname__", None)
+    if isinstance(qualname, str):
+        return qualname
+    return func.__class__.__name__
+
+
 def safe_call(
     func: Callable[..., T],
     *args: Any,
@@ -146,7 +163,8 @@ def safe_call(
     try:
         return func(*args, **kwargs)
     except Exception as e:
-        logger.error(f"Error calling {func.__name__}: {e}")
+        func_name = _callable_name(func)
+        logger.error(f"Error calling {func_name}: {e}")
         logger.debug(f"Exception details: {traceback.format_exc()}")
         if default is not None:
             return default

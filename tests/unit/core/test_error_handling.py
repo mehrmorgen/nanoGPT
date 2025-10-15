@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import io
 import logging
 from pathlib import Path
@@ -68,6 +69,23 @@ def test_safe_call_success_and_defaults():
     assert safe_call(bad, 0, default=42, logger=logger) == 42
     with pytest.raises(RuntimeError):
         safe_call(bad, 0, logger=logger)
+
+
+def test_safe_call_handles_callable_without_name(caplog: pytest.LogCaptureFixture) -> None:
+    """Callable wrappers without ``__name__`` should not break safe_call logging."""
+
+    logger = logging.getLogger("ml_pg_test_callable_without_name")
+    caplog.set_level(logging.ERROR, logger=logger.name)
+
+    def boom(_: int) -> int:
+        raise RuntimeError("boom")
+
+    wrapped = functools.partial(boom, 1)
+
+    assert safe_call(wrapped, logger=logger, default=7) == 7
+
+    error_messages = [record.getMessage() for record in caplog.records]
+    assert any("partial" in message for message in error_messages)
 
 
 def test_safe_file_operation_wraps_ioerror():

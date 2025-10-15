@@ -1,0 +1,67 @@
+# Connect Four experiment configuration tuned for CPU-only quick runs.
+# Highlights:
+# - Synthetic dataset generated via random self-play (controlled via [prepare.extras]).
+# - Compact GPT model with modest context length sized to cover a full board snapshot.
+# - Conservative optimizer schedule to converge quickly on the small dataset.
+
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+
+[prepare.extras]
+num_games = 4096
+train_fraction = 0.9
+seed = 1337
+
+[train.model]
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 96
+bias = false
+dropout = 0.1
+
+[train.data]
+batch_size = 32
+block_size = 96
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.0012
+weight_decay = 0.01
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 200
+lr_decay_iters = 6000
+min_lr = 6e-5
+
+[train.runtime]
+out_dir = "./out"
+max_iters = 4000
+eval_interval = 200
+eval_iters = 20
+log_interval = 20
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+always_save_checkpoint = true
+tensorboard_enabled = true
+
+[sample.runtime]
+out_dir = "./out"
+device = "cpu"
+dtype = "float32"
+compile = false
+seed = 1337
+
+[sample.sample]
+start = ""
+num_samples = 4
+max_new_tokens = 64
+temperature = 0.9
+top_k = 7
