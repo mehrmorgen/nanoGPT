@@ -55,6 +55,7 @@ Datasets
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
 - Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at ml_playground/experiments/bundestag_char/datasets/input.txt)
 - Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
+- Connect Four (random self-play transcripts; prepared via internal ml_playground.experiments.connect_four)
 
 Workflows (high-level)
 

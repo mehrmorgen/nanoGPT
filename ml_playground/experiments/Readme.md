@@ -43,6 +43,7 @@ ml_playground/experiments/
 ├── shakespeare/                 # Tiny Shakespeare experiment
 ├── bundestag_char/              # Bundestag character-level experiment
 ├── bundestag_tiktoken/          # Bundestag BPE (tiktoken) experiment
+├── connect_four/                # Connect Four self-play experiment
 ├── bundestag_qwen15b_lora_mps/  # Qwen2.5 LoRA preset over generic integration
 └── speakger/                    # Gemma-based fine-tuning workflow (SpeakGer)
 ```
@@ -73,6 +74,10 @@ Implemented experiments (current)
   - Readme: ml_playground/experiments/bundestag_tiktoken/Readme.md
   - Config:  ml_playground/experiments/bundestag_tiktoken/config.toml
   - Prepare name: `bundestag_tiktoken`
+- connect_four — Random self-play Connect Four transcripts
+  - Readme: ml_playground/experiments/connect_four/Readme.md
+  - Config:  ml_playground/experiments/connect_four/config.toml
+  - Prepare name: `connect_four`
 - bundestag_finetuning_mps — Generic HF + PEFT LoRA finetuning integration (Apple MPS‑friendly)
   - Readme: ml_playground/experiments/bundestag_finetuning_mps/Readme.md
   - Example preset config: ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml

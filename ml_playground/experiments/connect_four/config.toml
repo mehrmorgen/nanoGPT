@@ -1,0 +1,78 @@
+# Connect Four character-level modeling experiment.
+# Lightweight configuration tuned for CPU runs.
+
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+
+[prepare.extras]
+# Number of random self-play games to simulate during preparation.
+num_games = 10000
+# Filter out trivially short transcripts.
+min_moves = 7
+# Deterministic game generation for reproducible datasets.
+seed = 42
+
+[train.model]
+# Compact GPT suitable for CPU training.
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 128
+dropout = 0.1
+bias = false
+
+[train.data]
+# Ensure block_size <= model.block_size.
+batch_size = 16
+block_size = 128
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.01
+beta1 = 0.9
+beta2 = 0.99
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 200
+lr_decay_iters = 5000
+min_lr = 0.0001
+
+[train.runtime]
+max_iters = 10000
+eval_interval = 100
+eval_iters = 20
+log_interval = 10
+seed = 42
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[train.runtime.checkpointing]
+ckpt_last_filename = "ckpt_last.pt"
+ckpt_best_filename = "ckpt_best.pt"
+ckpt_metric = "val_loss"
+ckpt_greater_is_better = false
+ckpt_atomic = true
+ckpt_write_metadata = true
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[sample.runtime]
+out_dir = "./out/samples"
+seed = 42
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = "3 4 2"
+num_samples = 5
+max_new_tokens = 20
+temperature = 0.8
+top_k = 40
