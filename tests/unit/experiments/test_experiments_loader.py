@@ -4,13 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from ml_playground.configuration.models import PreparerConfig
 import ml_playground.experiments.registry as registry
 
 
 def test_load_preparers_returns_if_already_populated():
     # Pre-populate
     registry.PREPARERS.clear()
-    registry.PREPARERS["foo"] = lambda: None
+    registry.PREPARERS["foo"] = lambda _cfg=None: None
 
     # If resources.files is called, fail the test
     def bad_files(_):  # noqa: D401
@@ -41,10 +42,20 @@ class _FakePath:
 
 
 class _FakeEntry:
-    def __init__(self, name: str, is_dir: bool, has_preparer: bool):
+    def __init__(
+        self,
+        name: str,
+        is_dir: bool,
+        has_preparer: bool,
+        *,
+        has_trainer: bool = False,
+        has_sampler: bool = False,
+    ):
         self.name = name
         self._is_dir = is_dir
         self._has_preparer = has_preparer
+        self._has_trainer = has_trainer
+        self._has_sampler = has_sampler
 
     def is_dir(self) -> bool:  # noqa: D401
         return self._is_dir
@@ -52,6 +63,10 @@ class _FakeEntry:
     def __truediv__(self, other: str):  # noqa: D401
         if other == "preparer.py":
             return _FakePath(self._has_preparer)
+        if other == "trainer.py":
+            return _FakePath(self._has_trainer)
+        if other == "sampler.py":
+            return _FakePath(self._has_sampler)
         raise AssertionError("unexpected path component")
 
 
@@ -81,7 +96,9 @@ def test_load_preparers_registers_class():
     )
     assert "expA" in registry.PREPARERS
     # Calling the registered function shouldn't raise
-    registry.PREPARERS["expA"]()
+    runner = registry.PREPARERS["expA"]
+    runner()
+    runner(PreparerConfig())
 
 
 def test_load_preparers_raises_on_import_failure():
@@ -143,7 +160,9 @@ def test_load_preparers_noarg_prepare_calls_without_args():
         resources_mod=resources_ns, import_mod=lambda name: fake_mod
     )
     assert "expNoArg" in registry.PREPARERS
-    registry.PREPARERS["expNoArg"]()
+    runner = registry.PREPARERS["expNoArg"]
+    runner()
+    runner(PreparerConfig())
     assert prepared["called"] is True
 
 
@@ -163,3 +182,35 @@ def test_load_preparers_catches_per_entry_exception():
     registry.load_preparers(resources_mod=resources_ns)
     # No registrations since second entry had no preparer
     assert registry.PREPARERS == {}
+
+
+def test_load_trainers_registers_class():
+    registry.TRAINERS.clear()
+    root = _FakeRoot([_FakeEntry("expTrain", True, False, has_trainer=True)])
+    resources_ns = SimpleNamespace(files=lambda _: root)
+
+    class Trainer:
+        def train(self):  # noqa: D401
+            return "ok"
+
+    fake_mod = SimpleNamespace(Trainer=Trainer)
+    registry.load_trainers(resources_mod=resources_ns, import_mod=lambda name: fake_mod)
+    assert "expTrain" in registry.TRAINERS
+    runner = registry.TRAINERS["expTrain"]
+    assert runner() == "ok"
+
+
+def test_load_samplers_registers_class():
+    registry.SAMPLERS.clear()
+    root = _FakeRoot([_FakeEntry("expSample", True, False, has_sampler=True)])
+    resources_ns = SimpleNamespace(files=lambda _: root)
+
+    class Sampler:
+        def sample(self):  # noqa: D401
+            return "done"
+
+    fake_mod = SimpleNamespace(Sampler=Sampler)
+    registry.load_samplers(resources_mod=resources_ns, import_mod=lambda name: fake_mod)
+    assert "expSample" in registry.SAMPLERS
+    runner = registry.SAMPLERS["expSample"]
+    assert runner() == "done"

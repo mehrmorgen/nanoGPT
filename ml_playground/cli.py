@@ -47,6 +47,31 @@ def _run_prepare_impl(
     shared: Any,
 ) -> None:
     """Run the full prepare flow for an experiment."""
+    registry.load_preparers()
+    custom = registry.PREPARERS.get(experiment)
+    if custom is not None:
+        extras = prepare_cfg.extras
+        try:
+            extras.setdefault("dataset_dir", str(shared.dataset_dir))
+        except AttributeError:
+            pass
+        try:
+            base_dir = getattr(shared, "dataset_dir", None)
+            if base_dir is not None:
+                extras.setdefault("base_dir", str(Path(base_dir).parent))
+        except (AttributeError, TypeError, ValueError):
+            pass
+        prepare_cfg.logger.info(
+            f"Running custom preparer for experiment: {experiment}"
+        )
+        report = custom(prepare_cfg)
+        messages = getattr(report, "messages", None)
+        if messages:
+            for message in messages:
+                prepare_cfg.logger.info(message)
+        prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
+        return
+
     prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
     pipeline = create_pipeline(prepare_cfg, shared)
     pipeline.run()
@@ -72,6 +97,18 @@ def _run_train_impl(
 
     train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
     _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
+
+    registry.load_trainers()
+    custom = registry.TRAINERS.get(experiment)
+    if custom is not None:
+        report = custom(train_cfg, shared)
+        messages = getattr(report, "messages", None)
+        if messages:
+            for message in messages:
+                train_cfg.logger.info(message)
+        train_cfg.logger.info(f"Trainer for {experiment} finished.")
+        _log_command_status("post-train", shared, shared.train_out_dir, train_cfg.logger)
+        return
 
     trainer = CoreTrainer(train_cfg, shared)
     trainer.run()
@@ -99,6 +136,19 @@ def _run_sample_impl(
 
     sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
     _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
+    registry.load_samplers()
+    custom = registry.SAMPLERS.get(experiment)
+    if custom is not None:
+        report = custom(sample_cfg, shared)
+        messages = getattr(report, "messages", None)
+        if messages:
+            for message in messages:
+                sample_cfg.logger.info(message)
+        sample_cfg.logger.info(f"Sampler for {experiment} finished.")
+        _log_command_status(
+            "post-sample", shared, shared.sample_out_dir, sample_cfg.logger
+        )
+        return
     sampler = Sampler(sample_cfg, shared)
     sampler.run()
     sample_cfg.logger.info(f"Sampler for {experiment} finished.")

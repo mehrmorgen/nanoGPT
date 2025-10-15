@@ -1,0 +1,95 @@
+# Connect Four experiment configuration for nanoGPT.
+#
+# This preset generates a synthetic dataset of random Connect Four games and trains
+# a compact character-level Transformer suitable for CPU machines.
+
+[prepare]
+dataset_dir = "./datasets"
+tokenizer_type = "char"
+
+[prepare.extras]
+# Number of self-play games to synthesize during preparation.
+num_games = 2000
+# Fraction of tokens routed to the training split (remainder used for validation).
+train_split = 0.9
+# Seed drives the RNG used while simulating games.
+seed = 1337
+
+[train.model]
+# Lightweight GPT backbone tuned for quick experiments.
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 128
+dropout = 0.1
+bias = false
+
+[train.data]
+# Data is encoded character-by-character. Each example packs a 6x7 board plus the
+# next move column and a newline separator (44 tokens per example).
+batch_size = 32
+block_size = 128
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.0015
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 200
+lr_decay_iters = 4000
+min_lr = 0.00015
+
+[train.runtime]
+out_dir = "./out/connect_four"
+max_iters = 20000
+eval_interval = 200
+eval_iters = 20
+log_interval = 20
+eval_only = false
+always_save_checkpoint = true
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[train.runtime.checkpointing]
+read_policy = "best"
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[sample.runtime]
+out_dir = "./out/connect_four"
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.runtime.checkpointing]
+read_policy = "best"
+
+[sample.sample]
+start = "\n"
+num_samples = 3
+max_new_tokens = 64
+temperature = 0.8
+top_k = 20
+
+[sample.extras]
+human_player = "X"
+policy = "sample"

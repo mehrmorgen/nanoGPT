@@ -32,6 +32,9 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
+from ml_playground.experiments import registry
+from ml_playground.experiments.protocol import PrepareReport, TrainReport, SampleReport
+from tests.support.config_builders import create_basic_configs
 
 runner = CliRunner()
 
@@ -216,6 +219,91 @@ def test_main_prepare_bundestag_char_success(
 
     assert result.exit_code == 0
     assert calls["prepare"] == 1
+
+
+def test_run_prepare_impl_prefers_experiment_preparer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    dataset_dir = tmp_path / "datasets"
+    dataset_dir.mkdir(parents=True)
+    shared = SharedConfig(
+        experiment="connect_four",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=dataset_dir,
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+    cfg = PreparerConfig(tokenizer_type="char")
+    captured: dict[str, PreparerConfig] = {}
+
+    def _runner(local_cfg: PreparerConfig) -> PrepareReport:
+        captured["cfg"] = local_cfg
+        assert local_cfg.extras["dataset_dir"] == str(dataset_dir)
+        assert local_cfg.extras["base_dir"] == str(dataset_dir.parent)
+        return PrepareReport(messages=("custom",))
+
+    monkeypatch.setitem(registry.PREPARERS, "connect_four", _runner)
+
+    with caplog.at_level(logging.INFO):
+        cli._run_prepare_impl("connect_four", cfg, shared.config_path, shared)
+
+    assert captured["cfg"] is cfg
+    assert "custom" in caplog.text
+
+
+def test_run_train_impl_prefers_experiment_trainer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    registry.TRAINERS.clear()
+    _, trainer_cfg, _, shared = create_basic_configs(tmp_path)
+    called: dict[str, object] = {}
+
+    def _runner(cfg: TrainerConfig, shared_cfg: SharedConfig) -> TrainReport:
+        called["cfg"] = cfg
+        called["shared"] = shared_cfg
+        return TrainReport(messages=("custom-train",))
+
+    class _FailingTrainer:
+        def __init__(self, *_args, **_kwargs) -> None:  # noqa: D401
+            raise AssertionError("CoreTrainer should not be constructed")
+
+    monkeypatch.setitem(registry.TRAINERS, "connect_four", _runner)
+    monkeypatch.setattr(cli, "CoreTrainer", _FailingTrainer)
+
+    with caplog.at_level(logging.INFO):
+        cli._run_train_impl("connect_four", trainer_cfg, shared.config_path, shared)
+
+    assert called["cfg"] is trainer_cfg
+    assert called["shared"] is shared
+    assert "custom-train" in caplog.text
+
+
+def test_run_sample_impl_prefers_experiment_sampler(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    registry.SAMPLERS.clear()
+    _, _, sample_cfg, shared = create_basic_configs(tmp_path)
+    called: dict[str, object] = {}
+
+    def _runner(cfg: SamplerConfig, shared_cfg: SharedConfig) -> SampleReport:
+        called["cfg"] = cfg
+        called["shared"] = shared_cfg
+        return SampleReport(messages=("custom-sample",))
+
+    class _FailingSampler:
+        def __init__(self, *_args, **_kwargs) -> None:  # noqa: D401
+            raise AssertionError("Sampler should not be constructed")
+
+    monkeypatch.setitem(registry.SAMPLERS, "connect_four", _runner)
+    monkeypatch.setattr(cli, "Sampler", _FailingSampler)
+
+    with caplog.at_level(logging.INFO):
+        cli._run_sample_impl("connect_four", sample_cfg, shared.config_path, shared)
+
+    assert called["cfg"] is sample_cfg
+    assert called["shared"] is shared
+    assert "custom-sample" in caplog.text
 
 
 def test_main_prepare_unknown_dataset_fails(caplog: pytest.LogCaptureFixture) -> None:
