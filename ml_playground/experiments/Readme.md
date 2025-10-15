@@ -44,6 +44,7 @@ ml_playground/experiments/
 ├── bundestag_char/              # Bundestag character-level experiment
 ├── bundestag_tiktoken/          # Bundestag BPE (tiktoken) experiment
 ├── bundestag_qwen15b_lora_mps/  # Qwen2.5 LoRA preset over generic integration
+├── connect_four/                # Connect Four synthetic move-prediction experiment
 └── speakger/                    # Gemma-based fine-tuning workflow (SpeakGer)
 ```
 
@@ -85,6 +86,10 @@ Implemented experiments (current)
   - Readme: ml_playground/experiments/speakger/Readme.md
   - Config:  ml_playground/experiments/speakger/config.toml
   - Uses dataset/integration: `gemma_finetuning_mps` (see notes in the experiment Readme)
+- connect_four — Synthetic Connect Four move prediction (Kimi K2)
+  - Readme: ml_playground/experiments/connect_four/Readme.md
+  - Config:  ml_playground/experiments/connect_four/config.toml
+  - Prepare name: `connect_four`
 
 Add a new experiment (checklist)
 

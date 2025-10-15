@@ -1,0 +1,60 @@
+[shared]
+dataset_dir = "./datasets"
+train_out_dir = "./out/connect_four"
+sample_out_dir = "./out/connect_four"
+
+[prepare]
+extras.num_games = 10000
+extras.random_seed = 1337
+
+[train.model]
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 43
+dropout = 0.1
+bias = false
+
+[train.data]
+batch_size = 16
+block_size = 43
+grad_accum_steps = 4
+tokenizer = "char"
+
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.01
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 100
+lr_decay_iters = 5000
+min_lr = 0.0001
+
+[train.runtime]
+out_dir = "./out/connect_four"
+max_iters = 10000
+eval_interval = 100
+eval_iters = 20
+log_interval = 10
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.runtime]
+out_dir = "./out/connect_four"
+device = "cpu"
+dtype = "float32"
+compile = false
+seed = 1337
+
+[sample.sample]
+start = ""
+num_samples = 5
+max_new_tokens = 1
+temperature = 1.0
+top_k = 7
