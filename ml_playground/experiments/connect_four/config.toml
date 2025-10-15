@@ -1,0 +1,79 @@
+# Connect Four training configuration.
+# This experiment treats Connect Four self-play transcripts as character sequences.
+
+[train.model]
+# Transformer depth and width tuned for medium difficulty game reasoning.
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 512
+# Light dropout to regularize against overfitting the synthetic corpus.
+dropout = 0.1
+bias = false
+
+[train.data]
+# Effective batch tokens = batch_size * grad_accum_steps * block_size.
+batch_size = 16
+block_size = 512
+grad_accum_steps = 2
+
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.99
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 500
+lr_decay_iters = 10000
+min_lr = 0.0001
+
+[train.runtime]
+max_iters = 20000
+eval_interval = 100
+eval_iters = 20
+log_interval = 50
+eval_only = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[train.runtime.checkpointing]
+ckpt_last_filename = "ckpt_last.pt"
+ckpt_best_filename = "ckpt_best.pt"
+ckpt_metric = "val_loss"
+ckpt_greater_is_better = false
+ckpt_atomic = true
+ckpt_write_metadata = true
+ckpt_time_interval_minutes = 0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[sample.runtime]
+out_dir = "./out/connect_four"
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = "[START]\n.|.|.|.|.|.|.\n.|.|.|.|.|.|.\n.|.|.|.|.|.|.\n.|.|.|.|.|.|.\n.|.|.|.|.|.|.\n.|.|.|.|.|.|."
+num_samples = 2
+max_new_tokens = 256
+temperature = 0.8
+top_k = 200
