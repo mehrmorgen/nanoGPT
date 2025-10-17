@@ -15,18 +15,46 @@ class Simulation:
         self.reflection = Reflection(self.llm)
         self.planning = Planning(self.llm)
 
+    def perceive(self, agent: Agent) -> List[str]:
+        """Generates a list of perceptions for an agent."""
+        perceptions = []
+        for other_agent in self.world.agents:
+            if (
+                other_agent.name != agent.name
+                and other_agent.location == agent.location
+            ):
+                perceptions.append(f"I saw {other_agent.name}.")
+        return perceptions
+
+    def act(self, agent: Agent, plan: str):
+        """Executes an action for an agent based on a plan."""
+        if "move" in plan.lower():
+            # Simplified action: move to a random new location
+            current_location = agent.location
+            new_location = self.world.locations[
+                (self.world.locations.index(current_location) + 1)
+                % len(self.world.locations)
+            ]
+            current_location.agents.remove(agent)
+            new_location.agents.append(agent)
+            agent.location = new_location
+            print(f"  Action: {agent.name} moved to {new_location.name}")
+
     def step(self):
         """Advances the simulation by one time step."""
         print("Simulation step...")
         for agent in self.agents:
             print(f"Processing agent: {agent.name}")
             # 1. Perceive
-            # For now, perception is not implemented.
+            perceptions = self.perceive(agent)
+            for perception in perceptions:
+                agent.memory_stream.add_memory(
+                    Memory(description=perception, importance=5)
+                )
 
             # 2. Retrieve
-            recent_memories = agent.memory_stream.get_relevant_memories(
-                ""
-            )  # Empty query for now
+            query = " ".join(perceptions)
+            recent_memories = agent.memory_stream.get_relevant_memories(query)
 
             # 3. Reflect
             if len(recent_memories) > 0:
@@ -52,4 +80,4 @@ class Simulation:
             print(f"  Hourly Plan: {hourly_plan}")
 
             # 5. Act
-            # For now, the agent does not act on the plan.
+            self.act(agent, hourly_plan)

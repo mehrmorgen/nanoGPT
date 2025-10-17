@@ -19,7 +19,13 @@ def test_simulation_step():
     world = World(locations=locations)
 
     # 2. Create agents
-    agent = Agent(name="John Doe", description="A curious explorer.")
+    agent = Agent(
+        name="John Doe",
+        description="A curious explorer.",
+        location=locations[0],
+    )
+    locations[0].agents.append(agent)
+    world.agents.append(agent)
     agent.memory_stream.add_memory(Memory(description="I saw a bird.", importance=5))
     agents = [agent]
 

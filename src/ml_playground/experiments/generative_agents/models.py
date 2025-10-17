@@ -37,7 +37,15 @@ class Agent(BaseModel):
 
     name: str
     description: str
+    location: "Location"
     memory_stream: MemoryStream = Field(default_factory=MemoryStream)
+
+
+class Action(BaseModel):
+    """An action that an agent can perform."""
+
+    name: str
+    description: str
 
 
 class Location(BaseModel):
@@ -45,9 +53,16 @@ class Location(BaseModel):
 
     name: str
     description: str
+    agents: List["Agent"] = []
+    available_actions: List[Action] = []
 
 
 class World(BaseModel):
     """The text-based world."""
 
     locations: List[Location] = []
+    agents: List[Agent] = []
+
+
+Agent.model_rebuild()
+Location.model_rebuild()
