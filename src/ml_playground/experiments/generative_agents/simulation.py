@@ -28,17 +28,20 @@ class Simulation:
 
     def act(self, agent: Agent, plan: str):
         """Executes an action for an agent based on a plan."""
-        if "move" in plan.lower():
-            # Simplified action: move to a random new location
-            current_location = agent.location
-            new_location = self.world.locations[
-                (self.world.locations.index(current_location) + 1)
-                % len(self.world.locations)
-            ]
-            current_location.agents.remove(agent)
-            new_location.agents.append(agent)
-            agent.location = new_location
-            print(f"  Action: {agent.name} moved to {new_location.name}")
+        for action in agent.location.available_actions:
+            if action.name in plan.lower():
+                if action.name == "move":
+                    # Simplified action: move to a random new location
+                    current_location = agent.location
+                    new_location = self.world.locations[
+                        (self.world.locations.index(current_location) + 1)
+                        % len(self.world.locations)
+                    ]
+                    current_location.agents.remove(agent)
+                    new_location.agents.append(agent)
+                    agent.location = new_location
+                    print(f"  Action: {agent.name} moved to {new_location.name}")
+                return
 
     def step(self):
         """Advances the simulation by one time step."""
@@ -76,7 +79,9 @@ class Simulation:
             # For simplicity, we plan on every step for now.
             daily_plan = self.planning.generate_daily_plan(agent, recent_memories)
             print(f"  Daily Plan: {daily_plan}")
-            hourly_plan = self.planning.generate_hourly_plan(agent, daily_plan)
+            hourly_plan = self.planning.generate_hourly_plan(
+                agent, daily_plan, agent.location
+            )
             print(f"  Hourly Plan: {hourly_plan}")
 
             # 5. Act

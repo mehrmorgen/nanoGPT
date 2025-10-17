@@ -1,5 +1,9 @@
 from typing import List
-from src.ml_playground.experiments.generative_agents.models import Agent, Memory
+from src.ml_playground.experiments.generative_agents.models import (
+    Agent,
+    Memory,
+    Location,
+)
 from src.ml_playground.llm import LLM
 
 
@@ -16,11 +20,13 @@ class Planning:
         prompt = self._generate_daily_plan_prompt(agent, recent_memories)
         return self.llm.generate(prompt)
 
-    def generate_hourly_plan(self, agent: Agent, high_level_plan: str) -> str:
+    def generate_hourly_plan(
+        self, agent: Agent, high_level_plan: str, location: "Location"
+    ) -> str:
         """
         Generates an hourly plan for an agent.
         """
-        prompt = self._generate_hourly_plan_prompt(agent, high_level_plan)
+        prompt = self._generate_hourly_plan_prompt(agent, high_level_plan, location)
         return self.llm.generate(prompt)
 
     def _generate_daily_plan_prompt(
@@ -40,15 +46,24 @@ Based on this, create a high-level plan for your day, with 5-8 items.
 """
         return prompt.strip()
 
-    def _generate_hourly_plan_prompt(self, agent: Agent, high_level_plan: str) -> str:
+    def _generate_hourly_plan_prompt(
+        self, agent: Agent, high_level_plan: str, location: "Location"
+    ) -> str:
         """
         Generates a prompt to break down a high-level plan into hourly plans.
         """
+        actions_str = "\n".join(
+            [f"- {a.name}: {a.description}" for a in location.available_actions]
+        )
         prompt = f"""
 You are {agent.name}.
 Your high-level plan for the day is:
 {high_level_plan}
 
-Break this down into a detailed hourly plan.
+Your current location is {location.name}.
+Here are the available actions:
+{actions_str}
+
+Choose one action and create a plan for the next hour.
 """
         return prompt.strip()
