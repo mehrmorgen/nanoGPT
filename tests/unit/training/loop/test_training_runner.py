@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
+from types import MethodType, SimpleNamespace
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import pytest
 import torch
 
 import ml_playground.training.loop.runner as runner_mod
+from ml_playground.core.error_handling import CheckpointError
 from ml_playground.training.loop.runner import TrainerDependencies
 from ml_playground.configuration.models import (
     DataConfig,
@@ -91,6 +94,30 @@ class _FakeWriter:
         pass
 
 
+class _ListLogger:
+    def __init__(self) -> None:
+        self.debugs: list[str] = []
+        self.infos: list[str] = []
+        self.warnings: list[str] = []
+        self.errors: list[str] = []
+
+    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
+        del kwargs
+        self.infos.append(message % args if args else message)
+
+    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
+        del kwargs
+        self.debugs.append(message % args if args else message)
+
+    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
+        del kwargs
+        self.warnings.append(message % args if args else message)
+
+    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
+        del kwargs
+        self.errors.append(message % args if args else message)
+
+
 @dataclass
 class _Saved:
     is_best: bool
@@ -104,19 +131,30 @@ class _FakeCkptMgr:
 
 
 def _make_cfg(
-    tmp_path: Path, *, eval_only: bool = False, max_iters: int = 2
+    tmp_path: Path,
+    *,
+    eval_only: bool = False,
+    max_iters: int = 2,
+    tensorboard_mode: str = "eval",
+    logger: Any | None = None,
+    grad_accum_steps: int = 1,
+    grad_clip: float = 0.0,
+    ema_decay: float = 0.0,
 ) -> TrainerConfig:
     out_dir = tmp_path / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
+    cfg_kwargs: dict[str, Any] = {}
+    if logger is not None:
+        cfg_kwargs["logger"] = logger
     return TrainerConfig(
         model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
-        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
+        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=grad_accum_steps),
         optim=OptimConfig(
             learning_rate=0.01,
             weight_decay=0.0,
             beta1=0.9,
             beta2=0.95,
-            grad_clip=0.0,
+            grad_clip=grad_clip,
         ),
         schedule=LRSchedule(
             decay_lr=True,
@@ -136,7 +174,8 @@ def _make_cfg(
             dtype="float32",
             compile=False,
             tensorboard_enabled=True,
-            ema_decay=0.0,
+            tensorboard_update_mode=tensorboard_mode,
+            ema_decay=ema_decay,
         ),
         hf_model=TrainerConfig.HFModelConfig(
             model_name="hf/model",
@@ -144,6 +183,7 @@ def _make_cfg(
             block_size=128,
         ),
         peft=TrainerConfig.PeftConfig(enabled=False),
+        **cfg_kwargs,
     )
 
 
@@ -164,13 +204,16 @@ def _build_deps(
     saved_hook: Callable[[Dict[str, Any]], None] | None = None,
     load_checkpoint_result: Optional[Checkpoint] = None,
     get_lr_override: Callable[[int, LRSchedule, OptimConfig], float] | None = None,
+    writer: Any | None = None,
+    raise_on_final_save: Optional[BaseException] = None,
+    propagate_exception: Optional[BaseException] = None,
 ) -> Tuple[TrainerDependencies, _FakeCkptMgr]:
     evaluation = evaluation or {}
     batches = _FakeBatches(device="cpu")
     model = _FakeModel()
     optimizer = _FakeOptimizer()
     scaler = _FakeScaler()
-    writer = _FakeWriter()
+    writer = writer or _FakeWriter()
     manager = _FakeCkptMgr()
 
     def init_batches(cfg: TrainerConfig, shared: SharedConfig) -> _FakeBatches:
@@ -228,6 +271,8 @@ def _build_deps(
         is_best: bool,
     ) -> None:
         del cfg, model, optimizer, ema, logger
+        if not is_best and raise_on_final_save is not None:
+            raise raise_on_final_save
         manager_param.saved.append(_Saved(is_best=is_best, iter_num=iter_num))
         if saved_hook is not None:
             saved_hook(
@@ -244,7 +289,10 @@ def _build_deps(
         *,
         logger: Any,
     ) -> None:
-        del cfg, shared, logger
+        del cfg, shared
+        if propagate_exception is not None:
+            raise propagate_exception
+        del logger
 
     def run_evaluation(
         cfg: TrainerConfig,
@@ -347,6 +395,310 @@ def test_trainer_updates_optimizer_lr_via_get_lr(tmp_path: Path) -> None:
     assert any(lr > 0 for _, lr in lr_calls)
     for group in trainer.optimizer.param_groups:
         assert 0.0 <= group["lr"] <= cfg.optim.learning_rate + 1e-6
+
+
+def test_trainer_tensorboard_logging_handles_writer_errors(tmp_path: Path) -> None:
+    logger = _ListLogger()
+
+    class ExplodingWriter:
+        def add_scalar(self, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+            raise RuntimeError("tensorboard disconnected")
+
+        def close(self) -> None:
+            pass
+
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        writer=ExplodingWriter(),
+    )
+
+    cfg = _make_cfg(
+        tmp_path,
+        eval_only=False,
+        max_iters=1,
+        tensorboard_mode="log",
+        logger=logger,
+    )
+    shared = _shared(tmp_path, cfg)
+
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+
+    assert any(
+        "TensorBoard logging skipped due to writer error" in msg
+        for msg in logger.debugs
+    )
+
+
+def test_trainer_warns_when_final_checkpoint_fails(tmp_path: Path) -> None:
+    logger = _ListLogger()
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        raise_on_final_save=CheckpointError(
+            "disk full",
+            reason="Test failure",
+            rationale="Ensure warning branch is exercised",
+        ),
+    )
+
+    cfg = _make_cfg(tmp_path, max_iters=0, logger=logger)
+    shared = _shared(tmp_path, cfg)
+
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+
+    assert any("Failed to save final checkpoint" in msg for msg in logger.warnings)
+
+
+def test_trainer_warns_when_metadata_propagation_fails(tmp_path: Path) -> None:
+    logger = _ListLogger()
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        propagate_exception=RuntimeError("fs mismatch"),
+    )
+
+    cfg = _make_cfg(tmp_path, max_iters=0, logger=logger)
+    shared = _shared(tmp_path, cfg)
+
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+
+    assert any("Failed to propagate meta file" in msg for msg in logger.warnings)
+
+
+def test_trainer_applies_checkpoint_state_on_init(tmp_path: Path) -> None:
+    checkpoint = SimpleNamespace(iter_num=5, best_val_loss=0.42)
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        load_checkpoint_result=checkpoint,
+    )
+
+    cfg = _make_cfg(tmp_path, max_iters=0)
+    shared = _shared(tmp_path, cfg)
+
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    assert trainer.iter_num == 5
+    assert trainer.best_val_loss == pytest.approx(0.42)
+
+
+def test_trainer_tensorboard_logging_success(tmp_path: Path) -> None:
+    class CapturingWriter:
+        def __init__(self) -> None:
+            self.scalars: list[tuple[str, float, int]] = []
+            self.closed = False
+
+        def add_scalar(self, tag: str, value: float, step: int) -> None:
+            self.scalars.append((tag, float(value), int(step)))
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer = CapturingWriter()
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        writer=writer,
+    )
+    cfg = _make_cfg(
+        tmp_path,
+        max_iters=1,
+        tensorboard_mode="log",
+    )
+    shared = _shared(tmp_path, cfg)
+
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+
+    tags = {tag for tag, _, _ in writer.scalars}
+    assert {"Loss/train", "LR"} <= tags
+    assert writer.closed is True
+
+
+def test_trainer_keyboard_interrupt_skips_final_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logger = _ListLogger()
+    saved_calls: list[Dict[str, Any]] = []
+    deps, manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        saved_hook=saved_calls.append,
+    )
+    cfg = _make_cfg(tmp_path, max_iters=5, logger=logger)
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    def _interrupt(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        del self, X, Y
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(
+        trainer,
+        "_train_step",
+        MethodType(_interrupt, trainer),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        trainer.run()
+
+    assert manager.saved == []
+    assert any("Training loop interrupted" in msg for msg in logger.infos)
+
+
+def test_train_step_accum_with_grad_clip_and_ema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
+    cfg = _make_cfg(
+        tmp_path,
+        max_iters=0,
+        grad_accum_steps=2,
+        grad_clip=0.25,
+    )
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    class StubEMA:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def update(self, model: torch.nn.Module) -> None:
+            del model
+            self.calls += 1
+
+    trainer.ema = StubEMA()
+
+    def fake_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
+        def wrapped(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
+            losses = [func(xb, yb) for xb, yb in zip(x_batch, y_batch)]
+            return torch.stack(losses)
+
+        return wrapped
+
+    monkeypatch.setattr(torch, "vmap", fake_vmap)
+
+    X = torch.zeros((2, 2))
+    Y = torch.zeros((2, 2))
+    loss = trainer._train_step(X, Y)
+
+    assert isinstance(loss, torch.Tensor)
+    assert trainer.ema.calls == 1
+
+
+def test_train_step_accum_fallback_without_vmap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
+    cfg = _make_cfg(
+        tmp_path,
+        max_iters=0,
+        grad_accum_steps=2,
+    )
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    def raising_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
+        del func
+
+        def wrapped(*_args: Any, **_kwargs: Any) -> torch.Tensor:
+            raise RuntimeError("no vmap")
+
+        return wrapped
+
+    monkeypatch.setattr(torch, "vmap", raising_vmap)
+
+    X = torch.zeros((2, 2))
+    Y = torch.zeros((2, 2))
+    loss = trainer._train_step(X, Y)
+
+    assert isinstance(loss, torch.Tensor)
+
+
+def test_default_trainer_dependencies_returns_callables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def stub_initialize_components(
+        model: Any,
+        cfg: TrainerConfig,
+        runtime: runner_mod.RuntimeContext,
+        log_dir: str,
+    ) -> tuple[Any, str, None, None]:
+        captured["model"] = model
+        captured["cfg"] = cfg
+        captured["runtime"] = runtime
+        captured["log_dir"] = log_dir
+        return model, "scaler", None, None
+
+    monkeypatch.setattr(runner_mod, "initialize_components", stub_initialize_components)
+
+    deps = runner_mod.default_trainer_dependencies()
+    assert callable(deps.initialize_batches)
+    assert callable(deps.create_manager)
+    assert callable(deps.run_evaluation)
+
+    cfg = _make_cfg(tmp_path, max_iters=0)
+    runtime = runner_mod.RuntimeContext(
+        device_type="cpu", autocast_context=nullcontext()
+    )
+    model = _FakeModel()
+    compiled, scaler, ema, writer = deps.initialize_components(
+        model, cfg, runtime, log_dir=str(tmp_path)
+    )
+    assert compiled is model
+    assert scaler == "scaler"
+    assert ema is None and writer is None
+    assert captured["log_dir"] == str(tmp_path)
+
+
+def test_trainer_propagates_non_keyboard_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logger = _ListLogger()
+    deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
+    cfg = _make_cfg(tmp_path, max_iters=3, logger=logger)
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    def _boom(self, *_args: Any, **_kwargs: Any) -> torch.Tensor:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(trainer, "_train_step", MethodType(_boom, trainer))
+
+    with pytest.raises(RuntimeError):
+        trainer.run()
+
+    assert manager.saved == []
+
+
+def test_trainer_train_step_validates_grad_accum(tmp_path: Path) -> None:
+    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
+    cfg = _make_cfg(tmp_path, max_iters=0)
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    bad_data = trainer.cfg.data.model_copy(update={"grad_accum_steps": 0})
+    bad_cfg = trainer.cfg.model_copy(update={"data": bad_data})
+    object.__setattr__(trainer, "cfg", bad_cfg)
+
+    with pytest.raises(ValueError, match="grad_accum_steps must be a positive integer"):
+        trainer._train_step(torch.zeros((2, 2)), torch.zeros((2, 2)))
+
+
+def test_train_entrypoint_uses_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
+
+    monkeypatch.setattr(
+        runner_mod,
+        "default_trainer_dependencies",
+        lambda: deps,
+    )
+
+    cfg = _make_cfg(tmp_path, max_iters=0)
+    iters, best = runner_mod.train(cfg)
+
+    assert iters == 1
+    assert best == pytest.approx(0.4)
+    assert manager.saved
 
 
 def test_get_lr_variants() -> None:

@@ -70,6 +70,18 @@ def test_word_tokenizer_roundtrip_proto() -> None:
     assert isinstance(v, Mapping)
 
 
+def test_char_tokenizer_rebuilds_missing_lookup_array() -> None:
+    tok = CharTokenizer({"a": 0})
+    tok._itos_array = None  # type: ignore[assignment]
+    assert tok.decode([0]) == "a"
+
+
+def test_word_tokenizer_rebuilds_missing_lookup_array() -> None:
+    tok = WordTokenizer({"hello": 0})
+    tok._itos_array = None  # type: ignore[assignment]
+    assert tok.decode([0]) == "hello"
+
+
 @pytest.mark.parametrize(
     ("tok_type", "kwargs", "expected_cls"),
     [
@@ -117,6 +129,50 @@ def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
     v = tk.vocab
     # Mapping with expected keys
     assert hasattr(v, "__getitem__") and "a" in v and v["a"] == 1
+
+
+def test_tiktoken_tokenizer_handles_missing_mergeable_ranks(monkeypatch) -> None:
+    """When encoder lacks mergeable ranks mapping, tokenizer should expose empty mapping."""
+
+    class Encoder:
+        n_vocab = 1
+        _mergeable_ranks = None
+
+        def encode(self, text, allowed_special=None):
+            return []
+
+        def decode(self, ids):
+            return ""
+
+    class Module:
+        @staticmethod
+        def get_encoding(name):
+            return Encoder()
+
+    tk = TiktokenTokenizer(loader=lambda: Module)
+    assert tk.vocab == MappingProxyType({})
+
+
+def test_tiktoken_tokenizer_import_error_is_propagated() -> None:
+    """Loader ImportError should be surfaced with helpful message."""
+
+    def loader():
+        raise ImportError("missing dependency")
+
+    with pytest.raises(ImportError) as exc:
+        TiktokenTokenizer(loader=loader)
+
+    assert "tiktoken is required" in str(exc.value)
+
+
+def test_char_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
+    tok = CharTokenizer()
+    assert tok.decode([0, 1]) == ""
+
+
+def test_word_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
+    tok = WordTokenizer()
+    assert tok.decode([0, 1]) == ""
 
 
 @pytest.mark.parametrize(

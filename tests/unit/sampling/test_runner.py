@@ -453,6 +453,280 @@ def test_sampler_compile_requires_compile_fn(out_dir: Path) -> None:
     assert "compile_model_fn" in str(excinfo.value)
 
 
+def test_sampler_requires_runtime(out_dir: Path) -> None:
+    """Sampler should fail fast when runtime config is missing."""
+    cfg = SamplerConfig.model_construct(
+        runtime=None,
+        sample=SampleConfig(
+            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
+        ),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    with pytest.raises(ValueError, match="Runtime configuration is missing"):
+        Sampler(cfg, shared)
+
+
+def test_sampler_setup_torch_env_handles_cuda_errors(
+    out_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_setup_torch_env should swallow CUDA availability errors."""
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _Ckpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _checkpoint_loader(**_: Any) -> Any:
+        return _Ckpt()
+
+    class _LoadableDummy(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+    def _model_factory(_: Any, __: Any) -> Any:
+        return _LoadableDummy()
+
+    cfg = _sampler_cfg(out_dir).model_copy(
+        update={
+            "checkpoint_load_fn": _checkpoint_loader,
+            "model_factory": _model_factory,
+        }
+    )
+
+    def _raise_runtime_error() -> bool:
+        raise RuntimeError("cuda probing failed")
+
+    monkeypatch.setattr(torch.cuda, "is_available", _raise_runtime_error)
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    assert sampler.device_type == "cpu"
+
+
+def test_sampler_setup_torch_env_seeds_cuda_when_available(
+    out_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_setup_torch_env should call torch.cuda.manual_seed when CUDA is available."""
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _Ckpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _checkpoint_loader(**_: Any) -> Any:
+        return _Ckpt()
+
+    class _LoadableDummy(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+    def _model_factory(_: Any, __: Any) -> Any:
+        return _LoadableDummy()
+
+    cfg = _sampler_cfg(out_dir).model_copy(
+        update={
+            "checkpoint_load_fn": _checkpoint_loader,
+            "model_factory": _model_factory,
+        }
+    )
+
+    called: dict[str, int] = {}
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    def _manual_seed(seed: int) -> None:
+        called["seed"] = seed
+
+    monkeypatch.setattr(torch.cuda, "manual_seed", _manual_seed)
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    assert called["seed"] == cfg.runtime.seed
+    assert sampler.ctx is not None
+
+
+def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
+    """_decode_tokens should coerce non-long tensors and move them to CPU."""
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _Ckpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _checkpoint_loader(**_: Any) -> Any:
+        return _Ckpt()
+
+    class _LoadableDummy(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+    def _model_factory(_: Any, __: Any) -> Any:
+        return _LoadableDummy()
+
+    cfg = _sampler_cfg(out_dir).model_copy(
+        update={
+            "checkpoint_load_fn": _checkpoint_loader,
+            "model_factory": _model_factory,
+        }
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    sampler = Sampler(cfg, shared)
+
+    captured: dict[str, Any] = {}
+
+    class _TokenizerWithDecodeTensor:
+        def decode_tensor(self, tensor: Any) -> str:
+            captured["dtype"] = tensor.dtype
+            captured["device"] = tensor.device.type
+            return "decoded"
+
+    sampler.tokenizer = _TokenizerWithDecodeTensor()
+
+    class _FakeTensor:
+        def __init__(self) -> None:
+            self.dtype = torch.float32
+            self.device = type("Dev", (), {"type": "cuda"})()
+            self._data = [1, 2, 3]
+
+        def to(self, dtype: torch.dtype) -> "_FakeTensor":
+            assert dtype is torch.long
+            self.dtype = dtype
+            return self
+
+        def cpu(self) -> "_FakeTensor":
+            self.device = type("Dev", (), {"type": "cpu"})()
+            return self
+
+        def tolist(self) -> list[int]:
+            return list(self._data)
+
+    result = sampler._decode_tokens(_FakeTensor())
+    assert result == "decoded"
+    assert captured["dtype"] == torch.long
+    assert captured["device"] == "cpu"
+
+
+def test_sample_constructs_shared_when_missing(
+    tmp_path: Path, out_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """sample() should build a SharedConfig from runtime when one is not provided."""
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _Ckpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _checkpoint_loader(**_: Any) -> Any:
+        return _Ckpt()
+
+    class _LoadableDummy(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+    def _model_factory(_: Any, __: Any) -> Any:
+        return _LoadableDummy()
+
+    runtime = RuntimeConfig(
+        out_dir=out_dir,
+        max_iters=0,
+        eval_interval=1,
+        eval_iters=1,
+        log_interval=1,
+        eval_only=False,
+        checkpointing=RuntimeConfig.Checkpointing(
+            keep=RuntimeConfig.Checkpointing.Keep(last=1, best=1),
+            read_policy=READ_POLICY_BEST,
+        ),
+        seed=123,
+        device="cpu",
+        dtype="float32",
+        compile=False,
+    )
+    sample_cfg = SampleConfig(
+        start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
+    )
+    cfg = SamplerConfig(
+        runtime=runtime,
+        sample=sample_cfg,
+        checkpoint_load_fn=_checkpoint_loader,
+        model_factory=_model_factory,
+    )
+
+    caplog.set_level("INFO", logger="ml_playground.sampler")
+    sample(cfg, None)
+    assert "Sampling..." in caplog.text
+
+
+def test_sample_requires_runtime_when_shared_missing(tmp_path: Path) -> None:
+    """sample() should raise a clear error if runtime config is absent."""
+    cfg = SamplerConfig.model_construct(
+        runtime=None,
+        sample=SampleConfig(
+            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
+        ),
+    )
+    with pytest.raises(ValueError, match="Runtime configuration is missing"):
+        sample(cfg, None)
+
+
 def test_sampler_file_prompt_read_error(out_dir: Path) -> None:
     """Sampler.run should raise `FileOperationError` when `FILE:` prompt cannot be read."""
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
+from ml_playground.configuration import models as config_models
 from ml_playground.configuration.models import (
     DataConfig,
     ExperimentConfig,
@@ -71,6 +73,22 @@ def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
     )
 
 
+def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
+    """_default_config_path_from_root should handle roots named 'src'."""
+    src_root = tmp_path / "src"
+    src_root.mkdir()
+    resolved = config_loading.get_default_config_path(src_root)
+    assert (
+        resolved == src_root / "ml_playground" / "experiments" / "default_config.toml"
+    )
+
+
+def test_get_cfg_path_without_override(tmp_path: Path) -> None:
+    expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"
+    result = config_loading.get_cfg_path("demo", None)
+    assert result == expected
+
+
 def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:
     """list_experiments_with_config should return sorted experiment names with config.toml."""
     # Create fake experiments directory structure
@@ -89,15 +107,10 @@ def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> No
     (experiments_root / "exp_no_config").mkdir()
 
     # Mock the package root
-    original_file = config_loading.__file__
-    config_loading.__file__ = str(
-        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
+    result = config_loading.list_experiments_with_config(
+        experiments_root=experiments_root
     )
-    try:
-        result = config_loading.list_experiments_with_config()
-        assert result == ["exp_a", "exp_b", "exp_c"]
-    finally:
-        config_loading.__file__ = original_file
+    assert result == ["exp_a", "exp_b", "exp_c"]
 
 
 def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
@@ -112,26 +125,17 @@ def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
     (experiments_root / "shakespeare").mkdir()
     (experiments_root / "shakespeare" / "config.toml").write_text("")
 
-    original_file = config_loading.__file__
-    config_loading.__file__ = str(
-        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
+    result = config_loading.list_experiments_with_config(
+        "bundestag", experiments_root=experiments_root
     )
-    try:
-        result = config_loading.list_experiments_with_config("bundestag")
-        assert result == ["bundestag_char", "bundestag_tiktoken"]
-    finally:
-        config_loading.__file__ = original_file
+    assert result == ["bundestag_char", "bundestag_tiktoken"]
 
 
 def test_list_experiments_with_config_handles_missing_root() -> None:
     """list_experiments_with_config should return empty list if experiments root doesn't exist."""
-    original_file = config_loading.__file__
-    config_loading.__file__ = "/nonexistent/path/loading.py"
-    try:
-        result = config_loading.list_experiments_with_config()
-        assert result == []
-    finally:
-        config_loading.__file__ = original_file
+    missing_root = Path("/nonexistent/path/loading")
+    result = config_loading.list_experiments_with_config(experiments_root=missing_root)
+    assert result == []
 
 
 def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
@@ -139,29 +143,14 @@ def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
     experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
 
-    # Create a file instead of directory to trigger error
-    (experiments_root / "not_a_dir").write_text("file")
+    class BrokenPath(type(experiments_root)):  # type: ignore[misc]
+        def iterdir(self):  # type: ignore[override]
+            raise OSError("Simulated error")
 
-    original_file = config_loading.__file__
-    config_loading.__file__ = str(
-        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
-    )
+    broken_root = BrokenPath(experiments_root)
 
-    # Mock iterdir to raise OSError
-    from pathlib import Path as PathClass
-
-    original_iterdir = PathClass.iterdir
-
-    def mock_iterdir(self):  # type: ignore[no-untyped-def]
-        raise OSError("Simulated error")
-
-    PathClass.iterdir = mock_iterdir  # type: ignore[method-assign]
-    try:
-        result = config_loading.list_experiments_with_config()
-        assert result == []
-    finally:
-        PathClass.iterdir = original_iterdir  # type: ignore[method-assign]
-        config_loading.__file__ = original_file
+    result = config_loading.list_experiments_with_config(experiments_root=broken_root)
+    assert result == []
 
 
 def test_load_and_merge_configs_missing_file_raises(tmp_path: Path) -> None:
@@ -186,17 +175,10 @@ tokenizer_type = "char"
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
 
-    original_file = config_loading.__file__
-    config_loading.__file__ = str(
-        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
-    )
-    try:
-        cfg = config_loading.load_prepare_config(cfg_path)
-        assert isinstance(cfg, PreparerConfig)
-        assert cfg.tokenizer_type == "char"
-        assert "provenance" in cfg.extras
-    finally:
-        config_loading.__file__ = original_file
+    cfg = config_loading.load_prepare_config(cfg_path, default_config_path=default_path)
+    assert isinstance(cfg, PreparerConfig)
+    assert cfg.tokenizer_type == "char"
+    assert "provenance" in cfg.extras
 
 
 def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
@@ -210,15 +192,83 @@ def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
 
-    original_file = config_loading.__file__
-    config_loading.__file__ = str(
-        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
+    with pytest.raises(ValueError, match="must contain a \\[prepare\\] section"):
+        config_loading.load_prepare_config(cfg_path, default_config_path=default_path)
+
+
+def test_load_train_config_sets_provenance(tmp_path: Path) -> None:
+    config = tmp_path / "train.toml"
+    config.write_text(
+        """
+[train]
+[train.runtime]
+out_dir = "./out"
+[train.model]
+[train.data]
+[train.optim]
+[train.schedule]
+"""
     )
-    try:
-        with pytest.raises(ValueError, match="must contain a \\[prepare\\] section"):
-            config_loading.load_prepare_config(cfg_path)
-    finally:
-        config_loading.__file__ = original_file
+
+    default_config = tmp_path / "default.toml"
+    default_config.write_text("")
+
+    cfg = config_loading.load_train_config(config, default_config_path=default_config)
+
+    provenance = cfg.extras.get("provenance", {})
+    assert provenance.get("raw") is not None
+    assert provenance.get("context", {}).get("config_path") == str(config)
+
+
+def test_load_sample_config_sets_provenance(tmp_path: Path) -> None:
+    config = tmp_path / "sample.toml"
+    config.write_text(
+        """
+[sample]
+[sample.runtime]
+out_dir = "./out"
+[sample.sample]
+
+[train]
+[train.runtime]
+out_dir = "./train"
+[train.model]
+[train.data]
+[train.optim]
+[train.schedule]
+"""
+    )
+
+    default_config = tmp_path / "default.toml"
+    default_config.write_text("")
+
+    cfg = config_loading.load_sample_config(config, default_config_path=default_config)
+
+    provenance = cfg.extras.get("provenance", {})
+    assert provenance.get("raw") is not None
+    assert provenance.get("context", {}).get("config_path") == str(config)
+
+
+def test_load_train_config_requires_mapping(tmp_path: Path) -> None:
+    config = tmp_path / "train_invalid.toml"
+    config.write_text("train = 'value'\n")
+
+    default_config = tmp_path / "default.toml"
+    default_config.write_text("")
+
+    with pytest.raises(TypeError, match="\\[train\\] section"):
+        config_loading.load_train_config(config, default_config_path=default_config)
+
+
+def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
+    config = tmp_path / "sample_invalid.toml"
+    config.write_text("[train]\n[train.runtime]\nout_dir='.'\n")
+
+    default_config = tmp_path / "default.toml"
+    default_config.write_text("")
+
+    with pytest.raises(ValueError, match=r"must contain a \[sample\] section"):
+        config_loading.load_sample_config(config, default_config_path=default_config)
 
 
 def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
@@ -237,6 +287,14 @@ def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="must be a mapping"):
         config_loading.read_toml_dict(cfg_path, toml_loader=fake_loads)
+
+
+def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "broken.toml"
+    cfg_path.write_text("not = [", encoding="utf-8")
+
+    with pytest.raises(Exception, match="broken.toml"):
+        config_loading.read_toml_dict(cfg_path)
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
@@ -774,3 +832,363 @@ def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
     runtime_meta_dir.mkdir(parents=True, exist_ok=True)
     (runtime_meta_dir / "meta.pkl").write_bytes(b"meta")
     config_cli.ensure_sample_prerequisites(exp)
+
+
+def test_cli_ensure_train_prerequisites_missing_meta(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "exp.toml"
+    cfg_path.write_text(
+        minimal_full_experiment_toml(
+            dataset_dir=Path("./data"),
+            out_dir=Path("out/exp"),
+            include_sample=True,
+        ),
+        encoding="utf-8",
+    )
+    exp = config_cli.load_experiment("exp", cfg_path)
+
+    with pytest.raises(ValueError) as exc:
+        config_cli.ensure_train_prerequisites(exp)
+
+    msg = str(exc.value)
+    assert "Missing required meta file" in msg
+    assert "Run 'prepare' first" in msg
+
+
+def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "exp.toml"
+    cfg_path.write_text(
+        minimal_full_experiment_toml(
+            dataset_dir=Path("./data"),
+            out_dir=Path("out/exp"),
+            include_sample=True,
+        ),
+        encoding="utf-8",
+    )
+    exp = config_cli.load_experiment("exp", cfg_path)
+
+    with pytest.raises(ValueError) as exc:
+        config_cli.ensure_sample_prerequisites(exp)
+
+    msg = str(exc.value)
+    assert "Missing required meta file for sampling" in msg
+    assert "Run 'prepare' and 'train' first" in msg
+
+
+def test_internal_path_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bad_path = tmp_path / "bad"
+
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path):
+        if self == bad_path:
+            raise OSError("cannot resolve")
+        return original_resolve(self)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve, raising=False)
+
+    with pytest.raises(ValueError, match="Invalid path"):
+        config_models._resolve_path_strict(bad_path)
+
+    relative = config_models._resolve_if_relative("rel", tmp_path)
+    assert isinstance(relative, Path) and relative.is_absolute()
+
+    absolute_path = tmp_path / "abs"
+    assert config_models._resolve_if_relative(absolute_path, tmp_path) == absolute_path
+
+
+def test_no_nan_validator_raises() -> None:
+    with pytest.raises(ValidationError):
+        config_models.OptimConfig(learning_rate=float("nan"))
+
+
+def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "exp.toml"
+    context = {"config_path": cfg_path}
+    cfg = config_models.PreparerConfig.model_validate(
+        {"raw_dir": "data", "raw_text_path": Path("text.txt")},
+        context=context,
+    )
+    assert cfg.raw_dir.is_absolute()
+    assert cfg.raw_text_path and cfg.raw_text_path.is_absolute()
+
+    # Non-path context should leave values unchanged
+    cfg2 = config_models.PreparerConfig.model_validate(
+        {"raw_dir": Path("data")},
+        context={"config_path": "not-a-path"},
+    )
+    assert not cfg2.raw_dir.is_absolute()
+
+
+def test_peft_config_coerces_target_modules() -> None:
+    peft = config_models.TrainerConfig.PeftConfig.model_validate(
+        {"target_modules": ["a", "b"], "enabled": True}
+    )
+    assert isinstance(peft.target_modules, tuple)
+    assert peft.target_modules == ("a", "b")
+
+
+def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
+    base_dir = tmp_path / "project"
+    base_dir.mkdir()
+    cfg_path = base_dir / "cfg.toml"
+
+    data = {
+        "prepare": {"raw_dir": "raw_rel", "dataset_dir": "prep_dataset"},
+        "train": {"runtime": {"out_dir": "train_rel"}},
+        "sample": {"runtime": {"out_dir": "sample_rel"}},
+        "shared": {
+            "config_path": cfg_path,
+            "project_home": "proj_rel",
+            "dataset_dir": "data_rel",
+            "train_out_dir": "train_rel",
+            "sample_out_dir": "sample_rel",
+        },
+    }
+
+    result = config_models.ExperimentConfig._resolve_paths(data)
+
+    shared = result["shared"]
+    assert isinstance(shared["project_home"], Path)
+    assert isinstance(shared["dataset_dir"], Path)
+    assert isinstance(shared["train_out_dir"], Path)
+    assert isinstance(shared["sample_out_dir"], Path)
+    # prepare paths are resolved relative to config directory
+    assert result["prepare"]["raw_dir"].is_absolute()
+    assert "dataset_dir" not in result["prepare"]
+    assert isinstance(shared["dataset_dir"], Path)
+    # runtime paths are converted to Path instances
+    assert isinstance(result["train"]["runtime"]["out_dir"], Path)
+    assert isinstance(result["sample"]["runtime"]["out_dir"], Path)
+
+
+def test_experiment_config_resolve_paths_with_namespace(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "cfg.toml"
+    shared_ns = SimpleNamespace(config_path=cfg_path)
+    data = {"shared": shared_ns}
+    # Should not raise or mutate namespace for non-dict shared data
+    assert config_models.ExperimentConfig._resolve_paths(data)["shared"] is shared_ns
+
+
+def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "cfg.toml"
+    data = {
+        "config_path": cfg_path,
+        "project_home": "proj",
+        "dataset_dir": "data",
+        "train_out_dir": "train",
+        "sample_out_dir": "sample",
+    }
+    resolved = config_models.SharedConfig._resolve_shared_paths(data.copy())
+    assert resolved["project_home"].is_absolute()
+    assert resolved["dataset_dir"].is_absolute()
+
+
+def _trainer_dict(tmp_path: Path) -> dict[str, Any]:
+    model = ModelConfig().model_dump()
+    data = DataConfig().model_dump()
+    optim = OptimConfig().model_dump()
+    schedule = LRSchedule().model_dump()
+    runtime = config_models.RuntimeConfig(out_dir=tmp_path / "out").model_dump(
+        exclude={"total_eval_steps"}
+    )
+    runtime["out_dir"] = "rel_out"
+    return {
+        "model": model,
+        "data": data,
+        "optim": optim,
+        "schedule": schedule,
+        "runtime": runtime,
+    }
+
+
+def test_trainer_config_resolve_paths_with_context(tmp_path: Path) -> None:
+    trainer_dict = _trainer_dict(tmp_path)
+    cfg_path = tmp_path / "cfg.toml"
+    trainer = TrainerConfig.model_validate(
+        trainer_dict,
+        context={"config_path": cfg_path},
+    )
+    assert trainer.runtime.out_dir.is_absolute()
+
+
+def test_trainer_config_resolve_paths_without_context(tmp_path: Path) -> None:
+    trainer_dict = _trainer_dict(tmp_path)
+    trainer_dict["runtime"]["out_dir"] = Path("rel_out")
+    trainer = TrainerConfig.model_validate(
+        trainer_dict,
+        context={"config_path": "not-a-path"},
+    )
+    assert str(trainer.runtime.out_dir) == "rel_out"
+
+
+def _sampler_dict(tmp_path: Path) -> dict[str, Any]:
+    runtime = config_models.RuntimeConfig(out_dir=tmp_path / "out").model_dump(
+        exclude={"total_eval_steps"}
+    )
+    runtime["out_dir"] = "rel_out"
+    sample = SampleConfig().model_dump()
+    return {"runtime": runtime, "sample": sample}
+
+
+def test_sampler_config_resolve_paths_with_context(tmp_path: Path) -> None:
+    sampler_dict = _sampler_dict(tmp_path)
+    cfg_path = tmp_path / "cfg.toml"
+    sampler = config_models.SamplerConfig.model_validate(
+        sampler_dict,
+        context={"config_path": cfg_path},
+    )
+    assert sampler.runtime.out_dir.is_absolute()
+
+
+def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
+    sampler_dict = _sampler_dict(tmp_path)
+    sampler_dict["runtime"]["out_dir"] = Path("rel_out")
+    sampler = config_models.SamplerConfig.model_validate(
+        sampler_dict,
+        context={"config_path": "not-a-path"},
+    )
+    assert str(sampler.runtime.out_dir) == "rel_out"
+
+
+def test_experiment_config_resolve_paths_non_dict() -> None:
+    assert config_models.ExperimentConfig._resolve_paths(123) == 123
+
+
+def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> None:
+    data = {
+        "shared": {"experiment": "unit"},
+        "prepare": {},
+    }
+    assert config_models.ExperimentConfig._resolve_paths(data) is data
+
+
+def test_shared_config_resolve_paths_invalid_config_path() -> None:
+    data = {"config_path": object(), "project_home": "rel", "dataset_dir": 123}
+    resolved = config_models.SharedConfig._resolve_shared_paths(data.copy())
+    assert resolved == data
+
+
+def test_runtime_config_validates_log_interval(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        RuntimeConfig(
+            out_dir=tmp_path / "out",
+            max_iters=1,
+            eval_interval=1,
+            eval_iters=1,
+            log_interval=2,
+            eval_only=False,
+            seed=0,
+            device="cpu",
+            dtype="float32",
+            compile=False,
+            tensorboard_enabled=False,
+        )
+
+
+def _base_trainer_kwargs(tmp_path: Path) -> dict[str, Any]:
+    return {
+        "model": ModelConfig(
+            n_layer=1,
+            n_head=1,
+            n_embd=8,
+            block_size=4,
+            dropout=0.0,
+            bias=True,
+        ),
+        "data": DataConfig(
+            batch_size=2,
+            block_size=4,
+            grad_accum_steps=1,
+            tokenizer="char",
+        ),
+        "optim": OptimConfig(
+            learning_rate=0.1,
+            weight_decay=0.0,
+            beta1=0.9,
+            beta2=0.95,
+            grad_clip=0.0,
+        ),
+        "schedule": LRSchedule(
+            decay_lr=True,
+            warmup_iters=1,
+            lr_decay_iters=10,
+            min_lr=0.01,
+        ),
+        "runtime": RuntimeConfig(
+            out_dir=tmp_path / "out",
+            max_iters=1,
+            eval_interval=1,
+            eval_iters=1,
+            log_interval=1,
+            eval_only=False,
+            seed=42,
+            device="cpu",
+            dtype="float32",
+            compile=False,
+            tensorboard_enabled=False,
+        ),
+    }
+
+
+def test_trainer_config_rejects_large_data_block(tmp_path: Path) -> None:
+    kwargs = _base_trainer_kwargs(tmp_path)
+    kwargs["data"] = DataConfig(
+        batch_size=2,
+        block_size=8,
+        grad_accum_steps=1,
+        tokenizer="char",
+    )
+    with pytest.raises(ValidationError):
+        TrainerConfig(**kwargs)
+
+
+def test_trainer_config_rejects_min_lr_above_learning_rate(tmp_path: Path) -> None:
+    kwargs = _base_trainer_kwargs(tmp_path)
+    kwargs["optim"] = OptimConfig(
+        learning_rate=0.05,
+        weight_decay=0.0,
+        beta1=0.9,
+        beta2=0.95,
+        grad_clip=0.0,
+    )
+    kwargs["schedule"] = LRSchedule(
+        decay_lr=True,
+        warmup_iters=1,
+        lr_decay_iters=10,
+        min_lr=0.1,
+    )
+    with pytest.raises(ValidationError):
+        TrainerConfig(**kwargs)
+
+
+def test_trainer_config_requires_zero_warmup_without_decay(tmp_path: Path) -> None:
+    kwargs = _base_trainer_kwargs(tmp_path)
+    kwargs["schedule"] = LRSchedule(
+        decay_lr=False,
+        warmup_iters=1,
+        lr_decay_iters=10,
+        min_lr=0.01,
+    )
+    with pytest.raises(ValidationError):
+        TrainerConfig(**kwargs)
+
+
+def test_lr_schedule_requires_warmup_le_decay_iters() -> None:
+    with pytest.raises(ValidationError):
+        LRSchedule(
+            decay_lr=True,
+            warmup_iters=5,
+            lr_decay_iters=4,
+            min_lr=0.01,
+        )
+
+
+def test_data_config_requires_ngram_one_for_non_tiktoken() -> None:
+    with pytest.raises(ValidationError):
+        DataConfig(
+            batch_size=2,
+            block_size=4,
+            grad_accum_steps=1,
+            tokenizer="word",
+            ngram_size=2,
+        )
