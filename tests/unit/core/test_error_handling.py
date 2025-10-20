@@ -254,3 +254,42 @@ def test_progress_reporter_clamps_and_log_helpers(
     log_operation_error(logger, "op", error=RuntimeError("x"))
 
     assert "Starting op: d" in messages or any("Starting op" in m for m in messages)
+
+
+def test_detailed_exception_protocol_executes() -> None:
+    message_getter = DetailedException.__dict__["message"].fget  # type: ignore[index]
+    reason_getter = DetailedException.__dict__["reason"].fget  # type: ignore[index]
+    rationale_getter = DetailedException.__dict__["rationale"].fget  # type: ignore[index]
+
+    dummy = object()
+    message_getter(dummy)
+    reason_getter(dummy)
+    rationale_getter(dummy)
+
+
+def test_handle_exception_logs_non_keyboard(tmp_path: Path) -> None:
+    stream = io.StringIO()
+    logger = logging.getLogger("ml_pg_test_non_kb")
+    logger.handlers.clear()
+    handler = logging.StreamHandler(stream)
+    logger.addHandler(handler)
+    logger.setLevel(logging.ERROR)
+
+    from ml_playground.core.error_handling import handle_exception
+
+    handle_exception(ValueError, ValueError("boom"), None, logger)
+
+    assert "Uncaught exception" in stream.getvalue()
+
+
+def test_progress_reporter_message_without_total(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("ml_pg_progress_message")
+    pr = ProgressReporter(logger=logger)
+    pr.start("Start")
+    pr.update(message="tick")
+    pr.update()
+    messages = [record.getMessage() for record in caplog.records]
+    assert "Step 1: tick" in messages

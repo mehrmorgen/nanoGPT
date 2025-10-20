@@ -208,3 +208,22 @@ def test_initialize_components_with_compile(tmp_path: Path) -> None:
     assert compiled_model is not None
     # Should have attempted compilation exactly once
     assert compiled_calls == [model]
+
+
+def test_initialize_components_compile_missing(monkeypatch, tmp_path: Path) -> None:
+    """Requesting torch.compile without availability should raise."""
+    model = _make_model()
+    cfg = _make_config(compile=True)
+    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+
+    # Remove torch.compile attribute if present
+    monkeypatch.delattr(torch, "compile", raising=False)
+
+    with pytest.raises(RuntimeError, match="torch.compile requested but unavailable"):
+        initialize_components(
+            model,
+            cfg,
+            runtime,
+            log_dir=str(tmp_path),
+            compile_fn=None,
+        )

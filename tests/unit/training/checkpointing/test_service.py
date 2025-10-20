@@ -115,6 +115,16 @@ def _with_sample_out_dir(shared: SharedConfig, sample_out_dir: Path) -> SharedCo
     return shared.model_copy(update={"sample_out_dir": sample_out_dir})
 
 
+def test_create_manager_respects_retention(tmp_path: Path) -> None:
+    cfg = _make_cfg(tmp_path)
+    shared = _make_shared(tmp_path, cfg)
+
+    manager = service.create_manager(cfg, shared)
+
+    assert manager.keep_last == cfg.runtime.checkpointing.keep.last
+    assert manager.keep_best == cfg.runtime.checkpointing.keep.best
+
+
 def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
     cfg_latest = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     shared = _make_shared(tmp_path, cfg_latest)

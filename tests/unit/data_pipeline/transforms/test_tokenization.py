@@ -143,6 +143,28 @@ class TestPrepareWithTokenizerEdgeCases:
         )  # Should include punctuation as separate tokens
         assert meta["vocab_size"] == len(updated_tokenizer.vocab)
 
+    def test_prepare_with_tokenizer_word_empty_input_returns_empty_vocab(self) -> None:
+        """Word tokenizer with empty text should rebuild an empty vocab."""
+        tokenizer = WordTokenizer({})
+        train_arr, val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
+            "", tokenizer
+        )
+        assert train_arr.size == 0
+        assert val_arr.size == 0
+        assert updated_tokenizer.vocab_size == 0
+        assert meta["tokenizer_type"] == "word"
+
+    def test_prepare_with_tokenizer_char_empty_input_returns_empty_vocab(self) -> None:
+        """Char tokenizer with empty corpus should rebuild empty vocab and tokenizer."""
+        tokenizer = CharTokenizer({})
+        train_arr, val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
+            "", tokenizer
+        )
+        assert train_arr.size == 0
+        assert val_arr.size == 0
+        assert updated_tokenizer.vocab_size == 0
+        assert meta["tokenizer_type"] == "char"
+
 
 class TestCreateStandardizedMetadataExceptions:
     """Test create_standardized_metadata exception handling to cover lines 84-93, 88-93."""
@@ -229,3 +251,15 @@ class TestCreateStandardizedMetadataExceptions:
         meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
         # Should not crash, meta should be created without stoi
+
+    def test_metadata_creation_type_error_in_guarded_lookup(self) -> None:
+        """Ensure TypeError raised by stoi accessor is swallowed."""
+
+        class TypeErrorTokenizer(self.FakeTokenizer):
+            @property
+            def stoi(self):
+                raise TypeError("bad stoi")
+
+        fake_tokenizer = TypeErrorTokenizer(name="char")
+        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        assert meta["tokenizer_type"] == "char"

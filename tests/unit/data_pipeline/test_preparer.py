@@ -7,6 +7,12 @@ from typing import List, Mapping
 import numpy as np
 import pytest
 
+from ml_playground.configuration.models import DataConfig, PreparerConfig, SharedConfig
+from ml_playground.core.error_handling import DataError
+from ml_playground.data_pipeline.preparer import (
+    PreparationOutcome,
+    create_pipeline,
+)
 from ml_playground.data_pipeline.transforms.tokenization import (
     create_standardized_metadata,
     prepare_with_tokenizer,
@@ -209,6 +215,151 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
     # Ensure the logging branch executed (we do not assert exact content to avoid brittleness)
     assert any("[prepare] Created" in m for m in logger.infos)
     assert any("[prepare] Skipped" in m for m in logger.infos)
+
+
+# ---- preparation pipeline helpers ----
+
+
+def _make_shared(tmp_path: Path) -> SharedConfig:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    train_out_dir = tmp_path / "train"
+    train_out_dir.mkdir(parents=True, exist_ok=True)
+    sample_out_dir = tmp_path / "sample"
+    sample_out_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text("{}", encoding="utf-8")
+    return SharedConfig(
+        experiment="unit",
+        config_path=cfg_path,
+        project_home=tmp_path,
+        dataset_dir=dataset_dir,
+        train_out_dir=train_out_dir,
+        sample_out_dir=sample_out_dir,
+    )
+
+
+def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
+    text_path = tmp_path / "raw.txt"
+    text_path.write_text("abba", encoding="utf-8")
+    shared = _make_shared(tmp_path)
+
+    called: dict[str, int] = {"factory": 0}
+
+    def _factory(kind: str) -> DummyTok:
+        called["factory"] += 1
+        assert kind == "char"
+        return DummyTok()
+
+    cfg = PreparerConfig(
+        raw_text_path=text_path,
+        tokenizer_type="char",
+        tokenizer_factory=_factory,
+    )
+    pipeline = create_pipeline(cfg, shared)
+    outcome = pipeline.run()
+    assert isinstance(outcome, PreparationOutcome)
+    assert called["factory"] == 1
+    # Artifacts are written into dataset_dir
+    assert (shared.dataset_dir / "train.bin").exists()
+    assert (shared.dataset_dir / "val.bin").exists()
+    assert (shared.dataset_dir / "meta.pkl").exists()
+
+
+def test_pipeline_prepare_from_text_respects_meta_extras(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = PreparerConfig(
+        raw_text_path=tmp_path / "raw.txt",  # unused; prepare_from_text provides text
+        tokenizer_type="char",
+    )
+    pipeline = create_pipeline(cfg, shared)
+    outcome = pipeline.prepare_from_text(
+        "abba",
+        DummyTok(),
+        meta_extras={"source": "unit-test"},
+    )
+    assert outcome.metadata["source"] == "unit-test"
+
+
+def test_pipeline_resolves_custom_data_config(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    data_cfg = DataConfig(
+        train_bin="train-custom.bin",
+        val_bin="val-custom.bin",
+        meta_pkl="meta-custom.pkl",
+    )
+    cfg = PreparerConfig(
+        raw_text_path=tmp_path / "text.txt",
+        tokenizer_type="char",
+        extras={"data_config": data_cfg},
+    )
+    cfg.raw_text_path.write_text("abba", encoding="utf-8")
+    pipeline = create_pipeline(cfg, shared)
+    pipeline.run()
+    # Custom paths should be respected
+    assert (shared.dataset_dir / "train-custom.bin").exists()
+    assert (shared.dataset_dir / "val-custom.bin").exists()
+    assert (shared.dataset_dir / "meta-custom.pkl").exists()
+
+
+def test_pipeline_rejects_invalid_data_config(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = PreparerConfig(
+        raw_text_path=tmp_path / "text.txt",
+        tokenizer_type="char",
+        extras={"data_config": {"train_bin": "custom.bin"}},
+    )
+    pipeline = create_pipeline(cfg, shared)
+    with pytest.raises(DataError, match="data_config must be a DataConfig"):
+        pipeline.prepare_from_text("abba", DummyTok())
+
+
+def test_pipeline_split_validation(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = PreparerConfig(
+        raw_text_path=tmp_path / "text.txt",
+        tokenizer_type="char",
+        extras={"split": "not-a-number"},
+    )
+    pipeline = create_pipeline(cfg, shared)
+    with pytest.raises(DataError, match="Invalid split ratio"):
+        pipeline.prepare_from_text("abba", DummyTok())
+
+    cfg_bad = cfg.model_copy(update={"extras": {"split": 1.5}})
+    pipeline_bad = create_pipeline(cfg_bad, shared)
+    with pytest.raises(DataError, match="within \\[0.0, 1.0]"):
+        pipeline_bad.prepare_from_text("abba", DummyTok())
+
+
+def test_pipeline_load_raw_text_with_read_fn(tmp_path: Path) -> None:
+    text_path = tmp_path / "raw.txt"
+    text_path.write_text("ignored", encoding="utf-8")
+    shared = _make_shared(tmp_path)
+    seen: dict[str, Path] = {}
+
+    def _reader(path: Path) -> str:
+        seen["path"] = path
+        return "hello"
+
+    cfg = PreparerConfig(
+        raw_text_path=text_path,
+        tokenizer_type="char",
+        read_text_fn=_reader,
+    )
+    pipeline = create_pipeline(cfg, shared)
+    pipeline.run()
+    assert seen["path"] == text_path
+    with (shared.dataset_dir / "meta.pkl").open("rb") as fh:
+        meta = pickle.load(fh)
+    assert meta["train_tokens"] > 0
+
+
+def test_pipeline_load_raw_text_missing_path(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char")  # raw_text_path defaults to None
+    pipeline = create_pipeline(cfg, shared)
+    with pytest.raises(DataError, match="No raw text path provided"):
+        pipeline.run()
 
 
 # ---- seed file helpers ----

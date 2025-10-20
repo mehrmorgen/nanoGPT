@@ -751,3 +751,78 @@ def test_checkpoint_payload_not_a_mapping(tmp_path: Path, ckpt_obj: Checkpoint) 
 
     with pytest.raises(CheckpointError, match="does not contain a mapping"):
         mgr.load_latest_checkpoint("cpu", logger=logging.getLogger("test"))
+
+
+def test_save_checkpoint_last_retention_unlink_failure(
+    tmp_path: Path, ckpt_obj: Checkpoint
+) -> None:
+    """Retention pruning should raise CheckpointError when unlink fails for last checkpoints."""
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def failing_unlink(path: Path) -> None:
+        raise OSError(f"cannot remove {path}")
+
+    deps = make_deps(
+        unlink_supports_missing_ok=False,
+        path_unlink=failing_unlink,
+    )
+    mgr = CheckpointManager(out, atomic=False, keep_last=1, keep_best=0, deps=deps)
+    logger = logging.getLogger("test")
+
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=1.0,
+        iter_num=0,
+        logger=logger,
+    )
+
+    with pytest.raises(CheckpointError, match="Failed to remove old last checkpoint"):
+        mgr.save_checkpoint(
+            ckpt_obj,
+            base_filename="ignored",
+            metric=1.0,
+            iter_num=1,
+            logger=logger,
+        )
+
+
+def test_save_checkpoint_best_retention_unlink_failure(
+    tmp_path: Path, ckpt_obj: Checkpoint
+) -> None:
+    """Retention pruning should raise CheckpointError when unlink fails for best checkpoints."""
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def failing_unlink(path: Path) -> None:
+        raise OSError(f"cannot remove {path}")
+
+    deps = make_deps(
+        unlink_supports_missing_ok=False,
+        path_unlink=failing_unlink,
+    )
+    mgr = CheckpointManager(out, atomic=False, keep_last=0, keep_best=1, deps=deps)
+    logger = logging.getLogger("test")
+
+    first_path = mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=2.0,
+        iter_num=1,
+        logger=logger,
+        is_best=True,
+    )
+    # Create sidecar so removal branch attempts to delete it
+    sidecar = first_path.with_suffix(first_path.suffix + ".json")
+    sidecar.write_text("{}")
+
+    with pytest.raises(CheckpointError, match="Failed to remove old best checkpoint"):
+        mgr.save_checkpoint(
+            ckpt_obj,
+            base_filename="ignored",
+            metric=1.0,
+            iter_num=2,
+            logger=logger,
+            is_best=True,
+        )
