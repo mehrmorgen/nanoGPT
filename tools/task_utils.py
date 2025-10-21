@@ -39,6 +39,7 @@ def _discover_root() -> Path:
 
 ROOT = _discover_root()
 PKG = "ml_playground"
+PKG_PATH = ROOT / "src" / PKG
 PYTEST_BASE = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
 PRE_COMMIT_CONFIG = ROOT / ".githooks" / ".pre-commit-config.yaml"
 CACHE_DIR = ROOT / ".cache"
