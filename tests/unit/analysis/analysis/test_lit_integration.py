@@ -64,12 +64,18 @@ def test_lit_integration_server_path(tmp_path: Path) -> None:
         "        self.models = models\n"
         "        self.datasets = datasets\n"
         "\n"
-        "def serve(app, port=None, host=None, open_browser=None):\n"
-        "    SERVER_STATE['called'] = True\n"
-        "    SERVER_STATE['port'] = port\n"
-        "    SERVER_STATE['host'] = host\n"
-        "    SERVER_STATE['open_browser'] = open_browser\n"
-        "    SERVER_STATE['app'] = app\n",
+        "        def _wsgi(environ, start_response):\n"
+        "            start_response('200 OK', [('Content-Type', 'text/plain')])\n"
+        "            return [b'OK']\n"
+        "\n"
+        "        self.app = _wsgi\n"
+        "\n"
+        "    def serve(self, port=None, host=None, open_browser=None):\n"
+        "        SERVER_STATE['called'] = True\n"
+        "        SERVER_STATE['port'] = port\n"
+        "        SERVER_STATE['host'] = host\n"
+        "        SERVER_STATE['open_browser'] = open_browser\n"
+        "        SERVER_STATE['app'] = self.app\n",
         encoding="utf-8",
     )
 
