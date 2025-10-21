@@ -37,25 +37,39 @@ def lint_check() -> None:
 @app.command()
 def deadcode() -> None:
     """Scan for dead code using vulture."""
-    utils.uv_run("vulture", utils.PKG, "--min-confidence", "90")
+    utils.uv_run("vulture", str(utils.PKG_PATH), "--min-confidence", "90")
 
 
-@app.command()
-def pyright() -> None:
-    """Run Pyright type checks."""
-    utils.uv_run("pyright", utils.PKG)
+def _run_basedpyright() -> None:
+    """Execute BasedPyright against the package."""
+
+    utils.uv_run("basedpyright", str(utils.PKG_PATH))
+
+
+@app.command("basedpyright")
+def basedpyright() -> None:
+    """Run BasedPyright type checks."""
+
+    _run_basedpyright()
+
+
+@app.command("pyright")
+def pyright_alias() -> None:
+    """Run BasedPyright type checks (Pyright CLI alias)."""
+
+    _run_basedpyright()
 
 
 @app.command()
 def mypy() -> None:
     """Run Mypy type checks."""
-    utils.uv_run("mypy", "--incremental", utils.PKG)
+    utils.uv_run("mypy", "--incremental", str(utils.PKG_PATH))
 
 
 @app.command()
 def typecheck() -> None:
-    """Run both Pyright and Mypy."""
-    pyright()
+    """Run both BasedPyright and Mypy."""
+    basedpyright()
     mypy()
 
 

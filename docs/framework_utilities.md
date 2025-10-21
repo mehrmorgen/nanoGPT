@@ -479,7 +479,7 @@ comply with strict mode.
 
    - After each small refactor, run:
      - `uv run ruff check --fix . && uv run ruff format .`
-     - `uv run pyright && uv run mypy ml_playground`
+     - `uv run basedpyright && uv run mypy ml_playground`
      - `uv run pytest -n auto -W error --strict-markers --strict-config -v`
 
 ## Test Refactoring Checklist

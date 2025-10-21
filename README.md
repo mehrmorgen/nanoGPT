@@ -49,7 +49,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
   - `uv run test-tasks <command>` for pytest suites.
   - `uv run ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
 - The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
-- Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
+- Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
 - Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.

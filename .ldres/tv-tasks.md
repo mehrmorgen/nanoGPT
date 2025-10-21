@@ -230,7 +230,7 @@ ______________________________________________________________________
 ## Notes
 
 - `uv run ci-tasks quality` is the canonical gate and already runs pre-commit hooks
-  (ruff, format, checkmake, pyright, mypy, vulture,pytest).
+  (ruff, format, checkmake, BasedPyright, mypy, vulture,pytest).
   No separate test run in the Make target is necessary.
 - When the "remove mocks" effort is complete, enforce no mock usage via Ruff banned-modules and a CI grep sweep.
 
