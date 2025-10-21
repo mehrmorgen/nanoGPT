@@ -67,6 +67,7 @@ Notes
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
 - Checkpoint behavior and policies are described in `.dev-guidelines/Readme.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
+- For performance-focused ecosystem options, see [High-Performance Library Alternatives](docs/performance_library_options.md).
  - CLI validations: train and sample commands now fail fast if `meta.pkl` is missing. The loop's prepare-skip logic also requires `meta.pkl` to be present alongside `train.bin` and `val.bin`.
 
 Mutation testing
