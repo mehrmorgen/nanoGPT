@@ -3,12 +3,16 @@ from __future__ import annotations
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping
+from typing import Callable, Dict, Iterable, List, Mapping, cast
 import importlib
+
+WSGIApp = Callable[..., Iterable[bytes]]
 
 
 def run_server_bundestag_char(
-    host: str = "127.0.0.1", port: int = 5432, open_browser: bool = False
+    host: str = "127.0.0.1",
+    port: int = 5432,
+    open_browser: bool = False,
 ) -> None:
     """Launch a minimal LIT server for the bundestag_char PoC.
 
@@ -69,7 +73,7 @@ def run_server_bundestag_char(
             "  uv run --no-project --python 3.12 --with 'lit-nlp>=1.3.1' --with 'numpy<2' -- python -m ml_playground.analysis.lit_integration\n"
             "Alternatively, add the extra directly to your project with:\n"
             "  uv add lit-nlp\n"
-            "Or use the dev-tasks CLI: 'uv run dev-tasks lit setup' followed by 'uv run dev-tasks lit run'.\n"
+            "Or use the lit-tasks CLI: 'uv run lit-tasks setup' followed by 'uv run lit-tasks run'.\n"
             "See docs/LIT.md for details."
         ) from e
 
@@ -163,103 +167,78 @@ def run_server_bundestag_char(
     logger.info(f"Starting server at {url}")
     sys.stdout.flush()
 
-    # Start server with maximum compatibility across LIT versions
+    # Prefer the first-party serve method exposed by lit.Server
+    serve_method = getattr(app, "serve", None)
     started = False
-    tried_calls: list[str] = []
-
-    def _try_call(target, name: str) -> bool:
-        fn = getattr(target, name, None)
-        if not callable(fn):
-            return False
-        tried_calls.append(f"{target.__class__.__name__}.{name}")
+    if callable(serve_method):
+        serve_kwargs = {"port": port, "host": host, "open_browser": open_browser}
         try:
-            fn(app, port=port, host=host, open_browser=open_browser)
-            logger.info(
-                f"Started via {name}(app, port=..., host=..., open_browser=...)"
-            )
-            return True
+            serve_method(**serve_kwargs)
+            started = True
+        except TypeError:
+            # Try legacy positional signatures used by older lit-nlp releases.
+            try:
+                serve_method(port, host, open_browser)
+                started = True
+            except TypeError:
+                try:
+                    serve_method(port, host)
+                    started = True
+                except Exception as err:  # pragma: no cover - defensive
+                    logger.debug("Failed legacy serve(%s, %s): %s", port, host, err)
+
+    if started:
+        return
+
+    module_serve = getattr(lit_server, "serve", None)
+    if callable(module_serve):
+        serve_kwargs = {
+            "app": app,
+            "port": port,
+            "host": host,
+            "open_browser": open_browser,
+        }
+        try:
+            module_serve(**serve_kwargs)
+            started = True
         except TypeError:
             try:
-                fn(app, port, host)
-                logger.info(f"Started via {name}(app, port, host)")
-                return True
+                module_serve(app, port, host, open_browser)
+                started = True
             except TypeError:
                 try:
-                    fn(port=port, host=host, open_browser=open_browser)
-                    logger.info(
-                        f"Started via {name}(port=..., host=..., open_browser=...)"
-                    )
-                    return True
-                except TypeError:
-                    try:
-                        fn(port, host)
-                        logger.info(f"Started via {name}(port, host)")
-                        return True
-                    except (RuntimeError, ValueError, OSError):
-                        return False
-
-    # 1) Try common module-level starters
-    for fname in ("serve", "run", "start", "launch"):
-        if _try_call(lit_server, fname):
-            started = True
-            break
-
-    # 2) Try common app-level starters
-    if not started:
-        for fname in ("serve", "run", "start", "launch", "serve_forever"):
-            fn = getattr(app, fname, None)
-            if not callable(fn):
-                continue
-            tried_calls.append(f"app.{fname}")
-            try:
-                fn(port=port, host=host, open_browser=open_browser)  # type: ignore[misc]
-                logger.info(
-                    f"Started via app.{fname}(port=..., host=..., open_browser=...)"
-                )
-                started = True
-                break
-            except TypeError:
-                try:
-                    fn(port, host)  # type: ignore[misc]
-                    logger.info(f"Started via app.{fname}(port, host)")
+                    module_serve(app, port, host)
                     started = True
-                    break
-                except (RuntimeError, ValueError, OSError):
-                    continue
-
-    # 3) Final fallback: try to run via werkzeug.run_simple using common WSGI callables
-    if not started:
-        try:
-            from werkzeug.serving import run_simple  # type: ignore
-
-            # 3a) Try the object itself as a WSGI application
-            try:
-                logger.info(
-                    "Fallback: starting via werkzeug.run_simple(...) using app as WSGI application"
-                )
-                run_simple(hostname=host, port=port or 5432, application=app)  # blocks
-                started = True
-            except (RuntimeError, TypeError, ValueError):
-                # 3b) Try a nested .app attribute (common Flask pattern)
-                if hasattr(app, "app"):
-                    wsgi_app = getattr(app, "app")
-                    logger.info(
-                        "Fallback: starting via werkzeug.run_simple(...) using app.app as WSGI application"
+                except Exception as err:  # pragma: no cover - defensive
+                    logger.debug(
+                        "Failed module-level serve(%s, %s): %s", port, host, err
                     )
-                    run_simple(
-                        hostname=host, port=port or 5432, application=wsgi_app
-                    )  # blocks
-                    started = True
-        except (ImportError, RuntimeError, TypeError, ValueError):  # pragma: no cover
-            tried_calls.append("werkzeug.run_simple(app|app.app)")
 
-    if not started:
-        tried = ", ".join(tried_calls) if tried_calls else "<none>"
+    if started:
+        return
+
+    # Fall back to running the wrapped Flask/Werkzeug application directly.
+    wsgi_app_candidate = getattr(app, "app", None)
+    if not callable(wsgi_app_candidate):
         raise RuntimeError(
-            "Unable to start LIT server: no compatible entrypoint found.\n"
-            f"Tried call patterns on: {tried}.\n"
-            "Consider updating lit-nlp or using an alternative version compatible with this integration."
+            "Unable to start LIT server: neither Server.serve nor Server.app "
+            "provided a runnable entrypoint."
         )
+    wsgi_app = cast(WSGIApp, wsgi_app_candidate)
+
+    try:
+        from werkzeug.serving import run_simple  # type: ignore
+    except ImportError as err:  # pragma: no cover - Werkzeug should be available
+        raise RuntimeError(
+            "Unable to import werkzeug.serving.run_simple; cannot launch LIT server."
+        ) from err
+
+    logger.debug(
+        "Starting LIT via werkzeug.run_simple(hostname=%s, port=%s) using app.app",
+        host,
+        port,
+    )
+    run_simple(hostname=host, port=port or 5432, application=wsgi_app)
 
 
 if __name__ == "__main__":
