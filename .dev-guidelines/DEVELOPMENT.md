@@ -39,12 +39,11 @@ Core development practices, quality standards, and workflow for ml_playground co
   strict Pydantic models forbid extras and enforce cross-field invariants (see
   [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
   [`ml_playground/configuration`](../ml_playground/configuration)).
-- **Strict typing and deterministic utilities.** Use explicit type hints, `pathlib.Path` values, and pure helpers to keep code
-  predictable (see [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
-  [`ml_playground/core`](../ml_playground/core)).
-- **Centralized utilities over ad-hoc logic.** Reuse the shared error-handling, tokenizer, and data-preparation
-  infrastructure instead of duplicating behavior, and link to the centralized documentation when extending them (see
-  [Framework Utilities](../docs/framework_utilities.md#overview)).
+- **Strict Typing, Immutability, and Determinism.** Use explicit type hints, treat configuration and data structures as
+  immutable, and favor pure, side-effect-free functions to keep code predictable and prevent state bugs.
+- **Centralized Utilities and Explicit Device Management.** Extend shared infrastructure (tokenizers, data prep, error
+  handling) rather than reinventing it. Device selection (CPU/GPU) must be explicit and passed through function
+  signatures; global device state is forbidden.
 - **Deterministic, multi-layered tests.** Keep unit tests fast, isolated, and deterministic; complement them with
   property, integration, e2e, and acceptance suites so changes are guarded at multiple levels while maintaining coverage
   expectations (see [tests/README.md](../tests/README.md#structure) and
@@ -57,6 +56,10 @@ Core development practices, quality standards, and workflow for ml_playground co
   [Developer Guidelines](Readme.md#core-principles-non-negotiable)).
 - **Self-contained tooling.** Run helper scripts via UV, keep them documented and explicit in their CLI contracts, and
   avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
+- **Strict API Boundaries and Dependency Scoping.** External imports must be restricted to a defined public API surface.
+  Production code must only import packages from the default dependency group; development dependencies are forbidden.
+- **Explicit Error Contracts (Fail Fast).** All public functions must explicitly document the exceptions they raise.
+  Catching broad exceptions (`except Exception:`, `except:`) is strictly forbidden.
 
 ## Quality Gates (Mandatory)
 
