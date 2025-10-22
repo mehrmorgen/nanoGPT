@@ -58,13 +58,21 @@ READMEs, tests READMEs, and tools.
 Example:
 
 ```bash
-ml_playground/experiments/shakespeare/
-├── Readme.md        # experiment documentation (this file)
-├── config.toml      # sample/preset config for real runs overwriting ml_playground/experiments/default_config.toml
-├── preparer.py      # dataset preparation
-├── trainer.py       # training orchestration
-├── sampler.py       # generation/sampling entrypoints
-└── datasets/        # prepared dataset artifacts
+tools/
+├── README.md                # documentation for the tools directory (this file)
+├── ci_tasks.py              # Typer CLI exposing quality gates, coverage, and mutation helpers
+├── env_tasks.py             # Typer CLI for environment setup, verification, and cache cleanup
+├── lint_tasks.py            # Typer CLI bundling lint/format slices for fast feedback
+├── lit_tasks.py             # Typer CLI for LIT integration helpers
+├── test_tasks.py            # Typer CLI orchestrating pytest suites
+├── task_utils.py            # shared helpers (UV process wrappers, cache helpers) used by the CLIs
+├── review.py                # inspect review threads, bulk-reply, and delete comments
+├── cleanup_ignored_tracked.py # remove accidentally tracked files that should be ignored
+├── mutation_summary.py      # prints the active Cosmic Ray configuration before mutation runs
+├── mutation_report.py       # summarizes mutant outcomes after a Cosmic Ray run
+├── port_kill.py             # kill a process bound to a TCP port (Mac/Linux)
+├── setup_ai_guidelines.py   # configure symlinks for AI pair-programming workflow
+└── llama_cpp/               # vendor instructions and helpers for GGUF conversion
 ```
 
 ## Linking to Framework Docs
