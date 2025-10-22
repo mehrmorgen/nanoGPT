@@ -22,6 +22,7 @@ Implementation-specific reference for the `.github/` directory, detailing how ou
 - [Workflow Summary](#workflow-summary)
 - [Caching Implementation](#caching-implementation)
 - [Operational Commands](#operational-commands)
+- [Review Automation](#review-automation)
 - [Maintenance Notes](#maintenance-notes)
 
 ## Directory Overview
@@ -75,6 +76,15 @@ See [`workflows/README.md`](workflows/README.md) for per-file implementation det
 - **Sample progress**: `timeout 180 gh run watch <run-id>` to observe the first three minutes and exit (workflow continues server-side).
 - **Cancel a run**: `gh run cancel <run-id>` to free runner capacity.
 - **List recent runs**: `gh run list --workflow <workflow>.yml --limit 5`.
+
+## Review Automation
+
+Our review workflow combines shared ownership with explicit prompts so every pull request includes context, validation, and clear follow-up paths.
+
+- **Ownership model**: every core contributor is a code owner. Authors @-mention the most relevant teammates instead of relying on CODEOWNERS.
+- **Pull request template**: `.github/PULL_REQUEST_TEMPLATE.md` captures validation commands, *risk call-outs* (highlights for deploy, data, or performance hazards), and *reviewer notes* (files or commits that deserve focused attention). Authors must complete every section before requesting review.
+- **Review checklist**: `.dev-guidelines/CODE_REVIEW_CHECKLIST.md` is referenced by the PR template and complements author/reviewer guidelines.
+- **Bots and tooling**: `tools/review.py` provides helper commands for triaging discussion threads. Consider adding automation hooks (e.g., GitHub Apps, Probot) to ensure checklists are completed before merging.
 
 ## Maintenance Notes
 
