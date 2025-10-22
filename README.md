@@ -52,6 +52,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
+- Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
 - Review comment triage: use `uv run python tools/review.py list --pr <number> --unreplied --unresolved` to spot pending feedback; map comment URLs/IDs in `replies.json` for `bulk-reply`, and list comment IDs in `delete.json` for `uv run python tools/review.py delete --pr <number> --comments delete.json`.
 

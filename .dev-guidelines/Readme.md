@@ -24,7 +24,7 @@ them exactly.
 - [Core Principles (Non-Negotiable)](#core-principles-non-negotiable)
 - [Essential Commands](#essential-commands)
 - [Need Help?](#need-help)
-- [🧪 Testing Docs](#%f0%9f%a7%aa-testing-docs)
+- [🧪 Testing Docs](#-testing-docs)
 
 ## Quick Start
 
@@ -78,6 +78,12 @@ This guideline system is organized into focused documents for easy navigation:
 - Strict import policies and rationale
 - Canonical patterns and examples
 - Review checklist and enforcement
+
+### 🤝 Review Guidelines
+
+- [AUTHOR_GUIDELINES.md](AUTHOR_GUIDELINES.md) – Preparing high-signal pull requests and partnering with reviewers.
+- [REVIEWER_GUIDELINES.md](REVIEWER_GUIDELINES.md) – Conducting empathetic, high-signal reviews that align with automation.
+- [CODE_REVIEW_CHECKLIST.md](CODE_REVIEW_CHECKLIST.md) – Shared quality checklist for authors and reviewers.
 
 ### 🔍 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Problem Solving
 
