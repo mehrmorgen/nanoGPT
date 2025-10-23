@@ -59,7 +59,7 @@ uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sa
 ```bash
 # experiment documentation (this file)
 src/ml_playground/experiments/shakespeare/
-├── Readme.md        
+├── README.md        
 # sample/preset config for real runs
 ├── config.toml      
 # tiny defaults for tests

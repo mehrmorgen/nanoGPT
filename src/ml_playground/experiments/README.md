@@ -5,14 +5,14 @@ This directory hosts self‑contained experiments. Each experiment bundles:
 - its data preparation logic (`preparer.py`),
 - a TOML config (at the experiment root),
 - a local datasets/ area for seeds and prepared artifacts,
-- a focused Readme.md with step‑by‑step instructions,
+- a focused README.md with step‑by‑step instructions,
 - and, where applicable, trainer/integration code.
 
 Why self‑contained?
 
 - Portability: copy a single folder to reuse an experiment.
 - Reproducibility: config, code, and sample data paths live together.
-- Discoverability: each experiment explains itself in its own Readme.
+- Discoverability: each experiment explains itself in its own README.
 - Decoupling: no dependency on any legacy `ml_playground/datasets` package (the CLI uses the experiment registry only).
 
 Conventions
@@ -36,7 +36,7 @@ All experiments now use the centralized framework utilities for error handling, 
 
 ```bash
 src/ml_playground/experiments/
-├── Readme.md                    # overview and conventions (this file)
+├── README.md                    # overview and conventions (this file)
 ├── __init__.py                  # package marker/registry setup
 ├── default_config.toml          # baseline config used by templates/examples
 ├── protocol.py                  # typed protocol/contracts for preparers
@@ -61,29 +61,29 @@ Common CLI patterns
 Implemented experiments (current)
 
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
-  - Readme: src/ml_playground/experiments/shakespeare/Readme.md
+  - README: src/ml_playground/experiments/shakespeare/README.md
   - Config: src/ml_playground/experiments/shakespeare/config.toml
   - Prepare name: `shakespeare`
 - bundestag_char — Character‑level modeling on Bundestag text
-  - Readme: src/ml_playground/experiments/bundestag_char/Readme.md
+  - README: src/ml_playground/experiments/bundestag_char/README.md
   - Config: src/ml_playground/experiments/bundestag_char/config.toml
   - Prepare name: `bundestag_char`
 - bundestag_tiktoken — BPE tokenization (tiktoken) for Bundestag text
-  - Readme: src/ml_playground/experiments/bundestag_tiktoken/Readme.md
+  - README: src/ml_playground/experiments/bundestag_tiktoken/README.md
   - Config: src/ml_playground/experiments/bundestag_tiktoken/config.toml
   - Prepare name: `bundestag_tiktoken`
 - bundestag_finetuning_mps — Generic HF + PEFT LoRA finetuning integration (Apple MPS‑friendly)
-  - Readme: src/ml_playground/experiments/bundestag_finetuning_mps/Readme.md
+  - README: src/ml_playground/experiments/bundestag_finetuning_mps/README.md
   - Example preset config: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
   - Dataset value in TOML/CLI: `bundestag_finetuning_mps`
 - bundestag_qwen15b_lora_mps — Qwen2.5‑1.5B preset for the generic finetuning integration
-  - Readme: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
+  - README: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/README.md
   - Config: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
   - Uses dataset/integration: `bundestag_finetuning_mps`
 - speakger — Gemma‑based finetuning workflow targeting SpeakGer‑style data
-  - Readme: src/ml_playground/experiments/speakger/Readme.md
+  - README: src/ml_playground/experiments/speakger/README.md
   - Config: src/ml_playground/experiments/speakger/config.toml
-  - Uses dataset/integration: `gemma_finetuning_mps` (see notes in the experiment Readme)
+  - Uses dataset/integration: `gemma_finetuning_mps` (see notes in the experiment README)
 
 Add a new experiment (checklist)
 
@@ -95,7 +95,7 @@ Add a new experiment (checklist)
 
 1. Put a TOML config at `<name>/config.toml`, referenced by your README and examples.
 
-1. Write `<name>/Readme.md` following the common blueprint: Overview → Data → Method/Model → Environment → How to Run → Config Highlights → Outputs → Troubleshooting → Notes.
+1. Write `<name>/README.md` following the common blueprint: Overview → Data → Method/Model → Environment → How to Run → Config Highlights → Outputs → Troubleshooting → Notes.
 
 Notes
 
@@ -110,10 +110,10 @@ Use this copy-ready template to create a new experiment at `src/ml_playground/ex
 
   - `src/ml_playground/experiments/<name>/preparer.py`
   - `src/ml_playground/experiments/<name>/config.toml`
-  - `src/ml_playground/experiments/<name>/Readme.md`
+  - `src/ml_playground/experiments/<name>/README.md`
   - `src/ml_playground/experiments/<name>/datasets/` (created at runtime)
 
-Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and replace placeholders in angle brackets \<> with your experiment specifics.
+Paste the following into `src/ml_playground/experiments/<name>/README.md` and replace placeholders in angle brackets \<> with your experiment specifics.
 
 ````markdown
 # <Title of Your Experiment>

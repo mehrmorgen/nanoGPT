@@ -83,7 +83,7 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 
 ```bash
 src/ml_playground/experiments/bundestag_char/
-├── Readme.md        # experiment documentation (this file)
+├── README.md        # experiment documentation (this file)
 ├── config.toml      # sample/preset config for real runs
 ├── test_config.toml # tiny defaults for tests
 ├── preparer.py      # dataset preparation (char vocab, encode, write bins/meta)
