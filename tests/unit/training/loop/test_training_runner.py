@@ -63,6 +63,9 @@ class _FakeOptimizer:
     def zero_grad(self, *, set_to_none: bool = True) -> None:
         del set_to_none
 
+    def step(self) -> None:
+        pass
+
 
 class _FakeWriter:
     def add_scalar(
