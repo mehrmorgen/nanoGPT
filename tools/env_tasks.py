@@ -117,6 +117,12 @@ def ai_guidelines(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview actions"),
 ) -> None:
     """Set up AI guideline symlinks for the requested tool."""
+    if not tool:
+        from tools import setup_ai_guidelines  # local import to avoid circulars
+
+        supported = ", ".join(sorted(setup_ai_guidelines.TOOL_MAP))
+        typer.echo(f"[error] Missing tool name. Supported: {supported}")
+        raise typer.Exit(1)
     command = ["python", "tools/setup_ai_guidelines.py", tool]
     if dry_run:
         command.append("--dry-run")
