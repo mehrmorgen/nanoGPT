@@ -10,16 +10,16 @@ import typer
 app = typer.Typer(add_completion=False)
 
 # ---- Constants ----
-README_NAME = "Readme.md"
+README_NAME = "README.md"
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = PROJECT_DIR / "tools"
 BASE_DIR = PROJECT_DIR / ".dev-guidelines"
 
 # Tool configuration:
-#   maps tool name -> relative path (from project dir) for the primary symlink to Readme.md
+#   maps tool name -> relative path (from project dir) for the primary symlink to README.md
 TOOL_MAP: Dict[str, str] = {
     "copilot": ".github/copilot-instructions.md",
-    "aiassistant": ".aiassistant/rules/00-Readme.md",
+    "aiassistant": ".aiassistant/rules/00-README.md",
     "junie": ".junie/guidelines.md",
     "kiro": ".kiro/steering/product.md",
     "windsurf": ".windsurf/rules/rule.md",
@@ -59,7 +59,7 @@ def ensure_dir(path: Path, dry_run: bool) -> None:
         # On some platforms calling exists() can raise for problematic paths; fall through to create logic
         pass
 
-    # Heuristic: treat as file if it has a suffix (e.g., "Readme.md"); directories like ".github" have no suffix
+    # Heuristic: treat as file if it has a suffix (e.g., "README.md"); directories like ".github" have no suffix
     is_file_like = path.suffix != ""
 
     if dry_run:

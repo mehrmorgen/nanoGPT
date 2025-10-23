@@ -12,7 +12,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ## Documentation abstraction policy
 
 - Top-level docs are high-level and describe the why and the overall layout.
-- Each subfolder contains its own `Readme.md` with a focused scope and a folder tree.
+- Each subfolder contains its own `README.md` with a focused scope and a folder tree.
 - The deeper you go in the directory tree, the lower the level of abstraction and the more operational details you’ll find.
 
 ## Repository structure (high-level)
@@ -68,7 +68,7 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/README.md`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `README.md` and `.dev-guidelines/README.md`.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes
