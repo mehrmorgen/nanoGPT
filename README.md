@@ -55,6 +55,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
 - Review comment triage: use `uv run python tools/review.py list --pr <number> --unreplied --unresolved` to spot pending feedback; map comment URLs/IDs in `replies.json` for `bulk-reply`, and list comment IDs in `delete.json` for `uv run python tools/review.py delete --pr <number> --comments delete.json`.
 
+Setup and Developer Workflow
 - See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
 
 Datasets
