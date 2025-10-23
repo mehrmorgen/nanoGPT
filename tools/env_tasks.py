@@ -117,7 +117,7 @@ def ai_guidelines(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview actions"),
 ) -> None:
     """Set up AI guideline symlinks for the requested tool."""
-    if tool is None or (isinstance(tool, str) and not tool.strip()):
+    if not tool.strip():
         from tools import setup_ai_guidelines  # local import to avoid circulars
 
         supported = ", ".join(sorted(setup_ai_guidelines.TOOL_MAP))
