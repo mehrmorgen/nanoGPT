@@ -1,1 +1,1 @@
-.dev-guidelines/Readme.md
+.dev-guidelines/README.md
