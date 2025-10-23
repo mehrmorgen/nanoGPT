@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict
-
-from torch.utils.tensorboard import SummaryWriter
+from contextlib import AbstractContextManager
 
 from ml_playground.configuration.models import TrainerConfig
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.utils.estimator import estimate_loss
 from ml_playground.models.core.model import GPT
+from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.training.types import TensorboardWriter
 
 
 __all__ = ["run_evaluation"]
@@ -21,13 +22,13 @@ EstimateLossFn = Callable[[GPT, SimpleBatches, int, Any], Dict[str, float]]
 def run_evaluation(
     cfg: TrainerConfig,
     *,
-    logger,
+    logger: LoggerLike,
     iter_num: int,
     lr: float,
     raw_model: GPT,
     batches: SimpleBatches,
-    ctx,
-    writer: SummaryWriter | None,
+    ctx: AbstractContextManager[Any],
+    writer: TensorboardWriter | None,
     estimate_loss_fn: EstimateLossFn | None = None,
 ) -> dict[str, float]:
     """Run validation, log metrics, and optionally record TensorBoard scalars."""

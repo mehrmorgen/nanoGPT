@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
+from torch.optim import Optimizer
 
 from ml_playground.configuration.models import (
     TrainerConfig,
@@ -21,6 +21,7 @@ from ml_playground.training.ema import EMA
 from ml_playground.models.core.model import GPT
 
 from ml_playground.core.error_handling import CheckpointError
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.training.checkpointing.service import (
     apply_checkpoint,
     create_manager,
@@ -35,18 +36,27 @@ from ml_playground.training.hooks.logging import log_training_step
 from ml_playground.training.hooks.model import initialize_model
 from ml_playground.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.training.loop.scheduler import get_lr
+from ml_playground.training.types import (
+    OptimizerLike,
+    ScaledLoss,
+    TensorboardWriter,
+    VectorizeFn,
+)
 
 
 __all__ = ["Trainer", "train", "get_lr"]
 
 
+TTrainStep = Callable[["Trainer", torch.Tensor, torch.Tensor], torch.Tensor]
+
+
 @dataclass(frozen=True)
 class TrainerDependencies:
     initialize_batches: Callable[[TrainerConfig, SharedConfig], Any]
-    initialize_model: Callable[[TrainerConfig, Any], Tuple[Any, Any]]
+    initialize_model: Callable[[TrainerConfig, LoggerLike], Tuple[GPT, OptimizerLike]]
     initialize_components: Callable[
-        [Any, TrainerConfig, RuntimeContext, str],
-        Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]],
+        ...,  # Accepts model, cfg, runtime, and keyword-only log_dir
+        Tuple[GPT, GradScaler, Optional[EMA], Optional[TensorboardWriter]],
     ]
     create_manager: Callable[[TrainerConfig, SharedConfig], Any]
     load_checkpoint: Callable[..., Optional[Any]]
@@ -59,11 +69,11 @@ class TrainerDependencies:
 
 def default_trainer_dependencies() -> TrainerDependencies:
     def _init_components(
-        model: Any,
+        model: GPT,
         cfg: TrainerConfig,
         runtime: RuntimeContext,
         log_dir: str,
-    ) -> Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]]:
+    ) -> Tuple[GPT, GradScaler, Optional[EMA], Optional[TensorboardWriter]]:
         return initialize_components(model, cfg, runtime, log_dir=log_dir)
 
     return TrainerDependencies(
@@ -115,11 +125,15 @@ class Trainer:
             self.model,
             cfg,
             self.runtime,
-            str(self.out_dir),
+            log_dir=str(self.out_dir),
         )
 
         self.iter_num = 0
         self.best_val_loss = 1e9
+        self._train_step_override: Optional[TTrainStep] = None
+        self._vectorize_impl: Optional[VectorizeFn] = cast(
+            Optional[VectorizeFn], getattr(torch, "vmap", None)
+        )
 
         checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
@@ -147,17 +161,17 @@ class Trainer:
         self._ema = value
 
     @property
-    def writer(self) -> Optional[SummaryWriter]:
+    def writer(self) -> Optional[TensorboardWriter]:
         return self._writer
 
     @writer.setter
-    def writer(self, value: Optional[SummaryWriter]) -> None:
+    def writer(self, value: Optional[TensorboardWriter]) -> None:
         self._writer = value
 
     def run(self) -> Tuple[int, float]:
         """Execute the main training loop until reaching the maximum iteration count."""
         self.logger.info("Starting training loop")
-        X, Y = self.batches.get_batch("train")
+        inputs, targets = self.batches.get_batch("train")
         t0 = time.time()
         local_iter_num = 0
         raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
@@ -203,8 +217,8 @@ class Trainer:
                     if self.iter_num == 0 and self.cfg.runtime.eval_only:
                         break
 
-                loss = self._train_step(X, Y)
-                X, Y = self.batches.get_batch("train")
+                loss = self._train_step(inputs, targets)
+                inputs, targets = self.batches.get_batch("train")
 
                 t1 = time.time()
                 dt = t1 - t0
@@ -282,8 +296,12 @@ class Trainer:
 
         return self.iter_num, self.best_val_loss
 
-    def _train_step(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+    def _train_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Perform a gradient accumulation step and update EMA if configured."""
+
+        override = self._train_step_override
+        if override is not None:
+            return override(self, inputs, targets)
 
         grad_steps = int(self.cfg.data.grad_accum_steps)
         if grad_steps <= 0:
@@ -291,57 +309,63 @@ class Trainer:
 
         loss_tensor: torch.Tensor
         if grad_steps == 1:
-            loss_tensor = self._train_step_single(X, Y)
+            loss_tensor = self._train_step_single(inputs, targets)
         else:
-            loss_tensor = self._train_step_accum(X, Y, grad_steps)
+            loss_tensor = self._train_step_accum(inputs, targets, grad_steps)
+
+        optimizer = cast(Optimizer, self.optimizer)
 
         if self.cfg.optim.grad_clip != 0.0:
-            self.scaler.unscale_(self.optimizer)
+            self.scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.cfg.optim.grad_clip
             )
 
-        self.scaler.step(self.optimizer)
+        self.scaler.step(optimizer)
         self.scaler.update()
-        self.optimizer.zero_grad(set_to_none=True)
+        optimizer.zero_grad(set_to_none=True)
 
         if self.ema:
             self.ema.update(cast(GPT, getattr(self.model, "_orig_mod", self.model)))
         return loss_tensor.detach()
 
-    def _train_step_single(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+    def _train_step_single(
+        self, inputs: torch.Tensor, targets: torch.Tensor
+    ) -> torch.Tensor:
         with self.ctx:
-            _, loss_tensor = self.model(X, Y)
-        self.scaler.scale(loss_tensor).backward()
+            _, loss_tensor = self.model(inputs, targets)
+        scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
+        scaled_loss.backward()
         return loss_tensor
 
     def _train_step_accum(
-        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+        self, inputs: torch.Tensor, targets: torch.Tensor, grad_steps: int
     ) -> torch.Tensor:
         if grad_steps > 1 and hasattr(torch, "vmap"):
             try:
-                return self._train_step_vmap(X, Y, grad_steps)
+                return self._train_step_vmap(inputs, targets, grad_steps)
             except RuntimeError:
                 # Fallback if vmap cannot be applied (e.g., due to unsupported ops)
                 pass
-        return self._train_step_python(X, Y, grad_steps)
+        return self._train_step_python(inputs, targets, grad_steps)
 
     def _train_step_python(
-        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+        self, inputs: torch.Tensor, targets: torch.Tensor, grad_steps: int
     ) -> torch.Tensor:
-        loss_tensor = torch.tensor(0.0, device=X.device)
+        loss_tensor = torch.tensor(0.0, device=inputs.device)
         with self.ctx:
             for _ in range(grad_steps):
-                _, loss_tensor = self.model(X, Y)
+                _, loss_tensor = self.model(inputs, targets)
                 loss_tensor = loss_tensor / grad_steps
-                self.scaler.scale(loss_tensor).backward()
+                scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
+                scaled_loss.backward()
         return loss_tensor
 
     def _train_step_vmap(
-        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+        self, inputs: torch.Tensor, targets: torch.Tensor, grad_steps: int
     ) -> torch.Tensor:
-        x_expanded = X.unsqueeze(0).expand(grad_steps, *X.shape)
-        y_expanded = Y.unsqueeze(0).expand(grad_steps, *Y.shape)
+        x_expanded = inputs.unsqueeze(0).expand(grad_steps, *inputs.shape)
+        y_expanded = targets.unsqueeze(0).expand(grad_steps, *targets.shape)
 
         with self.ctx:
 
@@ -349,12 +373,28 @@ class Trainer:
                 _, loss_val = self.model(x_batch, y_batch)
                 return loss_val
 
-            vmap_fn = torch.vmap(_forward)
-            losses = vmap_fn(x_expanded, y_expanded)
+            vmap_fn = self._vectorize_impl
+            if vmap_fn is None:
+                raise RuntimeError("Vectorization requested but unavailable")
+            vectorized = vmap_fn(_forward)
+            losses = vectorized(x_expanded, y_expanded)
 
         loss_tensor = losses.mean()
-        self.scaler.scale(loss_tensor).backward()
+        scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
+        scaled_loss.backward()
         return loss_tensor
+
+    def set_train_step_override(self, override: Optional[TTrainStep]) -> None:
+        self._train_step_override = override
+
+    def set_vectorize_impl(self, vectorize: Optional[VectorizeFn]) -> None:
+        self._vectorize_impl = vectorize
+
+    def set_ema_for_test(self, ema: Optional[EMA]) -> None:
+        self.ema = ema
+
+    def run_train_step_for_test(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        return self._train_step(X, Y)
 
 
 def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> Tuple[int, float]:

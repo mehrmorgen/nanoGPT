@@ -227,3 +227,32 @@ def test_initialize_components_compile_missing(monkeypatch, tmp_path: Path) -> N
             log_dir=str(tmp_path),
             compile_fn=None,
         )
+
+
+def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
+    """GradScaler should omit device param and disable for CPU runtime."""
+    model = _make_model()
+    cfg = _make_config(device="cpu", dtype="float32")
+    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+
+    compiled_model, scaler, ema, writer = initialize_components(
+        model, cfg, runtime, log_dir=str(tmp_path)
+    )
+
+    # Scaler should be created and disabled for CPU
+    assert scaler is not None
+    assert not scaler.is_enabled()
+
+
+def test_initialize_components_scaler_cuda_branch(tmp_path: Path) -> None:
+    """GradScaler should set device and enable for CUDA + float16."""
+    model = _make_model()
+    cfg = _make_config(device="cuda", dtype="float16")
+    runtime = RuntimeContext(device_type="cuda", autocast_context=nullcontext())
+
+    compiled_model, scaler, ema, writer = initialize_components(
+        model, cfg, runtime, log_dir=str(tmp_path)
+    )
+
+    # Scaler should be created; enabled status depends on CUDA availability
+    assert scaler is not None

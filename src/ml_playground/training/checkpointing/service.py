@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Callable, Optional, cast
 
+from torch.optim import Optimizer
+
 from ml_playground.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
@@ -17,6 +19,7 @@ from ml_playground.configuration.models import (
 )
 from ml_playground.core.error_handling import CheckpointError, LoggerLike
 from ml_playground.models.core.model import GPT
+from ml_playground.training.ema import EMA
 
 
 __all__ = [
@@ -80,8 +83,8 @@ def apply_checkpoint(
     checkpoint: Checkpoint,
     *,
     model: GPT,
-    optimizer,
-    ema,
+    optimizer: Optimizer,
+    ema: Optional[EMA],
 ) -> tuple[int, float]:
     """Apply checkpoint state to the model/optimizer and return iteration metrics."""
     model.load_state_dict(checkpoint.model, strict=False)
@@ -98,8 +101,8 @@ def save_checkpoint(
     cfg: TrainerConfig,
     *,
     model: GPT,
-    optimizer,
-    ema,
+    optimizer: Optimizer,
+    ema: Optional[EMA],
     iter_num: int,
     best_val_loss: float,
     logger: LoggerLike,
