@@ -38,7 +38,7 @@ Core development practices, quality standards, and workflow for ml_playground co
   global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
   strict Pydantic models forbid extras and enforce cross-field invariants (see
   [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
-  [`ml_playground/configuration`](../ml_playground/configuration)).
+  [`ml_playground/configuration`](../src/ml_playground/configuration/)).
 - **Strict Typing, Immutability, and Determinism.** Use explicit type hints, treat configuration and data structures as
   immutable, and favor pure, side-effect-free functions to keep code predictable and prevent state bugs.
 - **Centralized Utilities and Explicit Device Management.** Extend shared infrastructure (tokenizers, data prep, error
