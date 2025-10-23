@@ -40,24 +40,16 @@ def deadcode() -> None:
     utils.uv_run("vulture", str(utils.PKG_PATH), "--min-confidence", "90")
 
 
-def _run_basedpyright() -> None:
-    """Execute BasedPyright against the package."""
-
-    utils.uv_run("basedpyright", str(utils.PKG_PATH))
-
-
 @app.command("basedpyright")
 def basedpyright() -> None:
     """Run BasedPyright type checks."""
-
-    _run_basedpyright()
+    utils.uv_run("basedpyright", str(utils.PKG_PATH))
 
 
 @app.command("pyright")
 def pyright_alias() -> None:
     """Run BasedPyright type checks (Pyright CLI alias)."""
-
-    _run_basedpyright()
+    utils.uv_run("basedpyright", str(utils.PKG_PATH))
 
 
 @app.command()
