@@ -17,6 +17,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = PROJECT_DIR / "tools"
 BASE_DIR = PROJECT_DIR / ".dev-guidelines"
 
+
 # Tool configuration:
 #   maps tool name -> ToolSpec describing the primary README.md link target and
 #   whether the target should mirror the full guidelines directory tree.
