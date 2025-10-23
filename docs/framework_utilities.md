@@ -387,7 +387,7 @@ these rules immediately and update tests in lockstep.
 
   - Absolute, submodule-level imports only. No umbrella re-exports or star imports. No local imports except documented
     cycle breaks.
-  - Follow `.dev-guidelines/Readme.md` (Import Standards) strictly.
+  - Follow `.dev-guidelines/README.md` (Import Standards) strictly.
 
 - **Tests updated first, then code in small steps**
 

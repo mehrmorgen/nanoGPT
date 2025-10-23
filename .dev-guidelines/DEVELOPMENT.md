@@ -30,7 +30,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 ## Guiding Principles
 
 - **Quality gates and TDD discipline.** Always run `uv run ci-tasks quality` before committing and practice strict
-  TDD as the default workflow (see [Developer Guidelines](Readme.md#core-principles-non-negotiable) and the canonical
+  TDD as the default workflow (see [Developer Guidelines](README.md#core-principles-non-negotiable) and the canonical
   process in [Testing Standards](TESTING.md#test-driven-development-required)).
 - **UV-first Typer CLIs.** Prefer the published Typer entry points (`env-tasks`, `test-tasks`, `ci-tasks`) over ad-hoc
   scripts so local workflows mirror CI (see the [repository README](../README.md#policy)).
