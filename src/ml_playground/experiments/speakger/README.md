@@ -123,7 +123,7 @@ out/speakger_gemma3_270m_lora_mps/
 
 ```bash
 src/ml_playground/experiments/speakger/
-├── Readme.md           # experiment documentation (this file)
+├── README.md           # experiment documentation (this file)
 ├── config.toml         # sample/preset config for real runs
 ├── test_config.toml    # tiny defaults for tests
 ├── preparer.py         # dataset preparation (tokenizer, JSONL, meta)

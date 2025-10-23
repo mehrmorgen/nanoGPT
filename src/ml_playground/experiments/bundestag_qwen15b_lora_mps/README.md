@@ -82,7 +82,7 @@ out/bundestag_qwen15b_lora_mps/
 
 ```bash
 src/ml_playground/experiments/bundestag_qwen15b_lora_mps/
-├── Readme.md        # preset documentation (this file)
+├── README.md        # preset documentation (this file)
 ├── __init__.py      # package marker
 ├── config.toml      # preset config targeting Qwen2.5-1.5B + LoRA
 ├── test_config.toml # tiny defaults for tests
