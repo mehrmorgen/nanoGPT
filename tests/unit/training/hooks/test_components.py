@@ -244,6 +244,7 @@ def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
     assert not scaler.is_enabled()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_initialize_components_scaler_cuda_branch(tmp_path: Path) -> None:
     """GradScaler should set device and enable for CUDA + float16."""
     model = _make_model()
