@@ -3,8 +3,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from types import MethodType, SimpleNamespace
-from typing import Any, Callable, Dict, Optional, Tuple
+from types import MethodType
+from typing import Any, Callable, Dict, Literal, Optional, Tuple
 
 import pytest
 import torch
@@ -64,31 +64,18 @@ class _FakeOptimizer:
         del set_to_none
 
 
-class _FakeScaler:
-    class _Scaled:
-        def backward(self, *args: Any, **kwargs: Any) -> None:
-            del args, kwargs
-
-    def __init__(self, enabled: bool = False) -> None:
-        self.enabled = enabled
-
-    def scale(self, loss: torch.Tensor) -> "_FakeScaler._Scaled":
-        del loss
-        return _FakeScaler._Scaled()
-
-    def unscale_(self, *args: Any, **kwargs: Any) -> None:
-        del args, kwargs
-
-    def step(self, *args: Any, **kwargs: Any) -> None:
-        del args, kwargs
-
-    def update(self, *args: Any, **kwargs: Any) -> None:
-        del args, kwargs
-
-
 class _FakeWriter:
-    def add_scalar(self, *args: Any, **kwargs: Any) -> None:
-        del args, kwargs
+    def add_scalar(
+        self,
+        tag: str,
+        scalar_value: float,
+        global_step: int,
+        *,
+        walltime: float | None = None,
+        new_style: bool = False,
+        double_precision: bool = False,
+    ) -> None:
+        del tag, scalar_value, global_step, walltime, new_style, double_precision
 
     def close(self) -> None:
         pass
@@ -135,7 +122,7 @@ def _make_cfg(
     *,
     eval_only: bool = False,
     max_iters: int = 2,
-    tensorboard_mode: str = "eval",
+    tensorboard_mode: Literal["eval", "log"] = "eval",
     logger: Any | None = None,
     grad_accum_steps: int = 1,
     grad_clip: float = 0.0,
@@ -212,7 +199,6 @@ def _build_deps(
     batches = _FakeBatches(device="cpu")
     model = _FakeModel()
     optimizer = _FakeOptimizer()
-    scaler = _FakeScaler()
     writer = writer or _FakeWriter()
     manager = _FakeCkptMgr()
 
@@ -231,9 +217,14 @@ def _build_deps(
         cfg: TrainerConfig,
         runtime: runner_mod.RuntimeContext,
         log_dir: str,
-    ) -> Tuple[torch.nn.Module, _FakeScaler, None, _FakeWriter]:
+    ) -> Tuple[torch.nn.Module, runner_mod.GradScaler, None, _FakeWriter]:
         del cfg, runtime, log_dir
-        return model_param, scaler, None, writer
+        return (
+            model_param,
+            runner_mod.GradScaler(device="cpu", enabled=False),
+            None,
+            writer,
+        )
 
     def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> _FakeCkptMgr:
         del cfg, shared
@@ -465,7 +456,14 @@ def test_trainer_warns_when_metadata_propagation_fails(tmp_path: Path) -> None:
 
 
 def test_trainer_applies_checkpoint_state_on_init(tmp_path: Path) -> None:
-    checkpoint = SimpleNamespace(iter_num=5, best_val_loss=0.42)
+    checkpoint = Checkpoint(
+        model={},
+        optimizer={},
+        model_args={"n_layer": 1},
+        iter_num=5,
+        best_val_loss=0.42,
+        config={},
+    )
     deps, _manager = _build_deps(
         evaluation={0: {"train": 0.5, "val": 0.4}},
         load_checkpoint_result=checkpoint,
