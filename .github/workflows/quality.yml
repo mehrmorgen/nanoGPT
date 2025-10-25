@@ -68,7 +68,7 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - if: steps.cache-venv.outputs.cache-hit != 'true'
+      - name: Sync dependencies (always; ensures env matches uv.lock)
         run: uv sync --frozen --group dev
       - run: uv run ci-tasks quality
       - name: Prune uv cache

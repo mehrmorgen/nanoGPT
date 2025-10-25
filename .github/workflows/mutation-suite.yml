@@ -55,9 +55,8 @@ jobs:
           key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
-      - name: Sync dependencies (dev)
-        if: steps.cache-venv.outputs.cache-hit != 'true'
-        run: uv run env-tasks sync --group dev
+      - name: Sync dependencies (always; ensures env matches uv.lock)
+        run: uv sync --frozen --group dev
 
       - name: Run mutation suite
         run: uv run ci-tasks mutation run
