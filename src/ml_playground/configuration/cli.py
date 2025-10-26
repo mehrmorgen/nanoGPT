@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
-
 from ml_playground.configuration.loading import (
     get_cfg_path,
     load_full_experiment_config,
@@ -12,12 +10,12 @@ from ml_playground.configuration.models import ExperimentConfig
 _PROJECT_HOME = Path(__file__).resolve().parent.parent.parent
 
 
-def cfg_path_for(experiment: str, exp_config: Optional[Path]) -> Path:
+def cfg_path_for(experiment: str, exp_config: Path | None) -> Path:
     """Return the canonical path to an experiment configuration file."""
     return get_cfg_path(experiment, exp_config)
 
 
-def load_experiment(experiment: str, exp_config: Optional[Path]) -> ExperimentConfig:
+def load_experiment(experiment: str, exp_config: Path | None) -> ExperimentConfig:
     """Load the fully merged configuration for a CLI invocation."""
     cfg_path = cfg_path_for(experiment, exp_config)
     return load_full_experiment_config(cfg_path, _PROJECT_HOME, experiment)
@@ -34,7 +32,7 @@ def ensure_train_prerequisites(exp: ExperimentConfig) -> Path:
     return train_meta
 
 
-def ensure_sample_prerequisites(exp: ExperimentConfig) -> Tuple[Path, Path]:
+def ensure_sample_prerequisites(exp: ExperimentConfig) -> tuple[Path, Path]:
     """Ensure sampling has access to metadata produced during training."""
     train_meta = exp.shared.dataset_dir / "meta.pkl"
     runtime_meta = exp.shared.sample_out_dir / exp.shared.experiment / "meta.pkl"

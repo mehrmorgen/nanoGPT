@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import pickle
-import sys
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any, Literal
 
 import numpy as np
 import pytest
@@ -13,6 +12,22 @@ from ml_playground.data_pipeline.transforms.io import (
     setup_tokenizer,
     write_bin_and_meta,
 )
+from ml_playground.core.tokenizer import create_tokenizer
+from ml_playground.core.tokenizer_protocol import Tokenizer
+
+
+class _NullLogger:
+    def info(self, msg: str, *args: object, **kwargs: object) -> None:
+        pass
+
+    def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+        pass
+
+    def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+        pass
+
+    def error(self, msg: str, *args: object, **kwargs: object) -> None:
+        pass
 
 
 def _arrays() -> tuple[np.ndarray, np.ndarray, dict]:
@@ -32,7 +47,7 @@ def test_write_bin_and_meta_raises_on_unreadable_existing_meta(tmp_path: Path) -
     train, val, meta = _arrays()
 
     with pytest.raises(DataError) as exc:
-        write_bin_and_meta(ds, train, val, meta, logger=object())
+        write_bin_and_meta(ds, train, val, meta, logger=_NullLogger())
 
     assert "Failed to read existing meta.pkl" in str(exc.value)
 
@@ -48,7 +63,7 @@ def test_write_bin_and_meta_detects_invalid_existing_meta(tmp_path: Path) -> Non
     train, val, meta = _arrays()
 
     with pytest.raises(DataError) as exc:
-        write_bin_and_meta(ds, train, val, meta, logger=object())
+        write_bin_and_meta(ds, train, val, meta, logger=_NullLogger())
 
     assert "Invalid existing meta.pkl" in str(exc.value)
 
@@ -63,7 +78,16 @@ def test_write_bin_and_meta_existing_meta_swallow_logger_errors(tmp_path: Path) 
         pickle.dump({"meta_version": 1}, f)
 
     class RaisingLogger:
-        def info(self, _message: str) -> None:
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("logger unavailable")
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("logger unavailable")
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("logger unavailable")
+
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
             raise ValueError("logger unavailable")
 
     train, val, meta = _arrays()
@@ -87,7 +111,7 @@ def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
     assert tokenizer.decode([0]) == "a"
 
 
-def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> None:
+def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
     class DummyEncoding:
         n_vocab = 1
         _mergeable_ranks = {"a": 0}
@@ -98,8 +122,19 @@ def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> 
         def decode(self, token_ids: list[int]) -> str:
             return "a" * len(token_ids)
 
-    dummy_module = SimpleNamespace(get_encoding=lambda name: DummyEncoding())
-    monkeypatch.setitem(sys.modules, "tiktoken", dummy_module)
+    class DummyModule:
+        @staticmethod
+        def get_encoding(name: str) -> DummyEncoding:
+            return DummyEncoding()
+
+    def fake_factory(
+        tokenizer_type: Literal["char", "word", "tiktoken"],
+        **kwargs: Any,
+    ) -> Tokenizer:
+        if tokenizer_type == "tiktoken":
+            kwargs = dict(kwargs)
+            kwargs.setdefault("loader", lambda: DummyModule())
+        return create_tokenizer(tokenizer_type, **kwargs)
 
     meta = {
         "tokenizer_type": "tiktoken",
@@ -109,7 +144,7 @@ def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> 
     with (tmp_path / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
 
-    tokenizer = setup_tokenizer(tmp_path)
+    tokenizer = setup_tokenizer(tmp_path, token_factory=fake_factory)
     assert tokenizer is not None
     assert tokenizer.name == "tiktoken"
     assert tokenizer.decode([0, 0]) == "aa"

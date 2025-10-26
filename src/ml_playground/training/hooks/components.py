@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple, cast
+from typing import Callable, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
@@ -24,8 +24,8 @@ def initialize_components(
     runtime: RuntimeContext,
     *,
     log_dir: str,
-    compile_fn: Optional[Callable[[GPT], GPT]] = None,
-) -> Tuple[GPT, GradScaler, Optional[EMA], Optional[TensorboardWriter]]:
+    compile_fn: Callable[[GPT], GPT] | None = None,
+) -> tuple[GPT, GradScaler, EMA | None, TensorboardWriter | None]:
     """Compile model, create scaler/EMA, and initialize TensorBoard writer."""
     compiled_model = model
     if cfg.runtime.compile:
@@ -36,20 +36,24 @@ def initialize_components(
             raise RuntimeError("torch.compile requested but unavailable")
         compiled_model = cast(GPT, compiler(model))
 
-    scaler_kwargs: dict[str, str | bool] = {}
+    device_arg: str | None = None
+    enabled_arg: bool
     if runtime.device_type == "cuda":
-        scaler_kwargs["device"] = runtime.device_type
-        scaler_kwargs["enabled"] = cfg.runtime.dtype == "float16"
+        device_arg = "cuda"
+        enabled_arg = cfg.runtime.dtype == "float16"
     else:
-        scaler_kwargs["enabled"] = False
+        enabled_arg = False
 
-    scaler = GradScaler(**scaler_kwargs)  # type: ignore[arg-type]
+    if device_arg is not None:
+        scaler = GradScaler(device=device_arg, enabled=enabled_arg)
+    else:
+        scaler = GradScaler(enabled=enabled_arg)
 
-    ema: Optional[EMA] = None
+    ema: EMA | None = None
     if cfg.runtime.ema_decay > 0.0:
         ema = EMA(compiled_model, cfg.runtime.ema_decay, cfg.runtime.device)
 
-    writer: Optional[TensorboardWriter] = None
+    writer: TensorboardWriter | None = None
     if cfg.runtime.tensorboard_enabled:
         writer = SummaryWriter(log_dir=log_dir)
 

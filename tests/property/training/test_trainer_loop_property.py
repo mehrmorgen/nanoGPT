@@ -98,7 +98,9 @@ def _create_dataset(tmp_path: Path, train_size: int = 256, val_size: int = 128) 
     train_file = dataset_dir / "train.bin"
     val_file = dataset_dir / "val.bin"
 
-    torch.randint(0, 256, (train_size,), dtype=torch.uint16).numpy().tofile(str(train_file))
+    torch.randint(0, 256, (train_size,), dtype=torch.uint16).numpy().tofile(
+        str(train_file)
+    )
     torch.randint(0, 256, (val_size,), dtype=torch.uint16).numpy().tofile(str(val_file))
 
 
@@ -123,7 +125,9 @@ def test_trainer_completes_with_valid_config(
     grad_accum_steps: int,
 ) -> None:
     """Trainer should complete successfully with any valid configuration."""
-    cfg, shared = _make_config(tmp_path, max_iters, eval_interval, ema_decay, grad_accum_steps)
+    cfg, shared = _make_config(
+        tmp_path, max_iters, eval_interval, ema_decay, grad_accum_steps
+    )
     _create_dataset(tmp_path)
 
     trainer = Trainer(cfg, shared)
@@ -178,7 +182,9 @@ def test_trainer_ema_consistency(
     ema_decay: float,
 ) -> None:
     """Trainer should create EMA only when decay > 0."""
-    cfg, shared = _make_config(tmp_path, max_iters=2, eval_interval=1, ema_decay=ema_decay, grad_accum_steps=1)
+    cfg, shared = _make_config(
+        tmp_path, max_iters=2, eval_interval=1, ema_decay=ema_decay, grad_accum_steps=1
+    )
     _create_dataset(tmp_path)
 
     trainer = Trainer(cfg, shared)
@@ -206,7 +212,13 @@ def test_trainer_loss_decreases_or_stable(
     grad_accum_steps: int,
 ) -> None:
     """Loss should generally decrease or remain stable across iterations."""
-    cfg, shared = _make_config(tmp_path, max_iters=3, eval_interval=1, ema_decay=0.0, grad_accum_steps=grad_accum_steps)
+    cfg, shared = _make_config(
+        tmp_path,
+        max_iters=3,
+        eval_interval=1,
+        ema_decay=0.0,
+        grad_accum_steps=grad_accum_steps,
+    )
     _create_dataset(tmp_path)
 
     trainer = Trainer(cfg, shared)

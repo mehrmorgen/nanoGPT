@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
 import pytest
 import torch
 
-from ml_playground.configuration.models import DataConfig
+from ml_playground.configuration.models import DataConfig, DeviceKind
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
+from ml_playground.data_pipeline.sources.memmap import MemmapReader
+
+
+CPU: DeviceKind = cast(DeviceKind, "cpu")
 
 
 def _writer(path: Path, arr: np.ndarray) -> None:
@@ -34,18 +38,18 @@ def _dataset_dir(
 def test_sample_batch_empty_reader_raises_value_error() -> None:
     """`sample_batch` should reject readers with zero length."""
 
-    reader = SimpleNamespace(arr=np.array([], dtype=np.uint16), length=0)
+    reader = MemmapReader(arr=np.array([], dtype=np.uint16), length=0)
     with pytest.raises(ValueError):
-        sample_batch(reader, batch_size=1, block_size=1, device="cpu")
+        sample_batch(reader, batch_size=1, block_size=1, device=CPU)
 
 
 def test_sample_batch_wraps_when_length_leq_block() -> None:
     """When `L <= block_size`, `sample_batch` should wrap around the dataset."""
 
     arr = np.arange(3, dtype=np.uint16)
-    reader = SimpleNamespace(arr=arr, length=arr.shape[0])
+    reader = MemmapReader(arr=arr, length=int(arr.shape[0]))
     np.random.seed(0)
-    x, y = sample_batch(reader, batch_size=2, block_size=5, device="cpu")
+    x, y = sample_batch(reader, batch_size=2, block_size=5, device=CPU)
 
     np.random.seed(0)
     idx = np.random.randint(0, reader.length, size=(2,), dtype=np.int64)
@@ -61,9 +65,9 @@ def test_sample_batch_sliding_window_path_extracts_contiguous_windows() -> None:
     """When `L > block_size`, the sliding window path should be used."""
 
     arr = np.arange(12, dtype=np.uint16)
-    reader = SimpleNamespace(arr=arr, length=arr.shape[0])
+    reader = MemmapReader(arr=arr, length=int(arr.shape[0]))
     np.random.seed(1)
-    x, y = sample_batch(reader, batch_size=3, block_size=4, device="cpu")
+    x, y = sample_batch(reader, batch_size=3, block_size=4, device=CPU)
 
     np.random.seed(1)
     idx = np.random.randint(0, reader.length - 4, size=(3,), dtype=np.int64)
@@ -80,7 +84,7 @@ def test_simple_batches_defaults_to_uint16_without_meta(tmp_path: Path) -> None:
     arr = np.arange(16, dtype=np.uint16)
     ddir = _dataset_dir(tmp_path, train=arr, val=arr)
     cfg = DataConfig(batch_size=2, block_size=4, sampler="random")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
     assert batches.train.arr.dtype == np.uint16
 
 
@@ -90,7 +94,7 @@ def test_simple_batches_respects_meta_dtype_uint32(tmp_path: Path) -> None:
     arr = np.arange(16, dtype=np.uint32)
     ddir = _dataset_dir(tmp_path, train=arr, val=arr, meta={"dtype": "uint32"})
     cfg = DataConfig(batch_size=2, block_size=4, sampler="random")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
     assert batches.train.arr.dtype == np.uint32
 
 
@@ -100,7 +104,7 @@ def test_simple_batches_unknown_sampler_raises(tmp_path: Path) -> None:
     arr = np.arange(16, dtype=np.uint16)
     ddir = _dataset_dir(tmp_path, train=arr, val=arr)
     cfg = DataConfig(batch_size=2, block_size=4, sampler="random")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
     # mutate sampler after construction to simulate unexpected configuration value
     object.__setattr__(batches.data, "sampler", "bogus")
     with pytest.raises(ValueError):
@@ -113,9 +117,9 @@ def test_simple_batches_sequential_empty_dataset_raises(tmp_path: Path) -> None:
     arr = np.arange(4, dtype=np.uint16)
     ddir = _dataset_dir(tmp_path, train=arr, val=arr)
     cfg = DataConfig(batch_size=1, block_size=1, sampler="sequential")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
     # replace reader with empty dataset to trigger guard without memmap creating empty files
-    empty_reader = SimpleNamespace(arr=np.array([], dtype=np.uint16), length=0)
+    empty_reader = MemmapReader(arr=np.array([], dtype=np.uint16), length=0)
     batches.train = empty_reader  # type: ignore[assignment]
     with pytest.raises(ValueError):
         batches.get_batch("train")
@@ -129,7 +133,7 @@ def test_simple_batches_corrupt_meta_falls_back_to_uint16(tmp_path: Path) -> Non
     (ddir / "meta.pkl").write_text("not-a-pickle", encoding="utf-8")
 
     cfg = DataConfig(batch_size=1, block_size=4, sampler="random")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
 
     assert batches.train.arr.dtype == np.uint16
 
@@ -141,7 +145,7 @@ def test_simple_batches_meta_uint16_keeps_dtype(tmp_path: Path) -> None:
     ddir = _dataset_dir(tmp_path, train=arr, val=arr, meta={"dtype": "uint16"})
 
     cfg = DataConfig(batch_size=1, block_size=4, sampler="random")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
 
     assert batches.train.arr.dtype == np.uint16
 
@@ -152,7 +156,7 @@ def test_simple_batches_sequential_val_split_wraps(tmp_path: Path) -> None:
     arr = np.arange(10, dtype=np.uint16)
     ddir = _dataset_dir(tmp_path, train=arr, val=arr)
     cfg = DataConfig(batch_size=2, block_size=3, sampler="sequential")
-    batches = SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
 
     # Advance train cursor so val path is isolated
     batches.get_batch("train")

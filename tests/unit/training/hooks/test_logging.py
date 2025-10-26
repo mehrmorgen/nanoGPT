@@ -1,38 +1,14 @@
 from __future__ import annotations
 
-import logging
-
-from ml_playground.configuration.models import ModelConfig
-from ml_playground.models.core.model import GPT
 from ml_playground.training.hooks.logging import log_training_step
 
-
-class _Logger:
-    def __init__(self) -> None:
-        self.messages: list[str] = []
-
-    def info(self, msg: str) -> None:
-        self.messages.append(msg)
-
-
-def _make_model() -> GPT:
-    """Create a minimal GPT model for testing."""
-    cfg = ModelConfig(
-        n_layer=1,
-        n_head=1,
-        n_embd=4,
-        block_size=4,
-        dropout=0.0,
-        vocab_size=50,
-    )
-    logger = logging.getLogger(__name__)
-    return GPT(cfg, logger)
+from tests.unit.training._helpers import LoggerStub, make_minimal_gpt
 
 
 def test_log_training_step_early_iterations() -> None:
     """log_training_step should skip MFU calculation for early iterations."""
-    logger = _Logger()
-    model = _make_model()
+    logger = LoggerStub()
+    model = make_minimal_gpt()
 
     # local_iter_num < 5 should skip MFU calculation
     running_mfu = log_training_step(
@@ -56,8 +32,8 @@ def test_log_training_step_early_iterations() -> None:
 
 def test_log_training_step_with_mfu_calculation() -> None:
     """log_training_step should calculate MFU after warmup iterations."""
-    logger = _Logger()
-    model = _make_model()
+    logger = LoggerStub()
+    model = make_minimal_gpt()
 
     # local_iter_num >= 5 should calculate MFU
     running_mfu = log_training_step(
@@ -81,8 +57,8 @@ def test_log_training_step_with_mfu_calculation() -> None:
 
 def test_log_training_step_smooths_mfu() -> None:
     """log_training_step should apply exponential smoothing to MFU."""
-    logger = _Logger()
-    model = _make_model()
+    logger = LoggerStub()
+    model = make_minimal_gpt()
 
     # First call with MFU calculation
     running_mfu = log_training_step(
@@ -121,8 +97,8 @@ def test_log_training_step_smooths_mfu() -> None:
 
 def test_log_training_step_scales_loss() -> None:
     """log_training_step should scale loss by grad_accum_steps."""
-    logger = _Logger()
-    model = _make_model()
+    logger = LoggerStub()
+    model = make_minimal_gpt()
 
     log_training_step(
         logger=logger,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, TYPE_CHECKING
+from typing import Annotated, Any, Callable, Literal, Optional, TYPE_CHECKING
 import typing as _t
 
 from pydantic import (
@@ -43,18 +43,25 @@ ModelFactoryFn = _t.Callable[[Any, object], Any]
 CompileModelFn = _t.Callable[[Any], Any]
 
 
-def _resolve_path_strict(v: Path) -> Path:
+ResolveFn = Callable[[Path], Path]
+
+
+def _resolve_path_strict(v: Path, *, resolve: ResolveFn | None = None) -> Path:
+    resolver = resolve or Path.resolve
     try:
-        return v.resolve()
+        return resolver(v)
     except OSError as exc:  # pragma: no cover - resolution failure path
         raise ValueError(f"Invalid path: {v}") from exc
 
 
-def _resolve_if_relative(value: Any, base_dir: Path) -> Any:
+def _resolve_if_relative(
+    value: Any, base_dir: Path, *, resolve: ResolveFn | None = None
+) -> Any:
+    resolver = resolve or Path.resolve
     if isinstance(value, str) and not value.startswith("/"):
-        return (base_dir / value).resolve()
+        return resolver(base_dir / value)
     if isinstance(value, Path) and not value.is_absolute():
-        return (base_dir / value).resolve()
+        return resolver(base_dir / value)
     return value
 
 

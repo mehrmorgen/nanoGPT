@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -9,29 +8,21 @@ import torch
 
 from ml_playground.configuration.models import (
     DataConfig,
+    DeviceKind,
+    DTypeKind,
     LRSchedule,
     ModelConfig,
     OptimConfig,
     RuntimeConfig,
     TrainerConfig,
 )
-from ml_playground.models.core.model import GPT
 from ml_playground.training.hooks.components import initialize_components
+
 from ml_playground.training.hooks.runtime import RuntimeContext
 
+from ml_playground.models.core.model import GPT
 
-def _make_model() -> GPT:
-    """Create a minimal GPT model for testing."""
-    cfg = ModelConfig(
-        n_layer=1,
-        n_head=1,
-        n_embd=4,
-        block_size=4,
-        dropout=0.0,
-        vocab_size=50,
-    )
-    logger = logging.getLogger(__name__)
-    return GPT(cfg, logger)
+from tests.unit.training._helpers import autocast_context, make_minimal_gpt
 
 
 def _make_config(
@@ -39,8 +30,8 @@ def _make_config(
     compile: bool = False,
     ema_decay: float = 0.0,
     tensorboard_enabled: bool = False,
-    device: str = "cpu",
-    dtype: str = "float32",
+    device: DeviceKind = "cpu",
+    dtype: DTypeKind = "float32",
 ) -> TrainerConfig:
     """Create a TrainerConfig for testing."""
     return TrainerConfig(
@@ -77,9 +68,9 @@ def _make_config(
 
 def test_initialize_components_without_optional_features(tmp_path: Path) -> None:
     """initialize_components should work without compile, EMA, or TensorBoard."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config()
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -97,9 +88,9 @@ def test_initialize_components_without_optional_features(tmp_path: Path) -> None
 
 def test_initialize_components_with_ema(tmp_path: Path) -> None:
     """initialize_components should create EMA when ema_decay > 0."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(ema_decay=0.999)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -112,9 +103,9 @@ def test_initialize_components_with_ema(tmp_path: Path) -> None:
 
 def test_initialize_components_with_tensorboard(tmp_path: Path) -> None:
     """initialize_components should create TensorBoard writer when enabled."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(tensorboard_enabled=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     log_dir = tmp_path / "logs"
     compiled_model, scaler, ema, writer = initialize_components(
@@ -131,9 +122,9 @@ def test_initialize_components_with_tensorboard(tmp_path: Path) -> None:
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_initialize_components_scaler_enabled_for_cuda_float16(tmp_path: Path) -> None:
     """initialize_components should enable GradScaler for CUDA + float16."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(device="cuda", dtype="float16")
-    runtime = RuntimeContext(device_type="cuda", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cuda", autocast_context=autocast_context())
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -146,9 +137,9 @@ def test_initialize_components_scaler_enabled_for_cuda_float16(tmp_path: Path) -
 
 def test_initialize_components_scaler_disabled_for_cpu(tmp_path: Path) -> None:
     """initialize_components should disable GradScaler for CPU."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(device="cpu", dtype="float32")
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -161,7 +152,7 @@ def test_initialize_components_scaler_disabled_for_cpu(tmp_path: Path) -> None:
 
 def test_initialize_components_with_all_features(tmp_path: Path) -> None:
     """initialize_components should handle all features enabled together."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(
         compile=False,  # Can't test actual compilation easily
         ema_decay=0.95,
@@ -169,7 +160,7 @@ def test_initialize_components_with_all_features(tmp_path: Path) -> None:
         device="cpu",
         dtype="float32",
     )
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     log_dir = tmp_path / "logs"
     compiled_model, scaler, ema, writer = initialize_components(
@@ -190,9 +181,9 @@ def test_initialize_components_with_all_features(tmp_path: Path) -> None:
 
 def test_initialize_components_with_compile(tmp_path: Path) -> None:
     """initialize_components should attempt to compile model when enabled."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(compile=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     compiled_calls: list[object] = []
 
@@ -210,14 +201,11 @@ def test_initialize_components_with_compile(tmp_path: Path) -> None:
     assert compiled_calls == [model]
 
 
-def test_initialize_components_compile_missing(monkeypatch, tmp_path: Path) -> None:
+def test_initialize_components_compile_missing(tmp_path: Path) -> None:
     """Requesting torch.compile without availability should raise."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(compile=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
-
-    # Remove torch.compile attribute if present
-    monkeypatch.delattr(torch, "compile", raising=False)
+    runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     with pytest.raises(RuntimeError, match="torch.compile requested but unavailable"):
         initialize_components(
@@ -225,13 +213,13 @@ def test_initialize_components_compile_missing(monkeypatch, tmp_path: Path) -> N
             cfg,
             runtime,
             log_dir=str(tmp_path),
-            compile_fn=None,
+            compile_fn=lambda _: (_ for _ in ()).throw(AttributeError("compile")),
         )
 
 
 def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
     """GradScaler should omit device param and disable for CPU runtime."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(device="cpu", dtype="float32")
     runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
 
@@ -247,9 +235,9 @@ def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_initialize_components_scaler_cuda_branch(tmp_path: Path) -> None:
     """GradScaler should set device and enable for CUDA + float16."""
-    model = _make_model()
+    model = make_minimal_gpt()
     cfg = _make_config(device="cuda", dtype="float16")
-    runtime = RuntimeContext(device_type="cuda", autocast_context=nullcontext())
+    runtime = RuntimeContext(device_type="cuda", autocast_context=autocast_context())
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)

@@ -108,14 +108,28 @@ def test_create_standardized_metadata_handles_attribute_errors() -> None:
     """create_standardized_metadata should handle AttributeError gracefully."""
 
     # Create a mock tokenizer without stoi attribute
-    class MockTokenizer:
-        name = "mock"
-        vocab_size = 10
+    class MockTokenizer(Tokenizer):
+        def __init__(self) -> None:
+            self._name = "mock"
+            self._vocab_size = 10
+            self._vocab: dict[str, int] = {}
+
+        @property
+        def name(self) -> str:
+            return self._name
+
+        @property
+        def vocab_size(self) -> int:
+            return self._vocab_size
+
+        @property
+        def vocab(self) -> dict[str, int]:
+            return dict(self._vocab)
 
         def encode(self, text: str) -> list[int]:
             return [1, 2, 3]
 
-        def decode(self, ids: list[int]) -> str:
+        def decode(self, token_ids: list[int]) -> str:
             return "test"
 
     tokenizer = MockTokenizer()
@@ -177,19 +191,24 @@ class TestCreateStandardizedMetadataExceptions:
             self._name = name
             for k, v in kwargs.items():
                 setattr(self, k, v)
+            self._vocab = kwargs.get("vocab", {})
 
         @property
         def vocab_size(self) -> int:
             return self._vocab_size
 
         @property
-        def name(self) -> str | None:
+        def name(self) -> str:
             return self._name
+
+        @property
+        def vocab(self) -> dict[str, int]:
+            return dict(self._vocab)
 
         def encode(self, text: str) -> list[int]:
             return [1, 2, 3]
 
-        def decode(self, ids: list[int]) -> str:
+        def decode(self, token_ids: list[int]) -> str:
             return "test"
 
     def test_metadata_creation_with_missing_stoi(self) -> None:

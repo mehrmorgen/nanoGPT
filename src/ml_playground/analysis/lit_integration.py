@@ -1,9 +1,32 @@
 from __future__ import annotations
 
-import sys
 import logging
+import sys
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping
+from typing import Protocol, cast
+
+
+class LitDataset(Protocol):
+    def spec(self) -> dict[str, object]: ...
+
+    def __len__(self) -> int: ...
+
+    def __iter__(self) -> Iterable[Mapping[str, object]]: ...
+
+
+class LitModel(Protocol):
+    def input_spec(self) -> dict[str, object]: ...
+
+    def output_spec(self) -> dict[str, object]: ...
+
+    def predict(
+        self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
+    ) -> list[Mapping[str, object]]: ...
+
+
+class LitTypesModule(Protocol):
+    def TextSegment(self) -> object: ...
 
 
 def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) -> None:
@@ -38,7 +61,7 @@ def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) 
 
     # --- Tiny sample dataset ---
     # Prefer a few lines from the bundestag_char seed if present; otherwise use embedded samples.
-    samples: List[str] = [
+    samples: list[str] = [
         "Nächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.",
         "Herr Präsident, liebe Kolleginnen und Kollegen, wir beraten heute wichtige Vorlagen.",
         "(Beifall bei der SPD)",
@@ -67,13 +90,15 @@ def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) 
         # Non-fatal; keep embedded samples
         pass
 
+    text_segment_factory = cast(LitTypesModule, lit_types).TextSegment
+
     class BundestagTextDataset(lit_dataset.Dataset):
         def __init__(self, sents: Iterable[str]):
-            self._examples: List[Mapping[str, str]] = [{"text": s} for s in sents]
+            self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
 
-        def spec(self) -> Dict[str, object]:  # type: ignore[override]
+        def spec(self) -> dict[str, object]:  # type: ignore[override]
             return {
-                "text": lit_types.TextSegment(),
+                "text": text_segment_factory(),
             }
 
         def __len__(self) -> int:
@@ -88,17 +113,17 @@ def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) 
         Serves as a PoC to exercise LIT views for text data without trained weights.
         """
 
-        def input_spec(self) -> Dict[str, object]:  # type: ignore[override]
-            return {"text": lit_types.TextSegment()}
+        def input_spec(self) -> dict[str, object]:  # type: ignore[override]
+            return {"text": text_segment_factory()}
 
-        def output_spec(self) -> Dict[str, object]:  # type: ignore[override]
+        def output_spec(self) -> dict[str, object]:  # type: ignore[override]
             # Use TextSegment for broad compatibility; some LIT versions also have GeneratedText.
-            return {"generated": lit_types.TextSegment()}
+            return {"generated": text_segment_factory()}
 
         def predict(
             self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
-        ) -> List[Mapping[str, object]]:
-            outs: List[Mapping[str, object]] = []
+        ) -> list[Mapping[str, object]]:
+            outs: list[Mapping[str, object]] = []
             for ex in _inputs:
                 s = str(ex.get("text", ""))
                 # Simple deterministic transform to show change

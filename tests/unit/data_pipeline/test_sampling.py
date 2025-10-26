@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import torch
 
-from ml_playground.configuration.models import DataConfig
+from ml_playground.configuration.models import DataConfig, DeviceKind
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
 from ml_playground.data_pipeline.sources.memmap import MemmapReader
 
@@ -34,11 +34,12 @@ def batch_config_strategy(draw: st.DrawFn) -> tuple[int, int]:
 
 
 @st.composite
-def device_strategy(draw: st.DrawFn) -> str:
+def device_strategy(draw: st.DrawFn) -> DeviceKind:
     """Generate device types."""
-    return draw(
-        st.sampled_from(["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"])
-    )
+    choices: list[DeviceKind] = ["cpu"]
+    if torch.cuda.is_available():
+        choices.append("cuda")
+    return draw(st.sampled_from(choices))
 
 
 class TestMemmapReader:
@@ -53,13 +54,13 @@ class TestMemmapReader:
 
         # Create test file
         with tempfile.NamedTemporaryFile(delete=False) as f:
+            path = Path(f.name)
             try:
                 test_data.tofile(f)
                 f.flush()
                 f.close()
 
-                path = Path(f.name)
-                reader = MemmapReader.open(path, dtype=np.uint16)
+                reader = MemmapReader.open(path, dtype=np.dtype(np.uint16))
 
                 # Check that length matches
                 assert reader.length == length
@@ -85,7 +86,10 @@ class TestSampleBatch:
     )
     @settings(max_examples=10, deadline=None)
     def test_sample_batch_shapes(
-        self, array_size: int, batch_config: tuple[int, int], device: str
+        self,
+        array_size: int,
+        batch_config: tuple[int, int],
+        device: DeviceKind,
     ) -> None:
         """Test that sampled batches have correct shapes."""
         batch_size, block_size = batch_config
@@ -96,6 +100,7 @@ class TestSampleBatch:
 
         # Create test data
         with tempfile.NamedTemporaryFile(delete=False) as f:
+            path = Path(f.name)
             try:
                 test_data = np.random.randint(
                     0, 65535, size=array_size, dtype=np.uint16
@@ -104,8 +109,7 @@ class TestSampleBatch:
                 f.flush()
                 f.close()
 
-                path = Path(f.name)
-                reader = MemmapReader.open(path, dtype=np.uint16)
+                reader = MemmapReader.open(path, dtype=np.dtype(np.uint16))
 
                 x, y = sample_batch(reader, batch_size, block_size, device)
 

@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import typer
 
 from tools import task_utils as utils
@@ -18,53 +16,35 @@ app = typer.Typer(help="Test runners executed via uv run.", no_args_is_help=True
 
 
 @app.command()
-def pytest(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def pytest(*args: str) -> None:
     """Invoke pytest with the shared configuration."""
-    utils.uv_run(*utils.pytest_command(utils.forwarded_args(args)))
+    _ = utils.uv_run(*utils.pytest_command(utils.forwarded_args(args)))
 
 
 @app.command()
-def test(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def test(*args: str) -> None:
     """Run the full test suite."""
-    utils.uv_run(*utils.pytest_command(["tests", *utils.forwarded_args(args)]))
+    _ = utils.uv_run(*utils.pytest_command(["tests", *utils.forwarded_args(args)]))
 
 
 @app.command()
-def unit(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def unit(*args: str) -> None:
     """Run unit tests."""
-    utils.uv_run(*utils.pytest_command(["tests/unit", *utils.forwarded_args(args)]))
+    _ = utils.uv_run(*utils.pytest_command(["tests/unit", *utils.forwarded_args(args)]))
 
 
 @app.command("property")
-def property_tests(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def property_tests(*args: str) -> None:
     """Run property-based tests."""
-    utils.uv_run(*utils.pytest_command(["tests/property", *utils.forwarded_args(args)]))
+    _ = utils.uv_run(
+        *utils.pytest_command(["tests/property", *utils.forwarded_args(args)])
+    )
 
 
 @app.command("unit-cov")
-def unit_with_coverage(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def unit_with_coverage(*args: str) -> None:
     """Run unit tests with coverage reporting."""
-    utils.uv_run(
+    _ = utils.uv_run(
         *utils.pytest_command(
             [
                 f"--cov={utils.PKG}",
@@ -77,13 +57,9 @@ def unit_with_coverage(
 
 
 @app.command()
-def integration(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def integration(*args: str) -> None:
     """Run integration tests."""
-    utils.uv_run(
+    _ = utils.uv_run(
         *utils.pytest_command(
             ["-m", "integration", "--no-cov", *utils.forwarded_args(args)]
         )
@@ -91,23 +67,15 @@ def integration(
 
 
 @app.command()
-def e2e(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def e2e(*args: str) -> None:
     """Run end-to-end tests."""
-    utils.uv_run(*utils.pytest_command(["tests/e2e", *utils.forwarded_args(args)]))
+    _ = utils.uv_run(*utils.pytest_command(["tests/e2e", *utils.forwarded_args(args)]))
 
 
 @app.command()
-def acceptance(
-    args: Optional[List[str]] = typer.Argument(
-        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
-    ),
-) -> None:
+def acceptance(*args: str) -> None:
     """Run acceptance tests."""
-    utils.uv_run(
+    _ = utils.uv_run(
         *utils.pytest_command(["tests/acceptance", *utils.forwarded_args(args)])
     )
 

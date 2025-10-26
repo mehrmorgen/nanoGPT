@@ -7,8 +7,11 @@ from pathlib import Path
 
 import torch
 
+from typing import cast
+
 from ml_playground.configuration.models import (
     DataConfig,
+    DeviceKind,
     LRSchedule,
     ModelConfig,
     OptimConfig,
@@ -23,7 +26,7 @@ def _make_trainer_config(
     tmp_path: Path,
     max_iters: int = 2,
     eval_interval: int = 1,
-    device: str = "cpu",
+    device: DeviceKind = cast(DeviceKind, "cpu"),
     eval_only: bool = False,
     ema_decay: float = 0.0,
     grad_accum_steps: int = 1,
@@ -139,7 +142,9 @@ def test_trainer_respects_max_iters(tmp_path: Path) -> None:
 
 def test_trainer_eval_only_mode(tmp_path: Path) -> None:
     """Trainer should exit early in eval_only mode."""
-    cfg, shared = _make_trainer_config(tmp_path, max_iters=10, eval_interval=1, eval_only=True)
+    cfg, shared = _make_trainer_config(
+        tmp_path, max_iters=10, eval_interval=1, eval_only=True
+    )
 
     # Create dataset
     dataset_dir = tmp_path / "data"

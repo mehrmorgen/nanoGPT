@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Callable, Mapping, cast
 
 import pytest
 from pydantic import ValidationError
@@ -23,6 +23,14 @@ from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
+
+
+def _validator_helper(
+    cls: type[Any], attr: str, *args: Any, **kwargs: Any
+) -> Callable[..., Any]:
+    descriptor = getattr(cls, attr)
+    bound = cast(Callable[..., Any], descriptor.__get__(None, cls))
+    return lambda: bound(*args, **kwargs)
 
 
 def test_full_loader_roundtrip(tmp_path: Path) -> None:
@@ -282,8 +290,8 @@ def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
 
-    def fake_loads(_: str) -> list[int]:
-        return [1, 2, 3]
+    def fake_loads(_: str) -> Mapping[str, Any]:
+        return cast(Mapping[str, Any], [1, 2, 3])
 
     with pytest.raises(TypeError, match="must be a mapping"):
         config_loading.read_toml_dict(cfg_path, toml_loader=fake_loads)
@@ -874,25 +882,27 @@ def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
     assert "Run 'prepare' and 'train' first" in msg
 
 
-def test_internal_path_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_internal_path_helpers(tmp_path: Path) -> None:
     bad_path = tmp_path / "bad"
 
-    original_resolve = Path.resolve
-
-    def fake_resolve(self: Path):
-        if self == bad_path:
+    def fake_resolve(path: Path) -> Path:
+        if path == bad_path:
             raise OSError("cannot resolve")
-        return original_resolve(self)
-
-    monkeypatch.setattr(Path, "resolve", fake_resolve, raising=False)
+        return path
 
     with pytest.raises(ValueError, match="Invalid path"):
-        config_models._resolve_path_strict(bad_path)
+        config_models._resolve_path_strict(bad_path, resolve=fake_resolve)
 
-    relative = config_models._resolve_if_relative("rel", tmp_path)
+    relative = config_models._resolve_if_relative("rel", tmp_path, resolve=Path.resolve)
     assert isinstance(relative, Path) and relative.is_absolute()
 
     absolute_path = tmp_path / "abs"
+    assert (
+        config_models._resolve_if_relative(
+            absolute_path, tmp_path, resolve=Path.resolve
+        )
+        == absolute_path
+    )
     assert config_models._resolve_if_relative(absolute_path, tmp_path) == absolute_path
 
 
@@ -945,7 +955,7 @@ def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
         },
     }
 
-    result = config_models.ExperimentConfig._resolve_paths(data)
+    result = _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
 
     shared = result["shared"]
     assert isinstance(shared["project_home"], Path)
@@ -966,7 +976,8 @@ def test_experiment_config_resolve_paths_with_namespace(tmp_path: Path) -> None:
     shared_ns = SimpleNamespace(config_path=cfg_path)
     data = {"shared": shared_ns}
     # Should not raise or mutate namespace for non-dict shared data
-    assert config_models.ExperimentConfig._resolve_paths(data)["shared"] is shared_ns
+    result = _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
+    assert result["shared"] is shared_ns
 
 
 def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
@@ -978,7 +989,9 @@ def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
         "train_out_dir": "train",
         "sample_out_dir": "sample",
     }
-    resolved = config_models.SharedConfig._resolve_shared_paths(data.copy())
+    resolved = _validator_helper(
+        config_models.SharedConfig, "_resolve_shared_paths", data.copy()
+    )()
     assert resolved["project_home"].is_absolute()
     assert resolved["dataset_dir"].is_absolute()
 
@@ -1051,7 +1064,10 @@ def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
 
 
 def test_experiment_config_resolve_paths_non_dict() -> None:
-    assert config_models.ExperimentConfig._resolve_paths(123) == 123
+    assert (
+        _validator_helper(config_models.ExperimentConfig, "_resolve_paths", 123)()
+        == 123
+    )
 
 
 def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> None:
@@ -1059,12 +1075,17 @@ def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> 
         "shared": {"experiment": "unit"},
         "prepare": {},
     }
-    assert config_models.ExperimentConfig._resolve_paths(data) is data
+    assert (
+        _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
+        is data
+    )
 
 
 def test_shared_config_resolve_paths_invalid_config_path() -> None:
     data = {"config_path": object(), "project_home": "rel", "dataset_dir": 123}
-    resolved = config_models.SharedConfig._resolve_shared_paths(data.copy())
+    resolved = _validator_helper(
+        config_models.SharedConfig, "_resolve_shared_paths", data.copy()
+    )()
     assert resolved == data
 
 

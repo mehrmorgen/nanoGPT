@@ -12,21 +12,13 @@ from ml_playground.configuration.models import (
 )
 from ml_playground.training.hooks import evaluation
 
-
-class _Logger:
-    def __init__(self) -> None:
-        self.messages: list[str] = []
-
-    def info(self, msg: str) -> None:
-        self.messages.append(msg)
-
-
-class _Writer:
-    def __init__(self) -> None:
-        self.entries: list[tuple[str, float, int]] = []
-
-    def add_scalar(self, name: str, value: float, step: int) -> None:
-        self.entries.append((name, value, step))
+from tests.unit.training._helpers import (
+    LoggerStub,
+    SimpleBatchesStub,
+    TensorboardWriterStub,
+    autocast_context,
+    make_minimal_gpt,
+)
 
 
 def _cfg() -> TrainerConfig:
@@ -62,21 +54,24 @@ def _cfg() -> TrainerConfig:
 
 def test_run_evaluation_records_scalars() -> None:
     cfg = _cfg()
-    logger = _Logger()
+    logger = LoggerStub()
 
     def fake_estimate(model, batches, eval_iters, ctx):
         del model, batches, eval_iters, ctx
         return {"train": 0.5, "val": 0.4}
 
-    writer = _Writer()
+    writer = TensorboardWriterStub()
+    model = make_minimal_gpt()
+    batches = SimpleBatchesStub()
+    ctx = autocast_context()
     losses = evaluation.run_evaluation(
         cfg,
         logger=logger,
         iter_num=1,
         lr=0.01,
-        raw_model=None,
-        batches=None,
-        ctx=None,
+        raw_model=model,
+        batches=batches,
+        ctx=ctx,
         writer=writer,
         estimate_loss_fn=fake_estimate,
     )
@@ -91,20 +86,23 @@ def test_run_evaluation_records_scalars() -> None:
 def test_run_evaluation_without_writer() -> None:
     """run_evaluation should work without a TensorBoard writer."""
     cfg = _cfg()
-    logger = _Logger()
+    logger = LoggerStub()
 
     def fake_estimate(model, batches, eval_iters, ctx):
         del model, batches, eval_iters, ctx
         return {"train": 0.6, "val": 0.5}
 
+    model = make_minimal_gpt()
+    batches = SimpleBatchesStub()
+    ctx = autocast_context()
     losses = evaluation.run_evaluation(
         cfg,
         logger=logger,
         iter_num=2,
         lr=0.02,
-        raw_model=None,
-        batches=None,
-        ctx=None,
+        raw_model=model,
+        batches=batches,
+        ctx=ctx,
         writer=None,
         estimate_loss_fn=fake_estimate,
     )

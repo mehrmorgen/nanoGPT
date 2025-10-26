@@ -5,6 +5,8 @@ from pathlib import Path
 import itertools
 
 import torch
+from typing import cast
+from collections.abc import Mapping
 from hypothesis import HealthCheck, given, settings, strategies as st
 
 from ml_playground.configuration.models import (
@@ -15,30 +17,70 @@ from ml_playground.configuration.models import (
 )
 from ml_playground.sampling.runner import Sampler
 from ml_playground.core.tokenizer import CharTokenizer
+from ml_playground.models.core.model import GPT
+from ml_playground.configuration.models import ModelConfig
+from ml_playground.core.logging_protocol import LoggerLike
 
 _RUN_COUNTER = itertools.count()
 
 
-class _StubModel:
+class _StubModel(GPT):
     def __init__(self) -> None:
+        cfg = ModelConfig(
+            n_layer=1,
+            n_head=1,
+            n_embd=8,
+            block_size=8,
+            dropout=0.0,
+            vocab_size=32,
+        )
+
+        class _NullLogger(LoggerLike):
+            def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+                pass
+
+            def info(self, msg: str, *args: object, **kwargs: object) -> None:
+                pass
+
+            def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+                pass
+
+            def error(self, msg: str, *args: object, **kwargs: object) -> None:
+                pass
+
+        super().__init__(cfg, _NullLogger())
         self.generate_calls = 0
 
     def eval(self) -> "_StubModel":
+        super().eval()
         return self
 
-    def to(self, device: str) -> "_StubModel":  # noqa: D401
+    def to(  # type: ignore[override]
+        self,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+        non_blocking: bool = False,
+    ) -> "_StubModel":
+        super().to(device=device, dtype=dtype, non_blocking=non_blocking)
         return self
 
-    def load_state_dict(
-        self, state_dict: dict[str, torch.Tensor], strict: bool = False
-    ) -> None:  # noqa: D401
-        pass
+    def load_state_dict(  # type: ignore[override]
+        self,
+        state_dict: Mapping[str, torch.Tensor],
+        strict: bool = True,
+        assign: bool = False,
+    ) -> torch.nn.modules.module._IncompatibleKeys:
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
-    def generate(
-        self, x: torch.Tensor, max_new_tokens: int, *, temperature: float, top_k: int
+    def generate(  # type: ignore[override]
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float = 1.0,
+        top_k: int | None = None,
     ) -> torch.Tensor:
         self.generate_calls += 1
-        b, t = x.shape
+        b, t = idx.shape
         out = (
             torch.arange(t + max_new_tokens, dtype=torch.long).unsqueeze(0).repeat(b, 1)
         )
@@ -100,12 +142,12 @@ def _build_sampler(tmp_path: Path, start: str) -> tuple[Sampler, _StubModel]:
             runtime=rt,
             sample=sample_cfg,
             checkpoint_load_fn=_load_ckpt,
-            model_factory=lambda cfg, logger: model,
+            model_factory=lambda cfg, logger: cast(GPT, model),
         ),
         shared,
     )
     sampler.tokenizer = CharTokenizer({"A": 1})
-    sampler.model = model
+    sampler.model = cast(GPT, model)
     return sampler, model
 
 

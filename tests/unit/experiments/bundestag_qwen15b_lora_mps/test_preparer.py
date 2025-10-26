@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import cast
 
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import (
@@ -121,24 +122,25 @@ def test_bundestag_qwen15b_preparer_diff_oserror_when_missing() -> None:
     """_diff should skip when OSError occurs and the path disappears."""
     from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import _diff
 
-    class TogglePath:
-        def __init__(self) -> None:
-            self._calls = 0
+    class TogglePath(Path):
+        _flavour = Path(".")._flavour  # type: ignore[attr-defined]
 
-        def exists(self) -> bool:
+        def __new__(cls) -> TogglePath:  # type: ignore[override]
+            self = Path.__new__(cls, "ghost")
+            self._calls = 0
+            return self
+
+        def exists(self) -> bool:  # type: ignore[override]
             self._calls += 1
             return self._calls == 1
 
         def stat(self):  # type: ignore[override]
             raise OSError("stat failed")
 
-        def __hash__(self) -> int:
-            return id(self)
+    ghost_path: Path = cast(Path, TogglePath())
+    before: dict[Path, tuple[bool, float, int]] = {ghost_path: (False, 0.0, 0)}
 
-    ghost = TogglePath()
-    before = {ghost: (False, 0.0, 0)}
-
-    created, updated, skipped = _diff([ghost], before)
+    created, updated, skipped = _diff([ghost_path], before)
 
     assert not created
     assert not updated

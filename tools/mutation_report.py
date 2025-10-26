@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import sqlite3
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 from cosmic_ray.config import load_config
 
@@ -45,8 +47,15 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(str(args.config))
-    session_cfg = cfg.get("session", {}) or {}
-    session_path = Path(session_cfg.get("file", ".cache/cosmic-ray/session.sqlite"))
+    session_cfg_raw = cfg.get("session")
+    session_cfg: Mapping[str, object]
+    if isinstance(session_cfg_raw, Mapping):
+        session_cfg = session_cfg_raw
+    else:
+        session_cfg = {}
+
+    session_file = session_cfg.get("file", ".cache/cosmic-ray/session.sqlite")
+    session_path = Path(str(cast(object, session_file)))
     summarize_session(session_path)
 
 

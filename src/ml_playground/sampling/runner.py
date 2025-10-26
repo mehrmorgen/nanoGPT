@@ -5,9 +5,10 @@ device, dtype, and autocast contexts locally without exposing legacy shims.
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 from contextlib import nullcontext
 from pathlib import Path
-from typing import cast
+from typing import Callable, cast
 import logging
 import torch
 from torch import autocast
@@ -38,10 +39,43 @@ All experiments should use these utilities to ensure consistency and proper erro
 """
 
 
+@dataclass(frozen=True)
+class SamplerDependencies:
+    cuda_is_available: Callable[[], bool]
+    cuda_manual_seed: Callable[[int], None]
+
+
+def default_sampler_dependencies() -> SamplerDependencies:
+    def _cuda_is_available() -> bool:
+        cuda_module = getattr(torch, "cuda", None)
+        if cuda_module is None:
+            return False
+        return bool(cuda_module.is_available())
+
+    def _cuda_manual_seed(seed: int) -> None:
+        cuda_module = getattr(torch, "cuda", None)
+        if cuda_module is None:
+            return
+        manual_seed = getattr(cuda_module, "manual_seed", None)
+        if callable(manual_seed):
+            manual_seed(seed)
+
+    return SamplerDependencies(
+        cuda_is_available=_cuda_is_available,
+        cuda_manual_seed=_cuda_manual_seed,
+    )
+
+
 class Sampler:
     """Generate samples from a trained `GPT` model using a strict configuration."""
 
-    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
+    def __init__(
+        self,
+        cfg: SamplerConfig,
+        shared: SharedConfig,
+        *,
+        deps: SamplerDependencies | None = None,
+    ):
         """Instantiate the sampler and eagerly load required runtime state.
 
         Args:
@@ -54,6 +88,7 @@ class Sampler:
         """
         self.cfg = cfg
         self.shared = shared
+        self.deps: SamplerDependencies = deps or default_sampler_dependencies()
         self.runtime_cfg = cfg.runtime
         self.sample_cfg = cfg.sample
 
@@ -76,8 +111,8 @@ class Sampler:
         torch.manual_seed(self.runtime_cfg.seed)
         # Guard CUDA-specific calls for non-CUDA environments
         try:
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed(self.runtime_cfg.seed)
+            if self.deps.cuda_is_available():
+                self.deps.cuda_manual_seed(self.runtime_cfg.seed)
         except (RuntimeError, AssertionError, AttributeError):
             pass
 
@@ -216,7 +251,12 @@ class Sampler:
         return self.tokenizer.decode(token_list)
 
 
-def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
+def sample(
+    cfg: SamplerConfig,
+    shared: SharedConfig | None = None,
+    *,
+    deps: SamplerDependencies | None = None,
+) -> None:
     """Run sampling with optional shared configuration fallback."""
 
     if shared is None:
@@ -233,11 +273,13 @@ def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
             sample_out_dir=out_dir,
         )
 
-    sampler_instance = Sampler(cfg, shared)
+    sampler_instance = Sampler(cfg, shared, deps=deps)
     sampler_instance.run()
 
 
 __all__ = [
     "Sampler",
+    "SamplerDependencies",
+    "default_sampler_dependencies",
     "sample",
 ]

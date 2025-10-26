@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal, cast
 from collections.abc import Mapping
 from types import MappingProxyType
 import pytest
@@ -26,7 +26,7 @@ def test_char_tokenizer_roundtrip_proto() -> None:
     v = tk.vocab
     assert isinstance(v, MappingProxyType)
     with pytest.raises(TypeError):
-        v["c"] = 3
+        cast(dict[str, int], v)["c"] = 3
 
 
 def test_char_tokenizer_decode_rebuilds_lookup_array() -> None:
@@ -46,7 +46,7 @@ def test_word_tokenizer_decode_strips_invalid_ids_and_exposes_vocab_proxy() -> N
     vocab_proxy = tok.vocab
     assert isinstance(vocab_proxy, MappingProxyType)
     with pytest.raises(TypeError):
-        vocab_proxy["new"] = 3
+        cast(dict[str, int], vocab_proxy)["new"] = 3
 
 
 def test_word_tokenizer_roundtrip() -> None:
@@ -85,12 +85,12 @@ def test_word_tokenizer_rebuilds_missing_lookup_array() -> None:
 @pytest.mark.parametrize(
     ("tok_type", "kwargs", "expected_cls"),
     [
-        ("char", {"vocab": {"x": 1}}, CharTokenizer),
-        ("word", {"vocab": {"x": 1}}, WordTokenizer),
+        (cast(Literal["char", "word"], "char"), {"vocab": {"x": 1}}, CharTokenizer),
+        (cast(Literal["char", "word"], "word"), {"vocab": {"x": 1}}, WordTokenizer),
     ],
 )
 def test_create_tokenizer_factory_char_word_proto(
-    tok_type: str, kwargs: dict[str, Any], expected_cls: type
+    tok_type: Literal["char", "word"], kwargs: dict[str, Any], expected_cls: type
 ) -> None:
     """Factory returns expected tokenizer subclass for char/word."""
     tk = create_tokenizer(tok_type, **kwargs)
@@ -100,7 +100,7 @@ def test_create_tokenizer_factory_char_word_proto(
 def test_create_tokenizer_factory_unknown_proto() -> None:
     """Factory raises ValueError for unknown tokenizer names."""
     with pytest.raises(ValueError):
-        create_tokenizer("nope")
+        create_tokenizer(cast(Any, "nope"))
 
 
 def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
@@ -131,7 +131,7 @@ def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
     assert hasattr(v, "__getitem__") and "a" in v and v["a"] == 1
 
 
-def test_tiktoken_tokenizer_handles_missing_mergeable_ranks(monkeypatch) -> None:
+def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
     """When encoder lacks mergeable ranks mapping, tokenizer should expose empty mapping."""
 
     class Encoder:

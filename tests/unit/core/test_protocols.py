@@ -114,8 +114,8 @@ def test_tokenizer_protocol_rejects_incomplete_implementation() -> None:
 def test_tokenizer_protocol_placeholders_execute_without_error() -> None:
     tokenizer = _StubTokenizer()
 
-    assert Tokenizer.name.fget(tokenizer) is None
-    assert Tokenizer.vocab_size.fget(tokenizer) is None
-    assert Tokenizer.vocab.fget(tokenizer) is None
-    assert Tokenizer.encode(tokenizer, "aa") is None  # type: ignore[arg-type]
-    assert Tokenizer.decode(tokenizer, [0]) is None  # type: ignore[arg-type]
+    assert _RuntimeTokenizer.name.fget(tokenizer) is None  # type: ignore[attr-defined]
+    assert _RuntimeTokenizer.vocab_size.fget(tokenizer) is None  # type: ignore[attr-defined]
+    assert _RuntimeTokenizer.vocab.fget(tokenizer) is None  # type: ignore[attr-defined]
+    assert _RuntimeTokenizer.encode(tokenizer, "aa") is None  # type: ignore[arg-type]
+    assert _RuntimeTokenizer.decode(tokenizer, [0]) is None  # type: ignore[arg-type]

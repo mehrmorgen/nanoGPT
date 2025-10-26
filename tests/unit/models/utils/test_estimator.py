@@ -3,40 +3,46 @@ from __future__ import annotations
 import torch
 
 from ml_playground.models.utils.estimator import estimate_loss
+from ml_playground.configuration.models import ModelConfig
+from ml_playground.models.core.model import GPT
+from tests.unit.training._helpers import LoggerStub, SimpleBatchesStub
 
 
 def test_estimate_loss_computes_train_and_val_metrics() -> None:
     """estimate_loss should compute train and validation metrics correctly."""
 
-    # Create a simple mock model that returns predictable outputs
-    class MockModel(torch.nn.Module):
+    cfg = ModelConfig(
+        n_layer=1,
+        n_head=1,
+        n_embd=16,
+        block_size=8,
+        dropout=0.0,
+        vocab_size=10,
+    )
+
+    class FakeGPT(GPT):
         def __init__(self) -> None:
-            super().__init__()
-            self.vocab_size = 10
+            super().__init__(cfg, LoggerStub())
 
-        def forward(self, x, targets=None):
-            logits = torch.nn.functional.one_hot(x, num_classes=self.vocab_size).to(
-                torch.float32
-            )
-            if targets is not None:
-                loss = torch.tensor(0.5, dtype=torch.float32)
-                return logits, loss
-            return logits, None
+        def forward(  # type: ignore[override]
+            self, x: torch.Tensor, targets: torch.Tensor | None = None
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            logits = torch.nn.functional.one_hot(
+                x, num_classes=self.config.vocab_size
+            ).to(torch.float32)
+            loss = torch.tensor(0.5, dtype=torch.float32)
+            return logits, loss
 
-    # Create mock batches function
-    def mock_get_batch(split):
-        batch_size, seq_len, vocab_size = 2, 3, 10
-        x = torch.randint(0, vocab_size, (batch_size, seq_len))
-        y = torch.randint(0, vocab_size, (batch_size, seq_len))
-        return x, y
+    class FakeBatches(SimpleBatchesStub):
+        def get_batch(self, split: str) -> tuple[torch.Tensor, torch.Tensor]:
+            del split
+            batch_size, seq_len, vocab_size = 2, 3, 10
+            x = torch.randint(0, vocab_size, (batch_size, seq_len), device="cpu")
+            y = torch.randint(0, vocab_size, (batch_size, seq_len), device="cpu")
+            return x, y
 
-    # Create mock batches object
-    class MockBatches:
-        def get_batch(self, split):
-            return mock_get_batch(split)
-
-    model = MockModel()
-    batches = MockBatches()
+    model = FakeGPT()
+    batches = FakeBatches()
 
     # Test the function
     results = estimate_loss(

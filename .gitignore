@@ -42,6 +42,9 @@ htmlcov/
 # Prevent stray Hypothesis cache at repo root (we use .cache/hypothesis instead)
 .hypothesis/
 
+# Ignore dist directory by default
+dist/
+
 # Mutation testing
 tb_logs/
 **/tensorboard/

@@ -9,7 +9,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
-from typing import Callable, ContextManager
+from typing import Callable, ContextManager, Iterator
 import random
 import numpy as np
 import pytest
@@ -120,7 +120,7 @@ def override_attr() -> Callable[[object, str, object], ContextManager[None]]:
     """Provide a context manager for temporarily overriding attributes on objects."""
 
     @contextmanager
-    def _override(target: object, attr: str, value: object) -> ContextManager[None]:
+    def _override(target: object, attr: str, value: object) -> Iterator[None]:
         original = getattr(target, attr)
         setattr(target, attr, value)
         try:

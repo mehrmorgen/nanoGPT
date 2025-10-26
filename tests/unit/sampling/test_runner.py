@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Any, Tuple, cast
+from typing import Any, Literal, Mapping, Tuple, cast
 
 import pytest
 import torch
@@ -18,7 +18,11 @@ from ml_playground.configuration.models import (
     READ_POLICY_LATEST,
     SharedConfig,
 )
-from ml_playground.sampling.runner import Sampler, sample
+from ml_playground.sampling.runner import (
+    Sampler,
+    SamplerDependencies,
+    sample,
+)
 from ml_playground.core.error_handling import (
     DataError,
     CheckpointError,
@@ -28,6 +32,7 @@ from ml_playground.training.checkpointing.checkpoint_manager import CheckpointMa
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.core.config import GPTConfig
 from ml_playground.models.core.model import GPT
+from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
 # ---------------------------
@@ -473,9 +478,7 @@ def test_sampler_requires_runtime(out_dir: Path) -> None:
         Sampler(cfg, shared)
 
 
-def test_sampler_setup_torch_env_handles_cuda_errors(
-    out_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sampler_setup_torch_env_handles_cuda_errors(out_dir: Path) -> None:
     """_setup_torch_env should swallow CUDA availability errors."""
     _write_char_meta(out_dir / "meta.pkl")
 
@@ -507,10 +510,13 @@ def test_sampler_setup_torch_env_handles_cuda_errors(
         }
     )
 
-    def _raise_runtime_error() -> bool:
+    def _cuda_probe() -> bool:
         raise RuntimeError("cuda probing failed")
 
-    monkeypatch.setattr(torch.cuda, "is_available", _raise_runtime_error)
+    deps = SamplerDependencies(
+        cuda_is_available=_cuda_probe,
+        cuda_manual_seed=lambda _seed: None,
+    )
 
     shared = SharedConfig(
         experiment="unit",
@@ -521,13 +527,11 @@ def test_sampler_setup_torch_env_handles_cuda_errors(
         sample_out_dir=out_dir,
     )
 
-    sampler = Sampler(cfg, shared)
+    sampler = Sampler(cfg, shared, deps=deps)
     assert sampler.device_type == "cpu"
 
 
-def test_sampler_setup_torch_env_seeds_cuda_when_available(
-    out_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sampler_setup_torch_env_seeds_cuda_when_available(out_dir: Path) -> None:
     """_setup_torch_env should call torch.cuda.manual_seed when CUDA is available."""
     _write_char_meta(out_dir / "meta.pkl")
 
@@ -561,12 +565,13 @@ def test_sampler_setup_torch_env_seeds_cuda_when_available(
 
     called: dict[str, int] = {}
 
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-
     def _manual_seed(seed: int) -> None:
         called["seed"] = seed
 
-    monkeypatch.setattr(torch.cuda, "manual_seed", _manual_seed)
+    deps = SamplerDependencies(
+        cuda_is_available=lambda: True,
+        cuda_manual_seed=_manual_seed,
+    )
 
     shared = SharedConfig(
         experiment="unit",
@@ -577,7 +582,7 @@ def test_sampler_setup_torch_env_seeds_cuda_when_available(
         sample_out_dir=out_dir,
     )
 
-    sampler = Sampler(cfg, shared)
+    sampler = Sampler(cfg, shared, deps=deps)
     assert called["seed"] == cfg.runtime.seed
     assert sampler.ctx is not None
 
@@ -625,33 +630,41 @@ def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
 
     captured: dict[str, Any] = {}
 
-    class _TokenizerWithDecodeTensor:
-        def decode_tensor(self, tensor: Any) -> str:
-            captured["dtype"] = tensor.dtype
-            captured["device"] = tensor.device.type
+    class _TokenizerWithDecodeTensor(Tokenizer):
+        def __init__(self, sink: dict[str, Any]) -> None:
+            self._sink = sink
+            self._stoi = {"\n": 0, "H": 1, "i": 2}
+            self._itos = {idx: char for char, idx in self._stoi.items()}
+
+        @property
+        def name(self) -> str:
+            return "fake"
+
+        @property
+        def vocab_size(self) -> int:
+            return len(self._stoi)
+
+        @property
+        def vocab(self) -> Mapping[str, int]:
+            return self._stoi
+
+        def encode(self, text: str) -> list[int]:
+            return [self._stoi.get(ch, 0) for ch in text]
+
+        def decode(self, token_ids: list[int]) -> str:
+            return "".join(self._itos.get(idx, "?") for idx in token_ids)
+
+        def decode_tensor(self, tensor: torch.Tensor) -> str:
+            self._sink["dtype"] = tensor.dtype
+            self._sink["device"] = tensor.device.type
             return "decoded"
 
-    sampler.tokenizer = _TokenizerWithDecodeTensor()
+    sampler.tokenizer = _TokenizerWithDecodeTensor(captured)
 
-    class _FakeTensor:
-        def __init__(self) -> None:
-            self.dtype = torch.float32
-            self.device = type("Dev", (), {"type": "cuda"})()
-            self._data = [1, 2, 3]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    float_tokens = torch.tensor([1, 2, 3], dtype=torch.float32, device=device)
 
-        def to(self, dtype: torch.dtype) -> "_FakeTensor":
-            assert dtype is torch.long
-            self.dtype = dtype
-            return self
-
-        def cpu(self) -> "_FakeTensor":
-            self.device = type("Dev", (), {"type": "cpu"})()
-            return self
-
-        def tolist(self) -> list[int]:
-            return list(self._data)
-
-    result = sampler._decode_tokens(_FakeTensor())
+    result = sampler._decode_tokens(float_tokens)
     assert result == "decoded"
     assert captured["dtype"] == torch.long
     assert captured["device"] == "cpu"
@@ -984,7 +997,9 @@ def _rotated_best(out_dir: Path, model: GPT) -> Path:
     return p
 
 
-def _sampler_cfg(out_dir: Path, read_policy: str = READ_POLICY_BEST) -> SamplerConfig:
+def _sampler_cfg(
+    out_dir: Path, read_policy: Literal["latest", "best"] = READ_POLICY_BEST
+) -> SamplerConfig:
     return SamplerConfig(
         runtime=RuntimeConfig(
             out_dir=out_dir,
