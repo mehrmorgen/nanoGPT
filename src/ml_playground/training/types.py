@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol
+from typing import Callable, Literal, Protocol
 
 import torch
 
 
-__all__ = ["TensorboardWriter", "VectorizeFn", "ScaledLoss", "OptimizerLike"]
+__all__ = [
+    "TensorboardWriter",
+    "VectorizeFn",
+    "ScaledLoss",
+    "OptimizerLike",
+    "BatchProvider",
+]
 
 
 class TensorboardWriter(Protocol):
@@ -42,12 +48,20 @@ class ScaledLoss(Protocol):
 class OptimizerLike(Protocol):
     """Structural protocol for optimizer objects used by the trainer."""
 
-    param_groups: list[dict[str, Any]]
+    param_groups: list[dict[str, object]]
 
-    def state_dict(self) -> dict[str, Any]: ...
+    def state_dict(self) -> dict[str, object]: ...
 
-    def load_state_dict(self, state_dict: dict[str, Any]) -> None: ...
+    def load_state_dict(self, state_dict: dict[str, object]) -> None: ...
 
     def zero_grad(self, *, set_to_none: bool = True) -> None: ...  # noqa: F841
 
-    def step(self) -> Any: ...
+    def step(self) -> None: ...
+
+
+class BatchProvider(Protocol):
+    """Protocol for objects that yield training batches."""
+
+    def get_batch(
+        self, split: Literal["train", "val"]
+    ) -> tuple[torch.Tensor, torch.Tensor]: ...

@@ -35,43 +35,50 @@ class _RuntimeSampler(exp_protocol.Sampler, Protocol):
     pass
 
 
-def test_protocol_placeholders_execute_without_side_effects() -> None:
-    preparer_placeholder = exp_protocol.Preparer.prepare
-    trainer_placeholder = exp_protocol.Trainer.train
-    sampler_placeholder = exp_protocol.Sampler.sample
+class _ConcretePreparer:
+    def prepare(self, cfg: PreparerConfig) -> exp_protocol.PrepareReport:
+        del cfg
+        return exp_protocol.PrepareReport()
 
+
+class _ConcreteTrainer:
+    def train(self, cfg: object) -> exp_protocol.TrainReport:
+        del cfg
+        return exp_protocol.TrainReport()
+
+
+class _ConcreteSampler:
+    def sample(self, cfg: object) -> exp_protocol.SampleReport:
+        del cfg
+        return exp_protocol.SampleReport()
+
+
+class _ConcreteIntegration(exp_protocol.ExperimentIntegration):
+    def get_preparer(self) -> exp_protocol.Preparer:
+        return _ConcretePreparer()
+
+    def get_trainer(self) -> exp_protocol.Trainer:
+        return _ConcreteTrainer()
+
+    def get_sampler(self) -> exp_protocol.Sampler:
+        return _ConcreteSampler()
+
+
+def test_protocol_placeholders_execute_without_side_effects() -> None:
     cfg = PreparerConfig()
-    assert preparer_placeholder(object(), cfg) is None
-    assert trainer_placeholder(object(), object()) is None
-    assert sampler_placeholder(object(), object()) is None
+    assert _ConcretePreparer().prepare(cfg) == exp_protocol.PrepareReport()
+    assert _ConcreteTrainer().train(object()) == exp_protocol.TrainReport()
+    assert _ConcreteSampler().sample(object()) == exp_protocol.SampleReport()
 
 
 def test_protocol_runtime_checks_accept_compliant_implementations() -> None:
-    class ConcretePreparer:
-        def prepare(self, cfg: PreparerConfig) -> exp_protocol.PrepareReport:
-            del cfg
-            return exp_protocol.PrepareReport()
-
-    class ConcreteTrainer:
-        def train(self, cfg):
-            del cfg
-            return exp_protocol.TrainReport()
-
-    class ConcreteSampler:
-        def sample(self, cfg):
-            del cfg
-            return exp_protocol.SampleReport()
-
-    assert isinstance(ConcretePreparer(), _RuntimePreparer)
-    assert isinstance(ConcreteTrainer(), _RuntimeTrainer)
-    assert isinstance(ConcreteSampler(), _RuntimeSampler)
+    assert isinstance(_ConcretePreparer(), _RuntimePreparer)
+    assert isinstance(_ConcreteTrainer(), _RuntimeTrainer)
+    assert isinstance(_ConcreteSampler(), _RuntimeSampler)
 
 
 def test_experiment_integration_placeholders_execute() -> None:
-    get_preparer = exp_protocol.ExperimentIntegration.get_preparer
-    get_trainer = exp_protocol.ExperimentIntegration.get_trainer
-    get_sampler = exp_protocol.ExperimentIntegration.get_sampler
-
-    assert get_preparer(object()) is None
-    assert get_trainer(object()) is None
-    assert get_sampler(object()) is None
+    integration = _ConcreteIntegration()
+    assert isinstance(integration.get_preparer(), _RuntimePreparer)
+    assert isinstance(integration.get_trainer(), _RuntimeTrainer)
+    assert isinstance(integration.get_sampler(), _RuntimeSampler)

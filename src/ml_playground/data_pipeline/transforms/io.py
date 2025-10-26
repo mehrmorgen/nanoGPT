@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 import pickle
 
 import numpy as np
@@ -112,7 +113,10 @@ def seed_text_file(dst: Path, candidates: list[Path]) -> None:
 
 
 def setup_tokenizer(
-    out_dir: Path, data_cfg: DataConfig | None = None
+    out_dir: Path,
+    data_cfg: DataConfig | None = None,
+    *,
+    token_factory: Callable[..., Tokenizer] = create_tokenizer,
 ) -> Tokenizer | None:
     meta_path = out_dir / "meta.pkl"
     if not meta_path.exists():
@@ -128,10 +132,15 @@ def setup_tokenizer(
         )
     if tokenizer_type in ("char", "word"):
         vocab = meta.get("stoi") or meta.get("vocab")
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
+        tokenizer = token_factory(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
     elif tokenizer_type == "tiktoken":
         encoding_name = meta.get("encoding_name", "cl100k_base")
-        tokenizer = create_tokenizer(tokenizer_type, encoding_name=encoding_name)
+        loader = meta.get("tokenizer_loader")
+        tokenizer = token_factory(
+            tokenizer_type,
+            encoding_name=encoding_name,
+            loader=loader,
+        )
     else:
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type))
+        tokenizer = token_factory(coerce_tokenizer_type(tokenizer_type))
     return tokenizer

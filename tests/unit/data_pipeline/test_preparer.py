@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import pickle
-from typing import List, Mapping
+from typing import List, Mapping, cast
 
 import numpy as np
 import pytest
@@ -23,6 +23,7 @@ from ml_playground.data_pipeline.transforms.io import (
     write_bin_and_meta,
 )
 from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer
+from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
 """Logging helpers are provided via fixtures in conftest.py (list_logger, list_logger_factory)."""
@@ -66,21 +67,30 @@ def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, dict]:
 
 
 # Additional fake tokenizer for tiktoken-like metadata enrichment tests
-class _FakeTiktoken:
+class _FakeTiktoken(Tokenizer):
     def __init__(self) -> None:
-        self.name = "tiktoken"
+        self._name = "tiktoken"
         self.encoding_name = "gpt2"
         self._vocab_size = 1000
+        self._vocab: dict[str, int] = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def vocab_size(self) -> int:
         return self._vocab_size
 
-    def encode(self, s: str) -> list[int]:
-        return list(range(len(s)))
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        return self._vocab
 
-    def decode(self, ids: list[int]) -> str:
-        return "".join("x" for _ in ids)
+    def encode(self, text: str) -> list[int]:
+        return list(range(len(text)))
+
+    def decode(self, token_ids: list[int]) -> str:
+        return "".join("x" for _ in token_ids)
 
 
 # ---- split helpers ----
@@ -154,7 +164,8 @@ def test_prepare_with_tokenizer_arrays_and_meta() -> None:
     assert val.tolist() == [1, 0]  # "ba" -> [1, 0]
     assert meta["tokenizer"] == "char"
     assert tokenizer is not None
-    assert tokenizer.stoi == {"a": 0, "b": 1}  # Rebuilt vocab
+    rebuilt_stoi = cast(dict[str, int], getattr(tokenizer, "stoi"))
+    assert rebuilt_stoi == {"a": 0, "b": 1}  # Rebuilt vocab
 
 
 def test_prepare_with_tokenizer_splits_and_encodes() -> None:
@@ -182,7 +193,16 @@ def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
 
 def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None:
     class RaisingLogger:
-        def info(self, _message: str) -> None:
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("fail")
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("fail")
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise ValueError("fail")
+
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
             raise ValueError("fail")
 
     train, val, meta = _mk_arrays(3)
@@ -202,8 +222,18 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
         def __init__(self) -> None:
             self.infos: list[str] = []
 
-        def info(self, msg: str) -> None:
-            self.infos.append(str(msg))
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            message = msg % args if args else msg
+            self.infos.append(str(message))
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
 
     logger = ListLogger()
     train: np.ndarray = np.arange(2, dtype=np.uint16)
@@ -246,7 +276,7 @@ def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
 
     called: dict[str, int] = {"factory": 0}
 
-    def _factory(kind: str) -> DummyTok:
+    def _factory(kind: object) -> DummyTok:
         called["factory"] += 1
         assert kind == "char"
         return DummyTok()
@@ -288,12 +318,13 @@ def test_pipeline_resolves_custom_data_config(tmp_path: Path) -> None:
         val_bin="val-custom.bin",
         meta_pkl="meta-custom.pkl",
     )
+    raw_path = tmp_path / "text.txt"
+    raw_path.write_text("abba", encoding="utf-8")
     cfg = PreparerConfig(
-        raw_text_path=tmp_path / "text.txt",
+        raw_text_path=raw_path,
         tokenizer_type="char",
         extras={"data_config": data_cfg},
     )
-    cfg.raw_text_path.write_text("abba", encoding="utf-8")
     pipeline = create_pipeline(cfg, shared)
     pipeline.run()
     # Custom paths should be respected

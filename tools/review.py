@@ -21,13 +21,133 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from subprocess import CompletedProcess
+from typing import Annotated, cast
 
 import typer
 
 app = typer.Typer(add_completion=False)
+
+
+def _ensure_mapping(value: object, context: str) -> Mapping[str, object]:
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    raise ReviewToolError(f"{context} must be a mapping, got {type(value).__name__}")
+
+
+def _ensure_list(value: object, context: str) -> list[object]:
+    if isinstance(value, list):
+        return [cast(object, item) for item in value]
+    raise ReviewToolError(f"{context} must be a list, got {type(value).__name__}")
+
+
+def _require_str(mapping: Mapping[str, object], key: str, *, context: str) -> str:
+    value = mapping.get(key)
+    if isinstance(value, str):
+        return value
+    raise ReviewToolError(f"{context} missing string field '{key}'")
+
+
+def _require_bool(mapping: Mapping[str, object], key: str, *, context: str) -> bool:
+    value = mapping.get(key)
+    if isinstance(value, bool):
+        return value
+    raise ReviewToolError(f"{context} missing boolean field '{key}'")
+
+
+def _optional_str(mapping: Mapping[str, object], key: str) -> str | None:
+    value = mapping.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _optional_int(mapping: Mapping[str, object], key: str) -> int | None:
+    value = mapping.get(key)
+    return value if isinstance(value, int) else None
+
+
+PRNumberOption = Annotated[
+    int,
+    typer.Option(
+        ...,
+        "--pr",
+        help="Pull request number to inspect.",
+    ),
+]
+
+RemoteOption = Annotated[
+    str,
+    typer.Option(
+        "origin",
+        "--remote",
+        help="Git remote name used to infer owner/repo (default: origin).",
+    ),
+]
+
+UnrepliedFilterOption = Annotated[
+    bool,
+    typer.Option(
+        False,
+        "--unreplied",
+        help="Only show threads without a viewer reply.",
+    ),
+]
+
+UnresolvedFilterOption = Annotated[
+    bool,
+    typer.Option(
+        False,
+        "--unresolved",
+        help="Only show unresolved threads.",
+    ),
+]
+
+UnrepliedToggleOption = Annotated[
+    bool,
+    typer.Option(
+        True,
+        "--unreplied/--all",
+        help="Reply only to threads without a viewer reply (default: true).",
+    ),
+]
+
+RepliesFileOption = Annotated[
+    Path,
+    typer.Option(
+        ...,
+        "--replies",
+        help="Path to JSON file mapping comment URLs or IDs to reply strings.",
+    ),
+]
+
+CommentsFileOption = Annotated[
+    Path,
+    typer.Option(
+        ...,
+        "--comments",
+        help="Path to file listing comment URLs, node IDs, or database IDs to delete.",
+    ),
+]
+
+ReplyDryRunOption = Annotated[
+    bool,
+    typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="Preview replies without publishing them.",
+    ),
+]
+
+DeleteDryRunOption = Annotated[
+    bool,
+    typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="Preview deletions without removing comments.",
+    ),
+]
 
 
 class ReviewToolError(RuntimeError):
@@ -44,7 +164,7 @@ class ReviewComment:
     author: str
     viewer_did_author: bool
     created_at: str
-    database_id: Optional[int]
+    database_id: int | None
 
 
 @dataclass
@@ -62,7 +182,7 @@ class ReviewThread:
             return False
         return bool(self.comments)
 
-    def latest_non_viewer_comment(self, viewer: str) -> Optional[ReviewComment]:
+    def latest_non_viewer_comment(self, viewer: str) -> ReviewComment | None:
         """Return the most recent comment authored by someone other than viewer."""
         for comment in reversed(self.comments):
             if comment.author != viewer:
@@ -70,7 +190,7 @@ class ReviewThread:
         return None
 
 
-def _run(command: list[str]) -> subprocess.CompletedProcess:
+def _run(command: list[str]) -> CompletedProcess[str]:
     typer.echo(f"$ {' '.join(shlex.quote(arg) for arg in command)}", err=True)
     return subprocess.run(command, check=True, capture_output=True, text=True)
 
@@ -115,7 +235,7 @@ def _infer_repo(remote: str = "origin") -> tuple[str, str]:
     return owner, repo
 
 
-def _gh_graphql(query: str, *, variables: dict[str, Any]) -> dict:
+def _gh_graphql(query: str, *, variables: dict[str, object]) -> Mapping[str, object]:
     """Execute `gh api graphql` with the provided query and variables."""
     command: list[str] = ["gh", "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
@@ -126,24 +246,35 @@ def _gh_graphql(query: str, *, variables: dict[str, Any]) -> dict:
     try:
         result = _run(command)
     except subprocess.CalledProcessError as exc:
-        raise ReviewToolError(exc.stderr.strip() or "gh api graphql failed") from exc
+        stderr_obj = cast(str | None, getattr(exc, "stderr", None))
+        message = (stderr_obj or "").strip()
+        raise ReviewToolError(message or "gh api graphql failed") from exc
 
+    stdout = result.stdout
     try:
-        response = json.loads(result.stdout)
+        response_raw = cast(object, json.loads(stdout))
     except json.JSONDecodeError as exc:
         raise ReviewToolError("Failed to parse GitHub API response as JSON") from exc
 
-    errors = response.get("errors") or []
-    if errors:
-        message = (
-            errors[0].get("message") if isinstance(errors[0], dict) else str(errors[0])
-        )
-        raise ReviewToolError(f"GitHub GraphQL error: {message}")
+    response = _ensure_mapping(response_raw, "GitHub response")
 
-    data = response.get("data")
-    if data is None:
+    errors_obj = response.get("errors")
+    if isinstance(errors_obj, list) and errors_obj:
+        errors_list = cast(list[object], errors_obj)
+        first_error: object = errors_list[0]
+        if isinstance(first_error, Mapping):
+            error_mapping = cast(Mapping[str, object], first_error)
+            message = _optional_str(error_mapping, "message") or str(error_mapping)
+        else:
+            message = str(first_error)
+        raise ReviewToolError(f"GitHub GraphQL error: {message}")
+    if errors_obj and not isinstance(errors_obj, list):
+        raise ReviewToolError("GitHub GraphQL error payload must be a list")
+
+    data_obj = response.get("data")
+    if data_obj is None:
         raise ReviewToolError("GitHub GraphQL response missing 'data' payload")
-    return data
+    return _ensure_mapping(data_obj, "GitHub response data")
 
 
 REVIEW_QUERY = """
@@ -211,13 +342,13 @@ class FetchResult:
 
 def fetch_review_threads(owner: str, repo: str, number: int) -> FetchResult:
     """Retrieve all review threads for a pull request."""
-    from_cursor: Optional[str] = None
-    viewer_login: Optional[str] = None
-    pull_request_id: Optional[str] = None
+    from_cursor: str | None = None
+    viewer_login: str | None = None
+    pull_request_id: str | None = None
     threads: list[ReviewThread] = []
 
     while True:
-        variables: dict[str, Any] = {
+        variables: dict[str, object] = {
             "owner": owner,
             "name": repo,
             "number": number,
@@ -227,44 +358,72 @@ def fetch_review_threads(owner: str, repo: str, number: int) -> FetchResult:
             variables["cursor"] = from_cursor
         data = _gh_graphql(REVIEW_QUERY, variables=variables)
 
-        repo_data = data.get("repository", {})
+        repo_data = _ensure_mapping(data.get("repository"), "repository")
         if viewer_login is None:
-            viewer_login = data.get("viewer", {}).get("login")
-        pr_data = repo_data.get("pullRequest")
-        if not pr_data:
+            viewer_mapping = _ensure_mapping(data.get("viewer"), "viewer")
+            viewer_login = _require_str(viewer_mapping, "login", context="viewer")
+        pr_data_obj = repo_data.get("pullRequest")
+        if pr_data_obj is None:
             raise ReviewToolError(f"Pull request #{number} not found in {owner}/{repo}")
+        pr_data = _ensure_mapping(pr_data_obj, "pullRequest")
 
         if pull_request_id is None:
-            pull_request_id = pr_data["id"]
+            pull_request_id = _require_str(pr_data, "id", context="pullRequest")
 
-        thread_page = pr_data["reviewThreads"]
-        for node in thread_page["nodes"]:
-            comments = [
-                ReviewComment(
-                    id=comment["id"],
-                    url=comment["url"],
-                    body=comment["body"],
-                    author=comment["author"]["login"]
-                    if comment["author"]
-                    else "<unknown>",
-                    viewer_did_author=bool(comment["viewerDidAuthor"]),
-                    created_at=comment["createdAt"],
-                    database_id=comment.get("databaseId"),
+        thread_connection = _ensure_mapping(
+            pr_data.get("reviewThreads"), "pullRequest.reviewThreads"
+        )
+        node_items = _ensure_list(
+            thread_connection.get("nodes"), "pullRequest.reviewThreads.nodes"
+        )
+        for node_obj in node_items:
+            node = _ensure_mapping(node_obj, "reviewThreads.nodes[]")
+            comments_mapping = _ensure_mapping(
+                node.get("comments"), "reviewThreads.comments"
+            )
+            comment_items = _ensure_list(
+                comments_mapping.get("nodes"), "reviewThreads.comments.nodes"
+            )
+            comments: list[ReviewComment] = []
+            for comment_obj in comment_items:
+                comment_mapping = _ensure_mapping(comment_obj, "comment")
+                author_login = "<unknown>"
+                author_obj = comment_mapping.get("author")
+                if isinstance(author_obj, Mapping):
+                    login = _optional_str(
+                        cast(Mapping[str, object], author_obj), "login"
+                    )
+                    if login:
+                        author_login = login
+                comments.append(
+                    ReviewComment(
+                        id=_require_str(comment_mapping, "id", context="comment"),
+                        url=_require_str(comment_mapping, "url", context="comment"),
+                        body=_require_str(comment_mapping, "body", context="comment"),
+                        author=author_login,
+                        viewer_did_author=_require_bool(
+                            comment_mapping, "viewerDidAuthor", context="comment"
+                        ),
+                        created_at=_require_str(
+                            comment_mapping, "createdAt", context="comment"
+                        ),
+                        database_id=_optional_int(comment_mapping, "databaseId"),
+                    )
                 )
-                for comment in node["comments"]["nodes"]
-            ]
             threads.append(
                 ReviewThread(
-                    id=node["id"],
-                    is_resolved=bool(node["isResolved"]),
+                    id=_require_str(node, "id", context="reviewThread"),
+                    is_resolved=_require_bool(
+                        node, "isResolved", context="reviewThread"
+                    ),
                     comments=comments,
                 )
             )
 
-        page_info = thread_page["pageInfo"]
-        if not page_info["hasNextPage"]:
+        page_info = _ensure_mapping(thread_connection.get("pageInfo"), "pageInfo")
+        if not _require_bool(page_info, "hasNextPage", context="pageInfo"):
             break
-        from_cursor = page_info["endCursor"]
+        from_cursor = _optional_str(page_info, "endCursor")
 
     assert viewer_login is not None
     assert pull_request_id is not None
@@ -354,7 +513,7 @@ def _bulk_reply(
             "parent": target_comment.id,
         }
         try:
-            _gh_graphql(
+            _ = _gh_graphql(
                 REPLY_MUTATION,
                 variables={**variables, "body": body},
             )
@@ -375,20 +534,21 @@ def _load_replies(path: Path) -> dict[str, str]:
         raise ReviewToolError(f"Failed to read replies file: {exc}") from exc
 
     try:
-        data = json.loads(payload)
+        data_raw = cast(object, json.loads(payload))
     except json.JSONDecodeError as exc:
         raise ReviewToolError(f"Failed to parse replies JSON: {exc}") from exc
 
-    if not isinstance(data, dict):
+    if not isinstance(data_raw, dict):
         raise ReviewToolError("Replies JSON must map comment identifiers to strings.")
 
+    mapping = cast(dict[str, object], data_raw)
     replies: dict[str, str] = {}
-    for key, value in data.items():
-        if not isinstance(key, str) or not isinstance(value, str):
+    for key_obj, value_obj in mapping.items():
+        if not isinstance(value_obj, str):
             raise ReviewToolError(
                 "Replies JSON must use string keys with string values."
             )
-        replies[key] = value
+        replies[key_obj] = value_obj
     return replies
 
 
@@ -401,21 +561,23 @@ def _load_comment_targets(path: Path) -> list[str]:
         raise ReviewToolError(f"Failed to read comments file: {exc}") from exc
 
     try:
-        data = json.loads(payload)
+        data_raw = cast(object, json.loads(payload))
     except json.JSONDecodeError:
         items = [line.strip() for line in payload.splitlines() if line.strip()]
         if not items:
             raise ReviewToolError("Comments file is empty.")
         return items
 
-    if isinstance(data, list):
-        items = [item for item in data if isinstance(item, str) and item.strip()]
+    if isinstance(data_raw, list):
+        items_raw = cast(list[object], data_raw)
+        items = [item for item in items_raw if isinstance(item, str) and item.strip()]
         if not items:
             raise ReviewToolError("Comments JSON list must contain non-empty strings.")
         return items
 
-    if isinstance(data, dict):
-        items = [key for key in data.keys() if isinstance(key, str) and key.strip()]
+    if isinstance(data_raw, dict):
+        mapping = cast(dict[str, object], data_raw)
+        items = [key for key in mapping.keys() if key.strip()]
         if not items:
             raise ReviewToolError("Comments JSON object must have string keys.")
         return items
@@ -429,32 +591,24 @@ def _comment_lookup(fetch: FetchResult) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for thread in fetch.threads:
         for comment in thread.comments:
-            mapping.setdefault(comment.id, comment.id)
-            mapping.setdefault(comment.url, comment.id)
+            _ = mapping.setdefault(comment.id, comment.id)
+            _ = mapping.setdefault(comment.url, comment.id)
             if "#" in comment.url:
-                mapping.setdefault(comment.url.split("#")[-1], comment.id)
+                _ = mapping.setdefault(comment.url.split("#")[-1], comment.id)
             if comment.database_id is not None:
-                mapping.setdefault(str(comment.database_id), comment.id)
+                _ = mapping.setdefault(str(comment.database_id), comment.id)
     return mapping
 
 
 @app.command("list")
 def cmd_list(
-    pr: int = typer.Option(..., "--pr", help="Pull request number to inspect."),
-    unreplied: bool = typer.Option(
-        False, "--unreplied", help="Only show threads without a viewer reply."
-    ),
-    unresolved: bool = typer.Option(
-        False, "--unresolved", help="Only show unresolved threads."
-    ),
-    remote: str = typer.Option(
-        "origin",
-        "--remote",
-        help="Git remote name used to infer owner/repo (default: origin).",
-    ),
+    pr: PRNumberOption,
+    unreplied: UnrepliedFilterOption = False,
+    unresolved: UnresolvedFilterOption = False,
+    remote: RemoteOption = "origin",
 ) -> None:
     """List review threads for a pull request."""
-    _ensure_repo_root()
+    _ = _ensure_repo_root()
     owner, repo = _infer_repo(remote)
     fetch = fetch_review_threads(owner, repo, pr)
     filtered = apply_filters(
@@ -468,28 +622,12 @@ def cmd_list(
 
 @app.command("bulk-reply")
 def cmd_bulk_reply(
-    pr: int = typer.Option(..., "--pr", help="Pull request number to update."),
-    replies_file: Path = typer.Option(
-        ...,
-        "--replies",
-        help="Path to JSON file mapping comment URLs or IDs to reply strings.",
-    ),
-    unreplied: bool = typer.Option(
-        True,
-        "--unreplied/--all",
-        help="Reply only to threads without a viewer reply (default: true).",
-    ),
-    unresolved: bool = typer.Option(
-        False, "--unresolved", help="Restrict replies to unresolved threads."
-    ),
-    remote: str = typer.Option(
-        "origin",
-        "--remote",
-        help="Git remote name used to infer owner/repo (default: origin).",
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview replies without publishing them."
-    ),
+    pr: PRNumberOption,
+    replies_file: RepliesFileOption,
+    unreplied: UnrepliedToggleOption = True,
+    unresolved: UnresolvedFilterOption = False,
+    remote: RemoteOption = "origin",
+    dry_run: ReplyDryRunOption = False,
 ) -> None:
     """Reply to multiple review threads using per-comment messages from file."""
     _ensure_repo_root()
@@ -507,20 +645,10 @@ def cmd_bulk_reply(
 
 @app.command("delete")
 def cmd_delete(
-    pr: int = typer.Option(..., "--pr", help="Pull request number to inspect."),
-    comments_file: Path = typer.Option(
-        ...,
-        "--comments",
-        help="Path to file listing comment URLs, node IDs, or database IDs to delete.",
-    ),
-    remote: str = typer.Option(
-        "origin",
-        "--remote",
-        help="Git remote name used to infer owner/repo (default: origin).",
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview deletions without removing comments."
-    ),
+    pr: PRNumberOption,
+    comments_file: CommentsFileOption,
+    remote: RemoteOption = "origin",
+    dry_run: DeleteDryRunOption = False,
 ) -> None:
     """Delete one or more review comments identified in a file."""
     _ensure_repo_root()
@@ -551,7 +679,7 @@ def cmd_delete(
             typer.echo(f"[dry-run] Would delete comment {original} (id: {comment_id})")
             continue
         try:
-            _gh_graphql(
+            _ = _gh_graphql(
                 DELETE_COMMENT_MUTATION,
                 variables={"id": comment_id},
             )
@@ -560,7 +688,7 @@ def cmd_delete(
             typer.echo(f"Failed to delete {original}: {exc}", err=True)
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     try:
         app(prog_name="uv run python tools/review.py", args=argv)
     except ReviewToolError as exc:

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from types import MethodType
-from typing import Any, Callable, Dict, Literal, Optional, Tuple
+from typing import Callable, Literal, Optional, Tuple, cast
+import math
 
 import pytest
 import torch
+from torch.optim import Optimizer
 
 import ml_playground.training.loop.runner as runner_mod
 from ml_playground.core.error_handling import CheckpointError
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.training.loop.runner import TrainerDependencies
 from ml_playground.configuration.models import (
     DataConfig,
@@ -21,91 +23,63 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
-from ml_playground.training.checkpointing.checkpoint_manager import Checkpoint
+from ml_playground.training.checkpointing.checkpoint_manager import (
+    Checkpoint,
+    CheckpointManager,
+    CheckpointPayload,
+)
+from ml_playground.training.ema import EMA
+from ml_playground.training.types import (
+    BatchProvider,
+    OptimizerLike,
+    TensorboardWriter,
+    VectorizeFn,
+)
+from ml_playground.models.core.model import GPT
+from ml_playground.training.hooks.runtime import RuntimeContext
+
+from tests.unit.training._helpers import (
+    LoggerStub,
+    SimpleBatchesStub,
+    TensorboardWriterStub,
+    make_optimizer,
+)
 
 
-class _FakeBatches:
-    def __init__(self, device: str) -> None:
-        self.device = device
+SavePayload = dict[str, float | int | bool]
+EvaluationMap = dict[int, dict[str, float]]
 
-    def get_batch(self, split: str) -> Tuple[torch.Tensor, torch.Tensor]:
-        del split
-        X = torch.zeros((2, 2), device=self.device)
-        Y = torch.zeros((2, 2), device=self.device)
-        return X, Y
+
+DEFAULT_EVALUATION: EvaluationMap = {0: {"train": 0.5, "val": 0.4}}
+
+
+def default_evaluation() -> EvaluationMap:
+    return {step: metrics.copy() for step, metrics in DEFAULT_EVALUATION.items()}
+
+
+def _assert_close(
+    actual: float,
+    expected: float,
+    *,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 0.0,
+) -> None:
+    assert math.isclose(actual, expected, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
 class _FakeModel(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.lin = torch.nn.Linear(2, 2)
+        self.weight = torch.nn.Parameter(torch.ones(1))
 
-    def forward(self, X: torch.Tensor, Y: torch.Tensor):  # type: ignore[override]
-        del Y
-        loss = torch.ones((), device=X.device, requires_grad=True)
-        return self.lin(X), loss
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor):  # type: ignore[override]
+        del targets
+        logits = inputs * self.weight
+        loss = logits.mean() + self.weight.square().sum()
+        return logits, loss
 
-    def estimate_mfu(self, *args: Any, **kwargs: Any) -> float:
-        del args, kwargs
+    def estimate_mfu(self, *_args: object, **_kwargs: object) -> float:
         return 42.0
-
-
-class _FakeOptimizer:
-    def __init__(self) -> None:
-        self.param_groups = [{"lr": 0.0}]
-
-    def state_dict(self) -> Dict[str, Any]:
-        return {}
-
-    def load_state_dict(self, state: Dict[str, Any]) -> None:
-        del state
-
-    def zero_grad(self, *, set_to_none: bool = True) -> None:
-        del set_to_none
-
-    def step(self) -> None:
-        pass
-
-
-class _FakeWriter:
-    def add_scalar(
-        self,
-        tag: str,
-        scalar_value: float,
-        global_step: int,
-        *,
-        walltime: float | None = None,
-        new_style: bool = False,
-        double_precision: bool = False,
-    ) -> None:
-        del tag, scalar_value, global_step, walltime, new_style, double_precision
-
-    def close(self) -> None:
-        pass
-
-
-class _ListLogger:
-    def __init__(self) -> None:
-        self.debugs: list[str] = []
-        self.infos: list[str] = []
-        self.warnings: list[str] = []
-        self.errors: list[str] = []
-
-    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
-        del kwargs
-        self.infos.append(message % args if args else message)
-
-    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
-        del kwargs
-        self.debugs.append(message % args if args else message)
-
-    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
-        del kwargs
-        self.warnings.append(message % args if args else message)
-
-    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
-        del kwargs
-        self.errors.append(message % args if args else message)
 
 
 @dataclass
@@ -120,22 +94,29 @@ class _FakeCkptMgr:
         self.out_dir = Path("/tmp")
 
 
+class _CountingEMA(EMA):
+    def __init__(self, model: GPT) -> None:
+        super().__init__(model, decay=0.5, device="cpu")
+        self.calls = 0
+
+    def update(self, model: GPT) -> None:
+        self.calls += 1
+        super().update(model)
+
+
 def _make_cfg(
     tmp_path: Path,
     *,
     eval_only: bool = False,
     max_iters: int = 2,
     tensorboard_mode: Literal["eval", "log"] = "eval",
-    logger: Any | None = None,
+    logger: LoggerStub | None = None,
     grad_accum_steps: int = 1,
     grad_clip: float = 0.0,
     ema_decay: float = 0.0,
 ) -> TrainerConfig:
     out_dir = tmp_path / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
-    cfg_kwargs: dict[str, Any] = {}
-    if logger is not None:
-        cfg_kwargs["logger"] = logger
     return TrainerConfig(
         model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
         data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=grad_accum_steps),
@@ -173,7 +154,7 @@ def _make_cfg(
             block_size=128,
         ),
         peft=TrainerConfig.PeftConfig(enabled=False),
-        **cfg_kwargs,
+        logger=logger or LoggerStub(),
     )
 
 
@@ -190,84 +171,90 @@ def _shared(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
 
 def _build_deps(
     *,
-    evaluation: Dict[int, Dict[str, float]] | None = None,
-    saved_hook: Callable[[Dict[str, Any]], None] | None = None,
+    evaluation: EvaluationMap | None = None,
+    saved_hook: Callable[[SavePayload], None] | None = None,
     load_checkpoint_result: Optional[Checkpoint] = None,
     get_lr_override: Callable[[int, LRSchedule, OptimConfig], float] | None = None,
-    writer: Any | None = None,
+    writer: TensorboardWriter | None = None,
     raise_on_final_save: Optional[BaseException] = None,
     propagate_exception: Optional[BaseException] = None,
+    vectorize_override: VectorizeFn | None = None,
 ) -> Tuple[TrainerDependencies, _FakeCkptMgr]:
     evaluation = evaluation or {}
-    batches = _FakeBatches(device="cpu")
+    batches = SimpleBatchesStub()
     model = _FakeModel()
-    optimizer = _FakeOptimizer()
-    writer = writer or _FakeWriter()
+    optimizer_like = make_optimizer(model.parameters())
+    writer_instance = writer or TensorboardWriterStub()
     manager = _FakeCkptMgr()
 
-    def init_batches(cfg: TrainerConfig, shared: SharedConfig) -> _FakeBatches:
-        del cfg, shared
-        return batches
+    model_obj: GPT = cast(GPT, model)
+    optimizer_obj: OptimizerLike = cast(OptimizerLike, optimizer_like)
+    writer_obj: TensorboardWriter = cast(TensorboardWriter, writer_instance)
 
-    def init_model(
-        cfg: TrainerConfig, logger: Any
-    ) -> Tuple[_FakeModel, _FakeOptimizer]:
+    def init_batches(cfg: TrainerConfig, shared: SharedConfig) -> BatchProvider:
+        del cfg, shared
+        return cast(BatchProvider, batches)
+
+    def init_model(cfg: TrainerConfig, logger: LoggerLike) -> Tuple[GPT, OptimizerLike]:
         del cfg, logger
-        return model, optimizer
+        return model_obj, optimizer_obj
 
     def init_components(
-        model_param: torch.nn.Module,
+        model: GPT,
         cfg: TrainerConfig,
-        runtime: runner_mod.RuntimeContext,
+        runtime: RuntimeContext,
+        *,
         log_dir: str,
-    ) -> Tuple[torch.nn.Module, runner_mod.GradScaler, None, _FakeWriter]:
+    ) -> Tuple[GPT, runner_mod.GradScaler, None, TensorboardWriter]:
         del cfg, runtime, log_dir
         return (
-            model_param,
+            model,
             runner_mod.GradScaler(device="cpu", enabled=False),
             None,
-            writer,
+            writer_obj,
         )
 
-    def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> _FakeCkptMgr:
+    def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> CheckpointManager:
         del cfg, shared
-        return manager
+        return cast(CheckpointManager, manager)
 
     def load_checkpoint(
-        manager_param: _FakeCkptMgr,
+        manager_param: CheckpointManager,
         cfg: TrainerConfig,
         *,
-        logger: Any,
+        logger: LoggerLike,
     ) -> Optional[Checkpoint]:
-        del manager_param, cfg, logger
+        del cfg, logger
+        _ = cast(_FakeCkptMgr, manager_param)
         return load_checkpoint_result
 
     def apply_checkpoint(
         checkpoint: Checkpoint,
         *,
         model: torch.nn.Module,
-        optimizer: Any,
-        ema: Optional[Any],
+        optimizer: Optimizer,
+        ema: Optional[EMA],
     ) -> Tuple[int, float]:
         del model, optimizer, ema
         return checkpoint.iter_num, checkpoint.best_val_loss
 
     def save_checkpoint(
-        manager_param: _FakeCkptMgr,
+        manager_param: CheckpointManager,
         cfg: TrainerConfig,
         *,
         model: torch.nn.Module,
-        optimizer: Any,
-        ema: Optional[Any],
+        optimizer: Optimizer,
+        ema: Optional[EMA],
         iter_num: int,
         best_val_loss: float,
-        logger: Any,
+        logger: LoggerLike,
         is_best: bool,
     ) -> None:
         del cfg, model, optimizer, ema, logger
+        fake_mgr = cast(_FakeCkptMgr, manager_param)
         if not is_best and raise_on_final_save is not None:
             raise raise_on_final_save
-        manager_param.saved.append(_Saved(is_best=is_best, iter_num=iter_num))
+        fake_mgr.saved.append(_Saved(is_best=is_best, iter_num=iter_num))
         if saved_hook is not None:
             saved_hook(
                 {
@@ -281,7 +268,7 @@ def _build_deps(
         cfg: TrainerConfig,
         shared: SharedConfig,
         *,
-        logger: Any,
+        logger: LoggerLike,
     ) -> None:
         del cfg, shared
         if propagate_exception is not None:
@@ -291,14 +278,14 @@ def _build_deps(
     def run_evaluation(
         cfg: TrainerConfig,
         *,
-        logger: Any,
+        logger: LoggerLike,
         iter_num: int,
         lr: float,
         raw_model: torch.nn.Module,
-        batches: Any,
-        ctx: Any,
-        writer: Optional[_FakeWriter],
-    ) -> Dict[str, float]:
+        batches: BatchProvider,
+        ctx: AbstractContextManager[object] | None,
+        writer: Optional[TensorboardWriter],
+    ) -> dict[str, float]:
         del cfg, logger, lr, raw_model, batches, ctx, writer
         return evaluation.get(iter_num, evaluation.get(-1, {"train": 0.5, "val": 0.5}))
 
@@ -306,6 +293,11 @@ def _build_deps(
         if get_lr_override is not None:
             return get_lr_override(iteration, schedule, optim)
         return runner_mod.get_lr(iteration, schedule, optim)
+
+    def vectorize_provider() -> VectorizeFn | None:
+        if vectorize_override is not None:
+            return vectorize_override
+        return cast(VectorizeFn | None, getattr(torch, "vmap", None))
 
     deps = TrainerDependencies(
         initialize_batches=init_batches,
@@ -318,53 +310,134 @@ def _build_deps(
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        vectorize=vectorize_provider,
     )
     return deps, manager
 
 
-def test_train_eval_only_breaks_early_and_returns(tmp_path: Path) -> None:
-    saved_calls: list[Dict[str, Any]] = []
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+@dataclass
+class TrainerFixture:
+    trainer: runner_mod.Trainer
+    cfg: TrainerConfig
+    shared: SharedConfig
+    deps: TrainerDependencies
+    manager: _FakeCkptMgr
+
+    def run(self) -> tuple[int, float]:
+        return self.trainer.run()
+
+    @property
+    def logger(self) -> LoggerStub:
+        return cast(LoggerStub, self.cfg.logger)
+
+
+@dataclass
+class TrainerHarness:
+    tmp_path: Path
+
+    def build(
+        self,
+        *,
+        evaluation: EvaluationMap | None = None,
+        saved_hook: Callable[[SavePayload], None] | None = None,
+        load_checkpoint: Optional[Checkpoint] = None,
+        get_lr_override: Callable[[int, LRSchedule, OptimConfig], float] | None = None,
+        writer: TensorboardWriter | None = None,
+        raise_on_final_save: Optional[BaseException] = None,
+        propagate_exception: Optional[BaseException] = None,
+        eval_only: bool = False,
+        max_iters: int = 2,
+        tensorboard_mode: Literal["eval", "log"] = "eval",
+        logger: LoggerStub | None = None,
+        grad_accum_steps: int = 1,
+        grad_clip: float = 0.0,
+        ema_decay: float = 0.0,
+        train_step_override: Callable[
+            [runner_mod.Trainer, torch.Tensor, torch.Tensor], torch.Tensor
+        ]
+        | None = None,
+        vectorize_override: VectorizeFn | None = None,
+    ) -> TrainerFixture:
+        deps, manager = _build_deps(
+            evaluation=evaluation,
+            saved_hook=saved_hook,
+            load_checkpoint_result=load_checkpoint,
+            get_lr_override=get_lr_override,
+            writer=writer,
+            raise_on_final_save=raise_on_final_save,
+            propagate_exception=propagate_exception,
+            vectorize_override=vectorize_override,
+        )
+        cfg = _make_cfg(
+            self.tmp_path,
+            eval_only=eval_only,
+            max_iters=max_iters,
+            tensorboard_mode=tensorboard_mode,
+            logger=logger,
+            grad_accum_steps=grad_accum_steps,
+            grad_clip=grad_clip,
+            ema_decay=ema_decay,
+        )
+        shared = _shared(self.tmp_path, cfg)
+        trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+        return TrainerFixture(
+            trainer=trainer,
+            cfg=cfg,
+            shared=shared,
+            deps=deps,
+            manager=manager,
+        )
+
+
+@pytest.fixture
+def trainer_harness(tmp_path: Path) -> TrainerHarness:
+    return TrainerHarness(tmp_path)
+
+
+def test_train_eval_only_breaks_early_and_returns(
+    trainer_harness: TrainerHarness,
+) -> None:
+    saved_calls: list[SavePayload] = []
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
         saved_hook=saved_calls.append,
+        eval_only=True,
+        max_iters=0,
     )
 
-    cfg = _make_cfg(tmp_path, eval_only=True, max_iters=0)
-    shared = _shared(tmp_path, cfg)
-
-    it, best = runner_mod.Trainer(cfg, shared, deps=deps).run()
+    it, best = fixture.run()
 
     assert it == 0
-    assert best == pytest.approx(0.4)
+    _assert_close(best, 0.4)
     assert any(not call["best"] for call in saved_calls)
 
 
 def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
-    tmp_path: Path,
+    trainer_harness: TrainerHarness,
 ) -> None:
-    calls: Dict[int, Dict[str, float]] = {
+    calls: EvaluationMap = {
         0: {"train": 0.6, "val": 0.5},
         1: {"train": 0.5, "val": 0.2},
     }
-    saved_calls: list[Dict[str, Any]] = []
-    deps, manager = _build_deps(
+    saved_calls: list[SavePayload] = []
+    fixture = trainer_harness.build(
         evaluation=calls,
         saved_hook=saved_calls.append,
+        max_iters=2,
     )
 
-    cfg = _make_cfg(tmp_path, eval_only=False, max_iters=2)
-    shared = _shared(tmp_path, cfg)
-
-    it, best = runner_mod.Trainer(cfg, shared, deps=deps).run()
+    it, best = fixture.run()
 
     assert it >= 1
     assert any(call["best"] and call["iter_num"] == 1 for call in saved_calls)
     assert any(not call["best"] for call in saved_calls)
-    assert best == pytest.approx(0.2)
-    assert manager.saved, "checkpoints should be recorded"
+    _assert_close(best, 0.2)
+    assert fixture.manager.saved, "checkpoints should be recorded"
 
 
-def test_trainer_updates_optimizer_lr_via_get_lr(tmp_path: Path) -> None:
+def test_trainer_updates_optimizer_lr_via_get_lr(
+    trainer_harness: TrainerHarness,
+) -> None:
     lr_calls: list[Tuple[int, float]] = []
 
     def track_lr(iteration: int, schedule: LRSchedule, optim: OptimConfig) -> float:
@@ -372,51 +445,55 @@ def test_trainer_updates_optimizer_lr_via_get_lr(tmp_path: Path) -> None:
         lr_calls.append((iteration, value))
         return value
 
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
         get_lr_override=track_lr,
+        max_iters=3,
     )
 
-    cfg = _make_cfg(tmp_path, eval_only=False, max_iters=3)
-    shared = _shared(tmp_path, cfg)
-
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
-    trainer.run()
+    fixture.run()
+    trainer = fixture.trainer
+    cfg = fixture.cfg
 
     assert lr_calls, "get_lr must be invoked at least once"
     for _, lr in lr_calls:
         assert 0.0 <= lr <= cfg.optim.learning_rate + 1e-6
     assert any(lr > 0 for _, lr in lr_calls)
     for group in trainer.optimizer.param_groups:
-        assert 0.0 <= group["lr"] <= cfg.optim.learning_rate + 1e-6
+        lr_value = group.get("lr")
+        assert isinstance(lr_value, float)
+        assert 0.0 <= lr_value <= cfg.optim.learning_rate + 1e-6
 
 
-def test_trainer_tensorboard_logging_handles_writer_errors(tmp_path: Path) -> None:
-    logger = _ListLogger()
+def test_trainer_tensorboard_logging_handles_writer_errors(
+    trainer_harness: TrainerHarness,
+) -> None:
+    logger = LoggerStub()
 
     class ExplodingWriter:
-        def add_scalar(self, *args: Any, **kwargs: Any) -> None:
-            del args, kwargs
+        def add_scalar(
+            self,
+            tag: str,
+            scalar_value: float,
+            global_step: int | None = None,
+            *,
+            walltime: float | None = None,
+            new_style: bool = False,
+            double_precision: bool = False,
+        ) -> None:
+            del tag, scalar_value, global_step, walltime, new_style, double_precision
             raise RuntimeError("tensorboard disconnected")
 
         def close(self) -> None:
             pass
 
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+    trainer_harness.build(
+        evaluation=default_evaluation(),
         writer=ExplodingWriter(),
-    )
-
-    cfg = _make_cfg(
-        tmp_path,
-        eval_only=False,
         max_iters=1,
         tensorboard_mode="log",
         logger=logger,
-    )
-    shared = _shared(tmp_path, cfg)
-
-    runner_mod.Trainer(cfg, shared, deps=deps).run()
+    ).run()
 
     assert any(
         "TensorBoard logging skipped due to writer error" in msg
@@ -424,41 +501,41 @@ def test_trainer_tensorboard_logging_handles_writer_errors(tmp_path: Path) -> No
     )
 
 
-def test_trainer_warns_when_final_checkpoint_fails(tmp_path: Path) -> None:
-    logger = _ListLogger()
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+def test_trainer_warns_when_final_checkpoint_fails(
+    trainer_harness: TrainerHarness,
+) -> None:
+    logger = LoggerStub()
+    trainer_harness.build(
+        evaluation=default_evaluation(),
         raise_on_final_save=CheckpointError(
             "disk full",
             reason="Test failure",
             rationale="Ensure warning branch is exercised",
         ),
-    )
-
-    cfg = _make_cfg(tmp_path, max_iters=0, logger=logger)
-    shared = _shared(tmp_path, cfg)
-
-    runner_mod.Trainer(cfg, shared, deps=deps).run()
+        max_iters=0,
+        logger=logger,
+    ).run()
 
     assert any("Failed to save final checkpoint" in msg for msg in logger.warnings)
 
 
-def test_trainer_warns_when_metadata_propagation_fails(tmp_path: Path) -> None:
-    logger = _ListLogger()
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+def test_trainer_warns_when_metadata_propagation_fails(
+    trainer_harness: TrainerHarness,
+) -> None:
+    logger = LoggerStub()
+    trainer_harness.build(
+        evaluation=default_evaluation(),
         propagate_exception=RuntimeError("fs mismatch"),
-    )
-
-    cfg = _make_cfg(tmp_path, max_iters=0, logger=logger)
-    shared = _shared(tmp_path, cfg)
-
-    runner_mod.Trainer(cfg, shared, deps=deps).run()
+        max_iters=0,
+        logger=logger,
+    ).run()
 
     assert any("Failed to propagate meta file" in msg for msg in logger.warnings)
 
 
-def test_trainer_applies_checkpoint_state_on_init(tmp_path: Path) -> None:
+def test_trainer_applies_checkpoint_state_on_init(
+    trainer_harness: TrainerHarness,
+) -> None:
     checkpoint = Checkpoint(
         model={},
         optimizer={},
@@ -467,45 +544,48 @@ def test_trainer_applies_checkpoint_state_on_init(tmp_path: Path) -> None:
         best_val_loss=0.42,
         config={},
     )
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
-        load_checkpoint_result=checkpoint,
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
+        load_checkpoint=checkpoint,
+        max_iters=0,
     )
-
-    cfg = _make_cfg(tmp_path, max_iters=0)
-    shared = _shared(tmp_path, cfg)
-
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+    trainer = fixture.trainer
 
     assert trainer.iter_num == 5
-    assert trainer.best_val_loss == pytest.approx(0.42)
+    _assert_close(trainer.best_val_loss, 0.42)
 
 
-def test_trainer_tensorboard_logging_success(tmp_path: Path) -> None:
+def test_trainer_tensorboard_logging_success(
+    trainer_harness: TrainerHarness,
+) -> None:
     class CapturingWriter:
         def __init__(self) -> None:
-            self.scalars: list[tuple[str, float, int]] = []
+            self.scalars: list[tuple[str, float, int | None]] = []
             self.closed = False
 
-        def add_scalar(self, tag: str, value: float, step: int) -> None:
-            self.scalars.append((tag, float(value), int(step)))
+        def add_scalar(
+            self,
+            tag: str,
+            scalar_value: float,
+            global_step: int | None = None,
+            *,
+            walltime: float | None = None,
+            new_style: bool = False,
+            double_precision: bool = False,
+        ) -> None:
+            del walltime, new_style, double_precision
+            self.scalars.append((tag, float(scalar_value), global_step))
 
         def close(self) -> None:
             self.closed = True
 
     writer = CapturingWriter()
-    deps, _manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
+    trainer_harness.build(
+        evaluation=default_evaluation(),
         writer=writer,
-    )
-    cfg = _make_cfg(
-        tmp_path,
         max_iters=1,
         tensorboard_mode="log",
-    )
-    shared = _shared(tmp_path, cfg)
-
-    runner_mod.Trainer(cfg, shared, deps=deps).run()
+    ).run()
 
     tags = {tag for tag, _, _ in writer.scalars}
     assert {"Loss/train", "LR"} <= tags
@@ -513,192 +593,195 @@ def test_trainer_tensorboard_logging_success(tmp_path: Path) -> None:
 
 
 def test_trainer_keyboard_interrupt_skips_final_save(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    logger = _ListLogger()
-    saved_calls: list[Dict[str, Any]] = []
-    deps, manager = _build_deps(
-        evaluation={0: {"train": 0.5, "val": 0.4}},
-        saved_hook=saved_calls.append,
-    )
-    cfg = _make_cfg(tmp_path, max_iters=5, logger=logger)
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+    saved_calls: list[SavePayload] = []
 
-    def _interrupt(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
-        del self, X, Y
+    def _interrupt(
+        _trainer: runner_mod.Trainer, X: torch.Tensor, Y: torch.Tensor
+    ) -> torch.Tensor:
+        del _trainer, X, Y
         raise KeyboardInterrupt()
 
-    monkeypatch.setattr(
-        trainer,
-        "_train_step",
-        MethodType(_interrupt, trainer),
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
+        saved_hook=saved_calls.append,
+        max_iters=5,
+        logger=LoggerStub(),
+        train_step_override=_interrupt,
     )
 
     with pytest.raises(KeyboardInterrupt):
-        trainer.run()
+        fixture.trainer.run()
 
-    assert manager.saved == []
-    assert any("Training loop interrupted" in msg for msg in logger.infos)
+    assert fixture.manager.saved == []
+    assert any("Training loop interrupted" in msg for msg in fixture.logger.infos)
 
 
 def test_train_step_accum_with_grad_clip_and_ema(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
-    cfg = _make_cfg(
-        tmp_path,
-        max_iters=0,
-        grad_accum_steps=2,
-        grad_clip=0.25,
-    )
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
-
-    class StubEMA:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def update(self, model: torch.nn.Module) -> None:
-            del model
-            self.calls += 1
-
-    trainer.ema = StubEMA()
-
-    def fake_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
+    def fake_vmap(
+        func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         def wrapped(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
             losses = [func(xb, yb) for xb, yb in zip(x_batch, y_batch)]
             return torch.stack(losses)
 
         return wrapped
 
-    monkeypatch.setattr(torch, "vmap", fake_vmap)
+    fixture = trainer_harness.build(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        grad_accum_steps=2,
+        grad_clip=0.25,
+        max_iters=1,
+        ema_decay=0.5,
+        vectorize_override=fake_vmap,
+    )
+    trainer = fixture.trainer
+    trainer.ema = _CountingEMA(trainer.model)
 
-    X = torch.zeros((2, 2))
-    Y = torch.zeros((2, 2))
-    loss = trainer._train_step(X, Y)
-
-    assert isinstance(loss, torch.Tensor)
-    assert trainer.ema.calls == 1
+    trainer.set_train_step_override(
+        lambda _trainer, x, y: trainer._train_step_accum(
+            x, y, trainer.cfg.data.grad_accum_steps
+        )
+    )
+    trainer.run()
+    counting_ema = trainer.ema
+    assert isinstance(counting_ema, _CountingEMA)
+    assert counting_ema.calls >= 1
 
 
 def test_train_step_accum_fallback_without_vmap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
-    cfg = _make_cfg(
-        tmp_path,
-        max_iters=0,
-        grad_accum_steps=2,
-    )
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
-
-    def raising_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
+    def raising_vmap(
+        func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         del func
 
-        def wrapped(*_args: Any, **_kwargs: Any) -> torch.Tensor:
+        def wrapped(*_args: object, **_kwargs: object) -> torch.Tensor:
             raise RuntimeError("no vmap")
 
         return wrapped
 
-    monkeypatch.setattr(torch, "vmap", raising_vmap)
+    fixture = trainer_harness.build(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        grad_accum_steps=2,
+        max_iters=1,
+        vectorize_override=raising_vmap,
+    )
+    trainer = fixture.trainer
 
-    X = torch.zeros((2, 2))
-    Y = torch.zeros((2, 2))
-    loss = trainer._train_step(X, Y)
-
-    assert isinstance(loss, torch.Tensor)
+    trainer.set_train_step_override(
+        lambda _trainer, x, y: trainer._train_step_accum(
+            x, y, trainer.cfg.data.grad_accum_steps
+        )
+    )
+    trainer.run()
 
 
 def test_default_trainer_dependencies_returns_callables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    captured: dict[str, Any] = {}
+    captured: dict[str, object] = {}
 
     def stub_initialize_components(
-        model: Any,
+        model: GPT,
         cfg: TrainerConfig,
-        runtime: runner_mod.RuntimeContext,
+        runtime: RuntimeContext,
+        *,
         log_dir: str,
-    ) -> tuple[Any, str, None, None]:
+    ) -> tuple[GPT, runner_mod.GradScaler, None, None]:
         captured["model"] = model
         captured["cfg"] = cfg
         captured["runtime"] = runtime
         captured["log_dir"] = log_dir
-        return model, "scaler", None, None
+        return (
+            model,
+            runner_mod.GradScaler(device="cpu", enabled=False),
+            None,
+            None,
+        )
 
-    monkeypatch.setattr(runner_mod, "initialize_components", stub_initialize_components)
-
-    deps = runner_mod.default_trainer_dependencies()
+    deps = runner_mod.default_trainer_dependencies(
+        initialize_components_fn=stub_initialize_components
+    )
     assert callable(deps.initialize_batches)
     assert callable(deps.create_manager)
     assert callable(deps.run_evaluation)
 
-    cfg = _make_cfg(tmp_path, max_iters=0)
+    cfg = _make_cfg(trainer_harness.tmp_path, max_iters=0)
     runtime = runner_mod.RuntimeContext(
         device_type="cpu", autocast_context=nullcontext()
     )
-    model = _FakeModel()
+    model = cast(GPT, _FakeModel())
     compiled, scaler, ema, writer = deps.initialize_components(
-        model, cfg, runtime, log_dir=str(tmp_path)
+        model, cfg, runtime, log_dir=str(trainer_harness.tmp_path)
     )
     assert compiled is model
-    assert scaler == "scaler"
+    assert isinstance(scaler, runner_mod.GradScaler)
     assert ema is None and writer is None
-    assert captured["log_dir"] == str(tmp_path)
+    assert captured["log_dir"] == str(trainer_harness.tmp_path)
 
 
 def test_trainer_propagates_non_keyboard_exception(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    logger = _ListLogger()
-    deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
-    cfg = _make_cfg(tmp_path, max_iters=3, logger=logger)
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
-
-    def _boom(self, *_args: Any, **_kwargs: Any) -> torch.Tensor:
+    def _boom(
+        _trainer: runner_mod.Trainer, *_args: object, **_kwargs: object
+    ) -> torch.Tensor:
+        del _trainer, _args, _kwargs
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(trainer, "_train_step", MethodType(_boom, trainer))
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
+        max_iters=3,
+        logger=LoggerStub(),
+        train_step_override=_boom,
+    )
+    trainer = fixture.trainer
 
     with pytest.raises(RuntimeError):
         trainer.run()
 
-    assert manager.saved == []
+    assert fixture.manager.saved == []
 
 
-def test_trainer_train_step_validates_grad_accum(tmp_path: Path) -> None:
-    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
-    cfg = _make_cfg(tmp_path, max_iters=0)
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+def test_trainer_train_step_validates_grad_accum(
+    trainer_harness: TrainerHarness,
+) -> None:
+    fixture = trainer_harness.build(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        max_iters=0,
+    )
+    trainer = fixture.trainer
 
     bad_data = trainer.cfg.data.model_copy(update={"grad_accum_steps": 0})
     bad_cfg = trainer.cfg.model_copy(update={"data": bad_data})
     object.__setattr__(trainer, "cfg", bad_cfg)
 
+    inputs = torch.zeros((2, 2))
+    targets = torch.zeros((2, 2))
+    trainer.set_train_step_override(
+        lambda _trainer, x, y: trainer._train_step_accum(
+            x, y, trainer.cfg.data.grad_accum_steps
+        )
+    )
     with pytest.raises(ValueError, match="grad_accum_steps must be a positive integer"):
-        trainer._train_step(torch.zeros((2, 2)), torch.zeros((2, 2)))
+        trainer._train_step(inputs, targets)
 
 
 def test_train_entrypoint_uses_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    trainer_harness: TrainerHarness,
 ) -> None:
-    deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
+    deps, manager = _build_deps(evaluation=default_evaluation())
 
-    monkeypatch.setattr(
-        runner_mod,
-        "default_trainer_dependencies",
-        lambda: deps,
-    )
-
-    cfg = _make_cfg(tmp_path, max_iters=0)
-    iters, best = runner_mod.train(cfg)
+    cfg = _make_cfg(trainer_harness.tmp_path, max_iters=0)
+    iters, best = runner_mod.train(cfg, deps=deps)
 
     assert iters == 1
-    assert best == pytest.approx(0.4)
+    _assert_close(best, 0.4)
     assert manager.saved
 
 
@@ -709,14 +792,14 @@ def test_get_lr_variants() -> None:
 
     schedule = LRSchedule(warmup_iters=10, lr_decay_iters=20, min_lr=0.01)
     optim = OptimConfig(learning_rate=0.1)
-    assert runner_mod.get_lr(5, schedule, optim) == pytest.approx(0.05)
+    _assert_close(runner_mod.get_lr(5, schedule, optim), 0.05)
     assert runner_mod.get_lr(10, schedule, optim) == 0.1
     assert runner_mod.get_lr(20, schedule, optim) == 0.01
     assert runner_mod.get_lr(25, schedule, optim) == 0.01
 
 
 def test_checkpoint_model_args() -> None:
-    checkpoint_data: Dict[str, Any] = {
+    checkpoint_data: CheckpointPayload = {
         "model_args": {"n_layer": 1},
         "config": {"model_args": {"n_layer": 2}},
         "optimizer": {},
@@ -727,21 +810,19 @@ def test_checkpoint_model_args() -> None:
     ckpt = Checkpoint(**checkpoint_data)
     assert ckpt.model_args == {"n_layer": 1}
 
-    checkpoint_data = {
-        "config": {"model_args": {"n_layer": 2}},
+    fallback_model_args: dict[str, int] = {"n_layer": 2}
+    fallback_data: CheckpointPayload = {
+        "config": {"model_args": fallback_model_args},
         "optimizer": {},
         "iter_num": 0,
         "best_val_loss": 0.0,
         "model": {},
+        "model_args": fallback_model_args,
     }
-    model_args = checkpoint_data.get("model_args") or checkpoint_data["config"].get(
-        "model_args"
-    )
-    checkpoint_data["model_args"] = model_args
-    ckpt = Checkpoint(**checkpoint_data)
+    ckpt = Checkpoint(**fallback_data)
     assert ckpt.model_args == {"n_layer": 2}
 
-    checkpoint_data = {
+    invalid_data: CheckpointPayload = {
         "config": {},
         "optimizer": {},
         "iter_num": 0,
@@ -749,4 +830,4 @@ def test_checkpoint_model_args() -> None:
         "model": {},
     }
     with pytest.raises(TypeError):
-        Checkpoint(**checkpoint_data)
+        _ = Checkpoint(**invalid_data)

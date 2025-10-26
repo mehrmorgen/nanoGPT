@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from pathlib import Path
+from typing import Callable, Protocol, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
@@ -22,6 +23,10 @@ from ml_playground.models.core.model import GPT
 
 from ml_playground.core.error_handling import CheckpointError
 from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.training.checkpointing.checkpoint_manager import (
+    Checkpoint,
+    CheckpointManager,
+)
 from ml_playground.training.checkpointing.service import (
     apply_checkpoint,
     create_manager,
@@ -37,6 +42,7 @@ from ml_playground.training.hooks.model import initialize_model
 from ml_playground.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.training.loop.scheduler import get_lr
 from ml_playground.training.types import (
+    BatchProvider,
     OptimizerLike,
     ScaledLoss,
     TensorboardWriter,
@@ -48,33 +54,54 @@ __all__ = ["Trainer", "train", "get_lr"]
 
 
 TTrainStep = Callable[["Trainer", torch.Tensor, torch.Tensor], torch.Tensor]
+VectorizeProvider = Callable[[], VectorizeFn | None]
+
+
+class InitializeComponentsFn(Protocol):
+    def __call__(
+        self,
+        model: GPT,
+        cfg: TrainerConfig,
+        runtime: RuntimeContext,
+        *,
+        log_dir: str,
+    ) -> tuple[GPT, GradScaler, EMA | None, TensorboardWriter | None]: ...
 
 
 @dataclass(frozen=True)
 class TrainerDependencies:
-    initialize_batches: Callable[[TrainerConfig, SharedConfig], Any]
-    initialize_model: Callable[[TrainerConfig, LoggerLike], Tuple[GPT, OptimizerLike]]
-    initialize_components: Callable[
-        ...,  # Accepts model, cfg, runtime, and keyword-only log_dir
-        Tuple[GPT, GradScaler, Optional[EMA], Optional[TensorboardWriter]],
-    ]
-    create_manager: Callable[[TrainerConfig, SharedConfig], Any]
-    load_checkpoint: Callable[..., Optional[Any]]
-    apply_checkpoint: Callable[..., Tuple[int, float]]
+    initialize_batches: Callable[[TrainerConfig, SharedConfig], BatchProvider]
+    initialize_model: Callable[[TrainerConfig, LoggerLike], tuple[GPT, OptimizerLike]]
+    initialize_components: InitializeComponentsFn
+    create_manager: Callable[[TrainerConfig, SharedConfig], CheckpointManager]
+    load_checkpoint: Callable[..., Checkpoint | None]
+    apply_checkpoint: Callable[..., tuple[int, float]]
     save_checkpoint: Callable[..., None]
     propagate_metadata: Callable[..., None]
-    run_evaluation: Callable[..., Dict[str, float]]
+    run_evaluation: Callable[..., dict[str, float]]
     get_lr: Callable[[int, LRSchedule, OptimConfig], float]
+    vectorize: VectorizeProvider
 
 
-def default_trainer_dependencies() -> TrainerDependencies:
+def default_trainer_dependencies(
+    *,
+    initialize_components_fn: InitializeComponentsFn | None = None,
+    vectorize: VectorizeFn | None = None,
+) -> TrainerDependencies:
     def _init_components(
         model: GPT,
         cfg: TrainerConfig,
         runtime: RuntimeContext,
+        *,
         log_dir: str,
-    ) -> Tuple[GPT, GradScaler, Optional[EMA], Optional[TensorboardWriter]]:
-        return initialize_components(model, cfg, runtime, log_dir=log_dir)
+    ) -> tuple[GPT, GradScaler, EMA | None, TensorboardWriter | None]:
+        target = initialize_components_fn or initialize_components
+        return target(model, cfg, runtime, log_dir=log_dir)
+
+    def _vectorize() -> VectorizeFn | None:
+        if vectorize is not None:
+            return vectorize
+        return cast(VectorizeFn | None, getattr(torch, "vmap", None))
 
     return TrainerDependencies(
         initialize_batches=initialize_batches,
@@ -87,6 +114,7 @@ def default_trainer_dependencies() -> TrainerDependencies:
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        vectorize=_vectorize,
     )
 
 
@@ -97,43 +125,46 @@ class Trainer:
         self,
         cfg: TrainerConfig,
         shared: SharedConfig,
-        deps: Optional[TrainerDependencies] = None,
+        deps: TrainerDependencies | None = None,
     ):
-        self.cfg = cfg
-        self.shared = shared
-        self.logger = cfg.logger
+        self.cfg: TrainerConfig = cfg
+        self.shared: SharedConfig = shared
+        self.logger: LoggerLike = cfg.logger
 
-        self.deps = deps or default_trainer_dependencies()
+        self.deps: TrainerDependencies = deps or default_trainer_dependencies()
 
         self.runtime: RuntimeContext = setup_runtime(cfg)
         self.ctx: AbstractContextManager[object] = self.runtime.autocast_context
-        self.device_type = self.runtime.device_type
+        self.device_type: str = self.runtime.device_type
 
-        self.batches = self.deps.initialize_batches(cfg, shared)
-        self.model, self.optimizer = self.deps.initialize_model(cfg, self.logger)
+        self.batches: BatchProvider = self.deps.initialize_batches(cfg, shared)
+        model, optimizer_like = self.deps.initialize_model(cfg, self.logger)
+        self.model: GPT = model
+        self.optimizer: OptimizerLike = optimizer_like
 
-        self.out_dir = shared.train_out_dir
+        self.out_dir: Path = shared.train_out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        self.ckpt_mgr = self.deps.create_manager(cfg, shared)
+        self.ckpt_mgr: CheckpointManager = self.deps.create_manager(cfg, shared)
 
         (
             self.model,
-            self.scaler,
-            self.ema,
-            self.writer,
+            scaler,
+            ema,
+            writer,
         ) = self.deps.initialize_components(
             self.model,
             cfg,
             self.runtime,
             log_dir=str(self.out_dir),
         )
+        self._scaler: GradScaler = scaler
+        self._ema: EMA | None = ema
+        self._writer: TensorboardWriter | None = writer
 
-        self.iter_num = 0
-        self.best_val_loss = 1e9
-        self._train_step_override: Optional[TTrainStep] = None
-        self._vectorize_impl: Optional[VectorizeFn] = cast(
-            Optional[VectorizeFn], getattr(torch, "vmap", None)
-        )
+        self.iter_num: int = 0
+        self.best_val_loss: float = 1e9
+        self._train_step_override: TTrainStep | None = None
+        self._vectorize_impl: VectorizeFn | None = self.deps.vectorize()
 
         checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
@@ -153,22 +184,28 @@ class Trainer:
         self._scaler = value
 
     @property
-    def ema(self) -> Optional[EMA]:
+    def ema(self) -> EMA | None:
         return self._ema
 
     @ema.setter
-    def ema(self, value: Optional[EMA]) -> None:
+    def ema(self, value: EMA | None) -> None:
         self._ema = value
 
     @property
-    def writer(self) -> Optional[TensorboardWriter]:
+    def writer(self) -> TensorboardWriter | None:
         return self._writer
 
     @writer.setter
-    def writer(self, value: Optional[TensorboardWriter]) -> None:
+    def writer(self, value: TensorboardWriter | None) -> None:
         self._writer = value
 
-    def run(self) -> Tuple[int, float]:
+    def set_train_step_override(self, override: TTrainStep | None) -> None:
+        self._train_step_override = override
+
+    def set_vectorize_impl(self, vectorize_impl: VectorizeFn | None) -> None:
+        self._vectorize_impl = vectorize_impl
+
+    def run(self) -> tuple[int, float]:
         """Execute the main training loop until reaching the maximum iteration count."""
         self.logger.info("Starting training loop")
         inputs, targets = self.batches.get_batch("train")
@@ -317,11 +354,11 @@ class Trainer:
 
         if self.cfg.optim.grad_clip != 0.0:
             self.scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(
+            _ = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.cfg.optim.grad_clip
             )
 
-        self.scaler.step(optimizer)
+        _ = self.scaler.step(optimizer)
         self.scaler.update()
         optimizer.zero_grad(set_to_none=True)
 
@@ -333,10 +370,12 @@ class Trainer:
         self, inputs: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
         with self.ctx:
-            _, loss_tensor = self.model(inputs, targets)
-        scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
-        scaled_loss.backward()
-        return loss_tensor
+            _logits, loss_tensor = cast(
+                tuple[torch.Tensor, torch.Tensor], self.model(inputs, targets)
+            )
+            scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
+            scaled_loss.backward()
+            return loss_tensor
 
     def _train_step_accum(
         self, inputs: torch.Tensor, targets: torch.Tensor, grad_steps: int
@@ -355,8 +394,11 @@ class Trainer:
         loss_tensor = torch.tensor(0.0, device=inputs.device)
         with self.ctx:
             for _ in range(grad_steps):
-                _, loss_tensor = self.model(inputs, targets)
-                loss_tensor = loss_tensor / grad_steps
+                _logits, raw_loss = cast(
+                    tuple[torch.Tensor, torch.Tensor],
+                    self.model(inputs, targets),
+                )
+                loss_tensor = raw_loss / grad_steps
                 scaled_loss = cast(ScaledLoss, self.scaler.scale(loss_tensor))
                 scaled_loss.backward()
         return loss_tensor
@@ -370,7 +412,10 @@ class Trainer:
         with self.ctx:
 
             def _forward(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
-                _, loss_val = self.model(x_batch, y_batch)
+                _logits, loss_val = cast(
+                    tuple[torch.Tensor, torch.Tensor],
+                    self.model(x_batch, y_batch),
+                )
                 return loss_val
 
             vmap_fn = self._vectorize_impl
@@ -384,31 +429,25 @@ class Trainer:
         scaled_loss.backward()
         return loss_tensor
 
-    def set_train_step_override(self, override: Optional[TTrainStep]) -> None:
-        self._train_step_override = override
 
-    def set_vectorize_impl(self, vectorize: Optional[VectorizeFn]) -> None:
-        self._vectorize_impl = vectorize
-
-    def set_ema_for_test(self, ema: Optional[EMA]) -> None:
-        self.ema = ema
-
-    def run_train_step_for_test(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
-        return self._train_step(X, Y)
-
-
-def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> Tuple[int, float]:
+def train(
+    cfg: TrainerConfig,
+    shared: SharedConfig | None = None,
+    *,
+    deps: TrainerDependencies | None = None,
+) -> tuple[int, float]:
     """Run the strict trainer with optional shared metadata fallback."""
     if shared is None:
         out_dir = cfg.runtime.out_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
         shared = SharedConfig(
-            experiment="unknown",
-            config_path=out_dir / "cfg.toml",
-            project_home=out_dir.parent if out_dir.parent else out_dir,
-            dataset_dir=out_dir,
-            train_out_dir=out_dir,
-            sample_out_dir=out_dir,
+            experiment="runtime",
+            config_path=cfg.runtime.out_dir / "cfg.toml",
+            project_home=cfg.runtime.out_dir,
+            dataset_dir=cfg.runtime.out_dir,
+            train_out_dir=cfg.runtime.out_dir,
+            sample_out_dir=cfg.runtime.out_dir,
         )
 
-    trainer = Trainer(cfg, shared)
+    trainer = Trainer(cfg, shared, deps=deps)
     return trainer.run()

@@ -2,31 +2,37 @@ from __future__ import annotations
 
 from pathlib import Path
 import time
+from typing import cast
 
 from ml_playground.core.file_state import diff_file_states, snapshot_file_states
 
 
-class _RaisingPath:
+class _RaisingPath(Path):
+    def __new__(cls, inner: Path) -> "_RaisingPath":  # type: ignore[override]
+        return Path.__new__(cls, str(inner))
+
     def __init__(self, inner: Path) -> None:
         self._inner = inner
 
-    def exists(self) -> bool:  # pragma: no cover - exercised through snapshot
+    def exists(
+        self, *, follow_symlinks: bool = True
+    ) -> bool:  # pragma: no cover - exercised through snapshot
         raise OSError("boom")
 
-    def stat(self):  # pragma: no cover - exercised through snapshot
+    def stat(
+        self, *, follow_symlinks: bool = True
+    ):  # pragma: no cover - exercised through snapshot
         raise AssertionError("stat should not be called after exists fails")
-
-    def __hash__(self) -> int:
-        return hash(self._inner)
 
     def __repr__(self) -> str:
         return f"_RaisingPath({self._inner!s})"
 
 
 def test_snapshot_file_states_handles_oserror(tmp_path: Path) -> None:
-    sentinel = _RaisingPath(tmp_path / "sentinel")
-    snapshot = snapshot_file_states([sentinel])
-    assert snapshot[sentinel] == (False, 0.0, 0)
+    underlying = tmp_path / "sentinel"
+    sentinel = _RaisingPath(underlying)
+    snapshot = snapshot_file_states([cast(Path, sentinel)])
+    assert snapshot[cast(Path, sentinel)] == (False, 0.0, 0)
 
 
 def test_diff_file_states_tracks_created_updated_and_skipped(tmp_path: Path) -> None:

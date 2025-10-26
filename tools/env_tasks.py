@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -19,35 +20,66 @@ app = typer.Typer(
 )
 
 
-@app.command()
-def setup(
-    clear: bool = typer.Option(
-        False, "--clear", help="Remove existing virtual env first"
+ClearFlag = Annotated[
+    bool, typer.Option("--clear", help="Remove existing virtual env first")
+]
+
+GroupsOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        None, "--group", help="Sync the specified dependency groups (repeatable)."
     ),
-) -> None:
+]
+
+AllGroupsFlag = Annotated[
+    bool,
+    typer.Option("--all-groups", help="Install all optional dependency groups."),
+]
+
+FrozenFlag = Annotated[
+    bool,
+    typer.Option(
+        False,
+        "--frozen",
+        "--no-frozen",
+        help="Use the existing lockfile without resolving new versions.",
+    ),
+]
+
+DryRunFlag = Annotated[bool, typer.Option("--dry-run", help="Preview actions")]
+
+LogdirOption = Annotated[
+    Path,
+    typer.Option(
+        "--logdir",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        help="TensorBoard log directory",
+    ),
+]
+
+PortOption = Annotated[int, typer.Option("--port", help="Port to bind")]
+
+HostOption = Annotated[str, typer.Option("--host", help="Host interface")]
+
+ToolArgument = Annotated[str, typer.Argument(help="Target tool name")]
+
+
+@app.command()
+def setup(clear: ClearFlag = False) -> None:
     """Create a fresh uv-managed virtual environment and install all deps."""
     if clear:
-        utils.uv("venv", "--clear")
-    utils.uv("sync", "--all-groups")
+        _ = utils.uv("venv", "--clear")
+    _ = utils.uv("sync", "--all-groups")
 
 
 @app.command()
 def sync(
-    groups: list[str] = typer.Option(
-        None,
-        "--group",
-        help="Sync the specified dependency groups (repeatable).",
-    ),
-    all_groups: bool = typer.Option(
-        False,
-        "--all-groups",
-        help="Install all optional dependency groups.",
-    ),
-    frozen: bool = typer.Option(
-        False,
-        "--frozen/--no-frozen",
-        help="Use the existing lockfile without resolving new versions.",
-    ),
+    groups: GroupsOption = None,
+    all_groups: AllGroupsFlag = False,
+    frozen: FrozenFlag = False,
 ) -> None:
     """Sync project dependencies using uv."""
     args = ["sync"]
@@ -58,13 +90,13 @@ def sync(
     elif groups:
         for group in groups:
             args.extend(["--group", group])
-    utils.uv(*args)
+    _ = utils.uv(*args)
 
 
 @app.command()
 def verify() -> None:
     """Ensure the project package imports correctly."""
-    utils.uv_run(
+    _ = utils.uv_run(
         "python", "-c", f"import {utils.PKG}; print('✓ {utils.PKG} import OK')"
     )
 
@@ -113,8 +145,8 @@ def clean() -> None:
 
 @app.command("ai-guidelines")
 def ai_guidelines(
-    tool: str = typer.Argument(..., help="Target tool name"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview actions"),
+    tool: ToolArgument,
+    dry_run: DryRunFlag = False,
 ) -> None:
     """Set up AI guideline symlinks for the requested tool."""
     if not tool.strip():
@@ -126,26 +158,24 @@ def ai_guidelines(
     command = ["python", "tools/setup_ai_guidelines.py", tool]
     if dry_run:
         command.append("--dry-run")
-    utils.uv_run(*command)
+    _ = utils.uv_run(*command)
 
 
 @app.command()
 def tensorboard(
-    logdir: Path = typer.Option(
-        ...,
-        "--logdir",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-        help="TensorBoard log directory",
-    ),
-    port: int = typer.Option(6006, "--port", help="Port to bind"),
-    host: str = typer.Option("127.0.0.1", "--host", help="Host interface"),
+    logdir: LogdirOption,
+    port: int = 6006,
+    host: str = "127.0.0.1",
 ) -> None:
     """Launch TensorBoard for the given log directory."""
-    utils.uv_run(
-        "tensorboard", "--logdir", str(logdir), "--port", str(port), "--host", host
+    _ = utils.uv_run(
+        "tensorboard",
+        "--logdir",
+        str(logdir),
+        "--port",
+        str(port),
+        "--host",
+        host,
     )
 
 
@@ -153,7 +183,7 @@ def tensorboard(
 def gguf_help() -> None:
     """Show llama.cpp GGUF conversion help."""
     try:
-        utils.uv_run("python", "tools/llama_cpp/convert-hf-to-gguf.py", "--help")
+        _ = utils.uv_run("python", "tools/llama_cpp/convert-hf-to-gguf.py", "--help")
     except utils.CommandError:
         typer.echo("[info] GGUF converter exited with a non-zero status", err=True)
 

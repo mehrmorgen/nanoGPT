@@ -703,7 +703,10 @@ def test_cli_global_exp_config_missing_exits(tmp_path, caplog):
     # Point to a definitely missing path
     missing = tmp_path / "nope.toml"
 
-    deps = _make_deps(load_experiment=lambda _exp, _path: None)
+    def _load_experiment(_exp: str, _path: Path | None) -> ExperimentConfig:
+        raise FileNotFoundError("Config not found")
+
+    deps = _make_deps(load_experiment=_load_experiment)
 
     with (
         override_cli_dependencies(deps),

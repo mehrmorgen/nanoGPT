@@ -5,8 +5,11 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
+
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
+
 import typer
 
 app = typer.Typer(add_completion=False)
@@ -39,7 +42,7 @@ TOOL_MAP: dict[str, ToolSpec] = {
     "windsurf": ToolSpec(".windsurf/rules/rule.md", ".windsurf/rules"),
     "cursor": ToolSpec(".cursor/rules/00-readme.mdc", ".cursor/rules"),
     "gemini": ToolSpec("GEMINI.md", ".", True),
-    "codex": ToolSpec("AGENTS.md", ".", True),  # https://agents.md
+    "codex": ToolSpec("AGENTS.md", ".", True),
 }
 
 
@@ -241,10 +244,11 @@ def create_or_update_link(link_path: Path, target_path: Path, dry_run: bool) -> 
                 os.link(target_path, link_path)
                 info(f"link   {link_path} == {target_path} (hardlink)")
             except OSError as e:
-                raise RuntimeError(
+                message = (
                     f"failed to create hardlink {link_path} -> {target_path}: {e}. "
                     "Ensure both paths are on the same volume."
-                ) from e
+                )
+                raise RuntimeError(message) from e
     else:
         # Unix-like: symlink for both files and directories (use relative path)
         rel = os.path.relpath(target_path, start=link_path.parent)
@@ -359,7 +363,7 @@ def _gitignore_match(relative_path: str, *, directory: bool) -> tuple[bool, str 
                 continue
 
             if any(pattern.match_file(candidate) for candidate in candidates):
-                ignored = pattern.include
+                ignored = bool(pattern.include)
                 matched_pattern = line.strip()
 
     return ignored, matched_pattern
@@ -377,21 +381,16 @@ def log_gitignore_status(path: Path, *, directory: bool) -> None:
 
     if ignored:
         info(
-            "git    '%s' ignored by pattern '%s'."
-            % (display_path, matched_pattern or "<unknown>")
+            f"git    '{display_path}' ignored by pattern '{matched_pattern or '<unknown>'}'."
         )
         return
 
     if matched_pattern and matched_pattern.startswith("!"):
-        info(
-            "git    '%s' kept by negated pattern '%s'."
-            % (display_path, matched_pattern)
-        )
+        info(f"git    '{display_path}' kept by negated pattern '{matched_pattern}'.")
         return
 
     warn(
-        "git    '%s' is not ignored by .gitignore. Add an entry if you want Git to "
-        "skip committing these files." % display_path
+        f"git    '{display_path}' is not ignored by .gitignore. Add an entry if you want Git to skip committing these files."
     )
 
 
@@ -424,8 +423,7 @@ def log_aiignore_status(tool_dir: Path) -> None:
     relative_path = _relative_tool_path(tool_dir).rstrip("/") + "/"
     if is_listed_in_aiignore(tool_dir):
         warn(
-            "ai     '%s' is excluded by .aiignore. Remove this entry so AI tools can "
-            "access their guidelines." % relative_path
+            f"ai     '{relative_path}' is excluded by .aiignore. Remove this entry so AI tools can access their guidelines."
         )
     else:
         info(f"ai     '{relative_path}' accessible to AI tools")
@@ -434,12 +432,14 @@ def log_aiignore_status(tool_dir: Path) -> None:
 # ---- Command ----
 @app.command()
 def setup(
-    tool: str = typer.Argument(
-        ..., help=f"One of: {', '.join(sorted(TOOL_MAP.keys()))}"
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run/--no-dry-run", help="Show actions without making changes."
-    ),
+    tool: Annotated[str, typer.Argument(help=f"One of: {', '.join(sorted(TOOL_MAP))}")],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run/--no-dry-run",
+            help="Show actions without making changes.",
+        ),
+    ] = False,
 ):
     """
     Create symlinks for all files in the base directory to the tool's directory.

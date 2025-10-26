@@ -21,7 +21,7 @@ dependencies = [
     "beautifulsoup4>=4.13.5",
     "pydantic>=2.11.7",
     "notebook>=7.4.5",
-    "typer==0.17.3",
+    "typer==0.19.2",
     "sentencepiece>=0.2.1",
     "pandas-stubs==2.3.2.250827",
     "toml>=0.10.2",
@@ -104,11 +104,10 @@ dev = [
     "pytest-xdist>=3.8.0",
     "pytest-bdd>=8.1.0",
     "pytest-cov>=6.2.1",
-    "pytest-mock>=3.14.1",
     "coverage[toml]>=7.10.6",
     "ruff>=0.12.11",
     "mypy>=1.17.1",
-    "basedpyright>=1.31.7",
+    "basedpyright>=1.32.1",
     "types-requests>=2.32.4.20250809",
     "vulture>=2.11.0",
     "cosmic-ray>=8.3.0",
@@ -190,6 +189,21 @@ follow_imports = "skip"
 # Avoid spending time resolving missing type stubs for external deps (torch, transformers, etc.)
 ignore_missing_imports = true
 cache_dir = ".cache/mypy"
+
+
+[tool.basedpyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+include = [
+    "src/ml_playground",
+    "tools",
+    "tests",
+]
+stubPath = "typings"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "."
+extraPaths = ["src"]
 
 
 [tool.pytest.ini_options]

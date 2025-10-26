@@ -8,17 +8,19 @@ from contextlib import nullcontext
 
 from ml_playground.configuration.models import (
     DataConfig,
+    DeviceKind,
     LRSchedule,
     ModelConfig,
     OptimConfig,
     RuntimeConfig,
     TrainerConfig,
+    DTypeKind,
 )
 from ml_playground.training.hooks.runtime import setup_runtime
 
 
 def _make_config(
-    device: str = "cpu", dtype: str = "float32", seed: int = 42
+    device: DeviceKind = "cpu", dtype: DTypeKind = "float32", seed: int = 42
 ) -> TrainerConfig:
     """Create a TrainerConfig for testing."""
     return TrainerConfig(
@@ -123,7 +125,7 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
 
     seed_called = False
 
-    def fake_seed(seed):
+    def fake_seed(seed: int) -> None:
         nonlocal seed_called
         seed_called = True
 
@@ -131,7 +133,7 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
         cfg,
         cuda_available_func=fake_cuda,
         cuda_seed_func=fake_seed,
-        autocast_func=lambda *args: nullcontext(),
+        autocast_func=lambda *_args: nullcontext(),
     )
 
     assert cuda_called
@@ -169,7 +171,7 @@ def test_setup_runtime_cuda_error_handling() -> None:
 
     seed_called = False
 
-    def fake_seed(seed):
+    def fake_seed(seed: int) -> None:
         nonlocal seed_called
         seed_called = True
         raise RuntimeError("CUDA error")
@@ -178,7 +180,7 @@ def test_setup_runtime_cuda_error_handling() -> None:
         cfg,
         cuda_available_func=fake_cuda,
         cuda_seed_func=fake_seed,
-        autocast_func=lambda *args: nullcontext(),
+        autocast_func=lambda *_args: nullcontext(),
     )
 
     assert cuda_called
@@ -192,7 +194,7 @@ def test_setup_runtime_injected_autocast_func() -> None:
 
     autocast_called = False
 
-    def fake_autocast(device_type, dtype):
+    def fake_autocast(device_type: str, dtype: torch.dtype) -> nullcontext[None]:
         nonlocal autocast_called
         autocast_called = True
         return nullcontext()

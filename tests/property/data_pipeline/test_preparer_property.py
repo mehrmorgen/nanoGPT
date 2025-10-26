@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Literal, cast
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -167,7 +168,10 @@ def test_pipeline_run_uses_tokenizer_factory(
 
     def _factory(kind: object) -> object:
         calls.append(kind)
-        return create_tokenizer(kind)
+        if not isinstance(kind, str) or kind not in {"char", "word", "tiktoken"}:
+            raise AssertionError(f"Unexpected tokenizer kind: {kind!r}")
+        resolved = cast(Literal["char", "word", "tiktoken"], kind)
+        return create_tokenizer(resolved)
 
     cfg = PreparerConfig(
         tokenizer_type="char",

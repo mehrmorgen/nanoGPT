@@ -111,11 +111,17 @@ def test_checkpoint_manager_best_rotation_and_sidecar_cleanup(
     logs: list[str] = []
 
     class _Logger:
-        def info(self, msg: str) -> None:
-            logs.append(msg)
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            logs.append(msg % args if args else msg)
 
-        def error(self, msg: str) -> None:
-            logs.append(f"ERR: {msg}")
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
+            logs.append(f"ERR: {msg % args if args else msg}")
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
 
     logger_proxy = _Logger()
 
@@ -309,7 +315,7 @@ def test_checkpoint_to_dict_includes_optional_ema() -> None:
         ema={"beta": 0.9},
     )
     serialized = ckpt.to_dict()
-    assert serialized["ema"] == {"beta": 0.9}
+    assert serialized.get("ema") == {"beta": 0.9}
 
 
 def test_load_latest_checkpoint_wraps_runtime_errors(
@@ -377,11 +383,17 @@ def test_load_best_checkpoint_success(tmp_path: Path) -> None:
     logs: list[str] = []
 
     class _Logger:
-        def info(self, msg: str) -> None:
-            logs.append(msg)
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            logs.append(msg % args if args else msg)
 
-        def error(self, msg: str) -> None:
-            logs.append(f"ERR: {msg}")
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
+            logs.append(f"ERR: {msg % args if args else msg}")
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
 
     loaded = mgr.load_best_checkpoint(device="cpu", logger=_Logger())
     assert loaded.iter_num == ckpt.iter_num
