@@ -34,7 +34,10 @@ def initialize_components(
             compiler = getattr(torch, "compile", None)
         if compiler is None:
             raise RuntimeError("torch.compile requested but unavailable")
-        compiled_model = cast(GPT, compiler(model))
+        try:
+            compiled_model = cast(GPT, compiler(model))
+        except AttributeError as exc:  # torch.compile unavailable or stubbed
+            raise RuntimeError("torch.compile requested but unavailable") from exc
 
     device_arg: str | None = None
     enabled_arg: bool

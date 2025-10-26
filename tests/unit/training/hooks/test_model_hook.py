@@ -88,7 +88,7 @@ def test_initialize_model_moves_model_to_correct_device(tmp_path: Path) -> None:
     )
     logger = logging.getLogger(__name__)
 
-    model, optimizer = initialize_model(cfg, logger)
+    model, _optimizer = initialize_model(cfg, logger)
 
     # Model should be on CPU
     assert next(model.parameters()).device.type == "cpu"

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
-from typing import Any, Callable, Literal
+from math import isclose
+from typing import Any, Callable, Literal, NoReturn
 
 import pytest
 import torch
@@ -85,11 +87,15 @@ def _make_shared(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
     )
 
 
-def _with_checkpoint_load_fn(cfg: TrainerConfig, fn) -> TrainerConfig:
+def _with_checkpoint_load_fn(
+    cfg: TrainerConfig, fn: Callable[..., object] | None
+) -> TrainerConfig:
     return cfg.model_copy(update={"checkpoint_load_fn": fn})
 
 
-def _with_checkpoint_save_fn(cfg: TrainerConfig, fn) -> TrainerConfig:
+def _with_checkpoint_save_fn(
+    cfg: TrainerConfig, fn: Callable[..., object] | None
+) -> TrainerConfig:
     return cfg.model_copy(update={"checkpoint_save_fn": fn})
 
 
@@ -159,7 +165,7 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
 
     assert calls
     payload = calls[0]
-    assert payload["metric"] == pytest.approx(0.123)
+    assert isclose(payload["metric"], 0.123, rel_tol=1e-9)
     assert payload["iter_num"] == 1
     assert payload["is_best"] is True
 
@@ -218,9 +224,13 @@ def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_override_exception(tmp_path: Path) -> None:
+    def _raise_runtime_error(**kwargs: object) -> NoReturn:
+        del kwargs
+        raise RuntimeError("boom")
+
     cfg = _with_checkpoint_load_fn(
         _make_cfg(tmp_path),
-        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        _raise_runtime_error,
     )
     shared = _make_shared(tmp_path, cfg)
     logger = LoggerStub()
@@ -290,7 +300,12 @@ def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
 
 def test_load_checkpoint_override_success(tmp_path: Path) -> None:
     sentinel = object()
-    cfg = _with_checkpoint_load_fn(_make_cfg(tmp_path), lambda **_kwargs: sentinel)
+
+    def _return_sentinel(**kwargs: object) -> object:
+        del kwargs
+        return sentinel
+
+    cfg = _with_checkpoint_load_fn(_make_cfg(tmp_path), _return_sentinel)
     shared = _make_shared(tmp_path, cfg)
 
     manager = CheckpointManager(
@@ -304,18 +319,29 @@ def test_load_checkpoint_override_success(tmp_path: Path) -> None:
 
 
 def test_apply_checkpoint_restores_state_and_ema() -> None:
+    model = make_minimal_gpt()
+    optimizer = make_optimizer(model.parameters())
+    ema = make_ema(model)
+
+    model_checkpoint: dict[str, torch.Tensor] = {}
+    for key, value in model.state_dict().items():
+        if not isinstance(value, torch.Tensor):
+            raise AssertionError(f"Unexpected non-tensor value in state dict for {key}")
+        model_checkpoint[key] = torch.full_like(value, 7.0)
+
+    optimizer_checkpoint = copy.deepcopy(optimizer.state_dict())
+    for group in optimizer_checkpoint["param_groups"]:
+        group["lr"] = 0.123
+
     checkpoint = Checkpoint(
-        model={"weights": [1, 2, 3]},
-        optimizer={"moments": [0.1]},
+        model=model_checkpoint,
+        optimizer=optimizer_checkpoint,
         model_args={"hidden": 4},
         iter_num=42,
         best_val_loss=0.123,
         config={"cfg": True},
         ema={"shadow": {"weights": [0.9]}},
     )
-    model = make_minimal_gpt()
-    optimizer = make_optimizer(model.parameters())
-    ema = make_ema(model)
 
     iter_num, best_val_loss = service.apply_checkpoint(
         checkpoint,
@@ -325,9 +351,15 @@ def test_apply_checkpoint_restores_state_and_ema() -> None:
     )
 
     assert iter_num == 42
-    assert best_val_loss == pytest.approx(0.123)
-    assert model.state_dict() == {"weights": [1, 2, 3]}
-    assert optimizer.state_dict() == {"moments": [0.1]}
+    assert isclose(best_val_loss, 0.123, rel_tol=1e-9)
+    updated_state = model.state_dict()
+    for key, expected in model_checkpoint.items():
+        actual = updated_state[key]
+        assert isinstance(actual, torch.Tensor)
+        assert torch.equal(actual, expected)
+    assert (
+        optimizer.state_dict()["param_groups"] == optimizer_checkpoint["param_groups"]
+    )
     assert ema.shadow == {"shadow": {"weights": [0.9]}}
 
 
@@ -465,7 +497,7 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
     assert manager.calls
     call = manager.calls[0]
     assert call["base_filename"] == "ckpt_best.pt"
-    assert call["metric"] == pytest.approx(0.2)
+    assert isclose(call["metric"], 0.2, rel_tol=1e-9)
     assert logger.warnings == [
         "checkpoint_save_fn failed, falling back to default save: boom"
     ]

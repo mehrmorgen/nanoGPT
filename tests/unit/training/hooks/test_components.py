@@ -92,7 +92,7 @@ def test_initialize_components_with_ema(tmp_path: Path) -> None:
     cfg = _make_config(ema_decay=0.999)
     runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
-    compiled_model, scaler, ema, writer = initialize_components(
+    _compiled_model, _scaler, ema, _writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
     )
 
@@ -108,7 +108,7 @@ def test_initialize_components_with_tensorboard(tmp_path: Path) -> None:
     runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
     log_dir = tmp_path / "logs"
-    compiled_model, scaler, ema, writer = initialize_components(
+    _compiled_model, _scaler, _ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(log_dir)
     )
 
@@ -126,9 +126,7 @@ def test_initialize_components_scaler_enabled_for_cuda_float16(tmp_path: Path) -
     cfg = _make_config(device="cuda", dtype="float16")
     runtime = RuntimeContext(device_type="cuda", autocast_context=autocast_context())
 
-    compiled_model, scaler, ema, writer = initialize_components(
-        model, cfg, runtime, log_dir=str(tmp_path)
-    )
+    _, scaler, _, _ = initialize_components(model, cfg, runtime, log_dir=str(tmp_path))
 
     # Scaler should be enabled for CUDA + float16
     assert scaler is not None
@@ -141,7 +139,7 @@ def test_initialize_components_scaler_disabled_for_cpu(tmp_path: Path) -> None:
     cfg = _make_config(device="cpu", dtype="float32")
     runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
-    compiled_model, scaler, ema, writer = initialize_components(
+    _compiled_model, scaler, _ema, _writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
     )
 
@@ -191,7 +189,7 @@ def test_initialize_components_with_compile(tmp_path: Path) -> None:
         compiled_calls.append(module)
         return module
 
-    compiled_model, scaler, ema, writer = initialize_components(
+    compiled_model, _scaler, _ema, _writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path), compile_fn=_fake_compile
     )
 
@@ -223,7 +221,7 @@ def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
     cfg = _make_config(device="cpu", dtype="float32")
     runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
 
-    compiled_model, scaler, ema, writer = initialize_components(
+    _compiled_model, scaler, _ema, _writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
     )
 
@@ -239,7 +237,7 @@ def test_initialize_components_scaler_cuda_branch(tmp_path: Path) -> None:
     cfg = _make_config(device="cuda", dtype="float16")
     runtime = RuntimeContext(device_type="cuda", autocast_context=autocast_context())
 
-    compiled_model, scaler, ema, writer = initialize_components(
+    _compiled_model, scaler, _ema, _writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
     )
 
