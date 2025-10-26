@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 
 from ml_playground.configuration.models import (
     DataConfig,
@@ -129,11 +129,17 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
         nonlocal seed_called
         seed_called = True
 
+    def fake_autocast(
+        device_type: str, dtype: torch.dtype
+    ) -> AbstractContextManager[None]:
+        del device_type, dtype
+        return nullcontext()
+
     runtime = setup_runtime(
         cfg,
         cuda_available_func=fake_cuda,
         cuda_seed_func=fake_seed,
-        autocast_func=lambda *_args: nullcontext(),
+        autocast_func=fake_autocast,
     )
 
     assert cuda_called
@@ -176,11 +182,17 @@ def test_setup_runtime_cuda_error_handling() -> None:
         seed_called = True
         raise RuntimeError("CUDA error")
 
+    def fake_autocast(
+        device_type: str, dtype: torch.dtype
+    ) -> AbstractContextManager[None]:
+        del device_type, dtype
+        return nullcontext()
+
     runtime = setup_runtime(
         cfg,
         cuda_available_func=fake_cuda,
         cuda_seed_func=fake_seed,
-        autocast_func=lambda *_args: nullcontext(),
+        autocast_func=fake_autocast,
     )
 
     assert cuda_called

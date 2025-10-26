@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
-from typing import Any, Iterable
+from contextlib import AbstractContextManager, nullcontext
+from typing import Iterable
 
 import torch
 from torch import optim
@@ -10,7 +10,7 @@ from ml_playground.configuration.models import DeviceKind, ModelConfig
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.models.core.model import GPT
 from ml_playground.training.ema import EMA
-from ml_playground.training.hooks.evaluation import SimpleBatches
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.training.types import TensorboardWriter
 
 
@@ -109,7 +109,7 @@ def make_optimizer(
     return optim.SGD(params, lr=0.0)
 
 
-def autocast_context() -> Any:
+def autocast_context() -> AbstractContextManager[None]:
     return nullcontext()
 
 

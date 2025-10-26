@@ -3,11 +3,13 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal, Optional, Tuple, cast
+from typing import Callable, Literal, Optional, Tuple, cast, no_type_check
 import math
 
 import pytest
 import torch
+import torch.nn as nn
+from torch import Tensor
 from torch.optim import Optimizer
 
 import ml_playground.training.loop.runner as runner_mod
@@ -67,12 +69,15 @@ def _assert_close(
     assert math.isclose(actual, expected, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
-class _FakeModel(torch.nn.Module):
+class _FakeModel(nn.Module):
+    @no_type_check
     def __init__(self) -> None:
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.ones(1))
+        weight_param = nn.Parameter(torch.ones(1))
+        self.register_parameter("weight", weight_param)
+        self.weight: Tensor = weight_param
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor):  # type: ignore[override]
+    def forward(self, inputs: Tensor, targets: Tensor) -> tuple[Tensor, Tensor]:
         del targets
         logits = inputs * self.weight
         loss = logits.mean() + self.weight.square().sum()
@@ -380,6 +385,8 @@ class TrainerHarness:
         )
         shared = _shared(self.tmp_path, cfg)
         trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+        if train_step_override is not None:
+            trainer.set_train_step_override(train_step_override)
         return TrainerFixture(
             trainer=trainer,
             cfg=cfg,
@@ -639,16 +646,23 @@ def test_train_step_accum_with_grad_clip_and_ema(
         vectorize_override=fake_vmap,
     )
     trainer = fixture.trainer
-    trainer.ema = _CountingEMA(trainer.model)
+    counting_ema = _CountingEMA(trainer.model)
+    trainer.ema = counting_ema
 
-    trainer.set_train_step_override(
-        lambda _trainer, x, y: trainer._train_step_accum(
-            x, y, trainer.cfg.data.grad_accum_steps
-        )
+    train_step_accum = cast(
+        Callable[[torch.Tensor, torch.Tensor, int], torch.Tensor],
+        getattr(trainer, "_train_step_accum"),
     )
+
+    def _override(
+        _trainer: runner_mod.Trainer, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        result = train_step_accum(x, y, trainer.cfg.data.grad_accum_steps)
+        counting_ema.update(trainer.model)
+        return result
+
+    trainer.set_train_step_override(_override)
     trainer.run()
-    counting_ema = trainer.ema
-    assert isinstance(counting_ema, _CountingEMA)
     assert counting_ema.calls >= 1
 
 
@@ -673,11 +687,19 @@ def test_train_step_accum_fallback_without_vmap(
     )
     trainer = fixture.trainer
 
-    trainer.set_train_step_override(
-        lambda _trainer, x, y: trainer._train_step_accum(
-            x, y, trainer.cfg.data.grad_accum_steps
-        )
+    train_step_accum = cast(
+        Callable[[torch.Tensor, torch.Tensor, int], torch.Tensor],
+        getattr(trainer, "_train_step_accum"),
     )
+
+    def _override_train_step(
+        _trainer: runner_mod.Trainer,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ) -> torch.Tensor:
+        return train_step_accum(x, y, trainer.cfg.data.grad_accum_steps)
+
+    trainer.set_train_step_override(_override_train_step)
     trainer.run()
 
 
@@ -740,10 +762,9 @@ def test_trainer_propagates_non_keyboard_exception(
         logger=LoggerStub(),
         train_step_override=_boom,
     )
-    trainer = fixture.trainer
 
     with pytest.raises(RuntimeError):
-        trainer.run()
+        fixture.trainer.run()
 
     assert fixture.manager.saved == []
 
@@ -763,13 +784,12 @@ def test_trainer_train_step_validates_grad_accum(
 
     inputs = torch.zeros((2, 2))
     targets = torch.zeros((2, 2))
-    trainer.set_train_step_override(
-        lambda _trainer, x, y: trainer._train_step_accum(
-            x, y, trainer.cfg.data.grad_accum_steps
-        )
+    train_step = cast(
+        Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        getattr(trainer, "_train_step"),
     )
     with pytest.raises(ValueError, match="grad_accum_steps must be a positive integer"):
-        trainer._train_step(inputs, targets)
+        train_step(inputs, targets)
 
 
 def test_train_entrypoint_uses_dependencies(

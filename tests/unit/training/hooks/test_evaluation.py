@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from ml_playground.configuration.models import (
@@ -10,6 +11,10 @@ from ml_playground.configuration.models import (
     RuntimeConfig,
     TrainerConfig,
 )
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
+from ml_playground.models.core.model import GPT
+from typing import Any
+
 from ml_playground.training.hooks import evaluation
 
 from tests.unit.training._helpers import (
@@ -56,7 +61,12 @@ def test_run_evaluation_records_scalars() -> None:
     cfg = _cfg()
     logger = LoggerStub()
 
-    def fake_estimate(model, batches, eval_iters, ctx):
+    def fake_estimate(
+        model: GPT,
+        batches: SimpleBatches,
+        eval_iters: int,
+        ctx: AbstractContextManager[Any],
+    ) -> dict[str, float]:
         del model, batches, eval_iters, ctx
         return {"train": 0.5, "val": 0.4}
 
@@ -88,7 +98,12 @@ def test_run_evaluation_without_writer() -> None:
     cfg = _cfg()
     logger = LoggerStub()
 
-    def fake_estimate(model, batches, eval_iters, ctx):
+    def fake_estimate(
+        model: GPT,
+        batches: SimpleBatches,
+        eval_iters: int,
+        ctx: AbstractContextManager[Any],
+    ) -> dict[str, float]:
         del model, batches, eval_iters, ctx
         return {"train": 0.6, "val": 0.5}
 
