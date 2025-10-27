@@ -141,19 +141,19 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Validate configuration loading and error handling
   - _Requirements: 2.1, 2.2_
 
-- [ ] 4. Implement learning mode infrastructure
+- [-] 4. Implement learning mode infrastructure
   - Create learning mode engine with verbosity level support
   - Add educational content for existing tool categories
   - Implement command explanation and best practices system
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 4.1 Create learning mode engine
+- [x] 4.1 Create learning mode engine
   - Create `src/ml_playground/tools/core/learning_mode.py` with LearningModeEngine class
   - Implement VerbosityLevel enum with MINIMAL, STANDARD, COMPREHENSIVE levels
   - Add command explanation generation and output formatting
   - _Requirements: 10.1, 10.2, 10.5_
 
-- [ ] 4.2 Add educational content for testing and quality tools
+- [-] 4.2 Add educational content for testing and quality tools
   - Create explanations for each testing command (unit, integration, e2e, coverage)
   - Create explanations for each quality command (lint, format, typecheck)
   - Add best practices information and related concepts
