@@ -11,22 +11,29 @@ from typing import Dict, List, Optional
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import run_pytest_command, run_uv_command
+from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
 
 
 class TestingTools:
     """Testing tools implementation."""
     
-    def __init__(self, config: ToolsConfig, root_path: Path) -> None:
+    def __init__(
+        self, 
+        config: ToolsConfig, 
+        root_path: Path, 
+        subprocess_runner: Optional[SubprocessRunner] = None
+    ) -> None:
         """Initialize testing tools.
         
         Args:
             config: Tool configuration
             root_path: Project root path
+            subprocess_runner: Subprocess runner for dependency injection
         """
         self.config = config
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
+        self.subprocess_runner = subprocess_runner or _default_runner
     
     @property
     def category(self) -> str:
@@ -69,7 +76,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="unit")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["tests/unit", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -87,7 +94,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="integration")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["-m", "integration", "--no-cov", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -105,7 +112,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="e2e")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["tests/e2e", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -123,7 +130,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="acceptance")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["tests/acceptance", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -141,7 +148,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="property")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["tests/property", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -159,7 +166,7 @@ class TestingTools:
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="all")
         
-        return run_pytest_command(
+        return self.subprocess_runner.run_pytest_command(
             ["tests", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
@@ -191,7 +198,7 @@ class TestingTools:
         env = self._coverage_env(coverage_file)
         
         # Run coverage with pytest
-        return run_uv_command(
+        return self.subprocess_runner.run_uv_command(
             [
                 "coverage",
                 "run",
@@ -258,7 +265,7 @@ class TestingTools:
         results = []
         for command, description in commands:
             try:
-                result = run_uv_command(
+                result = self.subprocess_runner.run_uv_command(
                     command,
                     cwd=self.root_path,
                     env=env,
@@ -324,7 +331,7 @@ class TestingTools:
         env = {"COVERAGE_FILE": str(coverage_file)}
         json_path = coverage_file.parent / "coverage.json"
         
-        result = run_uv_command(
+        result = self.subprocess_runner.run_uv_command(
             ["coverage", "json", "-o", str(json_path)],
             cwd=self.root_path,
             env=env,

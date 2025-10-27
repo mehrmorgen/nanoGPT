@@ -3,26 +3,33 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import run_uv_command
+from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
 
 
 class QualityTools:
     """Quality tools implementation."""
     
-    def __init__(self, config: ToolsConfig, root_path: Path) -> None:
+    def __init__(
+        self, 
+        config: ToolsConfig, 
+        root_path: Path, 
+        subprocess_runner: Optional[SubprocessRunner] = None
+    ) -> None:
         """Initialize quality tools.
         
         Args:
             config: Tool configuration
             root_path: Project root path
+            subprocess_runner: Subprocess runner for dependency injection
         """
         self.config = config
         self.root_path = root_path
         self.pkg_path = root_path / "src" / "ml_playground"
+        self.subprocess_runner = subprocess_runner or _default_runner
     
     @property
     def category(self) -> str:
@@ -46,7 +53,7 @@ class QualityTools:
             # Replace default args if user provides custom ones
             ruff_args = ["ruff", *args]
         
-        return run_uv_command(
+        return self.subprocess_runner.run_uv_command(
             ruff_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
@@ -66,7 +73,7 @@ class QualityTools:
         
         # Run both check --fix and format
         # First, run check with --fix
-        check_result = run_uv_command(
+        check_result = self.subprocess_runner.run_uv_command(
             ["ruff", "check", "--fix", ".", *args],
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
@@ -77,7 +84,7 @@ class QualityTools:
             return check_result
         
         # Then run format
-        format_result = run_uv_command(
+        format_result = self.subprocess_runner.run_uv_command(
             ["ruff", "format", ".", *args],
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
@@ -132,7 +139,7 @@ class QualityTools:
         if args:
             vulture_args.extend(args)
         
-        return run_uv_command(
+        return self.subprocess_runner.run_uv_command(
             vulture_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
@@ -154,7 +161,7 @@ class QualityTools:
         if args:
             basedpyright_args.extend(args)
         
-        return run_uv_command(
+        return self.subprocess_runner.run_uv_command(
             basedpyright_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
@@ -188,7 +195,7 @@ class QualityTools:
         if args:
             mypy_args.extend(args)
         
-        return run_uv_command(
+        return self.subprocess_runner.run_uv_command(
             mypy_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,

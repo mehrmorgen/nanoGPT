@@ -18,6 +18,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
 ## Critical Testing Guidelines
 
 **NO MOCKING POLICY (STRICTLY ENFORCED)**:
+
 - Absolutely NO `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, or `monkeypatch` anywhere in tests
 - Use dependency injection and lightweight in-memory fakes exclusively
 - Design production code with DI seams for external boundaries (subprocess, filesystem, time, network)
@@ -96,7 +97,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Implement help text and argument validation
   - _Requirements: 1.1, 1.4, 7.1, 7.2_
 
-- [ ] 2.5 REFACTOR: Remove mocks from existing tests and implement dependency injection
+- [x] 2.5 REFACTOR: Remove mocks from existing tests and implement dependency injection
   - **CRITICAL: Current tests use mocks - MUST be refactored to comply with testing guidelines**
   - **NO MOCKING ALLOWED**: Remove all `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Refactor production code to use dependency injection for external boundaries (subprocess, filesystem)
@@ -108,7 +109,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Use explicit type annotations in all test code for strict mode compatibility
   - _Requirements: 2.1, 2.2_
 
-- [-] 3. Implement environment and CI tools
+- [x] 3. Implement environment and CI tools
   - Migrate environment management from tools/env_tasks.py
   - Migrate CI functionality from tools/ci_tasks.py
   - Implement these using the established patterns from Phase 2
