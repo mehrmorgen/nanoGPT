@@ -166,7 +166,7 @@ Ruff automatically applies modern Python best practices:
 **Timeout Categories**:
 
 - **Quality tools** (lint, format, typecheck): 2 minutes - these should complete quickly
-- **Test execution**: 10 minutes - based on expected test suite duration  
+- **Test execution**: 10 minutes - based on expected test suite duration
 - **Environment setup**: 5 minutes - dependency installation and verification
 - **CI operations**: 15 minutes - comprehensive quality gates and reporting
 - **Mutation testing**: 180 minutes - computationally intensive analysis
