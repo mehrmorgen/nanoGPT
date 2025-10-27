@@ -127,6 +127,14 @@ def test_bundestag_qwen15b_preparer_diff_oserror_when_missing() -> None:
         def __init__(self) -> None:  # type: ignore[override]
             self._calls: int = 0
 
+        def __hash__(self) -> int:  # ensure hashing doesn't depend on private internals
+            return hash("TogglePath:ghost")
+
+        def __str__(
+            self,
+        ) -> str:  # avoid accessing private fields in pathlib when stringifying
+            return "ghost"
+
         def exists(self) -> bool:  # type: ignore[override]
             self._calls += 1
             return self._calls == 1

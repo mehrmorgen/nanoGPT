@@ -193,7 +193,7 @@ cache_dir = ".cache/mypy"
 
 [tool.basedpyright]
 pythonVersion = "3.13"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 include = [
     "src/ml_playground",
     "tools",

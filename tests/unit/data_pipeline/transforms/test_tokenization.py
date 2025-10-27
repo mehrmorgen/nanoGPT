@@ -106,7 +106,7 @@ def test_create_standardized_metadata_with_tiktoken() -> None:
         encoding_name="gpt2", loader=lambda: _FakeTiktokenModule()
     )
 
-    meta = create_standardized_metadata(tokenizer, 100, 20)
+    meta = build_metadata(tokenizer, 100, 20)
 
     assert meta["tokenizer_type"] == "tiktoken"
     assert "encoding_name" in meta
@@ -155,7 +155,7 @@ def test_create_standardized_metadata_handles_attribute_errors() -> None:
     tokenizer = MockTokenizer()
 
     # Should not raise, just skip the stoi/encoding_name additions
-    meta = create_standardized_metadata(tokenizer, 100, 20)
+    meta = build_metadata(tokenizer, 100, 20)
 
     assert meta["tokenizer_type"] == "mock"
     assert "stoi" not in meta
@@ -249,9 +249,32 @@ class TestCreateStandardizedMetadataExceptions:
 
     def test_metadata_creation_with_missing_stoi(self) -> None:
         """Test handling when tokenizer lacks stoi attribute, covering guarded lookup."""
-        fake_tokenizer = self.FakeTokenizer(name="char")
-        # Ensure no stoi attribute
-        assert not hasattr(fake_tokenizer, "stoi")
+
+        # Define a minimal tokenizer without 'stoi' in this scope
+        class MockTokenizerLocal(Tokenizer):
+            def __init__(self) -> None:
+                self._name = "char"
+                self._vocab_size = 100
+
+            @property
+            def name(self) -> str:
+                return self._name
+
+            @property
+            def vocab_size(self) -> int:
+                return self._vocab_size
+
+            @property
+            def vocab(self) -> Mapping[str, int]:  # pragma: no cover - unused
+                return {}
+
+            def encode(self, text: str) -> list[int]:  # pragma: no cover - unused
+                return []
+
+            def decode(self, token_ids: list[int]) -> str:  # pragma: no cover - unused
+                return ""
+
+        fake_tokenizer = MockTokenizerLocal()
 
         meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
@@ -279,7 +302,7 @@ class TestCreateStandardizedMetadataExceptions:
         fake_tokenizer = self.FakeTokenizer(name="tiktoken")
         # No encoding_name
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "tiktoken"
         assert "encoding_name" not in meta
 
@@ -289,7 +312,7 @@ class TestCreateStandardizedMetadataExceptions:
             name="tiktoken", encoding_name=123
         )  # Not str
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "tiktoken"
         assert "encoding_name" not in meta
 
@@ -303,7 +326,7 @@ class TestCreateStandardizedMetadataExceptions:
 
         fake_tokenizer = BadTokenizer(name="char")
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
         # Should not crash, meta should be created without stoi
 
@@ -316,5 +339,5 @@ class TestCreateStandardizedMetadataExceptions:
                 raise TypeError("bad stoi")
 
         fake_tokenizer = TypeErrorTokenizer(name="char")
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
