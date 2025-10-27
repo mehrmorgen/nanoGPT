@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable, cast
 
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.core.tokenizer_protocol import Tokenizer
@@ -10,16 +10,16 @@ class _CompliantLogger:
     def __init__(self) -> None:
         self.messages: list[tuple[str, str]] = []
 
-    def debug(self, msg: str, *args, **kwargs) -> None:
+    def debug(self, msg: str, *args: object, **kwargs: object) -> None:
         self.messages.append(("debug", msg))
 
-    def info(self, msg: str, *args, **kwargs) -> None:
+    def info(self, msg: str, *args: object, **kwargs: object) -> None:
         self.messages.append(("info", msg))
 
-    def warning(self, msg: str, *args, **kwargs) -> None:
+    def warning(self, msg: str, *args: object, **kwargs: object) -> None:
         self.messages.append(("warning", msg))
 
-    def error(self, msg: str, *args, **kwargs) -> None:
+    def error(self, msg: str, *args: object, **kwargs: object) -> None:
         self.messages.append(("error", msg))
 
 
@@ -57,24 +57,25 @@ def test_logger_like_accepts_structural_loggers() -> None:
 
 def test_logger_like_rejects_missing_methods() -> None:
     class MissingWarnLogger:
-        def debug(self, msg: str, *args, **kwargs) -> None:
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
             pass
 
-        def info(self, msg: str, *args, **kwargs) -> None:
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
             pass
 
-        def error(self, msg: str, *args, **kwargs) -> None:
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
             pass
 
     assert not isinstance(MissingWarnLogger(), LoggerLike)
 
 
 def test_logger_like_protocol_placeholders_are_noops() -> None:
-    sentinel = object()
-    assert LoggerLike.debug(sentinel, "msg") is None  # type: ignore[arg-type]
-    assert LoggerLike.info(sentinel, "msg") is None  # type: ignore[arg-type]
-    assert LoggerLike.warning(sentinel, "msg") is None  # type: ignore[arg-type]
-    assert LoggerLike.error(sentinel, "msg") is None  # type: ignore[arg-type]
+    sentinel: Any = object()
+    primitive = cast(LoggerLike, sentinel)
+    assert getattr(LoggerLike, "debug")(primitive, "msg") is None
+    assert getattr(LoggerLike, "info")(primitive, "msg") is None
+    assert getattr(LoggerLike, "warning")(primitive, "msg") is None
+    assert getattr(LoggerLike, "error")(primitive, "msg") is None
 
 
 @runtime_checkable

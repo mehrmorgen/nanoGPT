@@ -237,11 +237,11 @@ class TestSimpleBatches:
             batches = SimpleBatches(data_config, device, temp_path)
 
             # Get multiple batches to test sequential behavior
-            seen_positions = set()
+            seen_positions: set[int] = set()
             for _ in range(3):
-                x, y = batches.get_batch("train")
+                x, _ = batches.get_batch("train")
                 # Check that we're getting different data each time (sequential)
-                first_val = x[0, 0].item()
+                first_val: int = int(x[0, 0].item())
                 seen_positions.add(first_val)
 
             # Should see some variety in sequential sampling if possible

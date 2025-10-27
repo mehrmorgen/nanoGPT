@@ -30,10 +30,13 @@ class _NullLogger:
         pass
 
 
-def _arrays() -> tuple[np.ndarray, np.ndarray, dict]:
+Metadata = dict[str, object]
+
+
+def _arrays() -> tuple[np.ndarray, np.ndarray, Metadata]:
     train = np.arange(4, dtype=np.uint16)
     val = np.arange(4, dtype=np.uint16)
-    meta = {"meta_version": 1, "tokenizer_type": "char"}
+    meta: Metadata = {"meta_version": 1, "tokenizer_type": "char"}
     return train, val, meta
 
 

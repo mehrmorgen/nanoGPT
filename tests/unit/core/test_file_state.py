@@ -8,11 +8,13 @@ from ml_playground.core.file_state import diff_file_states, snapshot_file_states
 
 
 class _RaisingPath(Path):
+    _inner: Path
+
     def __new__(cls, inner: Path) -> "_RaisingPath":  # type: ignore[override]
         return Path.__new__(cls, str(inner))
 
     def __init__(self, inner: Path) -> None:
-        self._inner = inner
+        object.__setattr__(self, "_inner", inner)
 
     def exists(
         self, *, follow_symlinks: bool = True
@@ -68,14 +70,17 @@ def test_snapshot_file_states_handles_disappearing_path(tmp_path: Path) -> None:
     base = tmp_path / "vanish"
 
     class VanishingPath(type(base)):  # type: ignore[misc]
+        _inner: Path
+        _calls: int
+
         def __new__(cls, inner: Path) -> "VanishingPath":  # type: ignore[override]
             self = Path.__new__(cls, str(inner))
-            self._inner = inner
-            self._calls = 0
+            object.__setattr__(self, "_inner", inner)
+            object.__setattr__(self, "_calls", 0)
             return self
 
         def exists(self, *, follow_symlinks: bool = True) -> bool:  # type: ignore[override]
-            self._calls += 1
+            object.__setattr__(self, "_calls", self._calls + 1)
             return self._calls == 1
 
         def stat(self, *, follow_symlinks: bool = True):  # type: ignore[override]

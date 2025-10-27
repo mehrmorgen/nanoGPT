@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Iterable, Mapping
 
 import pytest
 import torch
@@ -39,6 +40,10 @@ def ckpt_obj() -> Checkpoint:
 def make_deps(**overrides: object) -> CheckpointDependencies:
     deps = CheckpointDependencies.default()
     return replace(deps, **overrides)
+
+
+def _noop_add_safe_globals(_: Iterable[Any]) -> None:
+    return None
 
 
 # -----------------------------------------------------------------------------
@@ -338,9 +343,13 @@ def test_load_latest_checkpoint_wraps_runtime_errors(
         raise RuntimeError("torch-load-failure")
 
     captured: dict[str, object] = {}
+
+    def _record_globals(globs: Iterable[Any]) -> None:
+        captured["globs"] = list(globs)
+
     deps = make_deps(
-        torch_load=lambda *args, **kwargs: _boom(*args, **kwargs),
-        add_safe_globals=lambda globs: captured.setdefault("globs", globs),
+        torch_load=_boom,
+        add_safe_globals=_record_globals,
     )
     mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0, deps=deps)
 
@@ -372,11 +381,15 @@ def test_load_best_checkpoint_success(tmp_path: Path) -> None:
         is_best=True,
     )
 
+    def _dup_globals(_: Iterable[Any]) -> None:
+        raise RuntimeError("duplicate")
+
+    def _load_payload(*_args: object, **_kwargs: object) -> Mapping[str, object]:
+        return ckpt.to_dict()
+
     deps = make_deps(
-        add_safe_globals=lambda *_a, **_k: (_ for _ in ()).throw(
-            RuntimeError("duplicate")
-        ),
-        torch_load=lambda *_args, **_kwargs: ckpt.to_dict(),
+        add_safe_globals=_dup_globals,
+        torch_load=_load_payload,
     )
     mgr = CheckpointManager(tmp_path, atomic=False, keep_last=0, keep_best=1, deps=deps)
 
@@ -434,13 +447,12 @@ def test_discover_existing_last_malformed_and_stat_failure(tmp_path: Path) -> No
     good_path = out / "ckpt_last_00000001.pt"
     torch.save({"ok": 1}, good_path)
 
-    deps = make_deps(
-        path_stat=lambda path: (
-            (_ for _ in ()).throw(OSError("stat failed"))
-            if path == good_path
-            else CheckpointDependencies.default().path_stat(path)
-        )
-    )
+    def _stat_with_failure(path: Path) -> os.stat_result:
+        if path == good_path:
+            raise OSError("stat failed")
+        return CheckpointDependencies.default().path_stat(path)
+
+    deps = make_deps(path_stat=_stat_with_failure)
     with pytest.raises(CheckpointError, match="Failed to stat checkpoint"):
         CheckpointManager(out, keep_last=1, keep_best=0, deps=deps)
 
@@ -593,11 +605,10 @@ def test_load_latest_checkpoint_wraps_unpickling_error(
         logger=logger,
     )
 
-    deps = make_deps(
-        torch_load=lambda *_a, **_kw: (_ for _ in ()).throw(
-            TorchUnpicklingError("bad pickle")
-        )
-    )
+    def _torch_unpickle_fail(*_args: object, **_kwargs: object) -> Any:
+        raise TorchUnpicklingError("bad pickle")
+
+    deps = make_deps(torch_load=_torch_unpickle_fail)
     mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0, deps=deps)
     mgr.save_checkpoint(
         ckpt_obj,
@@ -642,7 +653,7 @@ def test_safe_globals_branches(tmp_path: Path, ckpt_obj: Checkpoint) -> None:
     mgr.load_latest_checkpoint("cpu", logging.getLogger("test"))
 
     deps_no_posix = make_deps(
-        add_safe_globals=lambda *a, **kw: None,
+        add_safe_globals=_noop_add_safe_globals,
         posix_path_cls=None,
     )
     mgr = CheckpointManager(out, keep_last=1, keep_best=0, deps=deps_no_posix)
@@ -656,10 +667,10 @@ def test_add_safe_globals_exception_path(tmp_path: Path, ckpt_obj: Checkpoint) -
     mgr = CheckpointManager(out, keep_last=1, keep_best=0)
     mgr.save_checkpoint(ckpt_obj, "ignored", 1.0, 1, logging.getLogger("test"))
 
-    def boom_add_safe_globals(*args: object, **kwargs: object) -> None:
+    def boom_add_safe_globals(_: Iterable[Any]) -> None:
         raise RuntimeError("Boom!")
 
-    deps = make_deps(add_safe_globals=lambda *args, **kwargs: boom_add_safe_globals())
+    deps = make_deps(add_safe_globals=boom_add_safe_globals)
     mgr = CheckpointManager(out, keep_last=1, keep_best=0, deps=deps)
     mgr.save_checkpoint(ckpt_obj, "ignored", 1.0, 1, logging.getLogger("test"))
     mgr.load_latest_checkpoint("cpu", logging.getLogger("test"))
@@ -688,9 +699,10 @@ def test_load_best_checkpoint_final_coverage(
     )
 
     # 3. Test the CheckpointLoadError path
-    deps_error = make_deps(
-        torch_load=lambda *a, **kw: (_ for _ in ()).throw(OSError("boom"))
-    )
+    def _torch_load_raises(*args: Any, **kwargs: Any) -> Any:
+        raise OSError("boom")
+
+    deps_error = make_deps(torch_load=_torch_load_raises)
     mgr_error = CheckpointManager(
         tmp_path, atomic=False, keep_last=0, keep_best=1, deps=deps_error
     )
@@ -713,13 +725,12 @@ def test_discover_existing_best_stat_failure(tmp_path: Path) -> None:
     best_path = out / "ckpt_best_00000001_1.0.pt"
     torch.save({}, best_path)
 
-    deps = make_deps(
-        path_stat=lambda path: (
-            (_ for _ in ()).throw(OSError("stat failed"))
-            if path == best_path
-            else CheckpointDependencies.default().path_stat(path)
-        )
-    )
+    def _stat_override(path: Path) -> os.stat_result:
+        if path == best_path:
+            raise OSError("stat failed")
+        return CheckpointDependencies.default().path_stat(path)
+
+    deps = make_deps(path_stat=_stat_override)
     with pytest.raises(CheckpointError, match="Failed to stat checkpoint"):
         CheckpointManager(out, keep_last=0, keep_best=1, deps=deps)
 

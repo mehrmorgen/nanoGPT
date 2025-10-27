@@ -107,19 +107,21 @@ def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
     """Provide a fake tiktoken module to validate TiktokenTokenizer properties without installing tiktoken."""
 
     class FakeEncoder:
-        def __init__(self):
+        def __init__(self) -> None:
             self.n_vocab = 3
             self._mergeable_ranks = {"a": 1, "b": 2, "c": 3}
 
-        def encode(self, text, allowed_special=None):
+        def encode(
+            self, text: str, allowed_special: set[str] | None = None
+        ) -> list[int]:
             return [1, 2]
 
-        def decode(self, ids):
+        def decode(self, ids: list[int]) -> str:
             return "ab"
 
     class FakeTiktokenModule:
         @staticmethod
-        def get_encoding(name):
+        def get_encoding(name: str) -> FakeEncoder:
             return FakeEncoder()
 
     tk = TiktokenTokenizer(loader=lambda: FakeTiktokenModule)
@@ -138,15 +140,17 @@ def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
         n_vocab = 1
         _mergeable_ranks = None
 
-        def encode(self, text, allowed_special=None):
+        def encode(
+            self, text: str, allowed_special: set[str] | None = None
+        ) -> list[int]:
             return []
 
-        def decode(self, ids):
+        def decode(self, ids: list[int]) -> str:
             return ""
 
     class Module:
         @staticmethod
-        def get_encoding(name):
+        def get_encoding(name: str) -> Encoder:
             return Encoder()
 
     tk = TiktokenTokenizer(loader=lambda: Module)
@@ -156,7 +160,7 @@ def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
 def test_tiktoken_tokenizer_import_error_is_propagated() -> None:
     """Loader ImportError should be surfaced with helpful message."""
 
-    def loader():
+    def loader() -> None:
         raise ImportError("missing dependency")
 
     with pytest.raises(ImportError) as exc:
@@ -178,7 +182,7 @@ def test_word_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
 @pytest.mark.parametrize(
     "bad", ["charz", "wordz", "tiktokenz"]
 )  # avoid real tiktoken import
-def test_create_tokenizer_lexicographic_non_matches_raise(bad) -> None:
+def test_create_tokenizer_lexicographic_non_matches_raise(bad: str) -> None:
     """Ensure strings that are lexicographically >= but not equal still raise, killing Eq->GtE mutants."""
     with pytest.raises(ValueError):
-        create_tokenizer(bad)
+        create_tokenizer(cast(Any, bad))

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import pickle
-from typing import List, Mapping, cast
+from typing import Dict, List, Mapping, cast
 
 import numpy as np
 import pytest
@@ -59,10 +59,13 @@ class DummyTok:
 # ---- small helpers ----
 
 
-def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, dict]:
+Metadata = Dict[str, object]
+
+
+def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, Metadata]:
     train: np.ndarray = np.arange(n, dtype=np.uint16)
     val: np.ndarray = np.arange(n, dtype=np.uint16)
-    meta = {"meta_version": 1}
+    meta: Metadata = {"meta_version": 1}
     return train, val, meta
 
 
@@ -236,9 +239,9 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
             pass
 
     logger = ListLogger()
-    train: np.ndarray = np.arange(2, dtype=np.uint16)
-    val: np.ndarray = np.arange(2, dtype=np.uint16)
-    meta = {"meta_version": 1}
+    train = np.arange(2, dtype=np.uint16)
+    val = np.arange(2, dtype=np.uint16)
+    meta: Metadata = {"meta_version": 1}
 
     write_bin_and_meta(ds, train, val, meta, logger=logger, data_cfg=None)
 

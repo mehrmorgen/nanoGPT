@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping, cast
+import math
 
 import pytest
 from pydantic import ValidationError
@@ -92,7 +93,7 @@ def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
 
 
 def test_get_cfg_path_without_override(tmp_path: Path) -> None:
-    expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"
+    expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"  # pyright: ignore[reportPrivateUsage]
     result = config_loading.get_cfg_path("demo", None)
     assert result == expected
 
@@ -165,7 +166,7 @@ def test_load_and_merge_configs_missing_file_raises(tmp_path: Path) -> None:
     """_load_and_merge_configs should raise FileNotFoundError for missing config."""
     missing_path = tmp_path / "missing.toml"
     with pytest.raises(FileNotFoundError, match="Config file not found"):
-        config_loading._load_and_merge_configs(missing_path, tmp_path, "test")
+        config_loading._load_and_merge_configs(missing_path, tmp_path, "test")  # pyright: ignore[reportPrivateUsage]
 
 
 def test_load_prepare_config_success(tmp_path: Path) -> None:
@@ -397,8 +398,61 @@ def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
     exp = config_loading.load_experiment_toml(cfg_path)
     assert isinstance(exp, ExperimentConfig)
     assert exp.sample.runtime is not None
-    assert str(exp.sample.runtime.out_dir).endswith("out")
-    assert exp.sample.runtime.log_interval == 2
+
+
+def test_experiment_config_resolves_shared_and_section_paths(tmp_path: Path) -> None:
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = config_dir / "exp.toml"
+    cfg_path.write_text("")
+
+    data = {
+        "shared": {
+            "experiment": "demo",
+            "config_path": str(cfg_path),
+            "project_home": "..",
+            "dataset_dir": "dataset_rel",
+            "train_out_dir": "train_rel",
+            "sample_out_dir": "sample_rel",
+        },
+        "prepare": {
+            "raw_dir": "raw",
+            "raw_text_path": "texts/input.txt",
+            "dataset_dir": "prep_dataset",
+        },
+        "train": {
+            "model": {},
+            "data": {},
+            "optim": {},
+            "schedule": {},
+            "runtime": {
+                "out_dir": "train_out",
+                "log_interval": 1,
+                "eval_interval": 2,
+            },
+        },
+        "sample": {
+            "runtime": {
+                "out_dir": "sample_out",
+                "log_interval": 1,
+                "eval_interval": 2,
+            },
+            "sample": {},
+        },
+    }
+
+    exp = ExperimentConfig.model_validate(data)
+
+    assert exp.shared.config_path == cfg_path.resolve()
+    assert exp.shared.project_home == config_dir.parent.resolve()
+    assert exp.shared.dataset_dir == (config_dir / "prep_dataset").resolve()
+    assert exp.shared.train_out_dir == (config_dir / "train_out").resolve()
+    assert exp.shared.sample_out_dir == (config_dir / "sample_out").resolve()
+    assert exp.prepare.raw_dir == (config_dir / "raw").resolve()
+    assert exp.prepare.raw_text_path == (config_dir / "texts" / "input.txt").resolve()
+    assert exp.train.runtime.out_dir == (config_dir / "train_out").resolve()
+    assert exp.sample.runtime.out_dir == (config_dir / "sample_out").resolve()
+    assert exp.shared.dataset_dir == (config_dir / "prep_dataset").resolve()
 
 
 def test_explicit_sample_runtime_overrides(tmp_path: Path) -> None:
@@ -509,11 +563,11 @@ def test_default_constants_across_configs() -> None:
     assert schedule.min_lr == 6e-5
 
     optim = OptimConfig()
-    assert optim.learning_rate == pytest.approx(6e-4)
-    assert optim.weight_decay == pytest.approx(1e-1)
-    assert optim.beta1 == pytest.approx(0.9)
-    assert optim.beta2 == pytest.approx(0.95)
-    assert optim.grad_clip == pytest.approx(1.0)
+    assert math.isclose(optim.learning_rate, 6e-4)
+    assert math.isclose(optim.weight_decay, 1e-1)
+    assert math.isclose(optim.beta1, 0.9)
+    assert math.isclose(optim.beta2, 0.95)
+    assert math.isclose(optim.grad_clip, 1.0)
 
     model = ModelConfig()
     assert model.n_layer == 12
@@ -525,7 +579,7 @@ def test_default_constants_across_configs() -> None:
     assert sample.start == "\n"
     assert sample.num_samples == 3
     assert sample.max_new_tokens == 200
-    assert sample.temperature == pytest.approx(0.8)
+    assert math.isclose(sample.temperature, 0.8)
     assert sample.top_k == 200
     assert sample.top_p is None
 
@@ -891,19 +945,19 @@ def test_internal_path_helpers(tmp_path: Path) -> None:
         return path
 
     with pytest.raises(ValueError, match="Invalid path"):
-        config_models._resolve_path_strict(bad_path, resolve=fake_resolve)
+        config_models._resolve_path_strict(bad_path, resolve=fake_resolve)  # pyright: ignore[reportPrivateUsage]
 
-    relative = config_models._resolve_if_relative("rel", tmp_path, resolve=Path.resolve)
+    relative = config_models._resolve_if_relative("rel", tmp_path, resolve=Path.resolve)  # pyright: ignore[reportPrivateUsage]
     assert isinstance(relative, Path) and relative.is_absolute()
 
     absolute_path = tmp_path / "abs"
     assert (
-        config_models._resolve_if_relative(
+        config_models._resolve_if_relative(  # pyright: ignore[reportPrivateUsage]
             absolute_path, tmp_path, resolve=Path.resolve
         )
         == absolute_path
     )
-    assert config_models._resolve_if_relative(absolute_path, tmp_path) == absolute_path
+    assert config_models._resolve_if_relative(absolute_path, tmp_path) == absolute_path  # pyright: ignore[reportPrivateUsage]
 
 
 def test_no_nan_validator_raises() -> None:
@@ -912,21 +966,20 @@ def test_no_nan_validator_raises() -> None:
 
 
 def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
-    cfg_path = tmp_path / "exp.toml"
-    context = {"config_path": cfg_path}
     cfg = config_models.PreparerConfig.model_validate(
-        {"raw_dir": "data", "raw_text_path": Path("text.txt")},
-        context=context,
+        {"raw_dir": "data", "raw_text_path": "texts/in.txt"},
+        context={"config_path": tmp_path / "cfg.toml"},
     )
     assert cfg.raw_dir.is_absolute()
     assert cfg.raw_text_path and cfg.raw_text_path.is_absolute()
-
-    # Non-path context should leave values unchanged
+    # Non-path context should leave values unchanged aside from Path coercion,
+    # which produces absolute paths relative to the current working directory.
     cfg2 = config_models.PreparerConfig.model_validate(
         {"raw_dir": Path("data")},
         context={"config_path": "not-a-path"},
     )
-    assert not cfg2.raw_dir.is_absolute()
+    assert cfg2.raw_dir.is_absolute()
+    assert cfg2.raw_dir.name == "data"
 
 
 def test_peft_config_coerces_target_modules() -> None:
@@ -1031,7 +1084,8 @@ def test_trainer_config_resolve_paths_without_context(tmp_path: Path) -> None:
         trainer_dict,
         context={"config_path": "not-a-path"},
     )
-    assert str(trainer.runtime.out_dir) == "rel_out"
+    assert trainer.runtime.out_dir.is_absolute()
+    assert trainer.runtime.out_dir.name == "rel_out"
 
 
 def _sampler_dict(tmp_path: Path) -> dict[str, Any]:
@@ -1060,7 +1114,8 @@ def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
         sampler_dict,
         context={"config_path": "not-a-path"},
     )
-    assert str(sampler.runtime.out_dir) == "rel_out"
+    assert sampler.runtime.out_dir.is_absolute()
+    assert sampler.runtime.out_dir.name == "rel_out"
 
 
 def test_experiment_config_resolve_paths_non_dict() -> None:

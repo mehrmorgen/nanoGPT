@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Mapping, cast
 
 import numpy as np
 import pytest
@@ -21,8 +21,15 @@ def _writer(path: Path, arr: np.ndarray) -> None:
     path.write_bytes(arr.tobytes())
 
 
+Metadata = Mapping[str, object]
+
+
 def _dataset_dir(
-    tmp_path: Path, *, train: np.ndarray, val: np.ndarray, meta: dict | None = None
+    tmp_path: Path,
+    *,
+    train: np.ndarray,
+    val: np.ndarray,
+    meta: Metadata | None = None,
 ) -> Path:
     ddir = tmp_path / "dataset"
     ddir.mkdir()
@@ -31,7 +38,7 @@ def _dataset_dir(
     if meta is not None:
         import pickle
 
-        (ddir / "meta.pkl").write_bytes(pickle.dumps(meta))
+        (ddir / "meta.pkl").write_bytes(pickle.dumps(dict(meta)))
     return ddir
 
 
@@ -57,8 +64,10 @@ def test_sample_batch_wraps_when_length_leq_block() -> None:
     expected_x = arr[(idx[:, None] + steps) % reader.length]
     expected_y = arr[(idx[:, None] + 1 + steps) % reader.length]
 
-    assert torch.equal(x.cpu(), torch.from_numpy(expected_x.astype(np.int64)))
-    assert torch.equal(y.cpu(), torch.from_numpy(expected_y.astype(np.int64)))
+    expected_x_tensor = torch.as_tensor(expected_x, dtype=torch.int64)
+    expected_y_tensor = torch.as_tensor(expected_y, dtype=torch.int64)
+    assert torch.equal(x.cpu(), expected_x_tensor)
+    assert torch.equal(y.cpu(), expected_y_tensor)
 
 
 def test_sample_batch_sliding_window_path_extracts_contiguous_windows() -> None:
@@ -74,8 +83,10 @@ def test_sample_batch_sliding_window_path_extracts_contiguous_windows() -> None:
     expected_x = np.stack([arr[i : i + 4] for i in idx], axis=0)
     expected_y = np.stack([arr[i + 1 : i + 5] for i in idx], axis=0)
 
-    assert torch.equal(x.cpu(), torch.from_numpy(expected_x.astype(np.int64)))
-    assert torch.equal(y.cpu(), torch.from_numpy(expected_y.astype(np.int64)))
+    expected_x_tensor = torch.as_tensor(expected_x, dtype=torch.int64)
+    expected_y_tensor = torch.as_tensor(expected_y, dtype=torch.int64)
+    assert torch.equal(x.cpu(), expected_x_tensor)
+    assert torch.equal(y.cpu(), expected_y_tensor)
 
 
 def test_simple_batches_defaults_to_uint16_without_meta(tmp_path: Path) -> None:
