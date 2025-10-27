@@ -407,7 +407,6 @@ class CITools:
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
             operation_id=operation_id,
-            check=False,
         )
         
         # Adjust output based on result

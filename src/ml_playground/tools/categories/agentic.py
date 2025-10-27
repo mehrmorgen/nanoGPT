@@ -1035,7 +1035,7 @@ This is a machine learning playground project with the following key components:
         """Get git status information."""
         try:
             # Get current branch
-            branch_result = self.subprocess_runner.run_command(
+            branch_result = self.subprocess_runner.run_subprocess(
                 ["git", "branch", "--show-current"],
                 cwd=self.root_path,
                 timeout=10,
@@ -1043,7 +1043,7 @@ This is a machine learning playground project with the following key components:
             )
             
             # Get status
-            status_result = self.subprocess_runner.run_command(
+            status_result = self.subprocess_runner.run_subprocess(
                 ["git", "status", "--porcelain"],
                 cwd=self.root_path,
                 timeout=10,

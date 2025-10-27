@@ -26,7 +26,7 @@ class TestCIToolsInit:
         assert tools.root_path == tmp_path
         assert tools.category == "ci"
         assert tools.cache_dir == tmp_path / ".cache"
-        assert tools.pre_commit_config == tmp_path / ".pre-commit-config.yaml"
+        assert tools.pre_commit_config == tmp_path / ".githooks" / ".pre-commit-config.yaml"
 
 
 class TestQualityGate:
