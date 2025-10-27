@@ -12,6 +12,8 @@ from typing import List, Optional
 import typer
 from typing_extensions import Annotated
 
+from ml_playground.tools.categories.ci import CITools
+from ml_playground.tools.categories.environment import EnvironmentTools
 from ml_playground.tools.categories.quality import QualityTools
 from ml_playground.tools.categories.testing import TestingTools
 from ml_playground.tools.core.config import load_tools_config
@@ -177,6 +179,20 @@ def _get_testing_tools() -> TestingTools:
     if state.config is None:
         load_config_with_error_handling()
     return TestingTools(state.config, state.project_root or Path.cwd())
+
+
+def _get_environment_tools() -> EnvironmentTools:
+    """Get environment tools instance."""
+    if state.config is None:
+        load_config_with_error_handling()
+    return EnvironmentTools(state.config, state.project_root or Path.cwd())
+
+
+def _get_ci_tools() -> CITools:
+    """Get CI tools instance."""
+    if state.config is None:
+        load_config_with_error_handling()
+    return CITools(state.config, state.project_root or Path.cwd())
 
 
 def _handle_tool_result(result) -> None:
@@ -540,18 +556,388 @@ def test_clean(
         raise typer.Exit(1)
 
 
+# Environment commands
 @env_app.command("setup")
-def env_setup() -> None:
-    """Set up development environment (placeholder - will be implemented in phase 3)."""
-    typer.echo("Environment setup command - not yet implemented")
-    typer.echo("This will be implemented in phase 3: Environment and CI Tools")
+def env_setup(
+    clear: Annotated[
+        bool,
+        typer.Option("--clear", help="Remove existing virtual environment first")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Create a fresh uv-managed virtual environment and install all dependencies."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.setup(args or [], clear=clear)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
+@env_app.command("sync")
+def env_sync(
+    groups: Annotated[
+        Optional[List[str]],
+        typer.Option("--group", help="Sync specific dependency groups (repeatable)")
+    ] = None,
+    all_groups: Annotated[
+        bool,
+        typer.Option("--all-groups", help="Install all optional dependency groups")
+    ] = False,
+    frozen: Annotated[
+        bool,
+        typer.Option("--frozen", help="Use existing lockfile without resolving new versions")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional uv sync arguments")
+    ] = None,
+) -> None:
+    """Sync project dependencies using uv."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.sync(args or [], groups=groups, all_groups=all_groups, frozen=frozen)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("verify")
+def env_verify(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Ensure the project package imports correctly."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.verify(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("clean")
+def env_clean(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Remove caches and temporary build artifacts."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.clean(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("info")
+def env_info(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show environment information."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.info(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("ai-guidelines")
+def env_ai_guidelines(
+    tool: Annotated[
+        str,
+        typer.Argument(help="Target tool name for AI guidelines")
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview actions without executing")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Set up AI guideline symlinks for the requested tool."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.ai_guidelines(args or [], tool=tool, dry_run=dry_run)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("tensorboard")
+def env_tensorboard(
+    logdir: Annotated[
+        Path,
+        typer.Option(
+            "--logdir",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            help="TensorBoard log directory"
+        )
+    ],
+    port: Annotated[
+        int,
+        typer.Option("--port", help="Port to bind TensorBoard to")
+    ] = 6006,
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Host interface to bind to")
+    ] = "127.0.0.1",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional tensorboard arguments")
+    ] = None,
+) -> None:
+    """Launch TensorBoard for the given log directory."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.tensorboard(args or [], logdir=logdir, port=port, host=host)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@env_app.command("gguf-help")
+def env_gguf_help(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show llama.cpp GGUF conversion help."""
+    try:
+        tools = _get_environment_tools()
+        result = tools.gguf_help(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+# CI commands
 @ci_app.command("quality-gate")
-def ci_quality_gate() -> None:
-    """Run full quality gate (placeholder - will be implemented in phase 3)."""
-    typer.echo("CI quality gate command - not yet implemented")
-    typer.echo("This will be implemented in phase 3: Environment and CI Tools")
+def ci_quality_gate(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional pre-commit arguments")
+    ] = None,
+) -> None:
+    """Run the full pre-commit quality gate."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.quality_gate(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@ci_app.command("quality-fast")
+def ci_quality_fast(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional pre-commit arguments")
+    ] = None,
+) -> None:
+    """Run lint/format focused pre-commit hooks."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.quality_fast(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@ci_app.command("quality-ext")
+def ci_quality_ext(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Run quality gates followed by mutation testing."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.quality_ext(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@ci_app.command("quality-ci-local")
+def ci_quality_ci_local(
+    bind_caches: Annotated[
+        bool,
+        typer.Option(
+            "--bind-caches/--no-bind-caches",
+            help="Bind local caches into the act container"
+        )
+    ] = True,
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional act arguments")
+    ] = None,
+) -> None:
+    """Run the GitHub quality workflow locally using act."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.quality_ci_local(args or [], bind_caches=bind_caches)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@ci_app.command("coverage-badge")
+def ci_coverage_badge(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Regenerate the SVG coverage badges."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.coverage_badge(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+# Mutation testing subcommands
+mutation_app = typer.Typer(
+    name="mutation",
+    help="Mutation testing operations",
+    no_args_is_help=True,
+)
+ci_app.add_typer(mutation_app, name="mutation")
+
+
+@mutation_app.command("reset")
+def ci_mutation_reset(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Remove the cached Cosmic Ray session."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_reset(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("summary")
+def ci_mutation_summary(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show a summary of the previous Cosmic Ray run."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_summary(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("init")
+def ci_mutation_init(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Initialize the Cosmic Ray session database if needed."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_init(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("exec")
+def ci_mutation_exec(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Execute mutation tests with Cosmic Ray."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_exec(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("report")
+def ci_mutation_report(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Render a mutation testing report."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_report(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("run")
+def ci_mutation_run(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Run the full mutation testing pipeline."""
+    try:
+        tools = _get_ci_tools()
+        result = tools.mutation_run(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @agentic_app.command("guidelines")
