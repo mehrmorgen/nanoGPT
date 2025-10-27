@@ -246,7 +246,8 @@ def _log_dir(
         logger.info(f"[{tag}] {dir_name}: <not set>")
         return
 
-    if not isinstance(dir_path, Path):
+    # Runtime guard: tests may pass non-Path via Any; avoid attribute errors
+    if not isinstance(dir_path, Path):  # pyright: ignore[reportUnnecessaryIsInstance]
         return
 
     if dir_path.exists():
