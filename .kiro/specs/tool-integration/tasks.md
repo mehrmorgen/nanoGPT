@@ -11,7 +11,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
 
 ## Task Workflow Requirements
 
-**BEFORE starting each task**: Check if the base branch has updates and rebase if necessary to stay current with the strict mode work being done in parallel.
+**BEFORE starting each task**: Check if the base branch (codex/implement-basedpyright-for-comparison) has updates and rebase if necessary to stay current with the strict mode work being done in parallel.
 
 **AFTER completing each task**: Create a commit with the completed work. Each task should result in exactly one commit following the project's commit standards (granular commits, TDD pairing, quality gates passing).
 
@@ -205,25 +205,25 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
-- [ ] 6. Complete tools module with comprehensive learning mode
+- [x] 6. Complete tools module with comprehensive learning mode
   - Finalize all tool categories within the `ml_playground/tools/` module
   - Add comprehensive educational content for all tools
   - Ensure the tools module is fully functional and self-contained
   - _Requirements: 10.3, 10.4_
 
-- [ ] 6.1 Add educational content for environment and CI tools
+- [x] 6.1 Add educational content for environment and CI tools
   - Create explanations for environment management commands
   - Add best practices for CI/CD operations and quality gates
   - Implement cross-references to related development concepts
   - _Requirements: 10.3, 10.4_
 
-- [ ] 6.2 Create comprehensive best practices guides
+- [x] 6.2 Create comprehensive best practices guides
   - Implement comprehensive best practices documentation within tools module
   - Add learning paths for different user experience levels
   - Create command discovery and help system
   - _Requirements: 10.3, 10.4, 7.1, 7.2_
 
-- [ ] 6.3 Write unit tests for complete tools module
+- [x] 6.3 Write unit tests for complete tools module
   - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test comprehensive educational content accuracy and completeness
   - Validate all tool categories and their interactions
@@ -235,6 +235,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Update GitHub Actions workflows to use `uv run tools` commands
   - Update documentation references to new tool commands
   - Keep changes focused on tooling references only
+  - rebase on the base branch's recent changes.
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 11.1, 11.2, 11.4_
 
 - [ ] 7.1 Update CI workflows to use integrated tools

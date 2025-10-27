@@ -899,5 +899,541 @@ class LearningModeEngine:
                     "Project health dashboards",
                     "Automated development decision support"
                 ]
+            },
+            
+            # Environment tools educational content
+            "env.setup": {
+                "minimal_explanation": "Creates a fresh virtual environment and installs all dependencies",
+                "standard_explanation": [
+                    "Sets up a clean Python virtual environment using uv",
+                    "Installs all project dependencies including development tools",
+                    "Ensures consistent development environment across team members"
+                ],
+                "comprehensive_explanation": [
+                    "Environment setup creates a isolated Python environment for your project",
+                    "Virtual environments prevent dependency conflicts between different projects",
+                    "The setup process uses uv (a fast Python package manager) to create the environment",
+                    "All dependency groups are installed including testing, linting, and development tools",
+                    "This ensures every developer has the same tools and versions for consistent workflows"
+                ],
+                "best_practices": [
+                    "Run setup when first cloning the project or after major dependency changes",
+                    "Use --clear flag to start fresh if you encounter dependency issues",
+                    "Keep your virtual environment separate from your system Python installation",
+                    "Regularly sync dependencies to stay current with team changes"
+                ],
+                "related_concepts": [
+                    "Virtual environments and dependency isolation",
+                    "Package management with uv and pip",
+                    "Development environment consistency",
+                    "Dependency resolution and version management"
+                ]
+            },
+            
+            "env.sync": {
+                "minimal_explanation": "Synchronizes project dependencies using the lockfile",
+                "standard_explanation": [
+                    "Updates installed packages to match the project's lockfile",
+                    "Ensures all team members have identical dependency versions",
+                    "Can install specific dependency groups or all optional dependencies"
+                ],
+                "comprehensive_explanation": [
+                    "Dependency synchronization ensures reproducible builds and consistent environments",
+                    "The sync process reads from uv.lock to install exact versions of all dependencies",
+                    "This prevents 'works on my machine' issues by ensuring version consistency",
+                    "You can sync specific groups (like 'dev' or 'test') or all groups at once",
+                    "Frozen sync uses existing lockfile without resolving new versions for speed"
+                ],
+                "best_practices": [
+                    "Sync dependencies after pulling changes that modify uv.lock",
+                    "Use --frozen for faster syncing when you know lockfile is current",
+                    "Sync specific groups during development to save time and disk space",
+                    "Run full sync before important milestones to ensure complete environment"
+                ],
+                "related_concepts": [
+                    "Lockfiles and reproducible builds",
+                    "Dependency groups and optional dependencies",
+                    "Version pinning and dependency resolution",
+                    "Team collaboration and environment consistency"
+                ]
+            },
+            
+            "env.verify": {
+                "minimal_explanation": "Tests that the project package imports correctly",
+                "standard_explanation": [
+                    "Performs a basic import test of the main project package",
+                    "Validates that the development environment is working correctly",
+                    "Catches import errors and missing dependencies early"
+                ],
+                "comprehensive_explanation": [
+                    "Environment verification ensures your development setup is functional",
+                    "It performs a basic smoke test by importing the main project package",
+                    "This catches common issues like missing dependencies or Python path problems",
+                    "Verification is especially important after environment setup or major changes",
+                    "A successful import test indicates the environment is ready for development"
+                ],
+                "best_practices": [
+                    "Run verification after setting up or modifying your environment",
+                    "Use verification as a quick health check before starting development",
+                    "Include verification in automated setup scripts and CI pipelines",
+                    "Investigate import failures immediately to prevent development issues"
+                ],
+                "related_concepts": [
+                    "Python import system and module resolution",
+                    "Environment validation and smoke testing",
+                    "Development workflow health checks",
+                    "Dependency troubleshooting"
+                ]
+            },
+            
+            "env.clean": {
+                "minimal_explanation": "Removes cache files and temporary build artifacts",
+                "standard_explanation": [
+                    "Cleans up pytest cache, coverage data, and build artifacts",
+                    "Removes __pycache__ directories and temporary files",
+                    "Helps resolve issues caused by stale cache data"
+                ],
+                "comprehensive_explanation": [
+                    "Environment cleanup removes temporary files that can cause development issues",
+                    "Caches speed up tools but can become stale and cause unexpected behavior",
+                    "Cleanup removes pytest cache, coverage databases, build artifacts, and Python bytecode",
+                    "Regular cleanup prevents disk space issues and ensures clean test runs",
+                    "Clean environments help avoid test pollution and intermittent failures"
+                ],
+                "best_practices": [
+                    "Clean environment when experiencing unexplained test failures or import issues",
+                    "Run cleanup before important test runs to ensure consistent results",
+                    "Include cleanup in CI/CD pipelines to maintain clean build environments",
+                    "Clean regularly during development to prevent cache-related problems"
+                ],
+                "related_concepts": [
+                    "Cache management and invalidation",
+                    "Build artifact cleanup",
+                    "Test environment isolation",
+                    "Disk space management and maintenance"
+                ]
+            },
+            
+            "env.info": {
+                "minimal_explanation": "Shows current environment status and configuration",
+                "standard_explanation": [
+                    "Displays information about virtual environment, cache, and package status",
+                    "Helps diagnose environment issues and verify setup",
+                    "Shows disk usage and import status for troubleshooting"
+                ],
+                "comprehensive_explanation": [
+                    "Environment information provides a comprehensive view of your development setup",
+                    "It shows virtual environment location, cache directory size, and package import status",
+                    "This information is valuable for troubleshooting environment issues",
+                    "The info command helps verify that your environment is properly configured",
+                    "Use this command to understand your current setup before making changes"
+                ],
+                "best_practices": [
+                    "Check environment info when troubleshooting development issues",
+                    "Use info to verify environment setup after installation or changes",
+                    "Monitor cache sizes to understand disk usage patterns",
+                    "Include environment info in bug reports for better troubleshooting"
+                ],
+                "related_concepts": [
+                    "Environment introspection and debugging",
+                    "Development setup validation",
+                    "Troubleshooting workflows",
+                    "System resource monitoring"
+                ]
+            },
+            
+            "env.ai-guidelines": {
+                "minimal_explanation": "Sets up AI development guidelines and configuration files",
+                "standard_explanation": [
+                    "Creates symlinks to AI guideline files for specific tools",
+                    "Establishes consistent AI workflow standards for the project",
+                    "Provides templates and configurations for AI-assisted development"
+                ],
+                "comprehensive_explanation": [
+                    "AI guidelines setup creates structured documentation for AI-assisted development",
+                    "It establishes clear standards for how AI tools should be used in the project",
+                    "The setup creates symlinks to guideline files that AI agents can reference",
+                    "Guidelines include coding standards, testing requirements, and quality expectations",
+                    "This ensures consistent and effective AI-human collaboration in development workflows"
+                ],
+                "best_practices": [
+                    "Set up AI guidelines when starting AI-assisted development workflows",
+                    "Customize guidelines to match your team's specific coding standards",
+                    "Keep guidelines updated as project conventions and tools evolve",
+                    "Use dry-run mode to preview changes before applying them"
+                ],
+                "related_concepts": [
+                    "AI-assisted development workflows",
+                    "Development process standardization",
+                    "Human-AI collaboration patterns",
+                    "Code review automation and guidelines"
+                ]
+            },
+            
+            "env.tensorboard": {
+                "minimal_explanation": "Launches TensorBoard for visualizing machine learning metrics",
+                "standard_explanation": [
+                    "Starts TensorBoard web interface for log visualization",
+                    "Provides interactive dashboards for training metrics and model analysis",
+                    "Configurable host and port for different deployment scenarios"
+                ],
+                "comprehensive_explanation": [
+                    "TensorBoard is a visualization toolkit for machine learning experiments",
+                    "It provides web-based dashboards for metrics, graphs, histograms, and more",
+                    "TensorBoard reads log files created during model training and evaluation",
+                    "The tool helps understand model behavior, debug training issues, and compare experiments",
+                    "Interactive visualizations make it easier to analyze complex ML workflows"
+                ],
+                "best_practices": [
+                    "Use TensorBoard to monitor training progress and identify issues early",
+                    "Organize log directories by experiment for easy comparison",
+                    "Configure appropriate host/port settings for your deployment environment",
+                    "Use TensorBoard's features like scalar plots, histograms, and model graphs"
+                ],
+                "related_concepts": [
+                    "Machine learning experiment tracking",
+                    "Training visualization and monitoring",
+                    "Model debugging and analysis",
+                    "ML workflow tooling and dashboards"
+                ]
+            },
+            
+            "env.gguf-help": {
+                "minimal_explanation": "Shows help for GGUF model conversion tools",
+                "standard_explanation": [
+                    "Displays usage information for converting models to GGUF format",
+                    "GGUF is a file format for storing models for inference with llama.cpp",
+                    "Provides guidance on model conversion parameters and options"
+                ],
+                "comprehensive_explanation": [
+                    "GGUF (GPT-Generated Unified Format) is a binary format for storing large language models",
+                    "It's designed for efficient inference with llama.cpp and similar tools",
+                    "The conversion process transforms models from formats like HuggingFace to GGUF",
+                    "GGUF models can be quantized for smaller size and faster inference",
+                    "This format enables running large models on consumer hardware with good performance"
+                ],
+                "best_practices": [
+                    "Convert models to GGUF for efficient local inference and deployment",
+                    "Choose appropriate quantization levels based on your accuracy/speed requirements",
+                    "Test converted models to ensure they maintain acceptable quality",
+                    "Use GGUF format for production deployments where inference speed matters"
+                ],
+                "related_concepts": [
+                    "Model format conversion and optimization",
+                    "Quantization and model compression",
+                    "Local model inference and deployment",
+                    "llama.cpp and efficient model serving"
+                ]
+            },
+            
+            # CI tools educational content
+            "ci.quality-gate": {
+                "minimal_explanation": "Runs comprehensive quality checks including pre-commit hooks and tests",
+                "standard_explanation": [
+                    "Executes pre-commit hooks, integration tests, acceptance tests, and e2e tests",
+                    "Provides comprehensive validation before code integration",
+                    "Ensures code meets all quality standards and functional requirements"
+                ],
+                "comprehensive_explanation": [
+                    "Quality gates are comprehensive validation pipelines that ensure code quality",
+                    "They combine static analysis (linting, formatting) with dynamic testing",
+                    "The gate includes pre-commit hooks for style and basic checks",
+                    "Integration tests verify component interactions work correctly",
+                    "Acceptance tests validate business requirements and user stories",
+                    "End-to-end tests ensure complete workflows function as expected"
+                ],
+                "best_practices": [
+                    "Run quality gates before merging code to main branch",
+                    "Set up automated quality gates in CI/CD pipelines",
+                    "Address quality gate failures promptly to maintain code health",
+                    "Use quality gates as learning opportunities to improve code quality"
+                ],
+                "related_concepts": [
+                    "Continuous integration and quality assurance",
+                    "Multi-level testing strategies",
+                    "Code quality enforcement",
+                    "Automated validation pipelines"
+                ]
+            },
+            
+            "ci.quality-fast": {
+                "minimal_explanation": "Runs fast quality checks focused on linting and formatting",
+                "standard_explanation": [
+                    "Executes quick pre-commit hooks for immediate feedback",
+                    "Focuses on style, formatting, and basic static analysis",
+                    "Provides rapid validation during development workflow"
+                ],
+                "comprehensive_explanation": [
+                    "Fast quality checks provide immediate feedback during development",
+                    "They focus on automated fixes like code formatting and basic linting",
+                    "These checks run quickly to fit into tight development loops",
+                    "Fast checks catch common issues before they reach code review",
+                    "They're designed for frequent use during active development"
+                ],
+                "best_practices": [
+                    "Run fast quality checks frequently during development",
+                    "Use fast checks before committing code for immediate feedback",
+                    "Combine fast checks with full quality gates for comprehensive validation",
+                    "Set up editor integration for real-time fast quality feedback"
+                ],
+                "related_concepts": [
+                    "Development workflow optimization",
+                    "Fast feedback loops",
+                    "Incremental quality validation",
+                    "Developer experience and productivity"
+                ]
+            },
+            
+            "ci.quality-ext": {
+                "minimal_explanation": "Runs extended quality validation including mutation testing",
+                "standard_explanation": [
+                    "Combines full quality gates with mutation testing for comprehensive validation",
+                    "Validates both code quality and test effectiveness",
+                    "Provides the highest level of quality assurance available"
+                ],
+                "comprehensive_explanation": [
+                    "Extended quality validation provides the most comprehensive code quality assessment",
+                    "It combines all standard quality checks with mutation testing",
+                    "Mutation testing validates that your tests actually catch bugs by introducing artificial defects",
+                    "This level of validation ensures both code quality and test suite effectiveness",
+                    "Extended validation is typically used for critical releases and major changes"
+                ],
+                "best_practices": [
+                    "Use extended validation for critical releases and major feature changes",
+                    "Run extended validation periodically to assess overall code health",
+                    "Address mutation testing failures to improve test suite quality",
+                    "Balance extended validation cost with quality requirements"
+                ],
+                "related_concepts": [
+                    "Comprehensive quality assurance",
+                    "Mutation testing and test effectiveness",
+                    "Critical release validation",
+                    "Test suite quality assessment"
+                ]
+            },
+            
+            "ci.quality-ci-local": {
+                "minimal_explanation": "Runs GitHub Actions quality workflow locally using act",
+                "standard_explanation": [
+                    "Executes the same quality checks that run in GitHub Actions",
+                    "Uses act to simulate CI environment on your local machine",
+                    "Helps debug CI issues and validate changes before pushing"
+                ],
+                "comprehensive_explanation": [
+                    "Local CI execution allows you to test GitHub Actions workflows on your machine",
+                    "Act creates containers that simulate the GitHub Actions environment",
+                    "This helps catch CI-specific issues before pushing code to the repository",
+                    "Local CI testing saves time by avoiding push-test-fix cycles",
+                    "Cache binding improves performance by reusing local caches in containers"
+                ],
+                "best_practices": [
+                    "Run local CI before pushing changes that might affect the build",
+                    "Use cache binding to improve performance and reduce download time",
+                    "Test CI changes locally before committing workflow modifications",
+                    "Use local CI to debug complex CI failures in isolation"
+                ],
+                "related_concepts": [
+                    "Local CI/CD testing and validation",
+                    "Container-based development environments",
+                    "GitHub Actions workflow debugging",
+                    "CI/CD pipeline optimization"
+                ]
+            },
+            
+            "ci.coverage-badge": {
+                "minimal_explanation": "Generates SVG badges showing current test coverage",
+                "standard_explanation": [
+                    "Creates visual badges displaying line and branch coverage percentages",
+                    "Updates badge files in the docs/assets directory",
+                    "Provides at-a-glance coverage information for documentation"
+                ],
+                "comprehensive_explanation": [
+                    "Coverage badges provide visual indicators of test coverage quality",
+                    "They display both line coverage and branch coverage as SVG images",
+                    "Badges are typically embedded in README files and documentation",
+                    "Visual coverage indicators help communicate code quality to users and contributors",
+                    "Automated badge generation keeps coverage information current"
+                ],
+                "best_practices": [
+                    "Update badges after significant changes to maintain accuracy",
+                    "Include badges in README and documentation for visibility",
+                    "Use badges as motivation to maintain and improve test coverage",
+                    "Automate badge generation in CI/CD pipelines for consistency"
+                ],
+                "related_concepts": [
+                    "Test coverage visualization",
+                    "Documentation and project communication",
+                    "Quality metrics and reporting",
+                    "Automated documentation updates"
+                ]
+            },
+            
+            "ci.mutation-reset": {
+                "minimal_explanation": "Removes cached mutation testing session for fresh start",
+                "standard_explanation": [
+                    "Deletes the Cosmic Ray session database to start mutation testing fresh",
+                    "Useful when mutation testing configuration changes",
+                    "Ensures clean state for mutation testing runs"
+                ],
+                "comprehensive_explanation": [
+                    "Mutation testing sessions cache information about previous runs",
+                    "Resetting the session ensures you start with a clean state",
+                    "This is necessary when you change mutation testing configuration",
+                    "Reset also helps when session data becomes corrupted or inconsistent",
+                    "A fresh session ensures accurate mutation testing results"
+                ],
+                "best_practices": [
+                    "Reset mutation session when changing configuration or test files",
+                    "Use reset to troubleshoot inconsistent mutation testing results",
+                    "Reset before important mutation testing runs to ensure accuracy",
+                    "Combine reset with full mutation pipeline for comprehensive testing"
+                ],
+                "related_concepts": [
+                    "Mutation testing session management",
+                    "Test state management and cleanup",
+                    "Mutation testing configuration",
+                    "Test result consistency and accuracy"
+                ]
+            },
+            
+            "ci.mutation-summary": {
+                "minimal_explanation": "Shows summary of previous mutation testing results",
+                "standard_explanation": [
+                    "Displays statistics from the last Cosmic Ray mutation testing run",
+                    "Shows mutation score and identifies surviving mutants",
+                    "Provides insights into test suite effectiveness"
+                ],
+                "comprehensive_explanation": [
+                    "Mutation testing summary provides insights into your test suite's effectiveness",
+                    "It shows how many mutants were killed (caught by tests) vs survived (not caught)",
+                    "The mutation score indicates the percentage of mutants your tests caught",
+                    "Surviving mutants highlight areas where your tests might be insufficient",
+                    "Summary data helps prioritize test improvements for maximum impact"
+                ],
+                "best_practices": [
+                    "Review mutation summaries to identify weak spots in your test suite",
+                    "Focus on surviving mutants to improve test coverage and quality",
+                    "Track mutation scores over time to monitor test suite health",
+                    "Use mutation results to guide test writing and improvement efforts"
+                ],
+                "related_concepts": [
+                    "Test effectiveness measurement",
+                    "Mutation testing analysis",
+                    "Test suite quality assessment",
+                    "Quality metrics and improvement"
+                ]
+            },
+            
+            "ci.mutation-init": {
+                "minimal_explanation": "Initializes Cosmic Ray session database for mutation testing",
+                "standard_explanation": [
+                    "Creates the session database needed for mutation testing",
+                    "Prepares Cosmic Ray for executing mutation tests",
+                    "Reuses existing session if already initialized"
+                ],
+                "comprehensive_explanation": [
+                    "Mutation testing initialization prepares the Cosmic Ray framework",
+                    "It creates a session database that tracks mutation testing progress",
+                    "The session stores information about which mutants to create and test",
+                    "Initialization reads your configuration to understand what code to mutate",
+                    "Existing sessions are reused to avoid redundant initialization work"
+                ],
+                "best_practices": [
+                    "Initialize mutation testing session before running mutation tests",
+                    "Reuse existing sessions when configuration hasn't changed",
+                    "Initialize after making significant changes to test configuration",
+                    "Combine initialization with execution for complete mutation testing"
+                ],
+                "related_concepts": [
+                    "Mutation testing setup and configuration",
+                    "Test framework initialization",
+                    "Session management and persistence",
+                    "Mutation testing workflow preparation"
+                ]
+            },
+            
+            "ci.mutation-exec": {
+                "minimal_explanation": "Executes mutation tests using Cosmic Ray",
+                "standard_explanation": [
+                    "Runs the actual mutation testing by creating and testing mutants",
+                    "Executes your test suite against each generated mutant",
+                    "Determines which mutants survive (indicating test gaps)"
+                ],
+                "comprehensive_explanation": [
+                    "Mutation test execution is the core of mutation testing",
+                    "Cosmic Ray creates mutants (small code changes) and runs your tests against each",
+                    "Tests that fail against a mutant 'kill' it, showing the test caught the bug",
+                    "Tests that pass against a mutant let it 'survive', indicating a potential test gap",
+                    "The execution process can take significant time as it runs tests many times"
+                ],
+                "best_practices": [
+                    "Run mutation execution when you have time for the full process",
+                    "Ensure your test suite is fast to make mutation testing practical",
+                    "Monitor execution progress and be prepared for long run times",
+                    "Use mutation execution results to improve your test suite systematically"
+                ],
+                "related_concepts": [
+                    "Mutation testing execution and analysis",
+                    "Test suite validation and improvement",
+                    "Automated bug injection and detection",
+                    "Comprehensive test effectiveness measurement"
+                ]
+            },
+            
+            "ci.mutation-report": {
+                "minimal_explanation": "Generates detailed mutation testing reports",
+                "standard_explanation": [
+                    "Creates comprehensive reports from mutation testing results",
+                    "Shows detailed information about surviving mutants",
+                    "Provides actionable insights for test improvement"
+                ],
+                "comprehensive_explanation": [
+                    "Mutation testing reports provide detailed analysis of test effectiveness",
+                    "They show which specific mutants survived and where they're located",
+                    "Reports help you understand exactly what your tests are missing",
+                    "Detailed reports make it easier to write targeted tests for uncovered scenarios",
+                    "Reports can be used to track mutation testing progress over time"
+                ],
+                "best_practices": [
+                    "Review detailed reports to understand specific test gaps",
+                    "Use reports to prioritize which tests to write or improve",
+                    "Share reports with team members to improve collective test writing",
+                    "Track report trends to monitor test suite improvement over time"
+                ],
+                "related_concepts": [
+                    "Test gap analysis and reporting",
+                    "Mutation testing result interpretation",
+                    "Test improvement planning",
+                    "Quality assurance reporting and tracking"
+                ]
+            },
+            
+            "ci.mutation-run": {
+                "minimal_explanation": "Runs the complete mutation testing pipeline",
+                "standard_explanation": [
+                    "Executes all mutation testing steps in sequence",
+                    "Includes reset, summary, init, execution, and reporting",
+                    "Provides comprehensive mutation testing analysis"
+                ],
+                "comprehensive_explanation": [
+                    "The complete mutation testing pipeline provides thorough test effectiveness analysis",
+                    "It starts by resetting any previous session for a clean start",
+                    "Summary shows previous results before starting new analysis",
+                    "Initialization prepares the session for the current codebase",
+                    "Execution runs all mutation tests and reports provide detailed analysis",
+                    "This comprehensive approach gives you complete insight into test quality"
+                ],
+                "best_practices": [
+                    "Run complete mutation pipeline for thorough test suite evaluation",
+                    "Schedule mutation runs during low-activity periods due to execution time",
+                    "Use complete pipeline results to plan systematic test improvements",
+                    "Run complete pipeline before major releases to validate test quality"
+                ],
+                "related_concepts": [
+                    "Comprehensive test effectiveness analysis",
+                    "End-to-end mutation testing workflows",
+                    "Test suite quality validation",
+                    "Systematic test improvement processes"
+                ]
             }
         }

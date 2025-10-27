@@ -102,6 +102,57 @@ class TestLearningModeEngine:
         assert result.commands_executed == ["ruff check ."]
         assert any("style violations" in exp for exp in result.explanations)
         assert len(result.best_practices) > 0
+        assert len(result.related_concepts) > 0
+    
+    def test_explain_command_environment_category(self):
+        """Test command explanation for environment tools."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        
+        result = engine.explain_command(
+            command="setup",
+            context="Setting up development environment",
+            category="env",
+            executed_commands=["uv venv", "uv sync --all-groups"]
+        )
+        
+        assert isinstance(result, LearningInfo)
+        assert result.commands_executed == ["uv venv", "uv sync --all-groups"]
+        assert any("virtual environment" in exp for exp in result.explanations)
+        assert len(result.best_practices) > 0
+        assert len(result.related_concepts) > 0
+    
+    def test_explain_command_ci_category(self):
+        """Test command explanation for CI tools."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        
+        result = engine.explain_command(
+            command="quality-gate",
+            context="Running comprehensive quality checks",
+            category="ci",
+            executed_commands=["pre-commit run --all-files"]
+        )
+        
+        assert isinstance(result, LearningInfo)
+        assert result.commands_executed == ["pre-commit run --all-files"]
+        assert any("quality" in exp.lower() for exp in result.explanations)
+        assert len(result.best_practices) > 0
+        assert len(result.related_concepts) > 0
+    
+    def test_explain_command_agentic_category(self):
+        """Test command explanation for agentic tools."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        
+        result = engine.explain_command(
+            command="batch-review",
+            context="Running batch operations for AI",
+            category="agentic",
+            executed_commands=["batch-quality-checks"]
+        )
+        
+        assert isinstance(result, LearningInfo)
+        assert result.commands_executed == ["batch-quality-checks"]
+        assert any("ai" in exp.lower() for exp in result.explanations)
+        assert len(result.best_practices) > 0
         assert len(result.related_concepts) > 0 
    
     def test_explain_command_unknown_command(self):
@@ -230,6 +281,39 @@ class TestLearningModeEngine:
         quality_commands = ["lint", "format", "deadcode", "basedpyright", "mypy", "typecheck"]
         for command in quality_commands:
             content_key = f"quality.{command}"
+            assert content_key in engine._educational_content
+            content = engine._educational_content[content_key]
+            assert "minimal_explanation" in content
+            assert "standard_explanation" in content
+            assert "comprehensive_explanation" in content
+        
+        # Test that we have content for key environment commands
+        env_commands = ["setup", "sync", "verify", "clean", "info", "ai-guidelines", "tensorboard", "gguf-help"]
+        for command in env_commands:
+            content_key = f"env.{command}"
+            assert content_key in engine._educational_content
+            content = engine._educational_content[content_key]
+            assert "minimal_explanation" in content
+            assert "standard_explanation" in content
+            assert "comprehensive_explanation" in content
+        
+        # Test that we have content for key CI commands
+        ci_commands = ["quality-gate", "quality-fast", "quality-ext", "quality-ci-local", "coverage-badge", 
+                      "mutation-reset", "mutation-summary", "mutation-init", "mutation-exec", 
+                      "mutation-report", "mutation-run"]
+        for command in ci_commands:
+            content_key = f"ci.{command}"
+            assert content_key in engine._educational_content
+            content = engine._educational_content[content_key]
+            assert "minimal_explanation" in content
+            assert "standard_explanation" in content
+            assert "comprehensive_explanation" in content
+        
+        # Test that we have content for key agentic commands
+        agentic_commands = ["guidelines-setup", "batch-review", "workflow-helper", "batch-quality", 
+                           "batch-validate", "workflow-status"]
+        for command in agentic_commands:
+            content_key = f"agentic.{command}"
             assert content_key in engine._educational_content
             content = engine._educational_content[content_key]
             assert "minimal_explanation" in content
