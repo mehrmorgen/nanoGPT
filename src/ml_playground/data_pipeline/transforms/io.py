@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Mapping
 import pickle
 
 import numpy as np
@@ -29,7 +29,7 @@ def write_bin_and_meta(
     ds_dir: Path,
     train: np.ndarray,
     val: np.ndarray,
-    meta: dict,
+    meta: Mapping[str, object],
     logger: LoggerLike,
     data_cfg: DataConfig | None = None,
 ) -> None:
@@ -80,7 +80,7 @@ def write_bin_and_meta(
         tmp_train.write_bytes(train.tobytes())
         tmp_val.write_bytes(val.tobytes())
         with tmp_meta.open("wb") as f:
-            pickle.dump(meta, f)
+            pickle.dump(dict(meta), f)
 
         tmp_train.replace(train_path)
         tmp_val.replace(val_path)

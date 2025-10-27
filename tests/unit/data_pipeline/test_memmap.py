@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import hypothesis.strategies as st
 from hypothesis import given, settings
@@ -41,6 +41,9 @@ def device_strategy(draw: st.DrawFn) -> DeviceKind:
     if torch.cuda.is_available():
         devices.append(cast(DeviceKind, "cuda"))
     return draw(st.sampled_from(devices))
+
+
+SamplerKind = Literal["random", "sequential"]
 
 
 CPU: DeviceKind = cast(DeviceKind, "cpu")
@@ -139,7 +142,13 @@ class TestSimpleBatches:
         sampler=st.sampled_from(["random", "sequential"]),
     )
     @settings(max_examples=8, deadline=None)
-    def test_simple_batches_creation(self, array_size, batch_config, device, sampler):
+    def test_simple_batches_creation(
+        self,
+        array_size: int,
+        batch_config: tuple[int, int],
+        device: DeviceKind,
+        sampler: SamplerKind,
+    ) -> None:
         """Test SimpleBatches initialization and basic functionality."""
         batch_size, block_size = batch_config
 
@@ -197,8 +206,12 @@ class TestSimpleBatches:
     )
     @settings(max_examples=8, deadline=None)
     def test_sequential_sampling_coverage(
-        self, array_size, batch_size, block_size, device
-    ):
+        self,
+        array_size: int,
+        batch_size: int,
+        block_size: int,
+        device: DeviceKind,
+    ) -> None:
         """Test that sequential sampling eventually covers the dataset."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -227,11 +240,11 @@ class TestSimpleBatches:
             batches = SimpleBatches(data_config, device, temp_path)
 
             # Get multiple batches to test sequential behavior
-            seen_positions = set()
+            seen_positions: set[int] = set()
             for _ in range(3):
-                x, y = batches.get_batch("train")
+                x, _y = batches.get_batch("train")
                 # Check that we're getting different data each time (sequential)
-                first_val = x[0, 0].item()
+                first_val: int = int(x[0, 0].item())
                 seen_positions.add(first_val)
 
             # Should see some variety in sequential sampling if possible
@@ -243,7 +256,9 @@ class TestSimpleBatches:
         device=device_strategy(),
     )
     @settings(max_examples=10)
-    def test_missing_data_files_raise_errors(self, batch_size, block_size, device):
+    def test_missing_data_files_raise_errors(
+        self, batch_size: int, block_size: int, device: DeviceKind
+    ) -> None:
         """Test that missing data files raise appropriate errors."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, Callable, Literal, Optional, TYPE_CHECKING, cast
 import typing as _t
@@ -51,16 +51,12 @@ def _resolve_if_relative(
     value: Any, base_dir: Path, *, resolve: ResolveFn | None = None
 ) -> Any:
     resolver = resolve or Path.resolve
-    candidate: Path | None
-    if isinstance(value, str):
-        candidate = Path(value)
-    elif isinstance(value, Path):
-        candidate = value
-    else:
+    candidate = _coerce_path(value)
+    if candidate is None:
         return value
 
     if candidate.is_absolute():
-        return candidate
+        return resolver(candidate)
     return resolver(base_dir / candidate)
 
 
@@ -77,11 +73,15 @@ def _resolve_path_strict(value: Path, *, resolve: ResolveFn | None = None) -> Pa
 
 
 def _resolve_fields_relative(
-    data: _MutableConfig, keys: Iterable[str], base_dir: Path
+    data: _MutableConfig,
+    keys: Iterable[str],
+    base_dir: Path,
+    *,
+    resolve: ResolveFn | None = None,
 ) -> None:
     for key in keys:
         if key in data:
-            data[key] = _resolve_if_relative(data[key], base_dir)
+            data[key] = _resolve_if_relative(data[key], base_dir, resolve=resolve)
 
 
 def _clone_config(mapping: Mapping[str, Any]) -> _ConfigDict:
@@ -99,6 +99,23 @@ def _coerce_path(value: Any) -> Path | None:
             return Path(value)
         except (TypeError, ValueError, OSError):
             return None
+    return None
+
+
+def _get_context(info: ValidationInfo) -> Mapping[str, object]:
+    if info.context is None:
+        return cast(Mapping[str, object], {})
+    return cast(Mapping[str, object], info.context)
+
+
+def _get_resolve_fn(info: ValidationInfo | None) -> ResolveFn | None:
+    if info is None:
+        return None
+    context = _get_context(info)
+    for key in ("resolve_path", "resolve_fn"):
+        candidate = context.get(key)
+        if callable(candidate):
+            return cast(ResolveFn, candidate)
     return None
 
 
@@ -205,16 +222,23 @@ class PreparerConfig(_FrozenStrictModel):
     @model_validator(mode="before")
     @classmethod
     def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
-        if not isinstance(data, dict) or not info.context:
+        if not isinstance(data, Mapping):
             return data
-        config_path = info.context.get("config_path")
-        if not config_path or not isinstance(config_path, Path):
-            return data
+        context = _get_context(info)
+        config_path = _coerce_path(context.get("config_path"))
+        if config_path is None:
+            return cast(Any, data)
         base_dir = config_path.parent
-        typed_data = cast(Mapping[str, object], data)
-        mutable_data = _clone_config(typed_data)
-        _resolve_fields_relative(mutable_data, ["raw_dir", "raw_text_path"], base_dir)
-        return cast(dict[str, object], mutable_data)
+        resolve = _get_resolve_fn(info)
+        typed_data = cast(_ReadOnlyConfig, data)
+        mutable_data: _ConfigDict = _clone_config(typed_data)
+        _resolve_fields_relative(
+            mutable_data,
+            ["raw_dir", "raw_text_path"],
+            base_dir,
+            resolve=resolve,
+        )
+        return mutable_data
 
 
 class RuntimeConfig(_FrozenStrictModel):
@@ -276,21 +300,24 @@ class TrainerConfig(_FrozenStrictModel):
     @model_validator(mode="before")
     @classmethod
     def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
-        if not isinstance(data, dict) or not info.context:
+        if not isinstance(data, Mapping):
             return data
-        config_path = info.context.get("config_path")
-        if not config_path or not isinstance(config_path, Path):
-            return data
+        context = _get_context(info)
+        config_path = _coerce_path(context.get("config_path"))
+        if config_path is None:
+            return cast(Any, data)
         base_dir = config_path.parent
-        typed_data = cast(Mapping[str, object], data)
-        mutable_data = _clone_config(typed_data)
-        runtime_obj = mutable_data.get("runtime")
-        if isinstance(runtime_obj, dict):
-            runtime_mapping = cast(Mapping[str, object], runtime_obj)
-            runtime_data = _clone_config(runtime_mapping)
-            _resolve_fields_relative(runtime_data, ["out_dir"], base_dir)
+        resolve = _get_resolve_fn(info)
+        typed_data = cast(_ReadOnlyConfig, data)
+        mutable_data: _ConfigDict = _clone_config(typed_data)
+        runtime_obj = typed_data.get("runtime")
+        if isinstance(runtime_obj, Mapping):
+            runtime_data = _clone_config(cast(_ReadOnlyConfig, runtime_obj))
+            _resolve_fields_relative(
+                runtime_data, ["out_dir"], base_dir, resolve=resolve
+            )
             mutable_data["runtime"] = runtime_data
-        return cast(dict[str, object], mutable_data)
+        return mutable_data
 
     class HFModelConfig(_FrozenStrictModel):
         model_name: str
@@ -309,15 +336,23 @@ class TrainerConfig(_FrozenStrictModel):
         @model_validator(mode="before")
         @classmethod
         def _coerce_target_modules(cls, data: Any) -> Any:
-            if not isinstance(data, dict):
+            if not isinstance(data, Mapping):
                 return data
-            data_dict = cast(dict[str, object], data)
+            data_dict: dict[str, object] = cast(dict[str, object], data)
             modules_obj = data_dict.get("target_modules")
-            if isinstance(modules_obj, (list, tuple, set)):
-                modules_tuple: tuple[str, ...] = tuple(
-                    str(module) for module in modules_obj
+            if isinstance(modules_obj, set):
+                modules_iter = cast(Iterable[object], modules_obj)
+                data_dict["target_modules"] = tuple(
+                    str(module) for module in modules_iter
                 )
-                data_dict["target_modules"] = modules_tuple
+                return data_dict
+            if isinstance(modules_obj, Sequence) and not isinstance(
+                modules_obj, (str, bytes)
+            ):
+                modules_seq = cast(Sequence[object], modules_obj)
+                data_dict["target_modules"] = tuple(
+                    str(module) for module in modules_seq
+                )
             return data_dict
 
     model: "ModelConfig"
@@ -347,21 +382,24 @@ class SamplerConfig(_FrozenStrictModel):
     @model_validator(mode="before")
     @classmethod
     def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
-        if not isinstance(data, dict) or not info.context:
+        if not isinstance(data, Mapping):
             return data
-        config_path = info.context.get("config_path")
-        if not config_path or not isinstance(config_path, Path):
-            return data
+        context = _get_context(info)
+        config_path = _coerce_path(context.get("config_path"))
+        if config_path is None:
+            return cast(Any, data)
         base_dir = config_path.parent
-        typed_data = cast(Mapping[str, object], data)
-        mutable_data = _clone_config(typed_data)
-        runtime_obj = mutable_data.get("runtime")
+        resolve = _get_resolve_fn(info)
+        typed_data = cast(_ReadOnlyConfig, data)
+        mutable_data: _ConfigDict = _clone_config(typed_data)
+        runtime_obj = typed_data.get("runtime")
         if isinstance(runtime_obj, Mapping):
-            runtime_mapping = cast(Mapping[str, object], runtime_obj)
-            runtime_data = _clone_config(runtime_mapping)
-            _resolve_fields_relative(runtime_data, ["out_dir"], base_dir)
+            runtime_data = _clone_config(cast(_ReadOnlyConfig, runtime_obj))
+            _resolve_fields_relative(
+                runtime_data, ["out_dir"], base_dir, resolve=resolve
+            )
             mutable_data["runtime"] = runtime_data
-        return cast(dict[str, object], mutable_data)
+        return mutable_data
 
     runtime: RuntimeConfig
     sample: "SampleConfig"
@@ -451,58 +489,63 @@ class ExperimentConfig(_FrozenStrictModel):
         if not isinstance(data, Mapping):
             return data
 
-        typed_data = cast(Mapping[str, Any], data)
-        mutable_data = _clone_config(typed_data)
+        typed_data = cast(_ReadOnlyConfig, data)
 
-        shared_obj = mutable_data.get("shared")
-        shared_data: dict[str, Any] | None = None
+        shared_obj = typed_data.get("shared")
+        shared_mapping: _ReadOnlyConfig | None = None
         config_path: Path | None = None
         if isinstance(shared_obj, Mapping):
-            shared_data = _clone_config(cast(Mapping[str, Any], shared_obj))
-            mutable_data["shared"] = shared_data
-            config_path = _coerce_path(shared_data.get("config_path"))
+            shared_mapping = cast(_ReadOnlyConfig, shared_obj)
+            config_path = _coerce_path(shared_mapping.get("config_path"))
         elif hasattr(shared_obj, "config_path"):
             config_path = _coerce_path(getattr(shared_obj, "config_path", None))
 
         if config_path is None:
             # Preserve original mapping identity when no config_path is provided
-            return data
+            return cast(Any, data)
 
-        base_dir = config_path.parent
+        resolved_config_path = _resolve_path_strict(config_path)
+        base_dir = resolved_config_path.parent
 
-        def _normalize_runtime_out_dir(section: str) -> dict[str, Any] | None:
-            section_obj = mutable_data.get(section)
+        mutable_data: _ConfigDict = _clone_config(typed_data)
+
+        shared_data: _ConfigDict | None = None
+        if shared_mapping is not None:
+            shared_data = _clone_config(shared_mapping)
+            shared_data["config_path"] = resolved_config_path
+            mutable_data["shared"] = shared_data
+
+        def _normalize_runtime(section: str, shared_key: str) -> None:
+            section_obj = typed_data.get(section)
             if not isinstance(section_obj, Mapping):
-                return None
-            section_data = _clone_config(cast(Mapping[str, Any], section_obj))
+                return
+            section_data = _clone_config(cast(_ReadOnlyConfig, section_obj))
             mutable_data[section] = section_data
             runtime_obj = section_data.get("runtime")
             if not isinstance(runtime_obj, Mapping):
-                return None
-            runtime_data = _clone_config(cast(Mapping[str, Any], runtime_obj))
+                return
+            runtime_data = _clone_config(cast(_ReadOnlyConfig, runtime_obj))
+            _resolve_fields_relative(runtime_data, ["out_dir"], base_dir)
             section_data["runtime"] = runtime_data
-            out_dir_path = _coerce_path(runtime_data.get("out_dir"))
-            if out_dir_path is not None:
-                runtime_data["out_dir"] = _resolve_if_relative(out_dir_path, base_dir)
-            return runtime_data
+            if shared_data is not None:
+                out_dir_path = _coerce_path(runtime_data.get("out_dir"))
+                if out_dir_path is not None:
+                    shared_data[shared_key] = out_dir_path
 
-        train_runtime_data = _normalize_runtime_out_dir("train")
-        sample_runtime_data = _normalize_runtime_out_dir("sample")
+        _normalize_runtime(SECTION_TRAIN, "train_out_dir")
+        _normalize_runtime(SECTION_SAMPLE, "sample_out_dir")
 
-        prepare_obj = mutable_data.get("prepare")
+        prepare_obj = typed_data.get(SECTION_PREPARE)
         if isinstance(prepare_obj, Mapping):
-            prepare_data = _clone_config(cast(Mapping[str, Any], prepare_obj))
-            mutable_data["prepare"] = prepare_data
-            raw_dir_path = _coerce_path(prepare_data.get("raw_dir"))
-            if raw_dir_path is not None:
-                prepare_data["raw_dir"] = _resolve_if_relative(raw_dir_path, base_dir)
-            raw_text_path = _coerce_path(prepare_data.get("raw_text_path"))
-            if raw_text_path is not None:
-                prepare_data["raw_text_path"] = _resolve_if_relative(
-                    raw_text_path, base_dir
-                )
-            dataset_dir_obj = prepare_data.pop("dataset_dir", None)
-            dataset_dir_path = _coerce_path(dataset_dir_obj)
+            prepare_data = _clone_config(cast(_ReadOnlyConfig, prepare_obj))
+            mutable_data[SECTION_PREPARE] = prepare_data
+            _resolve_fields_relative(
+                prepare_data,
+                ["raw_dir", "raw_text_path"],
+                base_dir,
+            )
+            dataset_dir_raw = prepare_data.pop("dataset_dir", None)
+            dataset_dir_path = _coerce_path(dataset_dir_raw)
             if dataset_dir_path is not None and shared_data is not None:
                 shared_data["dataset_dir"] = _resolve_if_relative(
                     dataset_dir_path, base_dir
@@ -510,25 +553,15 @@ class ExperimentConfig(_FrozenStrictModel):
 
         if shared_data is not None:
             for key in (
+                "project_home",
                 "dataset_dir",
                 "train_out_dir",
                 "sample_out_dir",
-                "config_path",
-                "project_home",
             ):
-                path_value = _coerce_path(shared_data.get(key))
+                value = shared_data.get(key)
+                path_value = _coerce_path(value)
                 if path_value is not None:
                     shared_data[key] = _resolve_if_relative(path_value, base_dir)
-
-            if train_runtime_data is not None:
-                train_out_dir = _coerce_path(train_runtime_data.get("out_dir"))
-                if train_out_dir is not None:
-                    shared_data["train_out_dir"] = train_out_dir
-
-            if sample_runtime_data is not None:
-                sample_out_dir = _coerce_path(sample_runtime_data.get("out_dir"))
-                if sample_out_dir is not None:
-                    shared_data["sample_out_dir"] = sample_out_dir
 
         return mutable_data
 
@@ -546,26 +579,23 @@ class SharedConfig(_FrozenStrictModel):
     def _resolve_shared_paths(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
-        typed_data = cast(Mapping[str, Any], data)
-        mutable_data = _clone_config(typed_data)
+        typed_data = cast(_ReadOnlyConfig, data)
+        mutable_data: _ConfigDict = _clone_config(typed_data)
 
-        cfg_path_value = mutable_data.get("config_path")
+        cfg_path_value = typed_data.get("config_path")
         cfg_path = _coerce_path(cfg_path_value)
         if cfg_path is None:
             return mutable_data
 
-        base_dir = cfg_path.parent
-        mutable_data["config_path"] = _resolve_if_relative(cfg_path, base_dir)
-
-        def norm(value: Any) -> Any:
-            path_value = _coerce_path(value)
-            if path_value is None:
-                return value
-            return _resolve_if_relative(path_value, base_dir)
+        resolved_cfg_path = _resolve_path_strict(cfg_path)
+        base_dir = resolved_cfg_path.parent
+        mutable_data["config_path"] = resolved_cfg_path
 
         for key in ("project_home", "dataset_dir", "train_out_dir", "sample_out_dir"):
-            if key in mutable_data:
-                mutable_data[key] = norm(mutable_data[key])
+            value = mutable_data.get(key)
+            path_value = _coerce_path(value)
+            if path_value is not None:
+                mutable_data[key] = _resolve_if_relative(path_value, base_dir)
         return mutable_data
 
     @field_validator(

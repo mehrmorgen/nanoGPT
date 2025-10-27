@@ -15,13 +15,13 @@ def test_shared_paths_resolve_relative_string_values(tmp_path: Path) -> None:
     data = {
         "experiment": "unit",
         "config_path": cfg_path,
-        "project_home": "..",  # relative string
-        "dataset_dir": "../data",  # relative string
-        "train_out_dir": "../out/train",  # relative string
-        "sample_out_dir": "../out/sample",  # relative string
+        "project_home": Path(".."),
+        "dataset_dir": Path("../data"),
+        "train_out_dir": Path("../out/train"),
+        "sample_out_dir": Path("../out/sample"),
     }
 
-    shared = SharedConfig(**data)
+    shared = SharedConfig.model_validate(data)
 
     assert shared.project_home.is_absolute()
     assert shared.dataset_dir.is_absolute()
@@ -56,7 +56,7 @@ def test_shared_paths_preserve_absolute_values(tmp_path: Path) -> None:
         "sample_out_dir": abs_sample,
     }
 
-    shared = SharedConfig(**data)
+    shared = SharedConfig.model_validate(data)
 
     assert shared.project_home == abs_home
     assert shared.dataset_dir == abs_ds
@@ -76,4 +76,4 @@ def test_shared_paths_missing_config_path_raises() -> None:
     }
 
     with pytest.raises(ValidationError):
-        SharedConfig(**data)
+        SharedConfig.model_validate(data)
