@@ -261,6 +261,12 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - make sure we run successfully on CI using the same pre-commit hook as we do locally
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 11.1, 11.2, 11.4_
 
+- [x] 7.5 Cleanup cache directory configuration
+  - make sure all tooling from pyproject.toml uses our .cache folder. we currently have at least .hypothesis folders, where they don't belong.
+  - remove the leftovers from our project folder
+  - run the tests to make sure we don't have any leftovers
+
+
 - [ ] 8. FUTURE: Integrate with ML workflow CLI (DELAYED until after base branch merge)
   - **NOTE: This phase should be delayed until the base branch strict mode work is complete**
   - Refactor existing `cli.py` to use shared ToolResult infrastructure

@@ -6,6 +6,7 @@ to all tests in the ml_playground test suite.
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
@@ -17,6 +18,9 @@ from hypothesis import settings
 from hypothesis.database import DirectoryBasedExampleDatabase
 
 from ml_playground.configuration.models import SharedConfig
+
+# Set Hypothesis storage directory before any Hypothesis imports or usage
+os.environ["HYPOTHESIS_STORAGE_DIRECTORY"] = ".cache/hypothesis"
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -41,32 +45,6 @@ settings.register_profile(
     database=DirectoryBasedExampleDatabase(Path(".cache/hypothesis")),
 )
 settings.load_profile("repo-default")
-
-
-def pytest_load_initial_conftests(args, early_config, parser) -> None:  # type: ignore[override]
-    """Early hook: ensure no top-level .hypothesis dir exists before collection.
-
-    Pre-commit runs pytest with -W error; Hypothesis plugin warns when it sees
-    a top-level .hypothesis dir skipped by norecursedirs. We remove it here to
-    avoid the warning entirely.
-    """
-    top = Path.cwd() / ".hypothesis"
-    try:
-        if top.exists():
-            # Safety: only remove if it's a directory inside repo root
-            if top.is_dir():
-                for p in sorted(top.rglob("*"), reverse=True):
-                    try:
-                        if p.is_file() or p.is_symlink():
-                            p.unlink(missing_ok=True)
-                        elif p.is_dir():
-                            p.rmdir()
-                    except Exception:
-                        pass
-                top.rmdir()
-    except Exception:
-        # Non-fatal: better to proceed than fail early
-        pass
 
 
 # ----------------------------------------------------------------------------
