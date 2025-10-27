@@ -100,3 +100,7 @@ def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
         if path.stat().st_size == 0:
             return False
     return True
+
+
+def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
+    return _artifacts_look_valid(outputs)

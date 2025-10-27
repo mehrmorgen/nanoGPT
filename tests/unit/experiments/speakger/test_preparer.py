@@ -4,7 +4,10 @@ import logging
 from pathlib import Path
 
 from ml_playground.configuration.models import PreparerConfig
-from ml_playground.experiments.speakger.preparer import SpeakGerPreparer, _config_path
+from ml_playground.experiments.speakger.preparer import (
+    SpeakGerPreparer,
+    config_path,
+)
 
 
 def test_speakger_preparer_creates_dataset_dir(tmp_path: Path) -> None:
@@ -62,7 +65,7 @@ def test_speakger_preparer_handles_existing_dir(tmp_path: Path) -> None:
 
 def test_config_path_returns_valid_path() -> None:
     """_config_path should return path to config.toml."""
-    path = _config_path()
+    path = config_path()
 
     assert isinstance(path, Path)
     assert path.name == "config.toml"
