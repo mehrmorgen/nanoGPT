@@ -13,15 +13,15 @@ from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _defaul
 
 class QualityTools:
     """Quality tools implementation."""
-    
+
     def __init__(
-        self, 
-        config: ToolsConfig, 
-        root_path: Path, 
-        subprocess_runner: Optional[SubprocessRunner] = None
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: Optional[SubprocessRunner] = None,
     ) -> None:
         """Initialize quality tools.
-        
+
         Args:
             config: Tool configuration
             root_path: Project root path
@@ -32,74 +32,70 @@ class QualityTools:
         self.pkg_path = root_path / "src" / "ml_playground"
         self.subprocess_runner = subprocess_runner or _default_runner
         self.learning_engine = LearningModeEngine()
-    
+
     @property
     def category(self) -> str:
         """Tool category identifier."""
         return "quality"
-    
+
     def lint(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Run Ruff lint checks.
-        
+
         Args:
             args: Additional ruff arguments
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="lint")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="lint"
+        )
+
         # Default to check mode, allow args to override
         ruff_args = ["ruff", "check", "."]
         if args:
             # Replace default args if user provides custom ones
             ruff_args = ["ruff", *args]
-        
+
         result = self.subprocess_runner.run_uv_command(
             ruff_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
                 command="lint",
                 context="Analyzing code for style violations and potential bugs",
                 category=self.category,
-                executed_commands=[" ".join(ruff_args)]
+                executed_commands=[" ".join(ruff_args)],
             )
-        
+
         return result
-    
+
     def format(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Format code with Ruff.
-        
+
         Args:
             args: Additional ruff arguments
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="format")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="format"
+        )
+
         # Run both check --fix and format
         # First, run check with --fix
         check_result = self.subprocess_runner.run_uv_command(
@@ -108,7 +104,7 @@ class QualityTools:
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         if not check_result.success:
             if learning_mode:
                 self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
@@ -116,10 +112,10 @@ class QualityTools:
                     command="format",
                     context="Automatically formatting code to match style standards",
                     category=self.category,
-                    executed_commands=[f"ruff check --fix . {' '.join(args)}".strip()]
+                    executed_commands=[f"ruff check --fix . {' '.join(args)}".strip()],
                 )
             return check_result
-        
+
         # Then run format
         format_result = self.subprocess_runner.run_uv_command(
             ["ruff", "format", ".", *args],
@@ -127,20 +123,20 @@ class QualityTools:
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         # Combine outputs
         combined_stdout = ""
         if check_result.stdout:
             combined_stdout += f"Ruff check --fix:\n{check_result.stdout}\n"
         if format_result.stdout:
             combined_stdout += f"Ruff format:\n{format_result.stdout}"
-        
+
         combined_stderr = ""
         if check_result.stderr:
             combined_stderr += f"Ruff check --fix errors:\n{check_result.stderr}\n"
         if format_result.stderr:
             combined_stderr += f"Ruff format errors:\n{format_result.stderr}"
-        
+
         result = ToolResult(
             success=format_result.success,
             exit_code=format_result.exit_code,
@@ -148,7 +144,7 @@ class QualityTools:
             stderr=combined_stderr,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
@@ -157,201 +153,195 @@ class QualityTools:
                 category=self.category,
                 executed_commands=[
                     f"ruff check --fix . {' '.join(args)}".strip(),
-                    f"ruff format . {' '.join(args)}".strip()
-                ]
+                    f"ruff format . {' '.join(args)}".strip(),
+                ],
             )
-        
+
         return result
-    
+
     def lint_check(self, args: List[str]) -> ToolResult:
         """Run Ruff in check-only mode (alias for lint).
-        
+
         Args:
             args: Additional ruff arguments
-            
+
         Returns:
             ToolResult with execution details
         """
         # This is an alias for lint command
         return self.lint(args)
-    
+
     def deadcode(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Scan for dead code using vulture.
-        
+
         Args:
             args: Additional vulture arguments
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="deadcode")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="deadcode"
+        )
+
         vulture_args = ["vulture", str(self.pkg_path), "--min-confidence", "90"]
         if args:
             vulture_args.extend(args)
-        
+
         result = self.subprocess_runner.run_uv_command(
             vulture_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
                 command="deadcode",
                 context="Scanning for unused code that can be safely removed",
                 category=self.category,
-                executed_commands=[" ".join(vulture_args)]
+                executed_commands=[" ".join(vulture_args)],
             )
-        
+
         return result
-    
+
     def basedpyright(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Run BasedPyright type checks.
-        
+
         Args:
             args: Additional basedpyright arguments
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="basedpyright")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="basedpyright"
+        )
+
         basedpyright_args = ["basedpyright", str(self.pkg_path)]
         if args:
             basedpyright_args.extend(args)
-        
+
         result = self.subprocess_runner.run_uv_command(
             basedpyright_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
                 command="basedpyright",
                 context="Performing static type checking using BasedPyright",
                 category=self.category,
-                executed_commands=[" ".join(basedpyright_args)]
+                executed_commands=[" ".join(basedpyright_args)],
             )
-        
+
         return result
-    
+
     def pyright(self, args: List[str]) -> ToolResult:
         """Run BasedPyright type checks (Pyright CLI alias).
-        
+
         Args:
             args: Additional basedpyright arguments
-            
+
         Returns:
             ToolResult with execution details
         """
         # This is an alias for basedpyright command
         return self.basedpyright(args)
-    
+
     def mypy(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Run Mypy type checks.
-        
+
         Args:
             args: Additional mypy arguments
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="mypy")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mypy"
+        )
+
         mypy_args = ["mypy", "--incremental", str(self.pkg_path)]
         if args:
             mypy_args.extend(args)
-        
+
         result = self.subprocess_runner.run_uv_command(
             mypy_args,
             cwd=self.root_path,
             timeout=self.config.quality.timeout,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
                 command="mypy",
                 context="Performing static type checking using MyPy",
                 category=self.category,
-                executed_commands=[" ".join(mypy_args)]
+                executed_commands=[" ".join(mypy_args)],
             )
-        
+
         return result
-    
+
     def typecheck(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Run both BasedPyright and Mypy type checks.
-        
+
         Args:
             args: Additional arguments (applied to both tools)
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="typecheck")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="typecheck"
+        )
+
         # Run BasedPyright first
         basedpyright_result = self.basedpyright(args)
-        
+
         # Run Mypy regardless of BasedPyright result
         mypy_result = self.mypy(args)
-        
+
         # Combine results
         combined_stdout = ""
         if basedpyright_result.stdout:
             combined_stdout += f"BasedPyright:\n{basedpyright_result.stdout}\n"
         if mypy_result.stdout:
             combined_stdout += f"Mypy:\n{mypy_result.stdout}"
-        
+
         combined_stderr = ""
         if basedpyright_result.stderr:
             combined_stderr += f"BasedPyright errors:\n{basedpyright_result.stderr}\n"
         if mypy_result.stderr:
             combined_stderr += f"Mypy errors:\n{mypy_result.stderr}"
-        
+
         # Success only if both succeed
         success = basedpyright_result.success and mypy_result.success
-        exit_code = 0 if success else (basedpyright_result.exit_code or mypy_result.exit_code)
-        
+        exit_code = (
+            0 if success else (basedpyright_result.exit_code or mypy_result.exit_code)
+        )
+
         result = ToolResult(
             success=success,
             exit_code=exit_code,
@@ -359,7 +349,7 @@ class QualityTools:
             stderr=combined_stderr,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
@@ -368,59 +358,57 @@ class QualityTools:
                 category=self.category,
                 executed_commands=[
                     f"basedpyright {self.pkg_path} {' '.join(args)}".strip(),
-                    f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip()
-                ]
+                    f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip(),
+                ],
             )
-        
+
         return result
-    
+
     def all_checks(
-        self, 
-        args: List[str], 
-        *, 
-        learning_mode: bool = False, 
-        verbosity_level: int = 1
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Run all quality checks (lint, typecheck, deadcode).
-        
+
         Args:
             args: Additional arguments (applied to all tools)
             learning_mode: Whether to enable educational output
             verbosity_level: Level of detail for learning mode (0-2)
-            
+
         Returns:
             ToolResult with execution details and learning information
         """
-        operation_id = OperationId(namespace="tools", category=self.category, command="all")
-        
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="all"
+        )
+
         # Run all quality checks
         lint_result = self.lint(args)
         typecheck_result = self.typecheck(args)
         deadcode_result = self.deadcode(args)
-        
+
         # Combine results
         results = [
             ("Lint", lint_result),
             ("Typecheck", typecheck_result),
             ("Deadcode", deadcode_result),
         ]
-        
+
         combined_stdout = ""
         combined_stderr = ""
         all_success = True
         final_exit_code = 0
-        
+
         for name, result in results:
             if result.stdout:
                 combined_stdout += f"{name}:\n{result.stdout}\n"
             if result.stderr:
                 combined_stderr += f"{name} errors:\n{result.stderr}\n"
-            
+
             if not result.success:
                 all_success = False
                 if final_exit_code == 0:
                     final_exit_code = result.exit_code
-        
+
         result = ToolResult(
             success=all_success,
             exit_code=final_exit_code,
@@ -428,7 +416,7 @@ class QualityTools:
             stderr=combined_stderr,
             operation_id=operation_id,
         )
-        
+
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
@@ -439,8 +427,8 @@ class QualityTools:
                     f"ruff check . {' '.join(args)}".strip(),
                     f"basedpyright {self.pkg_path} {' '.join(args)}".strip(),
                     f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip(),
-                    f"vulture {self.pkg_path} --min-confidence 90 {' '.join(args)}".strip()
-                ]
+                    f"vulture {self.pkg_path} --min-confidence 90 {' '.join(args)}".strip(),
+                ],
             )
-        
+
         return result

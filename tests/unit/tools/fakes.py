@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -13,22 +11,22 @@ from ml_playground.tools.core.interfaces import OperationId, ToolResult
 
 class FakeSubprocessRunner:
     """Fake subprocess runner for testing."""
-    
+
     def __init__(self) -> None:
         """Initialize fake subprocess runner."""
         self.calls: List[Dict[str, Any]] = []
         self.results: List[ToolResult] = []
         self.current_result_index = 0
-    
+
     def set_results(self, results: List[ToolResult]) -> None:
         """Set the results to return for subsequent calls."""
         self.results = results
         self.current_result_index = 0
-    
+
     def add_result(self, result: ToolResult) -> None:
         """Add a single result to return."""
         self.results.append(result)
-    
+
     def run_subprocess(
         self,
         command: List[str],
@@ -41,21 +39,23 @@ class FakeSubprocessRunner:
     ) -> ToolResult:
         """Fake subprocess execution."""
         # Record the call
-        self.calls.append({
-            "command": command,
-            "cwd": cwd,
-            "env": env,
-            "timeout": timeout,
-            "operation_id": operation_id,
-            "capture_output": capture_output,
-        })
-        
+        self.calls.append(
+            {
+                "command": command,
+                "cwd": cwd,
+                "env": env,
+                "timeout": timeout,
+                "operation_id": operation_id,
+                "capture_output": capture_output,
+            }
+        )
+
         # Return pre-configured result
         if self.current_result_index < len(self.results):
             result = self.results[self.current_result_index]
             self.current_result_index += 1
             return result
-        
+
         # Default success result if no results configured
         return ToolResult(
             success=True,
@@ -64,7 +64,7 @@ class FakeSubprocessRunner:
             stderr="",
             operation_id=operation_id,
         )
-    
+
     def run_uv_command(
         self,
         args: List[str],
@@ -87,7 +87,7 @@ class FakeSubprocessRunner:
         if python:
             command.extend(["--python", python])
         command.extend(args)
-        
+
         return self.run_subprocess(
             command,
             cwd=cwd,
@@ -95,7 +95,7 @@ class FakeSubprocessRunner:
             timeout=timeout,
             operation_id=operation_id,
         )
-    
+
     def run_pytest_command(
         self,
         args: List[str],
@@ -106,7 +106,15 @@ class FakeSubprocessRunner:
         operation_id: OperationId,
     ) -> ToolResult:
         """Fake pytest command execution."""
-        pytest_base = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
+        pytest_base = [
+            "-q",
+            "-n",
+            "auto",
+            "-W",
+            "error",
+            "--strict-markers",
+            "--strict-config",
+        ]
         return self.run_uv_command(
             ["pytest", *pytest_base, *args],
             cwd=cwd,
@@ -118,108 +126,110 @@ class FakeSubprocessRunner:
 
 class FakeFilesystem:
     """Fake filesystem for testing."""
-    
+
     def __init__(self) -> None:
         """Initialize fake filesystem."""
         self.files: Dict[str, bytes] = {}
         self.directories: set[str] = set()
         self.removed_paths: List[str] = []
         self.created_paths: List[str] = []
-    
-    def create_file(self, path: Union[str, Path], content: Union[str, bytes] = b"") -> None:
+
+    def create_file(
+        self, path: Union[str, Path], content: Union[str, bytes] = b""
+    ) -> None:
         """Create a fake file."""
         path_str = str(path)
         if isinstance(content, str):
             content = content.encode("utf-8")
         self.files[path_str] = content
         self.created_paths.append(path_str)
-        
+
         # Ensure parent directories exist
         parent = str(Path(path_str).parent)
         if parent != path_str:  # Not root
             self.directories.add(parent)
-    
+
     def create_directory(self, path: Union[str, Path]) -> None:
         """Create a fake directory."""
         path_str = str(path)
         self.directories.add(path_str)
         self.created_paths.append(path_str)
-    
+
     def exists(self, path: Union[str, Path]) -> bool:
         """Check if path exists."""
         path_str = str(path)
         return path_str in self.files or path_str in self.directories
-    
+
     def is_file(self, path: Union[str, Path]) -> bool:
         """Check if path is a file."""
         return str(path) in self.files
-    
+
     def is_dir(self, path: Union[str, Path]) -> bool:
         """Check if path is a directory."""
         return str(path) in self.directories
-    
+
     def read_text(self, path: Union[str, Path]) -> str:
         """Read file content as text."""
         path_str = str(path)
         if path_str not in self.files:
             raise FileNotFoundError(f"No such file: {path_str}")
         return self.files[path_str].decode("utf-8")
-    
+
     def read_bytes(self, path: Union[str, Path]) -> bytes:
         """Read file content as bytes."""
         path_str = str(path)
         if path_str not in self.files:
             raise FileNotFoundError(f"No such file: {path_str}")
         return self.files[path_str]
-    
+
     def write_text(self, path: Union[str, Path], content: str) -> None:
         """Write text content to file."""
         self.create_file(path, content.encode("utf-8"))
-    
+
     def write_bytes(self, path: Union[str, Path], content: bytes) -> None:
         """Write bytes content to file."""
         self.create_file(path, content)
-    
+
     def unlink(self, path: Union[str, Path]) -> None:
         """Remove a file."""
         path_str = str(path)
         if path_str in self.files:
             del self.files[path_str]
             self.removed_paths.append(path_str)
-    
+
     def rmtree(self, path: Union[str, Path]) -> None:
         """Remove a directory tree."""
         path_str = str(path)
-        
+
         # Remove the directory itself
         if path_str in self.directories:
             self.directories.remove(path_str)
             self.removed_paths.append(path_str)
-        
+
         # Remove all files and subdirectories under this path
         to_remove_files = []
         to_remove_dirs = []
-        
+
         for file_path in self.files:
             if file_path.startswith(path_str + "/") or file_path == path_str:
                 to_remove_files.append(file_path)
-        
+
         for dir_path in self.directories:
             if dir_path.startswith(path_str + "/") or dir_path == path_str:
                 to_remove_dirs.append(dir_path)
-        
+
         for file_path in to_remove_files:
             del self.files[file_path]
             self.removed_paths.append(file_path)
-        
+
         for dir_path in to_remove_dirs:
             self.directories.remove(dir_path)
             self.removed_paths.append(dir_path)
-    
+
     def mkdir(self, path: Union[str, Path], parents: bool = False) -> None:
         """Create a directory."""
         path_str = str(path)
-        
+
         if parents:
             # Create all parent directories
             parts = Path(path_str).parts
@@ -228,49 +238,51 @@ class FakeFilesystem:
                 self.directories.add(parent_path)
         else:
             self.directories.add(path_str)
-        
+
         self.created_paths.append(path_str)
-    
+
     def iterdir(self, path: Union[str, Path]) -> List[Path]:
         """List directory contents."""
         path_str = str(path)
         if path_str not in self.directories:
             raise FileNotFoundError(f"No such directory: {path_str}")
-        
+
         contents = []
-        
+
         # Find direct children
         for file_path in self.files:
             if Path(file_path).parent == Path(path_str):
                 contents.append(Path(file_path))
-        
+
         for dir_path in self.directories:
             if Path(dir_path).parent == Path(path_str):
                 contents.append(Path(dir_path))
-        
+
         return sorted(contents)
-    
+
     def glob(self, path: Union[str, Path], pattern: str) -> List[Path]:
         """Glob pattern matching."""
         path_str = str(path)
         results = []
-        
+
         # Simple pattern matching for common cases
         if pattern == "*":
             return self.iterdir(path_str)
         elif pattern.endswith("*"):
             prefix = pattern[:-1]
             for file_path in self.files:
-                if Path(file_path).parent == Path(path_str) and Path(file_path).name.startswith(prefix):
+                if Path(file_path).parent == Path(path_str) and Path(
+                    file_path
+                ).name.startswith(prefix):
                     results.append(Path(file_path))
-        
+
         return sorted(results)
-    
+
     def rglob(self, path: Union[str, Path], pattern: str) -> List[Path]:
         """Recursive glob pattern matching."""
         path_str = str(path)
         results = []
-        
+
         # Simple recursive pattern matching
         if pattern == "*":
             # All files and directories under path
@@ -283,11 +295,13 @@ class FakeFilesystem:
         elif pattern == "__pycache__":
             # Find all __pycache__ directories
             for dir_path in self.directories:
-                if (dir_path.startswith(path_str + "/") or dir_path == path_str) and dir_path.endswith("__pycache__"):
+                if (
+                    dir_path.startswith(path_str + "/") or dir_path == path_str
+                ) and dir_path.endswith("__pycache__"):
                     results.append(Path(dir_path))
-        
+
         return sorted(results)
-    
+
     def stat_size(self, path: Union[str, Path]) -> int:
         """Get file size."""
         path_str = str(path)
@@ -298,23 +312,25 @@ class FakeFilesystem:
 
 class FakeJsonHandler:
     """Fake JSON handler for testing."""
-    
+
     def __init__(self, filesystem: FakeFilesystem) -> None:
         """Initialize with filesystem fake."""
         self.filesystem = filesystem
-    
+
     def load(self, file_path: Union[str, Path]) -> Any:
         """Load JSON from fake file."""
         content = self.filesystem.read_text(file_path)
         return json.loads(content)
-    
+
     def dump(self, data: Any, file_path: Union[str, Path]) -> None:
         """Dump JSON to fake file."""
         content = json.dumps(data, indent=2)
         self.filesystem.write_text(file_path, content)
 
 
-def create_success_result(operation_id: OperationId, stdout: str = "", stderr: str = "") -> ToolResult:
+def create_success_result(
+    operation_id: OperationId, stdout: str = "", stderr: str = ""
+) -> ToolResult:
     """Create a successful ToolResult."""
     return ToolResult(
         success=True,
@@ -325,7 +341,9 @@ def create_success_result(operation_id: OperationId, stdout: str = "", stderr: s
     )
 
 
-def create_failure_result(operation_id: OperationId, exit_code: int = 1, stdout: str = "", stderr: str = "") -> ToolResult:
+def create_failure_result(
+    operation_id: OperationId, exit_code: int = 1, stdout: str = "", stderr: str = ""
+) -> ToolResult:
     """Create a failed ToolResult."""
     return ToolResult(
         success=False,

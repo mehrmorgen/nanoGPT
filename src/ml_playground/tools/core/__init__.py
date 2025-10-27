@@ -20,7 +20,7 @@ from ml_playground.tools.core.errors import (
 __all__ = [
     "ToolInterface",
     "ToolResult",
-    "OperationId", 
+    "OperationId",
     "LearningInfo",
     "ToolExecutionError",
     "ToolConfigurationError",
