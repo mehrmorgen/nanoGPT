@@ -236,27 +236,6 @@ def format_command(command: List[str]) -> str:
     return " ".join(shlex.quote(arg) for arg in command)
 
 
-def validate_command_available(command: str) -> bool:
-    """Check if a command is available in the system PATH.
-    
-    Args:
-        command: Command name to check
-        
-    Returns:
-        True if command is available, False otherwise
-    """
-    try:
-        subprocess.run(
-            [command, "--version"],
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-        return True
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
 # Global instance for backward compatibility
 _default_runner = RealSubprocessRunner()
 
