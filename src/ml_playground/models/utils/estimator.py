@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Tuple, cast
+from typing import Any, Dict, Literal, Tuple
 
 import torch
 
@@ -11,7 +11,6 @@ from ml_playground.models.core.model import GPT
 __all__ = ["estimate_loss"]
 
 
-@torch.no_grad()
 def estimate_loss(
     model: GPT, batches: SimpleBatches, eval_iters: int, ctx: Any
 ) -> Dict[str, float]:
@@ -19,13 +18,15 @@ def estimate_loss(
     out: Dict[str, float] = {}
     model.eval()
     splits: Tuple[Literal["train"], Literal["val"]] = ("train", "val")
-    for split in splits:
-        losses = torch.zeros(eval_iters, dtype=torch.float32)
-        for k in range(eval_iters):
-            X, Y = batches.get_batch(cast(Literal["train", "val"], split))
-            with ctx:
-                _, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean().item()
+    with torch.no_grad():
+        for split in splits:
+            split_name: Literal["train", "val"] = split
+            losses = torch.zeros(eval_iters, dtype=torch.float32)
+            for k in range(eval_iters):
+                X, Y = batches.get_batch(split_name)
+                with ctx:
+                    _, loss = model(X, Y)
+                losses[k] = loss.item()
+            out[split_name] = losses.mean().item()
     model.train()
     return out

@@ -62,3 +62,25 @@ def test_diff_file_states_tracks_created_updated_and_skipped(tmp_path: Path) -> 
     assert updated == {updated_path}
     assert skipped == {unchanged_path}
     assert removed_path not in created | updated | skipped
+
+
+def test_snapshot_file_states_handles_disappearing_path(tmp_path: Path) -> None:
+    base = tmp_path / "vanish"
+
+    class VanishingPath(type(base)):  # type: ignore[misc]
+        def __new__(cls, inner: Path) -> "VanishingPath":  # type: ignore[override]
+            self = Path.__new__(cls, str(inner))
+            self._inner = inner
+            self._calls = 0
+            return self
+
+        def exists(self, *, follow_symlinks: bool = True) -> bool:  # type: ignore[override]
+            self._calls += 1
+            return self._calls == 1
+
+        def stat(self, *, follow_symlinks: bool = True):  # type: ignore[override]
+            raise OSError("stat failed")
+
+    ghost = VanishingPath(base)
+    states = snapshot_file_states([ghost])
+    assert states[ghost] == (False, 0.0, 0)

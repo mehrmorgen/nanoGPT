@@ -4,7 +4,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Callable, Optional, cast
 
 import torch
 import typer
@@ -22,12 +22,13 @@ from ml_playground.configuration import cli as config_cli
 from ml_playground.data_pipeline.preparer import create_pipeline
 from ml_playground.sampling.runner import Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.experiments import registry
 
 # (Removed unused type aliases)
 
 
-__all__ = ["main"]
+__all__ = ["main", "_run_prepare", "_run_train", "_run_sample"]
 
 
 @dataclass(frozen=True)
@@ -116,22 +117,28 @@ def default_cli_dependencies() -> CLIDependencies:
     )
 
 
-_CLI_DEPENDENCIES: CLIDependencies = default_cli_dependencies()
+class _DependencyContext:
+    __slots__ = ("value",)
+
+    def __init__(self) -> None:
+        self.value: CLIDependencies = default_cli_dependencies()
+
+
+_CLI_DEP_CONTEXT = _DependencyContext()
 
 
 def get_cli_dependencies() -> CLIDependencies:
-    return _CLI_DEPENDENCIES
+    return _CLI_DEP_CONTEXT.value
 
 
 @contextmanager
 def override_cli_dependencies(deps: CLIDependencies):
-    global _CLI_DEPENDENCIES
-    previous = _CLI_DEPENDENCIES
-    _CLI_DEPENDENCIES = deps
+    previous = _CLI_DEP_CONTEXT.value
+    _CLI_DEP_CONTEXT.value = deps
     try:
         yield
     finally:
-        _CLI_DEPENDENCIES = previous
+        _CLI_DEP_CONTEXT.value = previous
 
 
 # --- Global device setup ---------------------------------------------------
@@ -147,14 +154,16 @@ def _global_device_setup(
     Centralizes side-effectful setup so other modules don't repeat it.
     """
     try:
-        torch.manual_seed(seed)
+        manual_seed = cast(Callable[[int], object], torch.manual_seed)
+        manual_seed(seed)
         _cuda_available = (
             cuda_is_available()
             if cuda_is_available is not None
             else torch.cuda.is_available()
         )
         if _cuda_available:
-            torch.cuda.manual_seed(seed)
+            cuda_manual_seed = cast(Callable[[int], None], torch.cuda.manual_seed)
+            cuda_manual_seed(seed)
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
     except (RuntimeError, AttributeError, OSError):
@@ -180,9 +189,16 @@ def _extract_exp_config(ctx: typer.Context) -> Path | None:
             "Context object missing or not a dict; no exp_config."
         )
         return None
-    exp_config = obj.get("exp_config")
-    logging.getLogger(__name__).debug("Context exp_config resolved to %s", exp_config)
-    return exp_config
+    mapping = cast(dict[str, object], obj)
+    exp_config_obj = mapping.get("exp_config")
+    logger = logging.getLogger(__name__)
+    logger.debug("Context exp_config resolved to %s", exp_config_obj)
+    if exp_config_obj is None:
+        return None
+    if isinstance(exp_config_obj, Path):
+        return exp_config_obj
+    logger.debug("Unexpected exp_config value type %s; ignoring.", type(exp_config_obj))
+    return None
 
 
 def run_or_exit(
@@ -219,28 +235,39 @@ def run_or_exit(
         raise typer.Exit(exception_exit_code)
 
 
-def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
+def _log_dir(
+    tag: str,
+    dir_name: str,
+    dir_path: Path | None,
+    logger: LoggerLike,
+) -> None:
     """Log information about a directory path."""
     if dir_path is None:
         logger.info(f"[{tag}] {dir_name}: <not set>")
-    elif isinstance(dir_path, Path):
-        if dir_path.exists():
-            try:
-                contents = sorted([p.name for p in dir_path.iterdir()])
-                logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
-                logger.info(f"[{tag}]   Contents: {contents}")
-            except (OSError, PermissionError):
-                # If listing fails, still indicate existence
-                logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
-        else:
-            logger.info(f"[{tag}] {dir_name} (missing): {dir_path}")
+        return
+
+    if not isinstance(dir_path, Path):
+        return
+
+    if dir_path.exists():
+        try:
+            contents = sorted([p.name for p in dir_path.iterdir()])
+            logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
+            logger.info(f"[{tag}]   Contents: {contents}")
+        except (OSError, PermissionError):
+            logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
+    else:
+        logger.info(f"[{tag}] {dir_name} (missing): {dir_path}")
 
 
 # --- Command runners -------------------------------------------------------
 
 
 def _log_command_status(
-    tag: str, shared: "SharedConfig", out_dir: Path, logger
+    tag: str,
+    shared: "SharedConfig",
+    out_dir: Path,
+    logger: LoggerLike,
 ) -> None:
     """Log known file-based artifacts for the given config."""
     try:
