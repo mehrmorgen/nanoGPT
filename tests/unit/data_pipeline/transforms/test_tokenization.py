@@ -249,32 +249,11 @@ class TestCreateStandardizedMetadataExceptions:
 
     def test_metadata_creation_with_missing_stoi(self) -> None:
         """Test handling when tokenizer lacks stoi attribute, covering guarded lookup."""
-
-        # Define a minimal tokenizer without 'stoi' in this scope
-        class MockTokenizerLocal(Tokenizer):
-            def __init__(self) -> None:
-                self._name = "char"
-                self._vocab_size = 100
-
-            @property
-            def name(self) -> str:
-                return self._name
-
-            @property
-            def vocab_size(self) -> int:
-                return self._vocab_size
-
-            @property
-            def vocab(self) -> Mapping[str, int]:  # pragma: no cover - unused
-                return {}
-
-            def encode(self, text: str) -> list[int]:  # pragma: no cover - unused
-                return []
-
-            def decode(self, token_ids: list[int]) -> str:  # pragma: no cover - unused
-                return ""
-
-        fake_tokenizer = MockTokenizerLocal()
+        fake_tokenizer = self.FakeTokenizer(name="char")
+        # Remove the stoi attribute to simulate a tokenizer without it
+        delattr(fake_tokenizer, "stoi")
+        # Ensure no stoi attribute
+        assert not hasattr(fake_tokenizer, "stoi")
 
         meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"

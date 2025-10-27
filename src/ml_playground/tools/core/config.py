@@ -233,7 +233,7 @@ def _load_pyproject_toml(project_root: Path) -> Dict[str, Any]:
     return data
 
 
-def load_tools_config(project_root: Path = None) -> ToolsConfig:
+def load_tools_config(project_root: Path | None = None) -> ToolsConfig:
     """Load tools configuration from pyproject.toml.
 
     Args:
@@ -278,7 +278,7 @@ def load_tools_config(project_root: Path = None) -> ToolsConfig:
         ) from e
 
 
-def get_tool_config(category: str, project_root: Path = None) -> ToolConfig:
+def get_tool_config(category: str, project_root: Path | None = None) -> ToolConfig:
     """Get configuration for a specific tool category.
 
     Args:

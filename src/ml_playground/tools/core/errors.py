@@ -81,7 +81,7 @@ class TimeoutError(ToolExecutionError):
 
 
 def handle_subprocess_failure(
-    command: str, exit_code: int, stderr: str, timeout_seconds: int = None
+    command: str, exit_code: int, stderr: str, timeout_seconds: int | None = None
 ) -> None:
     """Handle subprocess execution failure with structured error information.
 
@@ -128,7 +128,9 @@ def handle_subprocess_failure(
 
 
 def handle_configuration_error(
-    setting_name: str, setting_value: str = None, expected_type: str = None
+    setting_name: str,
+    setting_value: str | None = None,
+    expected_type: str | None = None,
 ) -> None:
     """Handle configuration validation failure.
 
@@ -162,7 +164,9 @@ def handle_configuration_error(
 
 
 def handle_dependency_error(
-    dependency_name: str, required_version: str = None, found_version: str = None
+    dependency_name: str,
+    required_version: str | None = None,
+    found_version: str | None = None,
 ) -> None:
     """Handle dependency validation failure.
 

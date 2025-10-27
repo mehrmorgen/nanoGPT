@@ -52,7 +52,7 @@ repos:
       - -c
       - |
         set -euo pipefail
-        uv run basedpyright -p pyrightconfig.standard.json src/ml_playground
+        uv run basedpyright --level error src/ml_playground
     language: system
     pass_filenames: false
 - repo: local

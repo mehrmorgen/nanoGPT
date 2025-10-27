@@ -2,7 +2,7 @@ name: Quality Gates
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
 
 concurrency:
@@ -25,7 +25,7 @@ jobs:
       - id: setup-python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
       - id: setup-uv
         uses: astral-sh/setup-uv@v6
         with:
@@ -80,4 +80,3 @@ jobs:
             git status --short docs/assets/coverage*.svg || true
             exit 1
           fi
-

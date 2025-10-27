@@ -114,7 +114,7 @@ class ToolResult(BaseModel):
         command: str,
         stdout: str = "",
         stderr: str = "",
-        learning_info: LearningInfo = None,
+        learning_info: LearningInfo | None = None,
     ) -> "ToolResult":
         """Factory method to create ToolResult with validated operation_id."""
         if learning_info is None:

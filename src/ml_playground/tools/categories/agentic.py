@@ -152,7 +152,7 @@ class AgenticTools:
         test_results = self._run_test_batch()
 
         # Combine results
-        batch_results = {
+        batch_results: Dict[str, Any] = {
             "timestamp": self._get_timestamp(),
             "project_root": str(self.root_path),
             "quality_checks": quality_results,
@@ -469,7 +469,11 @@ This is a machine learning playground project with the following key components:
             }
             if not lint_result.success:
                 overall_success = False
-                total_issues += results["lint"]["issues"]
+                issues_count = results["lint"]["issues"]
+                if isinstance(issues_count, list):
+                    total_issues += len(issues_count)
+                else:
+                    total_issues += int(issues_count)
         except Exception as e:
             results["lint"] = {"status": "error", "error": str(e)}
             overall_success = False
@@ -489,7 +493,11 @@ This is a machine learning playground project with the following key components:
             }
             if not typecheck_result.success:
                 overall_success = False
-                total_issues += results["typecheck"]["errors"]
+                errors_count = results["typecheck"]["errors"]
+                if isinstance(errors_count, list):
+                    total_issues += len(errors_count)
+                else:
+                    total_issues += int(errors_count)
         except Exception as e:
             results["typecheck"] = {"status": "error", "error": str(e)}
             overall_success = False
@@ -509,7 +517,11 @@ This is a machine learning playground project with the following key components:
             }
             if not deadcode_result.success:
                 overall_success = False
-                total_issues += results["deadcode"]["unused_items"]
+                unused_count = results["deadcode"]["unused_items"]
+                if isinstance(unused_count, list):
+                    total_issues += len(unused_count)
+                else:
+                    total_issues += int(unused_count)
         except Exception as e:
             results["deadcode"] = {"status": "error", "error": str(e)}
             overall_success = False
@@ -580,18 +592,22 @@ This is a machine learning playground project with the following key components:
                 coverage_result = testing_tools.coverage_report([], verbose=False)
                 results["coverage"] = {
                     "status": "available",
-                    "line_pct": self._extract_coverage_percentage(
-                        coverage_result.stdout, "line"
+                    "line_pct": int(
+                        self._extract_coverage_percentage(
+                            coverage_result.stdout, "line"
+                        )
                     ),
-                    "branch_pct": self._extract_coverage_percentage(
-                        coverage_result.stdout, "branch"
+                    "branch_pct": int(
+                        self._extract_coverage_percentage(
+                            coverage_result.stdout, "branch"
+                        )
                     ),
                 }
             else:
                 results["coverage"] = {
                     "status": "not_available",
-                    "line_pct": 0.0,
-                    "branch_pct": 0.0,
+                    "line_pct": 0,
+                    "branch_pct": 0,
                     "note": "Run 'uv run tools test coverage-test' to generate coverage data",
                 }
         except Exception as e:
@@ -936,7 +952,7 @@ This is a machine learning playground project with the following key components:
 
     def _run_validation_batch(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Run validation batch based on configuration."""
-        results = {
+        results: Dict[str, Any] = {
             "timestamp": self._get_timestamp(),
             "validation_level": config,
             "quality_results": {},
@@ -983,7 +999,7 @@ This is a machine learning playground project with the following key components:
         quality_tools = QualityTools(
             self.config, self.root_path, self.subprocess_runner
         )
-        results = {"checks": {}, "success": True, "issues": []}
+        results: Dict[str, Any] = {"checks": {}, "success": True, "issues": []}
 
         for check in checks:
             try:
@@ -1020,7 +1036,7 @@ This is a machine learning playground project with the following key components:
         testing_tools = TestingTools(
             self.config, self.root_path, self.subprocess_runner
         )
-        results = {"tests": {}, "success": True, "issues": []}
+        results: Dict[str, Any] = {"tests": {}, "success": True, "issues": []}
 
         for test_type in test_types:
             try:
@@ -1060,7 +1076,7 @@ This is a machine learning playground project with the following key components:
         testing_tools = TestingTools(
             self.config, self.root_path, self.subprocess_runner
         )
-        results = {"success": True, "issues": [], "coverage": {}}
+        results: Dict[str, Any] = {"success": True, "issues": [], "coverage": {}}
 
         try:
             coverage_file = testing_tools._coverage_file()
@@ -1226,7 +1242,7 @@ This is a machine learning playground project with the following key components:
         git_status: Dict[str, Any],
     ) -> List[str]:
         """Get list of blocking issues."""
-        issues = []
+        issues: List[str] = []
 
         if quality_status.get("overall_status") != "passed":
             issues.append(

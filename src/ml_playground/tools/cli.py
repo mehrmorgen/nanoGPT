@@ -7,7 +7,7 @@ all development tools under logical subcommands with learning mode support.
 import logging
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import typer
 from typing_extensions import Annotated
@@ -16,7 +16,7 @@ from ml_playground.tools.categories.ci import CITools
 from ml_playground.tools.categories.environment import EnvironmentTools
 from ml_playground.tools.categories.quality import QualityTools
 from ml_playground.tools.categories.testing import TestingTools
-from ml_playground.tools.core.config import load_tools_config
+from ml_playground.tools.core.config import load_tools_config, ToolsConfig
 from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutionError
 
 # Set up logging
@@ -86,21 +86,22 @@ class GlobalState:
         self.verbosity: int = 1
         self.dry_run: bool = False
         self.project_root: Optional[Path] = None
-        self.config = None
+        self.config: Optional[ToolsConfig] = None
+        self._learning_mode_set: bool = False
 
 
 # Global state instance
 state = GlobalState()
 
 
-def load_config_with_error_handling(project_root: Path = None) -> None:
+def load_config_with_error_handling(project_root: Path | None = None) -> None:
     """Load configuration with proper error handling."""
     try:
         state.config = load_tools_config(project_root)
         state.project_root = project_root
 
         # Apply default learning mode from config if not explicitly set
-        if not hasattr(state, "_learning_mode_set"):
+        if not state._learning_mode_set and state.config is not None:
             state.learning_mode = state.config.learning_mode_default
             state.verbosity = state.config.default_verbosity
 
@@ -115,14 +116,14 @@ def load_config_with_error_handling(project_root: Path = None) -> None:
 @app.callback()
 def main(
     learning_mode: Annotated[
-        bool,
+        Optional[bool],
         typer.Option(
             "--learning-mode/--no-learning-mode",
             help="Enable learning mode to show underlying commands and explanations",
         ),
     ] = None,
     verbosity: Annotated[
-        int,
+        Optional[int],
         typer.Option(
             "--verbosity",
             "-v",
@@ -172,6 +173,7 @@ def _get_quality_tools() -> QualityTools:
     """Get quality tools instance."""
     if state.config is None:
         load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
     return QualityTools(state.config, state.project_root or Path.cwd())
 
 
@@ -179,6 +181,7 @@ def _get_testing_tools() -> TestingTools:
     """Get testing tools instance."""
     if state.config is None:
         load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
     return TestingTools(state.config, state.project_root or Path.cwd())
 
 
@@ -186,6 +189,7 @@ def _get_environment_tools() -> EnvironmentTools:
     """Get environment tools instance."""
     if state.config is None:
         load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
     return EnvironmentTools(state.config, state.project_root or Path.cwd())
 
 
@@ -193,6 +197,7 @@ def _get_ci_tools() -> CITools:
     """Get CI tools instance."""
     if state.config is None:
         load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
     return CITools(state.config, state.project_root or Path.cwd())
 
 
@@ -202,6 +207,7 @@ def _get_agentic_tools():
 
     if state.config is None:
         load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
     return AgenticTools(state.config, state.project_root or Path.cwd())
 
 
@@ -1082,7 +1088,7 @@ def learn_commands(
     """Show available commands with descriptions and usage examples."""
 
     # Command catalog with descriptions and examples
-    command_catalog = {
+    command_catalog: Dict[str, Dict[str, Any]] = {
         "quality": {
             "description": "Code quality tools (lint, format, typecheck)",
             "commands": {
@@ -1612,6 +1618,10 @@ def show_config() -> None:
     """Show current configuration."""
     if state.config is None:
         load_config_with_error_handling()
+
+    if state.config is None:
+        typer.echo("Configuration not loaded", err=True)
+        raise typer.Exit(1)
 
     typer.echo("Current tools configuration:")
     typer.echo(f"  Learning mode default: {state.config.learning_mode_default}")
