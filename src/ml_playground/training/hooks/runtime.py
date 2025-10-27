@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import ContextManager, Any, Callable
+from typing import ContextManager, Any, Callable, cast
 
 import torch
 from torch import autocast
@@ -30,6 +30,16 @@ _PT_DTYPES: dict[str, torch.dtype] = {
 }
 
 
+def _manual_seed(seed: int) -> None:
+    manual_seed_func = cast(Callable[[int], None], torch.manual_seed)
+    manual_seed_func(seed)
+
+
+def _cuda_manual_seed(seed: int) -> None:
+    manual_seed_func = cast(Callable[[int], None], torch.cuda.manual_seed)
+    manual_seed_func(seed)
+
+
 def setup_runtime(
     cfg: TrainerConfig,
     *,
@@ -41,7 +51,7 @@ def setup_runtime(
 
     Optional callables allow injecting test doubles for CUDA availability, seeding, and autocast creation.
     """
-    torch.manual_seed(cfg.runtime.seed)
+    _manual_seed(int(cfg.runtime.seed))
     try:
         cuda_available = (
             cuda_available_func()
@@ -50,9 +60,9 @@ def setup_runtime(
         )
         if cuda_available:
             (
-                cuda_seed_func(cfg.runtime.seed)
+                cuda_seed_func(int(cfg.runtime.seed))
                 if cuda_seed_func is not None
-                else torch.cuda.manual_seed(cfg.runtime.seed)
+                else _cuda_manual_seed(int(cfg.runtime.seed))
             )
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True

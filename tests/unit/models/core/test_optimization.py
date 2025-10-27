@@ -10,8 +10,8 @@ from ml_playground.models.core import optimization
 class _TinyModel(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.linear = torch.nn.Linear(4, 4, bias=True)
-        self.scalar = torch.nn.Parameter(torch.tensor(1.0))
+        self.linear: torch.nn.Linear = torch.nn.Linear(4, 4, bias=True)
+        self.scalar: torch.nn.Parameter = torch.nn.Parameter(torch.tensor(1.0))
 
 
 class _ListLogger:
@@ -19,7 +19,8 @@ class _ListLogger:
         self.messages: list[str] = []
 
     def info(self, message: str, *args: Any) -> None:
-        self.messages.append(message % args if args else message)
+        formatted = message % args if args else message
+        self.messages.append(formatted)
 
 
 def _flatten_params(

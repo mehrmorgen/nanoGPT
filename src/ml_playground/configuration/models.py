@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Callable, Literal, Optional, TYPE_CHECKING
+from typing import Annotated, Any, Callable, Literal, Optional, TYPE_CHECKING, cast
 import typing as _t
 
 from pydantic import (
@@ -399,39 +399,49 @@ class ExperimentConfig(_FrozenStrictModel):
         if not isinstance(data, dict):
             return data
 
-        shared_data = data.get("shared", {})
+        mutable_data = cast("dict[str, Any]", data)
+
+        shared_obj = mutable_data.get("shared")
+        shared_data: dict[str, Any] | None = None
         config_path = None
-        if isinstance(shared_data, dict):
+        if isinstance(shared_obj, dict):
+            shared_data = cast("dict[str, Any]", shared_obj)
             config_path = shared_data.get("config_path")
-        elif hasattr(shared_data, "config_path"):
-            config_path = shared_data.config_path
+        elif hasattr(shared_obj, "config_path"):
+            config_candidate = getattr(shared_obj, "config_path", None)
+            if isinstance(config_candidate, Path):
+                config_path = config_candidate
         if not config_path or not isinstance(config_path, Path):
             return data
 
         base_dir = config_path.parent
 
-        if isinstance(data.get("train"), dict):
-            runtime_data = data["train"].get("runtime")
-            if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
-                od = runtime_data["out_dir"]
-                if isinstance(od, str):
-                    runtime_data["out_dir"] = Path(od)
+        def _normalize_runtime_out_dir(section: str) -> dict[str, Any] | None:
+            section_data = mutable_data.get(section)
+            if not isinstance(section_data, dict):
+                return None
+            section_dict = cast("dict[str, Any]", section_data)
+            runtime_candidate = section_dict.get("runtime")
+            if not isinstance(runtime_candidate, dict):
+                return None
+            runtime_data = cast("dict[str, Any]", runtime_candidate)
+            out_dir = runtime_data.get("out_dir")
+            if isinstance(out_dir, str):
+                runtime_data["out_dir"] = Path(out_dir)
+            return runtime_data
 
-        if isinstance(data.get("sample"), dict):
-            runtime_data = data["sample"].get("runtime")
-            if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
-                od = runtime_data["out_dir"]
-                if isinstance(od, str):
-                    runtime_data["out_dir"] = Path(od)
+        train_runtime_data = _normalize_runtime_out_dir("train")
+        sample_runtime_data = _normalize_runtime_out_dir("sample")
 
-        if isinstance(data.get("prepare"), dict):
-            prepare_data = data["prepare"]
+        prepare_section = mutable_data.get("prepare")
+        if isinstance(prepare_section, dict):
+            prepare_data = cast("dict[str, Any]", prepare_section)
             if "raw_dir" in prepare_data:
                 prepare_data["raw_dir"] = _resolve_if_relative(
                     prepare_data["raw_dir"], base_dir
                 )
 
-        if isinstance(shared_data, dict):
+        if shared_data is not None:
             for key in (
                 "dataset_dir",
                 "train_out_dir",
@@ -443,34 +453,33 @@ class ExperimentConfig(_FrozenStrictModel):
                 if isinstance(v, str):
                     shared_data[key] = Path(v)
 
-            train_runtime_data = data.get("train", {}).get("runtime", {})
-            if isinstance(train_runtime_data, dict):
+            if train_runtime_data is not None:
                 train_out_dir = train_runtime_data.get("out_dir")
                 if train_out_dir:
                     shared_data["train_out_dir"] = (
                         Path(train_out_dir)
                         if isinstance(train_out_dir, str)
-                        else train_out_dir
+                        else cast(Path, train_out_dir)
                     )
 
-            sample_runtime_data = data.get("sample", {}).get("runtime", {})
-            if isinstance(sample_runtime_data, dict):
+            if sample_runtime_data is not None:
                 sample_out_dir = sample_runtime_data.get("out_dir")
                 if sample_out_dir:
                     shared_data["sample_out_dir"] = (
                         Path(sample_out_dir)
                         if isinstance(sample_out_dir, str)
-                        else sample_out_dir
+                        else cast(Path, sample_out_dir)
                     )
 
-            prepare_data = data.get("prepare")
-            if isinstance(prepare_data, dict):
-                dataset_dir = prepare_data.pop("dataset_dir", None)
+            prepare_data_for_shared = mutable_data.get("prepare")
+            if isinstance(prepare_data_for_shared, dict):
+                prepare_dict = cast("dict[str, Any]", prepare_data_for_shared)
+                dataset_dir = prepare_dict.pop("dataset_dir", None)
                 if dataset_dir:
                     shared_data["dataset_dir"] = (
                         Path(dataset_dir)
                         if isinstance(dataset_dir, str)
-                        else dataset_dir
+                        else cast(Path, dataset_dir)
                     )
 
         return data
