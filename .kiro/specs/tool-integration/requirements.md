@@ -40,9 +40,11 @@ This document specifies the requirements for integrating the external tooling fr
 
 1. THE Tool_Integration_System SHALL include comprehensive unit tests for all tool functionality
 2. THE Tool_Integration_System SHALL achieve the same coverage thresholds as the main `ml_playground` module
-3. THE Tool_Integration_System SHALL follow the project's strict typing requirements with explicit type hints
-4. THE Tool_Integration_System SHALL adhere to the PEP 420 namespace policy and import guidelines
-5. THE Tool_Integration_System SHALL pass all quality gates including ruff, mypy, and BasedPyright checks
+3. THE Tool_Integration_System SHALL follow the project's no-mocking policy with absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, or `monkeypatch`
+4. THE Tool_Integration_System SHALL follow the project's strict typing requirements with explicit type hints
+5. THE Tool_Integration_System SHALL use dependency injection and lightweight in-memory fakes exclusively for testing external boundaries
+6. THE Tool_Integration_System SHALL adhere to the PEP 420 namespace policy and import guidelines
+7. THE Tool_Integration_System SHALL pass all quality gates including ruff, mypy, and BasedPyright checks
 
 ### Requirement 3
 

@@ -15,6 +15,16 @@ The base branch is currently working on removing all BasedPyright warnings and e
 
 **AFTER completing each task**: Create a commit with the completed work. Each task should result in exactly one commit following the project's commit standards (granular commits, TDD pairing, quality gates passing).
 
+## Critical Testing Guidelines
+
+**NO MOCKING POLICY (STRICTLY ENFORCED)**:
+- Absolutely NO `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, or `monkeypatch` anywhere in tests
+- Use dependency injection and lightweight in-memory fakes exclusively
+- Design production code with DI seams for external boundaries (subprocess, filesystem, time, network)
+- Create seamable adapters for external dependencies following project patterns
+- Tests must exercise the same public API and code paths used in production
+- Pre-commit hooks will reject any code containing forbidden mocking tokens
+
 - [x] 1. Set up core infrastructure and interfaces
   - Create the basic module structure under `src/ml_playground/tools/`
   - Implement core interfaces (ToolInterface, ToolResult, OperationId) with Pydantic validation
@@ -86,40 +96,47 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Implement help text and argument validation
   - _Requirements: 1.1, 1.4, 7.1, 7.2_
 
-- [x] 2.5 Write comprehensive unit tests for testing and quality tools
-  - Create tests under `tests/unit/tools/categories/` for testing.py and quality.py
+- [ ] 2.5 REFACTOR: Remove mocks from existing tests and implement dependency injection
+  - **CRITICAL: Current tests use mocks - MUST be refactored to comply with testing guidelines**
+  - **NO MOCKING ALLOWED**: Remove all `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
+  - Refactor production code to use dependency injection for external boundaries (subprocess, filesystem)
+  - Create lightweight in-memory fakes for subprocess execution and filesystem operations
+  - Implement seamable adapters for external boundaries following project patterns
+  - Ensure tests exercise the same public API and code paths used in production
   - Implement property-based tests for argument validation and execution
   - Achieve 100% line and branch coverage for implemented functionality
   - Use explicit type annotations in all test code for strict mode compatibility
   - _Requirements: 2.1, 2.2_
 
-- [ ] 3. Implement environment and CI tools
+- [-] 3. Implement environment and CI tools
   - Migrate environment management from tools/env_tasks.py
   - Migrate CI functionality from tools/ci_tasks.py
   - Implement these using the established patterns from Phase 2
   - _Requirements: 5.2, 5.3, 11.1, 11.2_
 
-- [ ] 3.1 Implement environment tools category
+- [x] 3.1 Implement environment tools category
   - Create `src/ml_playground/tools/categories/environment.py` with setup, sync, verify, clean commands
   - Add support for dependency group selection and environment validation
   - Implement cache management and cleanup operations
   - _Requirements: 5.2, 8.1, 8.2_
 
-- [ ] 3.2 Implement CI tools category
+- [x] 3.2 Implement CI tools category
   - Create `src/ml_playground/tools/categories/ci.py` with quality-gate, mutation, badges commands
   - Add support for coverage reporting and badge generation
   - Implement mutation testing integration with Cosmic Ray
   - _Requirements: 5.1, 11.1, 11.2, 11.4_
 
-- [ ] 3.3 Add CLI commands for environment and CI
+- [x] 3.3 Add CLI commands for environment and CI
   - Register environment commands under `uv run tools env` subcommand group
   - Register CI commands under `uv run tools ci` subcommand group
   - Implement comprehensive help and usage examples
   - _Requirements: 1.1, 1.4, 7.1, 7.2_
 
-- [ ] 3.4 Write unit tests for environment and CI tools
+- [x] 3.4 Write unit tests for environment and CI tools
+  - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Create comprehensive test coverage for environment.py and ci.py
-  - Use dependency injection to avoid external dependencies in tests
+  - Use dependency injection and lightweight in-memory fakes exclusively
+  - Design production code with DI seams for external boundaries (subprocess, filesystem)
   - Validate configuration loading and error handling
   - _Requirements: 2.1, 2.2_
 
@@ -148,9 +165,11 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - _Requirements: 10.1, 10.2, 10.5_
 
 - [ ] 4.4 Write unit tests for learning mode
+  - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test learning mode engine functionality and output generation
   - Validate educational content accuracy and formatting
   - Test verbosity level behavior and command explanations
+  - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
 - [ ] 5. Implement agentic tools for AI-assisted development
@@ -178,9 +197,11 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - _Requirements: 1.1, 4.6, 7.1, 7.2_
 
 - [ ] 5.4 Write unit tests for agentic tools
+  - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test AI workflow command functionality and batch operations
   - Validate structured output generation and format compliance
   - Test extensibility mechanisms for future tool additions
+  - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
 - [ ] 6. Complete tools module with comprehensive learning mode
@@ -202,9 +223,11 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - _Requirements: 10.3, 10.4, 7.1, 7.2_
 
 - [ ] 6.3 Write unit tests for complete tools module
+  - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test comprehensive educational content accuracy and completeness
   - Validate all tool categories and their interactions
   - Ensure 100% coverage for the entire tools module
+  - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
 - [ ] 7. Update CI workflows and documentation (tools module only)
@@ -257,7 +280,9 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - _Requirements: 10.3, 10.4_
 
 - [ ] 8.4 FUTURE: Write unit tests for ML CLI integration
+  - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test ToolResult integration with existing ML workflow commands
   - Validate learning mode functionality for ML operations
   - Test shared configuration management and error handling
+  - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_

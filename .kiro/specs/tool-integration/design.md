@@ -515,7 +515,8 @@ Following the existing ultra-strict testing standards with 100% coverage require
 - **Coverage**: 100% line and branch coverage requirement (NO EXCEPTIONS)
 - **Structure**: `tests/unit/tools/` mirroring `src/ml_playground/tools/` layout
 - **Property-based first**: Start with Hypothesis properties, add example tests for clarity
-- **No mocking**: Use dependency injection and fakes exclusively, no monkeypatching
+- **NO MOCKING**: Strictly forbidden - no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, or `monkeypatch`
+- **Dependency injection and fakes only**: Use lightweight in-memory fakes and DI seams in production code
 
 ### Property-Based Testing
 
@@ -571,7 +572,9 @@ tests/
 - **TDD**: Write failing test first, implement minimal code, refactor
 - **No test-specific code paths**: Production code must never contain test-only branches
 - **Deterministic**: All tests must pass 100% reliably, zero flaky test tolerance
-- **Dependency injection**: Use fakes for external boundaries (subprocess, filesystem, time)
+- **NO MOCKING**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, or `monkeypatch`
+- **Dependency injection and fakes only**: Use lightweight in-memory fakes and DI seams in production code
+- **External boundaries**: For subprocess, filesystem, time - use deterministic fakes or seamable adapters
 - **Coverage gates**: 100% line and branch coverage from unit + property suites only
 
 ## Implementation Phases
