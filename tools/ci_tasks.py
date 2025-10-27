@@ -50,22 +50,27 @@ def _coverage_file_env(coverage_file: Path) -> dict[str, str]:
 
 def _read_coverage_thresholds_from_config() -> tuple[float, float]:
     """Read coverage thresholds from pyproject.toml configuration.
-    
+
     Returns:
         Tuple of (line_threshold, branch_threshold)
     """
     pyproject_path = Path("pyproject.toml")
     if not pyproject_path.exists():
         return 0.0, 0.0
-    
+
     try:
         with open(pyproject_path, "rb") as f:
             config = tomllib.load(f)
-        
-        thresholds = config.get("tool", {}).get("ml_playground", {}).get("coverage", {}).get("thresholds", {})
+
+        thresholds = (
+            config.get("tool", {})
+            .get("ml_playground", {})
+            .get("coverage", {})
+            .get("thresholds", {})
+        )
         line_threshold = float(thresholds.get("line_threshold", 0.0))
         branch_threshold = float(thresholds.get("branch_threshold", 0.0))
-        
+
         return line_threshold, branch_threshold
     except (tomllib.TOMLDecodeError, ValueError, KeyError):
         return 0.0, 0.0
@@ -210,30 +215,19 @@ def coverage_report(
 
 @app.command("coverage-threshold")
 def coverage_threshold(
-    line_threshold: float = typer.Option(
-        None,
-        "--line-threshold",
-        help="Fail if total line coverage is below this percentage. If not provided, reads from pyproject.toml.",
-    ),
-    branch_threshold: float = typer.Option(
-        None,
-        "--branch-threshold",
-        help="Fail if total branch coverage is below this percentage. If not provided, reads from pyproject.toml.",
-    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
         help="Print computed coverage totals.",
     ),
 ) -> None:
-    """Fail when coverage metrics drop below configured thresholds."""
-    # Read from config if thresholds not explicitly provided
-    if line_threshold is None or branch_threshold is None:
-        config_line, config_branch = _read_coverage_thresholds_from_config()
-        if line_threshold is None:
-            line_threshold = config_line
-        if branch_threshold is None:
-            branch_threshold = config_branch
+    """Fail when coverage metrics drop below configured thresholds from pyproject.toml."""
+    # Always read thresholds from config
+    line_threshold, branch_threshold = _read_coverage_thresholds_from_config()
+    
+    if line_threshold == 0.0 and branch_threshold == 0.0:
+        typer.echo("[coverage] No thresholds configured in pyproject.toml [tool.ml_playground.coverage.thresholds]", err=True)
+        raise typer.Exit(1)
     dest_cov = utils.coverage_file()
     if not dest_cov.exists():
         typer.echo(
