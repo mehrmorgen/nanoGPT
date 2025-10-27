@@ -730,5 +730,174 @@ class LearningModeEngine:
                     "Code quality metrics and monitoring",
                     "Team standards and enforcement"
                 ]
+            },
+            
+            # Agentic tools educational content
+            "agentic.guidelines-setup": {
+                "minimal_explanation": "Sets up AI development guidelines and configuration files",
+                "standard_explanation": [
+                    "Creates AI guidelines and project context files for consistent AI-assisted development",
+                    "Establishes standards for AI workflow integration and code review",
+                    "Provides templates for AI agents to understand project conventions"
+                ],
+                "comprehensive_explanation": [
+                    "AI guidelines setup creates structured documentation for AI-assisted development workflows",
+                    "It establishes clear standards for how AI tools should be used in the project",
+                    "The guidelines include coding standards, testing requirements, and quality gates",
+                    "Project context files help AI agents understand the codebase structure and conventions",
+                    "This setup ensures consistent and effective AI-human collaboration in development"
+                ],
+                "best_practices": [
+                    "Review and customize AI guidelines to match your team's specific needs",
+                    "Keep guidelines updated as project conventions evolve",
+                    "Train team members on AI workflow standards",
+                    "Use guidelines as input for AI agent prompts and instructions"
+                ],
+                "related_concepts": [
+                    "AI-assisted development workflows",
+                    "Human-AI collaboration patterns",
+                    "Code review automation",
+                    "Development process standardization"
+                ]
+            },
+            
+            "agentic.batch-review": {
+                "minimal_explanation": "Runs batch operations for AI consumption and analysis",
+                "standard_explanation": [
+                    "Executes multiple quality checks and formats results for AI agents",
+                    "Provides structured output suitable for automated analysis",
+                    "Combines quality and test results into comprehensive reports"
+                ],
+                "comprehensive_explanation": [
+                    "Batch review operations are designed for AI agent consumption and decision-making",
+                    "They run comprehensive quality checks and test suites in a single operation",
+                    "Results are formatted in structured formats (JSON, YAML) for programmatic analysis",
+                    "This enables AI agents to make informed decisions about code quality and readiness",
+                    "Batch operations are optimized for efficiency and provide consistent output formats"
+                ],
+                "best_practices": [
+                    "Use batch operations for automated quality gates in CI/CD pipelines",
+                    "Parse structured output programmatically for decision-making",
+                    "Combine batch results with human review for critical changes",
+                    "Monitor batch operation performance and optimize as needed"
+                ],
+                "related_concepts": [
+                    "Automated quality assurance",
+                    "CI/CD pipeline integration",
+                    "Structured data formats for automation",
+                    "AI-driven development workflows"
+                ]
+            },
+            
+            "agentic.workflow-helper": {
+                "minimal_explanation": "Provides workflow templates for AI-assisted development patterns",
+                "standard_explanation": [
+                    "Generates command sequences for common AI development workflows",
+                    "Provides templates for different development scenarios (minimal, standard, strict)",
+                    "Includes best practices and guidance for AI-assisted development"
+                ],
+                "comprehensive_explanation": [
+                    "Workflow helpers provide structured templates for AI-assisted development patterns",
+                    "They define command sequences and best practices for different development scenarios",
+                    "Templates range from minimal (rapid iteration) to strict (comprehensive validation)",
+                    "Each workflow includes specific commands, timing, and quality gates appropriate for the scenario",
+                    "This standardization helps teams adopt consistent AI-assisted development practices"
+                ],
+                "best_practices": [
+                    "Choose workflow templates that match your development phase and requirements",
+                    "Customize templates to fit your specific project needs and constraints",
+                    "Use strict workflows for production-ready code and minimal for experimentation",
+                    "Document any deviations from standard workflows for team awareness"
+                ],
+                "related_concepts": [
+                    "Development workflow standardization",
+                    "Quality gate configuration",
+                    "AI-assisted development best practices",
+                    "Template-driven development processes"
+                ]
+            },
+            
+            "agentic.batch-quality": {
+                "minimal_explanation": "Runs automated quality checks optimized for AI agent analysis",
+                "standard_explanation": [
+                    "Executes comprehensive quality checks with structured output",
+                    "Provides detailed results suitable for automated decision-making",
+                    "Optimized for AI agent consumption and workflow integration"
+                ],
+                "comprehensive_explanation": [
+                    "Batch quality operations provide comprehensive quality analysis for AI agents",
+                    "They run all quality checks (linting, type checking, dead code analysis) in a coordinated manner",
+                    "Results are structured and formatted for easy programmatic consumption",
+                    "This enables AI agents to understand code quality status and make informed recommendations",
+                    "The batch approach is more efficient than running individual quality checks separately"
+                ],
+                "best_practices": [
+                    "Use batch quality checks as input for AI-driven code review processes",
+                    "Integrate results into automated quality gates and decision systems",
+                    "Monitor quality trends over time using batch operation data",
+                    "Combine automated checks with human oversight for critical decisions"
+                ],
+                "related_concepts": [
+                    "Automated code quality assessment",
+                    "AI-driven code review",
+                    "Quality metrics and monitoring",
+                    "Structured quality reporting"
+                ]
+            },
+            
+            "agentic.batch-validate": {
+                "minimal_explanation": "Runs comprehensive validation at different levels for AI decision-making",
+                "standard_explanation": [
+                    "Performs validation with configurable levels (minimal, standard, strict)",
+                    "Combines quality checks, testing, and coverage validation",
+                    "Provides structured feedback for AI-assisted development decisions"
+                ],
+                "comprehensive_explanation": [
+                    "Batch validation provides comprehensive project validation at different strictness levels",
+                    "It combines quality checks, test execution, and coverage analysis in a single operation",
+                    "Different validation levels (minimal, standard, strict) suit different development phases",
+                    "Results include detailed feedback on what passed, failed, and needs attention",
+                    "This comprehensive approach helps AI agents make informed decisions about code readiness"
+                ],
+                "best_practices": [
+                    "Use minimal validation for rapid development and experimentation",
+                    "Apply standard validation for regular development workflows",
+                    "Require strict validation for production releases and critical changes",
+                    "Use validation results to guide AI recommendations and automated decisions"
+                ],
+                "related_concepts": [
+                    "Multi-level quality assurance",
+                    "Configurable validation pipelines",
+                    "AI-driven development decisions",
+                    "Comprehensive project health assessment"
+                ]
+            },
+            
+            "agentic.workflow-status": {
+                "minimal_explanation": "Provides comprehensive workflow status for AI decision-making",
+                "standard_explanation": [
+                    "Gathers current development state including git, quality, and test status",
+                    "Provides readiness indicators for merge and deployment decisions",
+                    "Formats status information for AI agent consumption and analysis"
+                ],
+                "comprehensive_explanation": [
+                    "Workflow status provides a comprehensive view of current development state",
+                    "It includes git status, quality metrics, test results, and coverage information",
+                    "The status assessment includes readiness indicators for various development milestones",
+                    "This information helps AI agents understand project state and make appropriate recommendations",
+                    "Status data is structured for easy programmatic analysis and decision-making"
+                ],
+                "best_practices": [
+                    "Use workflow status as input for AI-driven development recommendations",
+                    "Monitor status trends to identify development bottlenecks and issues",
+                    "Integrate status checks into automated workflow and decision systems",
+                    "Combine automated status with human judgment for critical decisions"
+                ],
+                "related_concepts": [
+                    "Development state monitoring",
+                    "AI-driven workflow optimization",
+                    "Project health dashboards",
+                    "Automated development decision support"
+                ]
             }
         }

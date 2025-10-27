@@ -173,31 +173,31 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
-- [ ] 5. Implement agentic tools for AI-assisted development
+- [x] 5. Implement agentic tools for AI-assisted development
   - Create specialized commands for AI workflow support
   - Add batch operation capabilities and structured output formats
   - Implement workflow helpers for common AI development patterns
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 5.1 Implement agentic tools category
+- [x] 5.1 Implement agentic tools category
   - Create `src/ml_playground/tools/categories/agentic.py` with AI workflow commands
   - Add guidelines setup, batch review, and workflow helper commands
   - Implement structured output formats (JSON, YAML) for AI consumption
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 5.2 Add batch operation capabilities
+- [x] 5.2 Add batch operation capabilities
   - Implement batch processing for common development tasks
   - Add support for automated quality checks triggered by AI agents
   - Create workflow templates for AI-assisted development patterns
   - _Requirements: 4.2, 4.4_
 
-- [ ] 5.3 Add CLI commands for agentic tools
+- [x] 5.3 Add CLI commands for agentic tools
   - Register agentic commands under `uv run tools agentic` subcommand group
   - Implement extensible command structure for future AI use cases
   - Add comprehensive help and usage examples
   - _Requirements: 1.1, 4.6, 7.1, 7.2_
 
-- [ ] 5.4 Write unit tests for agentic tools
+- [x] 5.4 Write unit tests for agentic tools
   - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test AI workflow command functionality and batch operations
   - Validate structured output generation and format compliance

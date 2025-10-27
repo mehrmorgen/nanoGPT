@@ -8,12 +8,14 @@ This package contains the concrete implementations of different tool categories:
 - Agentic tools (AI-assisted development workflows)
 """
 
+from .agentic import AgenticTools
 from .ci import CITools
 from .environment import EnvironmentTools
 from .quality import QualityTools
 from .testing import TestingTools
 
 __all__ = [
+    "AgenticTools",
     "CITools",
     "EnvironmentTools", 
     "QualityTools",

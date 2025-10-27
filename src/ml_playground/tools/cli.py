@@ -195,6 +195,14 @@ def _get_ci_tools() -> CITools:
     return CITools(state.config, state.project_root or Path.cwd())
 
 
+def _get_agentic_tools():
+    """Get agentic tools instance."""
+    from ml_playground.tools.categories.agentic import AgenticTools
+    if state.config is None:
+        load_config_with_error_handling()
+    return AgenticTools(state.config, state.project_root or Path.cwd())
+
+
 def _handle_tool_result(result) -> None:
     """Handle tool result and exit appropriately."""
     if result.stdout:
@@ -940,11 +948,161 @@ def ci_mutation_run(
         raise typer.Exit(1)
 
 
-@agentic_app.command("guidelines")
-def agentic_guidelines() -> None:
-    """Set up AI guidelines (placeholder - will be implemented in phase 5)."""
-    typer.echo("Agentic guidelines command - not yet implemented")
-    typer.echo("This will be implemented in phase 5: Agentic Tools")
+# Agentic commands
+@agentic_app.command("guidelines-setup")
+def agentic_guidelines_setup(
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for guideline setup")
+    ] = None,
+) -> None:
+    """Set up AI development guidelines and configuration."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.guidelines_setup(
+            args or [], 
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@agentic_app.command("batch-review")
+def agentic_batch_review(
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format (json, yaml, text)")
+    ] = "json",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for batch operations")
+    ] = None,
+) -> None:
+    """Perform batch review operations for AI consumption."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.batch_review(
+            args or [], 
+            output_format=output_format,
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@agentic_app.command("workflow-helper")
+def agentic_workflow_helper(
+    workflow_type: Annotated[
+        str,
+        typer.Option("--type", help="Workflow type (standard, strict, minimal)")
+    ] = "standard",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for workflow generation")
+    ] = None,
+) -> None:
+    """Provide workflow helpers for common AI development patterns."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.workflow_helper(
+            args or [], 
+            workflow_type=workflow_type,
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@agentic_app.command("batch-quality")
+def agentic_batch_quality(
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format (json, yaml, text)")
+    ] = "json",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for quality checks")
+    ] = None,
+) -> None:
+    """Run automated quality checks for AI agent consumption."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.batch_quality(
+            args or [], 
+            output_format=output_format,
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@agentic_app.command("batch-validate")
+def agentic_batch_validate(
+    validation_level: Annotated[
+        str,
+        typer.Option("--level", help="Validation level (minimal, standard, strict)")
+    ] = "standard",
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format (json, yaml, text)")
+    ] = "json",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for validation")
+    ] = None,
+) -> None:
+    """Run comprehensive validation for AI-assisted development."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.batch_validate(
+            args or [], 
+            validation_level=validation_level,
+            output_format=output_format,
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@agentic_app.command("workflow-status")
+def agentic_workflow_status(
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format (json, yaml, text)")
+    ] = "json",
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Additional arguments for status checking")
+    ] = None,
+) -> None:
+    """Get current workflow status for AI decision-making."""
+    try:
+        tools = _get_agentic_tools()
+        result = tools.workflow_status(
+            args or [], 
+            output_format=output_format,
+            learning_mode=state.learning_mode, 
+            verbosity_level=state.verbosity
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @learn_app.command("commands")
