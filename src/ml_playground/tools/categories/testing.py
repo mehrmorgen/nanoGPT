@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
 
 
@@ -34,6 +35,7 @@ class TestingTools:
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
         self.subprocess_runner = subprocess_runner or _default_runner
+        self.learning_engine = LearningModeEngine()
     
     @property
     def category(self) -> str:
@@ -65,122 +67,244 @@ class TestingTools:
             "COVERAGE_FILE": str(coverage_file),
         }
     
-    def unit(self, args: List[str]) -> ToolResult:
+    def unit(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run unit tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="unit")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["tests/unit", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="unit",
+                context="Running unit tests to verify individual components work correctly",
+                category=self.category,
+                executed_commands=[f"pytest tests/unit {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def integration(self, args: List[str]) -> ToolResult:
+    def integration(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run integration tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="integration")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["-m", "integration", "--no-cov", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="integration",
+                context="Running integration tests to verify components work together correctly",
+                category=self.category,
+                executed_commands=[f"pytest -m integration --no-cov {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def e2e(self, args: List[str]) -> ToolResult:
+    def e2e(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run end-to-end tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="e2e")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["tests/e2e", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="e2e",
+                context="Running end-to-end tests to verify complete user workflows",
+                category=self.category,
+                executed_commands=[f"pytest tests/e2e {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def acceptance(self, args: List[str]) -> ToolResult:
+    def acceptance(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run acceptance tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="acceptance")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["tests/acceptance", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="acceptance",
+                context="Running acceptance tests to validate business requirements",
+                category=self.category,
+                executed_commands=[f"pytest tests/acceptance {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def property_tests(self, args: List[str]) -> ToolResult:
+    def property_tests(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run property-based tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="property")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["tests/property", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="property",
+                context="Running property-based tests to find edge cases with random inputs",
+                category=self.category,
+                executed_commands=[f"pytest tests/property {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def all_tests(self, args: List[str]) -> ToolResult:
+    def all_tests(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run all tests.
         
         Args:
             args: Additional pytest arguments
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="all")
         
-        return self.subprocess_runner.run_pytest_command(
+        result = self.subprocess_runner.run_pytest_command(
             ["tests", *args],
             cwd=self.root_path,
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="all",
+                context="Running complete test suite for comprehensive validation",
+                category=self.category,
+                executed_commands=[f"pytest tests {' '.join(args)}".strip()]
+            )
+        
+        return result
     
-    def coverage_test(self, args: List[str]) -> ToolResult:
+    def coverage_test(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Run tests with coverage collection.
         
         Args:
             args: Additional arguments (ignored for coverage test)
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="coverage-test")
         
@@ -198,7 +322,7 @@ class TestingTools:
         env = self._coverage_env(coverage_file)
         
         # Run coverage with pytest
-        return self.subprocess_runner.run_uv_command(
+        result = self.subprocess_runner.run_uv_command(
             [
                 "coverage",
                 "run",
@@ -215,12 +339,26 @@ class TestingTools:
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="coverage-test",
+                context="Running tests while measuring code coverage to identify untested code",
+                category=self.category,
+                executed_commands=[f"coverage run --data-file={coverage_file} -m pytest -n 0 tests/unit tests/property"]
+            )
+        
+        return result
     
     def coverage_report(
         self, 
         args: List[str], 
         fail_under: float = 0.0, 
-        verbose: bool = False
+        verbose: bool = False,
+        *,
+        learning_mode: bool = False,
+        verbosity_level: int = 1
     ) -> ToolResult:
         """Generate coverage reports.
         
@@ -228,9 +366,11 @@ class TestingTools:
             args: Additional arguments (ignored)
             fail_under: Minimum coverage threshold
             verbose: Whether to show verbose output
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="coverage-report")
         
@@ -291,20 +431,39 @@ class TestingTools:
             if artifacts:
                 output += "\n\nCoverage artifacts:\n" + "\n".join(artifacts)
         
-        return ToolResult(
+        result = ToolResult(
             success=True,
             exit_code=0,
             stdout=output,
             stderr="",
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="coverage-report",
+                context="Generating coverage reports in multiple formats for analysis",
+                category=self.category,
+                executed_commands=[
+                    "coverage report -m",
+                    "coverage html",
+                    "coverage json", 
+                    "coverage xml"
+                ]
+            )
+        
+        return result
     
     def coverage_threshold(
         self, 
         args: List[str], 
         line_threshold: float = 0.0, 
         branch_threshold: float = 0.0,
-        verbose: bool = False
+        verbose: bool = False,
+        *,
+        learning_mode: bool = False,
+        verbosity_level: int = 1
     ) -> ToolResult:
         """Check coverage thresholds.
         
@@ -313,9 +472,11 @@ class TestingTools:
             line_threshold: Minimum line coverage percentage
             branch_threshold: Minimum branch coverage percentage
             verbose: Whether to show verbose output
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="coverage-threshold")
         
@@ -391,30 +552,60 @@ class TestingTools:
         
         if messages:
             error_output = "\n".join(f"[coverage] {msg}" for msg in messages)
-            return ToolResult(
+            result = ToolResult(
                 success=False,
                 exit_code=1,
                 stdout=output,
                 stderr=error_output,
                 operation_id=operation_id,
             )
+            
+            if learning_mode:
+                self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+                result.learning_info = self.learning_engine.explain_command(
+                    command="coverage-threshold",
+                    context="Checking coverage thresholds to enforce quality standards",
+                    category=self.category,
+                    executed_commands=["coverage json"]
+                )
+            
+            return result
         
-        return ToolResult(
+        result = ToolResult(
             success=True,
             exit_code=0,
             stdout=output,
             stderr="",
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="coverage-threshold",
+                context="Checking coverage thresholds to enforce quality standards",
+                category=self.category,
+                executed_commands=["coverage json"]
+            )
+        
+        return result
     
-    def clean(self, args: List[str]) -> ToolResult:
+    def clean(
+        self, 
+        args: List[str], 
+        *, 
+        learning_mode: bool = False, 
+        verbosity_level: int = 1
+    ) -> ToolResult:
         """Clean test artifacts and caches.
         
         Args:
             args: Additional arguments (ignored)
+            learning_mode: Whether to enable educational output
+            verbosity_level: Level of detail for learning mode (0-2)
             
         Returns:
-            ToolResult with execution details
+            ToolResult with execution details and learning information
         """
         operation_id = OperationId(namespace="tools", category=self.category, command="clean")
         
@@ -439,10 +630,21 @@ class TestingTools:
         if cleaned:
             output += ":\n" + "\n".join(f"  - {path}" for path in cleaned)
         
-        return ToolResult(
+        result = ToolResult(
             success=True,
             exit_code=0,
             stdout=output,
             stderr="",
             operation_id=operation_id,
         )
+        
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="clean",
+                context="Cleaning test artifacts and caches to ensure clean test environment",
+                category=self.category,
+                executed_commands=[f"Removed {len(cleaned)} artifact paths"]
+            )
+        
+        return result
