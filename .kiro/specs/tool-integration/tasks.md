@@ -231,7 +231,7 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
-- [ ] 7. Update CI workflows and documentation (tools module only)
+- [-] 7. Update CI workflows and documentation (tools module only)
   - Update GitHub Actions workflows to use `uv run tools` commands
   - Update documentation references to new tool commands
   - Keep changes focused on tooling references only
