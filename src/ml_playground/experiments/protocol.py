@@ -50,18 +50,18 @@ class SampleReport(_SideEffectBase):
 
 
 class Preparer(Protocol):
-    def prepare(self, cfg: PreparerConfig) -> PrepareReport: ...
+    def prepare(self, cfg: PreparerConfig) -> PrepareReport: ...  # pragma: no branch
 
 
 class Trainer(Protocol):
-    def train(self, cfg: TrainerConfig) -> TrainReport: ...
+    def train(self, cfg: TrainerConfig) -> TrainReport: ...  # pragma: no branch
 
 
 class Sampler(Protocol):
-    def sample(self, cfg: SamplerConfig) -> SampleReport: ...
+    def sample(self, cfg: SamplerConfig) -> SampleReport: ...  # pragma: no branch
 
 
 class ExperimentIntegration(Protocol):
-    def get_preparer(self) -> Preparer: ...
-    def get_trainer(self) -> Trainer: ...
-    def get_sampler(self) -> Sampler: ...
+    def get_preparer(self) -> Preparer: ...  # pragma: no branch
+    def get_trainer(self) -> Trainer: ...  # pragma: no branch
+    def get_sampler(self) -> Sampler: ...  # pragma: no branch

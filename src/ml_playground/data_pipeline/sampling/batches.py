@@ -51,8 +51,11 @@ def sample_batch(
     x_np = np.asarray(x_np, dtype=np.int64)
     y_np = np.asarray(y_np, dtype=np.int64)
 
-    x = torch.from_numpy(x_np).to(device)
-    y = torch.from_numpy(y_np).to(device)
+    x_arr: npt.NDArray[np.int64] = x_np
+    y_arr: npt.NDArray[np.int64] = y_np
+
+    x: torch.Tensor = torch.from_numpy(x_arr).to(device)
+    y: torch.Tensor = torch.from_numpy(y_arr).to(device)
     return x, y
 
 
@@ -80,11 +83,12 @@ class SimpleBatches:
         if meta_path.exists():
             try:
                 with meta_path.open("rb") as f:
-                    meta = pickle.load(f)
+                    meta: dict[str, object] | None = pickle.load(f)
             except (OSError, pickle.UnpicklingError, EOFError):
                 meta = None
             if isinstance(meta, dict):
-                dts = meta.get("dtype")
+                dts_obj = meta.get("dtype")
+                dts = dts_obj if isinstance(dts_obj, str) else None
                 if dts == "uint32":
                     dtype = np.dtype(np.uint32)
                 elif dts == "uint16":
@@ -131,10 +135,8 @@ class SimpleBatches:
 
         self._cursor[split] = int((cur + bsz * T) % L)
 
-        x = torch.from_numpy(base[x_indices].astype(np.int64, copy=False)).to(
-            self.device
-        )
-        y = torch.from_numpy(base[y_indices].astype(np.int64, copy=False)).to(
-            self.device
-        )
+        x_seq_arr: npt.NDArray[np.int64] = base[x_indices].astype(np.int64, copy=False)
+        x: torch.Tensor = torch.from_numpy(x_seq_arr).to(self.device)
+        y_seq_arr: npt.NDArray[np.int64] = base[y_indices].astype(np.int64, copy=False)
+        y: torch.Tensor = torch.from_numpy(y_seq_arr).to(self.device)
         return x, y

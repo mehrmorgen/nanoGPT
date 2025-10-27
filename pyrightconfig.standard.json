@@ -1,0 +1,21 @@
+{
+  "typeCheckingMode": "standard",
+  "useLibraryCodeForTypes": true,
+  "reportUnknownParameterType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportMissingTypeArgument": "none",
+  "reportUntypedBaseClass": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportExplicitAny": "none",
+  "reportAny": "none",
+  "reportPrivateLocalImportUsage": "warning",
+  "reportIncompatibleVariableOverride": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+  "include": [
+    "src/ml_playground"
+  ]
+}

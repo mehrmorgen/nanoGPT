@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from typing import Literal
 
 import hypothesis.strategies as st
 from hypothesis import given, settings
@@ -138,7 +139,13 @@ class TestSimpleBatches:
         sampler=st.sampled_from(["random", "sequential"]),
     )
     @settings(max_examples=8, deadline=None)
-    def test_simple_batches_creation(self, array_size, batch_config, device, sampler):
+    def test_simple_batches_creation(
+        self,
+        array_size: int,
+        batch_config: tuple[int, int],
+        device: DeviceKind,
+        sampler: Literal["random", "sequential"],
+    ) -> None:
         """Test SimpleBatches initialization and basic functionality."""
         batch_size, block_size = batch_config
 
@@ -196,8 +203,12 @@ class TestSimpleBatches:
     )
     @settings(max_examples=8, deadline=None)
     def test_sequential_sampling_coverage(
-        self, array_size, batch_size, block_size, device
-    ):
+        self,
+        array_size: int,
+        batch_size: int,
+        block_size: int,
+        device: DeviceKind,
+    ) -> None:
         """Test that sequential sampling eventually covers the dataset."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -242,7 +253,9 @@ class TestSimpleBatches:
         device=device_strategy(),
     )
     @settings(max_examples=10)
-    def test_missing_data_files_raise_errors(self, batch_size, block_size, device):
+    def test_missing_data_files_raise_errors(
+        self, batch_size: int, block_size: int, device: DeviceKind
+    ) -> None:
         """Test that missing data files raise appropriate errors."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
