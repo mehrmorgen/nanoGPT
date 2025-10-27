@@ -1,9 +1,18 @@
 # Vier Gewinnt training and sampling configuration.
 
 [prepare]
+raw_text_path = "datasets/games.txt"
 dataset_dir = "./datasets"
 raw_dir = "./raw"
 tokenizer_type = "char" # Placeholder, will be a custom tokenizer
+
+#[prepare.data]
+#directory = "./data"
+#complete_dataset = "games.txt"
+
+#[train.data]
+#directory = "./data"
+#complete_dataset = "games.txt"
 
 [train.model]
 # The board is 7x6=42, so the sequence length is 42.
@@ -14,7 +23,7 @@ n_embd = 128
 block_size = 42
 dropout = 0.1
 bias = false
-vocab_size = 3
+vocab_size = 9
 
 [train.data]
 batch_size = 64
@@ -46,7 +55,7 @@ dtype = "float32"
 compile = false
 
 [sample.runtime]
-out_dir = "./out/samples"
+out_dir = "./out"
 seed = 1337
 device = "cpu"
 dtype = "float32"

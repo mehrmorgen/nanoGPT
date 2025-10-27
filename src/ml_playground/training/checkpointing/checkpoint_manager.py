@@ -35,7 +35,7 @@ def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
         # Atomic save via rename
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         torch.save(obj, tmp_path)
-        tmp_path.rename(path)
+        tmp_path.replace(path)
     else:
         torch.save(obj, path)
 
