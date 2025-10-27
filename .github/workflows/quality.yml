@@ -70,7 +70,7 @@ jobs:
           du -sh .venv || true
       - if: steps.cache-venv.outputs.cache-hit != 'true'
         run: uv sync --frozen --group dev
-      - run: uv run tools ci quality-gate
+      - run: uv run tools --no-learning-mode ci quality-gate
       - name: Prune uv cache
         run: uv cache prune --ci
       - name: Ensure coverage badges are committed
