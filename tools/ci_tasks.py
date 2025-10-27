@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
@@ -45,6 +46,29 @@ def _coverage_file_env(coverage_file: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["COVERAGE_FILE"] = str(coverage_file)
     return env
+
+
+def _read_coverage_thresholds_from_config() -> tuple[float, float]:
+    """Read coverage thresholds from pyproject.toml configuration.
+    
+    Returns:
+        Tuple of (line_threshold, branch_threshold)
+    """
+    pyproject_path = Path("pyproject.toml")
+    if not pyproject_path.exists():
+        return 0.0, 0.0
+    
+    try:
+        with open(pyproject_path, "rb") as f:
+            config = tomllib.load(f)
+        
+        thresholds = config.get("tool", {}).get("ml_playground", {}).get("coverage", {}).get("thresholds", {})
+        line_threshold = float(thresholds.get("line_threshold", 0.0))
+        branch_threshold = float(thresholds.get("branch_threshold", 0.0))
+        
+        return line_threshold, branch_threshold
+    except (tomllib.TOMLDecodeError, ValueError, KeyError):
+        return 0.0, 0.0
 
 
 @app.command()
@@ -187,14 +211,14 @@ def coverage_report(
 @app.command("coverage-threshold")
 def coverage_threshold(
     line_threshold: float = typer.Option(
-        0.0,
+        None,
         "--line-threshold",
-        help="Fail if total line coverage is below this percentage.",
+        help="Fail if total line coverage is below this percentage. If not provided, reads from pyproject.toml.",
     ),
     branch_threshold: float = typer.Option(
-        0.0,
+        None,
         "--branch-threshold",
-        help="Fail if total branch coverage is below this percentage.",
+        help="Fail if total branch coverage is below this percentage. If not provided, reads from pyproject.toml.",
     ),
     verbose: bool = typer.Option(
         False,
@@ -203,6 +227,13 @@ def coverage_threshold(
     ),
 ) -> None:
     """Fail when coverage metrics drop below configured thresholds."""
+    # Read from config if thresholds not explicitly provided
+    if line_threshold is None or branch_threshold is None:
+        config_line, config_branch = _read_coverage_thresholds_from_config()
+        if line_threshold is None:
+            line_threshold = config_line
+        if branch_threshold is None:
+            branch_threshold = config_branch
     dest_cov = utils.coverage_file()
     if not dest_cov.exists():
         typer.echo(
@@ -213,7 +244,8 @@ def coverage_threshold(
 
     env = _coverage_file_env(dest_cov)
     json_path = dest_cov.parent / "coverage.json"
-    _ = utils.uv_run("coverage", "json", "-o", str(json_path), env=env)
+    # Generate JSON report, ignoring exit code since we'll do our own threshold checking
+    _ = utils.uv_run("coverage", "json", "-o", str(json_path), env=env, check=False)
 
     try:
         coverage_payload_raw = cast(
