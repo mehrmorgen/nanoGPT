@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 from typing import cast
+
+import pytest
 
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import (
@@ -114,6 +117,10 @@ def test_bundestag_qwen15b_preparer_diff_handles_missing_path(tmp_path: Path) ->
     assert not skipped
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 13),
+    reason="TogglePath implementation incompatible with Python 3.13 pathlib internals",
+)
 def test_bundestag_qwen15b_preparer_diff_oserror_when_missing() -> None:
     """_diff should skip when OSError occurs and the path disappears."""
 
