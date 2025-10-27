@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -401,7 +400,7 @@ class TestClean:
             with patch.object(htmlcov, "exists", return_value=True):
                 with patch.object(pytest_cache, "is_dir", return_value=True):
                     with patch.object(htmlcov, "is_dir", return_value=True):
-                        with patch("shutil.rmtree") as mock_rmtree:
+                        with patch("shutil.rmtree"):
                             result = testing_tools.clean([])
         
         assert result.success is True

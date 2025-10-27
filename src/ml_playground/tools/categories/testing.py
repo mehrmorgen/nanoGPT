@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ml_playground.tools.core.config import ToolsConfig
-from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutionError
-from ml_playground.tools.core.interfaces import LearningInfo, OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import run_pytest_command, run_subprocess, run_uv_command
+from ml_playground.tools.core.errors import ToolExecutionError
+from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from ml_playground.tools.utils.subprocess_utils import run_pytest_command, run_uv_command
 
 
 class TestingTools:

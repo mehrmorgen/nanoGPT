@@ -7,7 +7,7 @@ from typing import List
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import run_subprocess, run_uv_command
+from ml_playground.tools.utils.subprocess_utils import run_uv_command
 
 
 class QualityTools:
