@@ -245,9 +245,13 @@ class Sampler:
                         top_k=self.sample_cfg.top_k,
                     )
                     output_tensor = y[0].detach().cpu()
-                    output = self._decode_tokens(output_tensor)
+                    output = self.decode_tokens(output_tensor)
                     self.logger.info(output)
                     self.logger.info("---------------")
+
+    def decode_tokens(self, token_tensor: torch.Tensor) -> str:
+        """Decode a tensor of token ids using the configured tokenizer."""
+        return self._decode_tokens(token_tensor)
 
     def _decode_tokens(self, token_tensor: torch.Tensor) -> str:
         tensor = token_tensor
@@ -265,6 +269,16 @@ class Sampler:
             int(val.item()) for val in cast(Iterable[torch.Tensor], flat_tensor)
         ]
         return self.tokenizer.decode(normalized)
+
+    @property
+    def prompt_tensor(self) -> torch.Tensor | None:
+        """Expose the cached prompt tensor for read-only inspection."""
+        return self._prompt_tensor
+
+    @property
+    def cached_prompt_ids(self) -> tuple[int, ...] | None:
+        """Expose the cached prompt ids for read-only inspection."""
+        return self._cached_prompt_ids
 
 
 def sample(

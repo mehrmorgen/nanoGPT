@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Any, Literal, Mapping, Tuple, cast
+from typing import Any, Literal, Mapping, Sequence, Tuple, cast
 
 import pytest
 import torch
@@ -633,8 +633,10 @@ def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
     class _TokenizerWithDecodeTensor(Tokenizer):
         def __init__(self, sink: dict[str, Any]) -> None:
             self._sink = sink
-            self._stoi = {"\n": 0, "H": 1, "i": 2}
-            self._itos = {idx: char for char, idx in self._stoi.items()}
+            self._stoi: Mapping[str, int] = {"\n": 0, "H": 1, "i": 2}
+            self._itos: Mapping[int, str] = {
+                idx: char for char, idx in self._stoi.items()
+            }
 
         @property
         def name(self) -> str:
@@ -651,12 +653,12 @@ def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
         def encode(self, text: str) -> list[int]:
             return [self._stoi.get(ch, 0) for ch in text]
 
-        def decode(self, token_ids: list[int]) -> str:
+        def decode(self, token_ids: Sequence[int]) -> str:
             return "".join(self._itos.get(idx, "?") for idx in token_ids)
 
-        def decode_tensor(self, tensor: torch.Tensor) -> str:
-            self._sink["dtype"] = tensor.dtype
-            self._sink["device"] = tensor.device.type
+        def decode_tensor(self, token_tensor: torch.Tensor) -> str:
+            self._sink["dtype"] = token_tensor.dtype
+            self._sink["device"] = token_tensor.device.type
             return "decoded"
 
     sampler.tokenizer = _TokenizerWithDecodeTensor(captured)
@@ -664,7 +666,7 @@ def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     float_tokens = torch.tensor([1, 2, 3], dtype=torch.float32, device=device)
 
-    result = sampler._decode_tokens(float_tokens)
+    result = sampler.decode_tokens(float_tokens)
     assert result == "decoded"
     assert captured["dtype"] == torch.long
     assert captured["device"] == "cpu"
@@ -859,12 +861,16 @@ def test_sampler_prompt_tensor_cached_between_runs(
     caplog.set_level("INFO", logger="ml_playground.sampler")
     caplog.clear()
     sampler.run()
-    first_tensor_id = id(sampler._prompt_tensor)
+    first_tensor = sampler.prompt_tensor
+    assert first_tensor is not None
+    first_tensor_id = id(first_tensor)
     first_log_count = sum(1 for msg in caplog.messages if msg == "Sampling...")
 
     caplog.clear()
     sampler.run()
-    second_tensor_id = id(sampler._prompt_tensor)
+    second_tensor = sampler.prompt_tensor
+    assert second_tensor is not None
+    second_tensor_id = id(second_tensor)
     second_log_count = sum(1 for msg in caplog.messages if msg == "Sampling...")
 
     assert first_tensor_id == second_tensor_id
@@ -907,7 +913,7 @@ def test_sampler_run_returns_early_for_empty_prompt(tmp_path: Path) -> None:
     sampler = Sampler(cfg, shared)
     sampler.run()
 
-    assert sampler._prompt_tensor is None
+    assert sampler.prompt_tensor is None
 
 
 def test_sampler_uses_latest_checkpoint_when_configured(tmp_path: Path) -> None:
@@ -950,7 +956,7 @@ def test_sampler_uses_latest_checkpoint_when_configured(tmp_path: Path) -> None:
     sampler = Sampler(cfg, shared)
     sampler.run()
 
-    assert sampler._cached_prompt_ids is not None
+    assert sampler.cached_prompt_ids is not None
 
 
 # ---------------------------
