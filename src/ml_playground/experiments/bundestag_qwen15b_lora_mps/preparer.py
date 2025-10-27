@@ -3,7 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
+
+try:
+    Path(".")._flavour  # type: ignore[attr-defined]
+except AttributeError:
+    setattr(type(Path(".")), "_flavour", object())
+
 from ml_playground.configuration.models import PreparerConfig
+from ml_playground.core.file_state import diff_file_states, snapshot_file_states
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
@@ -32,12 +39,12 @@ class BundestagQwen15bLoraMpsPreparer(_PreparerProto):
 
         # Track side-effects (creation/updates) for user feedback
         tracked: list[Path] = [ds_dir]
-        before = _snapshot(tracked)
+        before = snapshot_file_states(tracked)
 
         # Ensure dataset directory exists
         ds_dir.mkdir(parents=True, exist_ok=True)
 
-        created, updated, skipped = _diff(tracked, before)
+        created, updated, skipped = diff_file_states(tracked, before)
         msgs = (
             f"[bundestag_qwen15b_lora_mps] ensured dataset directory at {ds_dir}",
             f"[bundestag_qwen15b_lora_mps.outputs.created] {[str(p) for p in created]}",
@@ -53,35 +60,9 @@ class BundestagQwen15bLoraMpsPreparer(_PreparerProto):
 
 
 def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
-    m: dict[Path, tuple[bool, float, int]] = {}
-    for p in paths:
-        try:
-            if p.exists():
-                st = p.stat()
-                m[p] = (True, st.st_mtime, st.st_size)
-            else:
-                m[p] = (False, 0.0, 0)
-        except OSError:
-            m[p] = (False, 0.0, 0)
-    return m
+    return snapshot_file_states(paths)
 
 
 def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]):
-    created: list[Path] = []
-    updated: list[Path] = []
-    skipped: list[Path] = []
-    for p in paths:
-        existed, mtime, size = before.get(p, (False, 0.0, 0))
-        try:
-            if p.exists():
-                st = p.stat()
-                if not existed:
-                    created.append(p)
-                elif st.st_mtime != mtime or st.st_size != size:
-                    updated.append(p)
-                else:
-                    skipped.append(p)
-        except OSError:
-            if p.exists() and not existed:
-                created.append(p)
-    return created, updated, skipped
+    created, updated, skipped = diff_file_states(paths, before)
+    return list(created), list(updated), list(skipped)

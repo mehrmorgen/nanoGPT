@@ -136,11 +136,10 @@ def setup_tokenizer(
     elif tokenizer_type == "tiktoken":
         encoding_name = meta.get("encoding_name", "cl100k_base")
         loader = meta.get("tokenizer_loader")
-        tokenizer = token_factory(
-            tokenizer_type,
-            encoding_name=encoding_name,
-            loader=loader,
-        )
+        kwargs: dict[str, object] = {"encoding_name": encoding_name}
+        if loader is not None:
+            kwargs["loader"] = loader
+        tokenizer = token_factory(tokenizer_type, **kwargs)
     else:
         tokenizer = token_factory(coerce_tokenizer_type(tokenizer_type))
     return tokenizer
