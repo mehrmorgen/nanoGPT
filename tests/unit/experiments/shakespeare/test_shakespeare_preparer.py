@@ -4,7 +4,7 @@ import contextlib
 import logging
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Literal, Mapping, cast
 
 import pytest
 import requests.exceptions
@@ -13,20 +13,33 @@ import ml_playground.experiments.shakespeare.preparer as shakespeare_module
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.core.error_handling import DataError
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
+from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
-class _FakeTokenizer:
+class _FakeTokenizer(Tokenizer):
     def __init__(self) -> None:
         self.calls: list[str] = []
-        self.vocab_size = 256
-        self.name = "fake"
+        self._stoi: dict[str, int] = {chr(i + 97): i for i in range(26)}
+        self._itos: dict[int, str] = {idx: ch for ch, idx in self._stoi.items()}
 
     def encode(self, text: str) -> list[int]:
         self.calls.append(text)
-        return list(range(len(text)))
+        return [self._stoi.get(ch, 0) for ch in text]
 
-    def decode(self, ids: list[int]) -> str:
-        return "".join(chr((i % 26) + 97) for i in ids)
+    def decode(self, token_ids: list[int]) -> str:
+        return "".join(self._itos.get(i, "?") for i in token_ids)
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self._stoi)
+
+    @property
+    def name(self) -> str:
+        return "fake"
+
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        return self._stoi
 
 
 class _FakeResponse:
@@ -39,6 +52,27 @@ class _FakeResponse:
         if not self._ok:
             raise requests.exceptions.HTTPError("boom")
         self.called = True
+
+
+def _make_tokenizer_factory(tokenizer: _FakeTokenizer) -> Callable[[], Tokenizer]:
+    def _factory() -> Tokenizer:
+        return tokenizer
+
+    return _factory
+
+
+def _make_create_tokenizer_fn(
+    tokenizer: _FakeTokenizer,
+) -> Callable[[Literal["char", "word", "tiktoken"], Any], Tokenizer]:
+    def _factory(
+        tokenizer_type: Literal["char", "word", "tiktoken"],
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> Tokenizer:
+        del tokenizer_type
+        return tokenizer
+
+    return _factory
 
 
 def _make_cfg(
@@ -59,11 +93,11 @@ def _make_cfg(
 
     def _writer(
         ds_dir: Path,
-        train_ids,
-        val_ids,
-        meta,
+        train_ids: list[int],
+        val_ids: list[int],
+        meta: dict[str, Any],
         *,
-        logger,
+        logger: Any,
     ) -> None:
         if writer_calls is not None:
             writer_calls.append(
@@ -82,7 +116,7 @@ def _make_cfg(
     extras: dict[str, Any] = {
         "base_dir": str(base_dir),
         "http_get": _http_get if http_response or http_error else None,
-        "tokenizer_factory": lambda: tok,
+        "tokenizer_factory": _make_tokenizer_factory(tok),
     }
     if writer_calls is not None:
         extras["writer_fn"] = _writer
@@ -142,9 +176,11 @@ def test_shakespeare_preparer_uses_module_directory(tmp_path: Path) -> None:
     )
 
     original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
+    original_tokenizer_factory = cast(
+        Callable[..., Tokenizer], shakespeare_module.create_tokenizer
+    )
     shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
+    shakespeare_module.create_tokenizer = _make_create_tokenizer_fn(tokenizer)  # type: ignore[assignment]
 
     try:
         report = ShakespearePreparer().prepare(cfg)
@@ -198,11 +234,12 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
         def __init__(self, text: str) -> None:
             self.text = text
 
-    extras = {
+    def _http_get(*_args: Any, **_kwargs: Any) -> MinimalResponse:
+        return MinimalResponse("all the world's a stage")
+
+    extras: dict[str, Any] = {
         "base_dir": str(base_dir),
-        "http_get": lambda *_args, **_kwargs: MinimalResponse(
-            "all the world's a stage"
-        ),
+        "http_get": _http_get,
         "tokenizer_factory": "noop",
         "writer_fn": "noop",
     }
@@ -214,8 +251,10 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
     )
 
     tokenizer = _FakeTokenizer()
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
+    original_tokenizer_factory = cast(
+        Callable[..., Tokenizer], shakespeare_module.create_tokenizer
+    )
+    shakespeare_module.create_tokenizer = _make_create_tokenizer_fn(tokenizer)  # type: ignore[assignment]
 
     try:
         report = ShakespearePreparer().prepare(cfg)
@@ -248,9 +287,11 @@ def test_shakespeare_preparer_handles_config_without_extras(tmp_path: Path) -> N
     tokenizer = _FakeTokenizer()
 
     original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
+    original_tokenizer_factory = cast(
+        Callable[..., Tokenizer], shakespeare_module.create_tokenizer
+    )
     shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
+    shakespeare_module.create_tokenizer = _make_create_tokenizer_fn(tokenizer)  # type: ignore[assignment]
 
     try:
         report = ShakespearePreparer().prepare(cfg)  # type: ignore[arg-type]
@@ -286,6 +327,10 @@ def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
         def raise_for_status(self) -> None:
             self._called = True
 
+        @property
+        def called(self) -> bool:
+            return self._called
+
     tokenizer = _FakeTokenizer()
     response = ResponseWithRaise("lend me your ears")
 
@@ -296,11 +341,17 @@ def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
     )
 
     original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
+    original_tokenizer_factory = cast(
+        Callable[..., Tokenizer], shakespeare_module.create_tokenizer
+    )
     original_requests_get = shakespeare_module.requests.get
     shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
-    shakespeare_module.requests.get = lambda *_a, **_k: response
+    shakespeare_module.create_tokenizer = _make_create_tokenizer_fn(tokenizer)  # type: ignore[assignment]
+
+    def _requests_get(*_args: Any, **_kwargs: Any) -> ResponseWithRaise:
+        return response
+
+    shakespeare_module.requests.get = _requests_get
 
     try:
         report = ShakespearePreparer().prepare(cfg)
@@ -308,7 +359,7 @@ def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
         assert (ds_dir / "val.bin").exists()
         assert (ds_dir / "meta.pkl").exists()
         assert len(tokenizer.calls) == 2
-        assert response._called is True
+        assert response.called is True
         assert any("prepared dataset" in msg for msg in report.messages)
     finally:
         shakespeare_module.__file__ = original_file

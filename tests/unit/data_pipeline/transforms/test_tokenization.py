@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Callable, Mapping, cast
+
 import pytest
 
 from ml_playground.core.error_handling import DataError
@@ -7,9 +9,27 @@ from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer, TiktokenT
 from ml_playground.core.tokenizer_protocol import Tokenizer
 from ml_playground.data_pipeline.transforms.tokenization import (
     coerce_tokenizer_type,
-    prepare_with_tokenizer,
     create_standardized_metadata,
+    prepare_with_tokenizer,
 )
+
+
+CreateMetadataFn = Callable[
+    [Tokenizer, int, int, dict[str, Any] | None],
+    dict[str, Any],
+]
+
+_create_metadata = cast(CreateMetadataFn, create_standardized_metadata)
+
+
+def build_metadata(
+    tokenizer: Tokenizer,
+    train_tokens: int,
+    val_tokens: int,
+    extras: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    extras_dict = dict(extras) if extras is not None else None
+    return _create_metadata(tokenizer, train_tokens, val_tokens, extras_dict)
 
 
 class _FakeTiktokenModule:
@@ -19,7 +39,7 @@ class _FakeTiktokenModule:
         def __init__(self, name: str) -> None:
             self.name = name
             self.n_vocab = 16
-            self._mergeable_ranks = {"token": 0}
+            self._mergeable_ranks: dict[str, int] = {"token": 0}
 
         def encode(
             self, text: str, allowed_special: set[str] | None = None
@@ -61,7 +81,7 @@ def test_create_standardized_metadata_with_char_tokenizer() -> None:
     vocab = {"a": 0, "b": 1, "c": 2}
     tokenizer = CharTokenizer(vocab=vocab)
 
-    meta = create_standardized_metadata(tokenizer, 100, 20)
+    meta = build_metadata(tokenizer, 100, 20)
 
     assert meta["tokenizer_type"] == "char"
     assert "stoi" in meta
@@ -73,7 +93,7 @@ def test_create_standardized_metadata_with_word_tokenizer() -> None:
     vocab = {"hello": 0, "world": 1}
     tokenizer = WordTokenizer(vocab=vocab)
 
-    meta = create_standardized_metadata(tokenizer, 100, 20)
+    meta = build_metadata(tokenizer, 100, 20)
 
     assert meta["tokenizer_type"] == "word"
     assert "stoi" in meta
@@ -98,7 +118,7 @@ def test_create_standardized_metadata_with_extras() -> None:
     tokenizer = CharTokenizer(vocab={"a": 0})
     extras = {"custom_field": "value", "another": 123}
 
-    meta = create_standardized_metadata(tokenizer, 100, 20, extras=extras)
+    meta = build_metadata(tokenizer, 100, 20, extras=extras)
 
     assert meta["custom_field"] == "value"
     assert meta["another"] == 123
@@ -123,7 +143,7 @@ def test_create_standardized_metadata_handles_attribute_errors() -> None:
             return self._vocab_size
 
         @property
-        def vocab(self) -> dict[str, int]:
+        def vocab(self) -> Mapping[str, int]:
             return dict(self._vocab)
 
         def encode(self, text: str) -> list[int]:
@@ -149,7 +169,7 @@ class TestPrepareWithTokenizerEdgeCases:
         """Test word tokenizer with mixed punctuation to ensure words branch is hit."""
         text = "Hello, world! How are you?"
         tokenizer = WordTokenizer({})
-        train_arr, val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
+        _train_arr, _val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
             text, tokenizer
         )
         assert (
@@ -160,22 +180,22 @@ class TestPrepareWithTokenizerEdgeCases:
     def test_prepare_with_tokenizer_word_empty_input_returns_empty_vocab(self) -> None:
         """Word tokenizer with empty text should rebuild an empty vocab."""
         tokenizer = WordTokenizer({})
-        train_arr, val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
+        _train_arr, _val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
             "", tokenizer
         )
-        assert train_arr.size == 0
-        assert val_arr.size == 0
+        assert _train_arr.size == 0
+        assert _val_arr.size == 0
         assert updated_tokenizer.vocab_size == 0
         assert meta["tokenizer_type"] == "word"
 
     def test_prepare_with_tokenizer_char_empty_input_returns_empty_vocab(self) -> None:
         """Char tokenizer with empty corpus should rebuild empty vocab and tokenizer."""
         tokenizer = CharTokenizer({})
-        train_arr, val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
+        _train_arr, _val_arr, meta, updated_tokenizer = prepare_with_tokenizer(
             "", tokenizer
         )
-        assert train_arr.size == 0
-        assert val_arr.size == 0
+        assert _train_arr.size == 0
+        assert _val_arr.size == 0
         assert updated_tokenizer.vocab_size == 0
         assert meta["tokenizer_type"] == "char"
 
@@ -186,12 +206,24 @@ class TestCreateStandardizedMetadataExceptions:
     class FakeTokenizer(Tokenizer):
         """Minimal tokenizer implementation for testing."""
 
-        def __init__(self, vocab_size=100, name="char", **kwargs):
+        def __init__(
+            self,
+            vocab_size: int = 100,
+            name: str = "char",
+            **kwargs: Any,
+        ) -> None:
             self._vocab_size = vocab_size
             self._name = name
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-            self._vocab = kwargs.get("vocab", {})
+            self._vocab: dict[str, int] = dict(
+                cast(dict[str, int], kwargs.get("vocab", {}))
+            )
+            stoi_value = kwargs.get("stoi")
+            self._stoi: dict[str, int] | None = (
+                dict(cast(dict[str, int], stoi_value))
+                if isinstance(stoi_value, dict)
+                else None
+            )
+            self.encoding_name = kwargs.get("encoding_name")
 
         @property
         def vocab_size(self) -> int:
@@ -202,8 +234,12 @@ class TestCreateStandardizedMetadataExceptions:
             return self._name
 
         @property
-        def vocab(self) -> dict[str, int]:
+        def vocab(self) -> Mapping[str, int]:
             return dict(self._vocab)
+
+        @property
+        def stoi(self) -> Mapping[str, int] | None:  # type: ignore[override]
+            return dict(self._stoi) if self._stoi else None
 
         def encode(self, text: str) -> list[int]:
             return [1, 2, 3]
@@ -217,7 +253,7 @@ class TestCreateStandardizedMetadataExceptions:
         # Ensure no stoi attribute
         assert not hasattr(fake_tokenizer, "stoi")
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
         assert meta["vocab_size"] == 100
         assert "stoi" not in meta  # Should not crash
@@ -226,7 +262,7 @@ class TestCreateStandardizedMetadataExceptions:
         """Test handling when stoi is not a dict, covering isinstance check."""
         fake_tokenizer = self.FakeTokenizer(name="char", stoi="invalid")  # Not a dict
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
         assert "stoi" not in meta  # Should not crash
 
@@ -234,7 +270,7 @@ class TestCreateStandardizedMetadataExceptions:
         """Test handling when stoi is empty dict, covering vocab check."""
         fake_tokenizer = self.FakeTokenizer(name="char", stoi={})  # Empty dict
 
-        meta = create_standardized_metadata(fake_tokenizer, 1000, 200)
+        meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
         assert "stoi" not in meta  # Empty dict should not be stored
 

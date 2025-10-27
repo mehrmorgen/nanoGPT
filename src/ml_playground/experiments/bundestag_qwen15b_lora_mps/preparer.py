@@ -66,3 +66,12 @@ def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
 def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]):
     created, updated, skipped = diff_file_states(paths, before)
     return list(created), list(updated), list(skipped)
+
+
+def snapshot_paths(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
+    return _snapshot(paths)
+
+
+def diff_paths(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]):
+    created, updated, skipped = _diff(paths, before)
+    return list(created), list(updated), list(skipped)

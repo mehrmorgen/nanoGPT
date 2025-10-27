@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
 
+__all__ = ["SpeakGerPreparer", "config_path"]
+
 
 def _config_path() -> Path:
     return Path(__file__).resolve().parent / "config.toml"
+
+
+def config_path() -> Path:
+    return _config_path()
 
 
 class SpeakGerPreparer(_PreparerProto):
