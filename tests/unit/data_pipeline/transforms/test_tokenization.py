@@ -249,11 +249,9 @@ class TestCreateStandardizedMetadataExceptions:
 
     def test_metadata_creation_with_missing_stoi(self) -> None:
         """Test handling when tokenizer lacks stoi attribute, covering guarded lookup."""
-        fake_tokenizer = self.FakeTokenizer(name="char")
-        # Remove the stoi attribute to simulate a tokenizer without it
-        delattr(fake_tokenizer, "stoi")
-        # Ensure no stoi attribute
-        assert not hasattr(fake_tokenizer, "stoi")
+        fake_tokenizer = self.FakeTokenizer(name="char", stoi=None)
+        # Ensure no stoi attribute (returns None)
+        assert fake_tokenizer.stoi is None
 
         meta = build_metadata(fake_tokenizer, 1000, 200)
         assert meta["tokenizer_type"] == "char"
