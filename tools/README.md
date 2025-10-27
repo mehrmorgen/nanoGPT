@@ -1,28 +1,32 @@
-# tools/
+# tools/ (Legacy)
 
-Centralized developer utilities and helper scripts that support the `ml_playground` project. Everything
-is invoked via UV CLIs—no raw `pip`, no manual venv activation.
+**DEPRECATED**: This directory contains legacy developer utilities. The functionality has been integrated into the main `ml_playground` module and is now accessible via `uv run tools <command>`.
 
-## Purpose
+## Migration Status
 
-- Provide small, focused utilities used during development and maintenance.
-- Keep operational scripts discoverable and documented in one place.
+**New Integrated Commands** (use these instead):
+- `uv run tools ci quality-gate` — Quality gates, coverage workflows, and mutation testing
+- `uv run tools env <command>` — Environment setup, verification, cache cleanup
+- `uv run tools quality <command>` — Lint/format operations for fast feedback  
+- `uv run tools test <command>` — Pytest suite orchestration
+- `uv run tools agentic <command>` — AI-assisted development workflows
 
-## Structure
+**Legacy Files** (still available but deprecated):
+- `ci_tasks.py` — Use `uv run tools ci` instead
+- `env_tasks.py` — Use `uv run tools env` instead  
+- `lint_tasks.py` — Use `uv run tools quality` instead
+- `test_tasks.py` — Use `uv run tools test` instead
+- `lit_tasks.py` — LIT integration helpers (no integrated equivalent yet)
 
-- `ci_tasks.py` — Typer CLI exposing quality gates (`uv run ci-tasks quality`), coverage workflows, and mutation helpers.
-- `env_tasks.py` — Typer CLI for environment setup, verification, cache cleanup, TensorBoard, and AI guideline symlinks (`uv run env-tasks <command>`).
-- `lint_tasks.py` — Typer CLI bundling lint/format slices for fast feedback (`uv run lint-tasks <command>`).
-- `lit_tasks.py` — Typer CLI for LIT integration helpers (`uv run lit-tasks <command>`).
-- `test_tasks.py` — Typer CLI orchestrating pytest suites (`uv run test-tasks <suite>`).
-- `task_utils.py` — shared helpers (UV process wrappers, cache helpers) used by the CLIs above.
-- `review.py` — inspect review threads, bulk-reply, and delete comments using JSON mappings.
-- `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
-- `mutation_summary.py` — prints the active Cosmic Ray configuration before mutation runs.
-- `mutation_report.py` — summarizes mutant outcomes after a Cosmic Ray run.
-- `port_kill.py` — kill a process bound to a TCP port (Mac/Linux).
-- `setup_ai_guidelines.py` — configure symlinks for AI pair-programming workflow per guideline docs.
-- `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
+**Utility Scripts** (still used):
+- `task_utils.py` — shared helpers used by legacy CLIs
+- `review.py` — inspect review threads, bulk-reply, and delete comments using JSON mappings
+- `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored
+- `mutation_summary.py` — prints the active Cosmic Ray configuration before mutation runs
+- `mutation_report.py` — summarizes mutant outcomes after a Cosmic Ray run
+- `port_kill.py` — kill a process bound to a TCP port (Mac/Linux)
+- `setup_ai_guidelines.py` — configure symlinks for AI pair-programming workflow per guideline docs
+- `llama_cpp/` — vendor instructions and helpers for GGUF conversion
 
 
 ## GitHub CLI setup
@@ -68,27 +72,46 @@ Keep commands scoped to the repository root; the CLI inherits the project Git re
 
 Always run through the project venv using UV. From repo root:
 
+**New Integrated Commands** (recommended):
 ```bash
 # Quality gates
-uv run ci-tasks quality
+uv run tools ci quality-gate
 
-# Run GitHub quality workflow locally via act
-uv run ci-tasks quality-ci-local
-
-# Coverage report with threshold enforcement
-uv run ci-tasks coverage-report --fail-under 87
+# Coverage report with threshold enforcement  
+uv run tools test coverage --fail-under 87
 
 # Run unit tests
-uv run test-tasks unit
+uv run tools test unit
 
 # Fast lint bundle
-uv run lint-tasks ruff
+uv run tools quality lint
 
 # Environment setup
+uv run tools env setup
+```
+
+**Legacy Commands** (deprecated but still functional):
+```bash
+# Quality gates (legacy)
+uv run ci-tasks quality
+
+# Run GitHub quality workflow locally via act (legacy)
+uv run ci-tasks quality-ci-local
+
+# Coverage report with threshold enforcement (legacy)
+uv run ci-tasks coverage-report --fail-under 87
+
+# Run unit tests (legacy)
+uv run test-tasks unit
+
+# Fast lint bundle (legacy)
+uv run lint-tasks ruff
+
+# Environment setup (legacy)
 uv run env-tasks setup
 ```
 
-- **`quality-ci-local`**: Binds `.cache/uv`, `.cache/pre-commit`, `.cache/ruff`, and `.venv` into the container. Toggle mounts with `--no-bind-caches` or pass additional flags directly to `act`.
+- **`quality-ci-local`** (legacy): Binds `.cache/uv`, `.cache/pre-commit`, `.cache/ruff`, and `.venv` into the container. Toggle mounts with `--no-bind-caches` or pass additional flags directly to `act`. Use `uv run tools ci local` for the integrated equivalent.
 
 ## Examples
 
@@ -96,7 +119,8 @@ uv run env-tasks setup
 
 ```bash
 uv run python tools/port_kill.py 6006
-uv run env-tasks tensorboard --logdir out/<run>/logs/tb
+# Use integrated command: uv run tools env info  # (shows TensorBoard status)
+# Or legacy command: uv run env-tasks tensorboard --logdir out/<run>/logs/tb
 ```
 
 - Clean up noisy artifacts that slipped into Git:

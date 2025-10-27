@@ -29,10 +29,10 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Guiding Principles
 
-- **Quality gates and TDD discipline.** Always run `uv run ci-tasks quality` before committing and practice strict
+- **Quality gates and TDD discipline.** Always run `uv run tools ci quality-gate` before committing and practice strict
   TDD as the default workflow (see [Developer Guidelines](README.md#core-principles-non-negotiable) and the canonical
   process in [Testing Standards](TESTING.md#test-driven-development-required)).
-- **UV-first Typer CLIs.** Prefer the published Typer entry points (`env-tasks`, `test-tasks`, `ci-tasks`) over ad-hoc
+- **UV-first Typer CLIs.** Prefer the integrated tooling (`uv run tools env`, `uv run tools test`, `uv run tools ci`) over ad-hoc
   scripts so local workflows mirror CI (see the [repository README](../README.md#policy)).
 - **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
   global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
@@ -63,9 +63,9 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-Pre-commit and CI both execute `uv run ci-tasks quality`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run ci-tasks quality PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
+Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
-For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `ci-tasks` and `env-tasks` for coverage reports, property suites, and lint-only passes.
+For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `uv run tools` for coverage reports, property suites, and lint-only passes.
 
 ## Commit Standards
 
@@ -151,6 +151,40 @@ Ruff automatically applies modern Python best practices:
 - `[tool.mypy]` for type checker settings
 - `[tool.pyright]` for static analysis include/exclude
 - `[tool.pytest.ini_options]` for pytest testpaths and options
+
+## Timeout Philosophy
+
+**Core Principle**: There is no such thing as an infinite timeout. All timeouts should be short and based on the specific operation and environment.
+
+**Timeout Selection Guidelines**:
+
+- **Choose the timeout we want to achieve when everything is working correctly**
+- **Base timeouts on expected operation duration in normal environments**
+- **If we hit the timeout, it's a good indicator that one of our assumptions about the current environment is wrong**
+- **Timeouts serve as early warning signals for environmental issues**
+
+**Timeout Categories**:
+
+- **Quality tools** (lint, format, typecheck): 2 minutes - these should complete quickly
+- **Test execution**: 10 minutes - based on expected test suite duration  
+- **Environment setup**: 5 minutes - dependency installation and verification
+- **CI operations**: 15 minutes - comprehensive quality gates and reporting
+- **Mutation testing**: 180 minutes - computationally intensive analysis
+
+**Configuration and Monitoring**:
+
+- All timeouts must be explicitly configured in `pyproject.toml` under `[tool.ml_playground.tools]`
+- Timeout values should be documented with rationale for the chosen duration
+- When timeouts are hit, investigate environmental assumptions before increasing the timeout
+- Monitor timeout patterns to identify systemic issues with dependencies or infrastructure
+
+**Environmental Assumptions**:
+
+- Modern development machine with SSD storage
+- Stable internet connection for dependency downloads
+- Reasonable CPU resources (4+ cores for parallel operations)
+- Adequate memory for concurrent tool execution
+- Clean dependency cache state (no corrupted artifacts)
 
 ## Dev Tooling Quick Reference
 

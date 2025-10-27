@@ -57,10 +57,10 @@ jobs:
             ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
       - name: Sync dependencies (dev)
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        run: uv run env-tasks sync --group dev
+        run: uv run tools env sync --group dev
 
       - name: Run mutation suite
-        run: uv run ci-tasks mutation run
+        run: uv run tools ci mutation run
 
       - name: Capture mutation report
         run: |

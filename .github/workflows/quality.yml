@@ -70,13 +70,13 @@ jobs:
           du -sh .venv || true
       - if: steps.cache-venv.outputs.cache-hit != 'true'
         run: uv sync --frozen --group dev
-      - run: uv run ci-tasks quality
+      - run: uv run tools ci quality-gate
       - name: Prune uv cache
         run: uv cache prune --ci
       - name: Ensure coverage badges are committed
         run: |
           if ! git diff --quiet -- docs/assets/coverage*.svg; then
-            echo "::error::Coverage badges are stale. Run 'uv run ci-tasks coverage-report --fail-under 87' and 'uv run ci-tasks coverage-badge', then commit the updated SVGs." >&2
+            echo "::error::Coverage badges are stale. Run 'uv run tools test coverage --fail-under 87' and 'uv run tools ci badges', then commit the updated SVGs." >&2
             git status --short docs/assets/coverage*.svg || true
             exit 1
           fi

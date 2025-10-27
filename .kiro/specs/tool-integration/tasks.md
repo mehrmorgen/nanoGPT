@@ -231,26 +231,26 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - Use dependency injection and lightweight fakes for any external dependencies
   - _Requirements: 2.1, 2.2_
 
-- [-] 7. Update CI workflows and documentation (tools module only)
+- [x] 7. Update CI workflows and documentation (tools module only)
   - Update GitHub Actions workflows to use `uv run tools` commands
   - Update documentation references to new tool commands
   - Keep changes focused on tooling references only
   - rebase on the base branch's recent changes.
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 11.1, 11.2, 11.4_
 
-- [ ] 7.1 Update CI workflows to use integrated tools
+- [x] 7.1 Update CI workflows to use integrated tools
   - Update GitHub Actions workflows to use `uv run tools` commands
   - Replace direct tool invocations with integrated tool system
   - Document exceptions where external tools are still used for speed/features
   - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-- [ ] 7.2 Update documentation references to tools
+- [x] 7.2 Update documentation references to tools
   - Update README.md to reflect new `uv run tools` command structure
   - Update all `.dev-guidelines/` files to use new tool commands
   - Update `tools/README.md` to reflect integration into main module
   - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 7.3 Add timeout philosophy to development guidelines
+- [x] 7.3 Add timeout philosophy to development guidelines
   - Update `.dev-guidelines/DEVELOPMENT.md` with explicit timeout philosophy
   - Document timeout selection principles and environmental assumptions
   - Add guidelines for timeout configuration and monitoring

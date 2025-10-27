@@ -30,12 +30,12 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   ├── integration/           # multi-module tests via Python APIs
 │   ├── e2e/                   # CLI-level smoke tests
 │   └── acceptance/            # higher-level behaviors and policies
-├── tools/                     # developer tooling CLIs (see tools/README.md)
-│   ├── ci_tasks.py            # uv-backed quality, coverage, mutation flows
-│   ├── env_tasks.py           # uv-backed environment helpers
-│   ├── lint_tasks.py          # uv-backed lint bundles
+├── tools/                     # legacy developer tooling CLIs (see tools/README.md)
+│   ├── ci_tasks.py            # legacy quality, coverage, mutation flows (use `uv run tools ci` instead)
+│   ├── env_tasks.py           # legacy environment helpers (use `uv run tools env` instead)
+│   ├── lint_tasks.py          # legacy lint bundles (use `uv run tools quality` instead)
 │   ├── lit_tasks.py           # uv-backed LIT helpers
-│   └── test_tasks.py          # uv-backed pytest orchestration
+│   └── test_tasks.py          # legacy pytest orchestration (use `uv run tools test` instead)
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
@@ -43,10 +43,11 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ## Policy
 
   - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
-  - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
-  - `uv run lint-tasks <command>` for lint/format bundles when you need faster feedback.
-  - `uv run test-tasks <command>` for pytest suites.
-  - `uv run ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
+  - `uv run tools env <command>` for environment setup, cache cleanup, and dependency management.
+  - `uv run tools quality <command>` for lint/format bundles when you need faster feedback.
+  - `uv run tools test <command>` for pytest suites and coverage reporting.
+  - `uv run tools ci <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
+  - `uv run tools agentic <command>` for AI-assisted development workflows and batch operations.
 - The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
 - Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
