@@ -27,7 +27,7 @@ class CITools:
         self.config = config
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
-        self.pre_commit_config = root_path / ".pre-commit-config.yaml"
+        self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
     
     @property
     def category(self) -> str:
