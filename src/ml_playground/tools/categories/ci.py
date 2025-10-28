@@ -16,8 +16,8 @@ class CITools:
     """CI/CD tools implementation."""
 
     def __init__(
-        self, 
-        config: ToolsConfig, 
+        self,
+        config: ToolsConfig,
         root_path: Path,
         subprocess_runner: SubprocessRunner | None = None,
     ) -> None:
@@ -42,10 +42,6 @@ class CITools:
     def _coverage_file(self) -> Path:
         """Get the coverage data file path."""
         return self.cache_dir / "coverage" / "coverage.sqlite"
-
-    def _cosmic_ray_session_file(self) -> Path:
-        """Get the Cosmic Ray session file path."""
-        return self.cache_dir / "cosmic_ray" / "session.sqlite"
 
     def _ensure_cache_dirs(self, *subdirs: str) -> None:
         """Ensure cache directories exist."""
@@ -201,7 +197,7 @@ class CITools:
         )
 
     def quality_ext(self, args: List[str]) -> ToolResult:
-        """Run quality gates followed by mutation testing.
+        """Run extended quality gates (mutation testing moved to testing tools).
 
         Args:
             args: Additional arguments (ignored)
@@ -213,32 +209,14 @@ class CITools:
             namespace="tools", category=self.category, command="quality-ext"
         )
 
-        # Run full quality gate first
+        # Run quality gate (mutation testing moved to testing tools)
         quality_result = self.quality_gate([])
-        if not quality_result.success:
-            return quality_result
-
-        # Run mutation testing
-        mutation_result = self.mutation_run([])
-
-        # Combine outputs
-        combined_stdout = ""
-        if quality_result.stdout:
-            combined_stdout += f"Quality gate:\n{quality_result.stdout}\n"
-        if mutation_result.stdout:
-            combined_stdout += f"Mutation testing:\n{mutation_result.stdout}"
-
-        combined_stderr = ""
-        if quality_result.stderr:
-            combined_stderr += f"Quality gate warnings:\n{quality_result.stderr}\n"
-        if mutation_result.stderr:
-            combined_stderr += f"Mutation testing errors:\n{mutation_result.stderr}"
 
         return ToolResult(
-            success=mutation_result.success,
-            exit_code=mutation_result.exit_code,
-            stdout=combined_stdout,
-            stderr=combined_stderr,
+            success=quality_result.success,
+            exit_code=quality_result.exit_code,
+            stdout=quality_result.stdout,
+            stderr=quality_result.stderr,
             operation_id=operation_id,
         )
 
@@ -351,215 +329,72 @@ class CITools:
                     rationale="Badge generation requires valid coverage data",
                 )
 
-        # Generate badges
-        return self._subprocess_runner.run_uv_command(
-            ["python", "tools/coverage_badges.py", str(json_path), "docs/assets"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
+        # Generate badges directly
+        try:
+            import json
+            from pathlib import Path
 
-    def mutation_reset(self, args: List[str]) -> ToolResult:
-        """Remove the cached Cosmic Ray session.
+            # Read coverage data
+            with open(json_path) as f:
+                coverage_data = json.load(f)
 
-        Args:
-            args: Additional arguments (ignored)
+            total_coverage = coverage_data.get("totals", {}).get("percent_covered", 0)
 
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-reset"
-        )
+            # Create simple SVG badge
+            badge_dir = Path("docs/assets")
+            badge_dir.mkdir(parents=True, exist_ok=True)
 
-        session_file = self._cosmic_ray_session_file()
-        if session_file.exists():
-            try:
-                session_file.unlink()
-                output = f"Removed Cosmic Ray session: {session_file}"
-            except Exception as exc:
-                raise ToolExecutionError(
-                    f"Failed to remove Cosmic Ray session file: {session_file}",
-                    reason=f"File deletion failed: {exc}",
-                    rationale="Session file must be removable for clean mutation testing",
-                ) from exc
-        else:
-            output = f"Cosmic Ray session file does not exist: {session_file}"
+            # Determine color based on coverage
+            if total_coverage >= 90:
+                color = "brightgreen"
+            elif total_coverage >= 80:
+                color = "green"
+            elif total_coverage >= 70:
+                color = "yellowgreen"
+            elif total_coverage >= 60:
+                color = "yellow"
+            else:
+                color = "red"
 
-        return ToolResult(
-            success=True,
-            exit_code=0,
-            stdout=output,
-            stderr="",
-            operation_id=operation_id,
-        )
+            # Simple SVG badge content
+            svg_content = f'''<svg xmlns="http://www.w3.org/2000/svg" width="104" height="20">
+<linearGradient id="b" x2="0" y2="100%">
+<stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+<stop offset="1" stop-opacity=".1"/>
+</linearGradient>
+<mask id="a">
+<rect width="104" height="20" rx="3" fill="#fff"/>
+</mask>
+<g mask="url(#a)">
+<path fill="#555" d="M0 0h63v20H0z"/>
+<path fill="{color}" d="M63 0h41v20H63z"/>
+<path fill="url(#b)" d="M0 0h104v20H0z"/>
+</g>
+<g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="110">
+<text x="325" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="530">coverage</text>
+<text x="325" y="140" transform="scale(.1)" textLength="530">coverage</text>
+<text x="825" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="310">{total_coverage:.0f}%</text>
+<text x="825" y="140" transform="scale(.1)" textLength="310">{total_coverage:.0f}%</text>
+</g>
+</svg>'''
 
-    def mutation_summary(self, args: List[str]) -> ToolResult:
-        """Show a summary of the previous Cosmic Ray run.
+            # Write badge file
+            badge_file = badge_dir / "coverage.svg"
+            badge_file.write_text(svg_content)
 
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-summary"
-        )
-
-        return self._subprocess_runner.run_uv_command(
-            ["python", "tools/mutation_summary.py", "--config", "pyproject.toml"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-    def mutation_init(self, args: List[str]) -> ToolResult:
-        """Initialize the Cosmic Ray session database if needed.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-init"
-        )
-
-        session_file = self._cosmic_ray_session_file()
-        session_file.parent.mkdir(parents=True, exist_ok=True)
-
-        # Run cosmic-ray init, allowing non-zero exit (reusing existing session)
-        result = self._subprocess_runner.run_uv_command(
-            ["cosmic-ray", "init", "pyproject.toml", str(session_file)],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-        # Adjust output based on result
-        if result.success:
-            output = "Cosmic Ray session initialized"
-        else:
-            output = "Cosmic Ray init skipped (reusing existing session)"
-            # Convert to success since this is expected behavior
-            result = ToolResult(
+            return ToolResult(
                 success=True,
                 exit_code=0,
-                stdout=output,
-                stderr=result.stderr,
+                stdout=f"Generated coverage badge: {badge_file} ({total_coverage:.1f}% coverage)",
+                stderr="",
                 operation_id=operation_id,
             )
 
-        return result
-
-    def mutation_exec(self, args: List[str]) -> ToolResult:
-        """Execute mutation tests with Cosmic Ray.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-exec"
-        )
-
-        session_file = self._cosmic_ray_session_file()
-        if not session_file.exists():
-            raise ToolExecutionError(
-                "Cosmic Ray session file not found",
-                reason=f"Missing session file: {session_file}",
-                rationale="Mutation execution requires initialized session database",
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"Failed to generate coverage badge: {e}",
+                operation_id=operation_id,
             )
-
-        return self._subprocess_runner.run_uv_command(
-            ["cosmic-ray", "exec", "pyproject.toml", str(session_file)],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-    def mutation_report(self, args: List[str]) -> ToolResult:
-        """Render a mutation testing report.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-report"
-        )
-
-        return self._subprocess_runner.run_uv_command(
-            ["python", "tools/mutation_report.py", "--config", "pyproject.toml"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-    def mutation_run(self, args: List[str]) -> ToolResult:
-        """Run the full mutation testing pipeline.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-run"
-        )
-
-        # Run mutation testing pipeline
-        steps = [
-            ("reset", self.mutation_reset),
-            ("summary", self.mutation_summary),
-            ("init", self.mutation_init),
-            ("exec", self.mutation_exec),
-            ("report", self.mutation_report),
-        ]
-
-        results = []
-        combined_stdout = ""
-        combined_stderr = ""
-
-        for step_name, step_func in steps:
-            try:
-                result = step_func([])
-                results.append((step_name, result))
-
-                if result.stdout:
-                    combined_stdout += f"Mutation {step_name}:\n{result.stdout}\n"
-                if result.stderr:
-                    combined_stderr += (
-                        f"Mutation {step_name} warnings:\n{result.stderr}\n"
-                    )
-
-                if not result.success:
-                    # Return failure at first failed step
-                    return ToolResult(
-                        success=False,
-                        exit_code=result.exit_code,
-                        stdout=combined_stdout,
-                        stderr=combined_stderr,
-                        operation_id=operation_id,
-                    )
-            except Exception as exc:
-                raise ToolExecutionError(
-                    f"Mutation testing step '{step_name}' failed",
-                    reason=str(exc),
-                    rationale="All mutation testing steps must complete successfully",
-                ) from exc
-
-        return ToolResult(
-            success=True,
-            exit_code=0,
-            stdout=combined_stdout,
-            stderr=combined_stderr,
-            operation_id=operation_id,
-        )

@@ -138,6 +138,6 @@ class RealJsonOperations:
             json.dump(data, f, indent=2)
 
 
-# Global instances for backward compatibility
+# Default global instances for tools that don't inject their own operations
 _default_filesystem = RealFilesystemOperations()
 _default_json = RealJsonOperations()

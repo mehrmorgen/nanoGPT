@@ -243,7 +243,7 @@ def format_command(command: List[str]) -> str:
     return " ".join(shlex.quote(arg) for arg in command)
 
 
-# Global instance for backward compatibility
+# Default global instance for tools that don't inject their own runner
 _default_runner = RealSubprocessRunner()
 
 

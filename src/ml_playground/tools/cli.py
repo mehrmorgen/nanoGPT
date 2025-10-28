@@ -13,6 +13,7 @@ import typer
 from typing_extensions import Annotated
 
 from ml_playground.tools.categories.ci import CITools
+from ml_playground.tools.categories.dev import DevTools
 from ml_playground.tools.categories.environment import EnvironmentTools
 from ml_playground.tools.categories.quality import QualityTools
 from ml_playground.tools.categories.testing import TestingTools
@@ -52,13 +53,19 @@ env_app = typer.Typer(
 
 ci_app = typer.Typer(
     name="ci",
-    help="CI/CD operations (quality gates, mutation testing, badges)",
+    help="CI/CD operations (quality gates, badges)",
     no_args_is_help=True,
 )
 
 agentic_app = typer.Typer(
     name="agentic",
     help="AI-assisted development tools (workflows, batch operations)",
+    no_args_is_help=True,
+)
+
+dev_app = typer.Typer(
+    name="dev",
+    help="Development workflow tools (PR management, cleanup utilities)",
     no_args_is_help=True,
 )
 
@@ -74,6 +81,7 @@ app.add_typer(test_app, name="test")
 app.add_typer(env_app, name="env")
 app.add_typer(ci_app, name="ci")
 app.add_typer(agentic_app, name="agentic")
+app.add_typer(dev_app, name="dev")
 app.add_typer(learn_app, name="learn")
 
 
@@ -209,6 +217,14 @@ def _get_agentic_tools():
         load_config_with_error_handling()
     assert state.config is not None, "Config should be loaded"
     return AgenticTools(state.config, state.project_root or Path.cwd())
+
+
+def _get_dev_tools() -> DevTools:
+    """Get dev tools instance."""
+    if state.config is None:
+        load_config_with_error_handling()
+    assert state.config is not None, "Config should be loaded"
+    return DevTools(config=state.config)
 
 
 def _handle_tool_result(result) -> None:
@@ -562,6 +578,111 @@ def test_clean(
         raise typer.Exit(1)
 
 
+# Mutation testing subcommands
+mutation_app = typer.Typer(
+    name="mutation",
+    help="Mutation testing operations",
+    no_args_is_help=True,
+)
+test_app.add_typer(mutation_app, name="mutation")
+
+
+@mutation_app.command("reset")
+def test_mutation_reset(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Remove the cached Cosmic Ray session."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_reset(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("summary")
+def test_mutation_summary(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show a summary of the current Cosmic Ray configuration."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_summary(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("init")
+def test_mutation_init(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Initialize the Cosmic Ray session database if needed."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_init(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("exec")
+def test_mutation_exec(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Execute mutation tests with Cosmic Ray."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_exec(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("report")
+def test_mutation_report(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Generate a mutation testing report."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_report(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@mutation_app.command("run")
+def test_mutation_run(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Run the full mutation testing pipeline."""
+    try:
+        tools = _get_testing_tools()
+        result = tools.mutation_run(args or [])
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 # Environment commands
 @env_app.command("setup")
 def env_setup(
@@ -770,7 +891,7 @@ def ci_quality_ext(
         Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
     ] = None,
 ) -> None:
-    """Run quality gates followed by mutation testing."""
+    """Run extended quality gates (mutation testing moved to testing tools)."""
     try:
         tools = _get_ci_tools()
         result = tools.quality_ext(args or [])
@@ -819,109 +940,7 @@ def ci_coverage_badge(
         raise typer.Exit(1)
 
 
-# Mutation testing subcommands
-mutation_app = typer.Typer(
-    name="mutation",
-    help="Mutation testing operations",
-    no_args_is_help=True,
-)
-ci_app.add_typer(mutation_app, name="mutation")
-
-
-@mutation_app.command("reset")
-def ci_mutation_reset(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Remove the cached Cosmic Ray session."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_reset(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@mutation_app.command("summary")
-def ci_mutation_summary(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Show a summary of the previous Cosmic Ray run."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_summary(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@mutation_app.command("init")
-def ci_mutation_init(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Initialize the Cosmic Ray session database if needed."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_init(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@mutation_app.command("exec")
-def ci_mutation_exec(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Execute mutation tests with Cosmic Ray."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_exec(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@mutation_app.command("report")
-def ci_mutation_report(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Render a mutation testing report."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_report(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@mutation_app.command("run")
-def ci_mutation_run(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Run the full mutation testing pipeline."""
-    try:
-        tools = _get_ci_tools()
-        result = tools.mutation_run(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+# Mutation testing moved to testing tools
 
 
 # Agentic commands
@@ -1069,6 +1088,134 @@ def agentic_workflow_status(
             learning_mode=state.learning_mode,
             verbosity_level=state.verbosity,
         )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+# Dev commands
+@dev_app.command("review-list")
+def dev_review_list(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number")],
+    unreplied: Annotated[
+        bool, typer.Option("--unreplied", help="Only show threads without viewer reply")
+    ] = False,
+    unresolved: Annotated[
+        bool, typer.Option("--unresolved", help="Only show unresolved threads")
+    ] = False,
+    remote: Annotated[
+        str, typer.Option("--remote", help="Git remote name for owner/repo inference")
+    ] = "origin",
+) -> None:
+    """List GitHub PR review comments with optional filtering."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.review_list(
+            pr_number=pr_number,
+            unreplied=unreplied,
+            unresolved=unresolved,
+            remote=remote,
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@dev_app.command("review-bulk-reply")
+def dev_review_bulk_reply(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number")],
+    replies_file: Annotated[
+        Path,
+        typer.Option(
+            "--replies", help="JSON file mapping comment URLs/IDs to reply text"
+        ),
+    ],
+    remote: Annotated[
+        str, typer.Option("--remote", help="Git remote name for owner/repo inference")
+    ] = "origin",
+) -> None:
+    """Bulk reply to GitHub PR review comments."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.review_bulk_reply(
+            pr_number=pr_number,
+            replies_file=replies_file,
+            remote=remote,
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@dev_app.command("review-delete")
+def dev_review_delete(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number")],
+    comments_file: Annotated[
+        Path,
+        typer.Option(
+            "--comments", help="JSON file with list of comment IDs/URLs to delete"
+        ),
+    ],
+    remote: Annotated[
+        str, typer.Option("--remote", help="Git remote name for owner/repo inference")
+    ] = "origin",
+) -> None:
+    """Delete GitHub PR review comments."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.review_delete(
+            pr_number=pr_number,
+            comments_file=comments_file,
+            remote=remote,
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@dev_app.command("cleanup-ignored-tracked")
+def dev_cleanup_ignored_tracked() -> None:
+    """Clean up Git-ignored files that are still tracked."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.cleanup_ignored_tracked()
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@dev_app.command("kill-port")
+def dev_kill_port(
+    port: Annotated[int, typer.Argument(help="Port number to kill processes on")],
+) -> None:
+    """Kill processes running on a specific port."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.kill_port(port=port)
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@dev_app.command("setup-ai-guidelines")
+def dev_setup_ai_guidelines(
+    tool: Annotated[
+        str, typer.Argument(help="Target tool name (e.g., kiro, cursor, copilot)")
+    ],
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Preview actions without executing")
+    ] = False,
+) -> None:
+    """Set up AI development guidelines for a specific tool."""
+    try:
+        tools = _get_dev_tools()
+        result = tools.setup_ai_guidelines(tool=tool, dry_run=dry_run)
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)

@@ -371,7 +371,7 @@ class EnvironmentTools:
             )
 
         # Build command
-        cmd = ["python", "tools/setup_ai_guidelines.py", tool]
+        cmd = ["python", "scripts/setup_ai_guidelines.py", tool]
         if dry_run:
             cmd.append("--dry-run")
 

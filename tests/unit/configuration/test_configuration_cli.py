@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pytest
 from typer.testing import CliRunner
 
 from ml_playground.cli import CLIDependencies, app, override_cli_dependencies
+from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.models import (
     DataConfig,
@@ -92,27 +93,51 @@ def _deps(
         prepare_cfg: PreparerConfig,
         config_path: Path,
         shared_cfg: SharedConfig,
-    ) -> None:
+        learning_engine: Any = None,
+    ) -> ToolResult:
         if run_prepare is not None:
             run_prepare(experiment, prepare_cfg, config_path, shared_cfg)
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command=experiment,
+        )
 
     def _run_train_inner(
         experiment: str,
         train_cfg: TrainerConfig,
         config_path: Path,
         shared_cfg: SharedConfig,
-    ) -> None:
+        learning_engine: Any = None,
+    ) -> ToolResult:
         if run_train is not None:
             run_train(experiment, train_cfg, config_path, shared_cfg)
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="train",
+            command=experiment,
+        )
 
     def _run_sample_inner(
         experiment: str,
         sample_cfg: SamplerConfig,
         config_path: Path,
         shared_cfg: SharedConfig,
-    ) -> None:
+        learning_engine: Any = None,
+    ) -> ToolResult:
         if run_sample is not None:
             run_sample(experiment, sample_cfg, config_path, shared_cfg)
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="sample",
+            command=experiment,
+        )
 
     return CLIDependencies(
         load_experiment=load,

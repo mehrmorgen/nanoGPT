@@ -24,11 +24,46 @@ from ml_playground.sampling.runner import Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.experiments import registry
+from ml_playground.tools.core.interfaces import ToolResult
+from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
+
+# Constants for error messages
+_MISSING_TRAIN_RUNTIME_MSG = "Runtime configuration is missing for training."
+_MISSING_SAMPLE_RUNTIME_MSG = "Runtime configuration is missing for sampling."
+
+
+def _handle_tool_result(result: ToolResult, learning_mode: bool = False) -> None:
+    """Handle ToolResult output and exit appropriately."""
+    if result.stdout:
+        typer.echo(result.stdout)
+    if result.stderr:
+        typer.echo(result.stderr, err=True)
+
+    # Display learning mode information if enabled
+    if learning_mode and result.learning_info:
+        if result.learning_info.explanations:
+            typer.echo("\n📚 Learning Mode - What this command does:")
+            for explanation in result.learning_info.explanations:
+                typer.echo(f"  • {explanation}")
+
+        if result.learning_info.best_practices:
+            typer.echo("\n💡 Best Practices:")
+            for practice in result.learning_info.best_practices:
+                typer.echo(f"  • {practice}")
+
+        if result.learning_info.related_concepts:
+            typer.echo("\n🔗 Related Concepts:")
+            for concept in result.learning_info.related_concepts:
+                typer.echo(f"  • {concept}")
+
+    if not result.success:
+        raise typer.Exit(result.exit_code)
+
 
 # (Removed unused type aliases)
 
 
-__all__ = ["main", "_run_prepare", "_run_train", "_run_sample"]
+__all__ = ["main"]
 
 
 @dataclass(frozen=True)
@@ -36,9 +71,15 @@ class CLIDependencies:
     load_experiment: Callable[[str, Path | None], ExperimentConfig]
     ensure_train_prerequisites: Callable[[ExperimentConfig], Any]
     ensure_sample_prerequisites: Callable[[ExperimentConfig], Any]
-    run_prepare: Callable[[str, PreparerConfig, Path, SharedConfig], None]
-    run_train: Callable[[str, TrainerConfig, Path, SharedConfig], None]
-    run_sample: Callable[[str, SamplerConfig, Path, SharedConfig], None]
+    run_prepare: Callable[
+        [str, PreparerConfig, Path, SharedConfig, LearningModeEngine | None], ToolResult
+    ]
+    run_train: Callable[
+        [str, TrainerConfig, Path, SharedConfig, LearningModeEngine | None], ToolResult
+    ]
+    run_sample: Callable[
+        [str, SamplerConfig, Path, SharedConfig, LearningModeEngine | None], ToolResult
+    ]
 
 
 def _run_prepare_impl(
@@ -46,12 +87,56 @@ def _run_prepare_impl(
     prepare_cfg: PreparerConfig,
     config_path: Path,
     shared: Any,
-) -> None:
+    learning_mode_engine: LearningModeEngine | None = None,
+) -> ToolResult:
     """Run the full prepare flow for an experiment."""
-    prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
-    pipeline = create_pipeline(prepare_cfg, shared)
-    pipeline.run()
-    prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
+    try:
+        prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
+        pipeline = create_pipeline(prepare_cfg, shared)
+        pipeline.run()
+        prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
+
+        # Generate learning info if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="data preparation",
+                category="prepare",
+                executed_commands=[f"prepare {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command=experiment,
+            stdout=f"Successfully prepared data for experiment: {experiment}",
+            learning_info=learning_info,
+        )
+    except Exception as e:
+        prepare_cfg.logger.error(f"Pipeline for {experiment} failed: {e}")
+
+        # Generate learning info even for failures if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="data preparation",
+                category="prepare",
+                executed_commands=[f"prepare {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="ml",
+            category="prepare",
+            command=experiment,
+            stderr=f"Pipeline preparation failed: {e}",
+            learning_info=learning_info,
+        )
 
 
 def _run_train_impl(
@@ -59,26 +144,80 @@ def _run_train_impl(
     train_cfg: TrainerConfig,
     config_path: Path,
     shared: Any,
-) -> None:
+    learning_mode_engine: LearningModeEngine | None = None,
+) -> ToolResult:
     """Run the full training flow for an experiment."""
-    if not train_cfg.runtime:
-        train_cfg.logger.error("Runtime configuration is missing for training.")
-        raise typer.Exit(1)
 
-    _global_device_setup(
-        train_cfg.runtime.device,
-        train_cfg.runtime.dtype,
-        train_cfg.runtime.seed,
-    )
+    try:
+        if not train_cfg.runtime:
+            train_cfg.logger.error(_MISSING_TRAIN_RUNTIME_MSG)
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="ml",
+                category="train",
+                command=experiment,
+                stderr=_MISSING_TRAIN_RUNTIME_MSG,
+            )
 
-    train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
-    _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
+        _global_device_setup(
+            train_cfg.runtime.device,
+            train_cfg.runtime.dtype,
+            train_cfg.runtime.seed,
+        )
 
-    trainer = CoreTrainer(train_cfg, shared)
-    trainer.run()
+        train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
+        _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
 
-    train_cfg.logger.info(f"Trainer for {experiment} finished.")
-    _log_command_status("post-train", shared, shared.train_out_dir, train_cfg.logger)
+        trainer = CoreTrainer(train_cfg, shared)
+        trainer.run()
+
+        train_cfg.logger.info(f"Trainer for {experiment} finished.")
+        _log_command_status(
+            "post-train", shared, shared.train_out_dir, train_cfg.logger
+        )
+
+        # Generate learning info if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="model training",
+                category="train",
+                executed_commands=[f"train {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="train",
+            command=experiment,
+            stdout=f"Successfully completed training for experiment: {experiment}",
+            learning_info=learning_info,
+        )
+    except Exception as e:
+        train_cfg.logger.error(f"Training for {experiment} failed: {e}")
+
+        # Generate learning info even for failures if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="model training",
+                category="train",
+                executed_commands=[f"train {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="ml",
+            category="train",
+            command=experiment,
+            stderr=f"Training failed: {e}",
+            learning_info=learning_info,
+        )
 
 
 def _run_sample_impl(
@@ -86,24 +225,80 @@ def _run_sample_impl(
     sample_cfg: SamplerConfig,
     config_path: Path,
     shared: Any,
-) -> None:
+    learning_mode_engine: LearningModeEngine | None = None,
+) -> ToolResult:
     """Run the full sampling flow for an experiment."""
-    if not sample_cfg.runtime:
-        sample_cfg.logger.error("Runtime configuration is missing for sampling.")
-        raise typer.Exit(1)
 
-    _global_device_setup(
-        sample_cfg.runtime.device,
-        sample_cfg.runtime.dtype,
-        sample_cfg.runtime.seed,
-    )
+    try:
+        if not sample_cfg.runtime:
+            sample_cfg.logger.error(_MISSING_SAMPLE_RUNTIME_MSG)
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="ml",
+                category="sample",
+                command=experiment,
+                stderr=_MISSING_SAMPLE_RUNTIME_MSG,
+            )
 
-    sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
-    _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
-    sampler = Sampler(sample_cfg, shared)
-    sampler.run()
-    sample_cfg.logger.info(f"Sampler for {experiment} finished.")
-    _log_command_status("post-sample", shared, shared.sample_out_dir, sample_cfg.logger)
+        _global_device_setup(
+            sample_cfg.runtime.device,
+            sample_cfg.runtime.dtype,
+            sample_cfg.runtime.seed,
+        )
+
+        sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
+        _log_command_status(
+            "pre-sample", shared, shared.sample_out_dir, sample_cfg.logger
+        )
+        sampler = Sampler(sample_cfg, shared)
+        sampler.run()
+        sample_cfg.logger.info(f"Sampler for {experiment} finished.")
+        _log_command_status(
+            "post-sample", shared, shared.sample_out_dir, sample_cfg.logger
+        )
+
+        # Generate learning info if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="model sampling",
+                category="sample",
+                executed_commands=[f"sample {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="sample",
+            command=experiment,
+            stdout=f"Successfully completed sampling for experiment: {experiment}",
+            learning_info=learning_info,
+        )
+    except Exception as e:
+        sample_cfg.logger.error(f"Sampling for {experiment} failed: {e}")
+
+        # Generate learning info even for failures if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="model sampling",
+                category="sample",
+                executed_commands=[f"sample {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="ml",
+            category="sample",
+            command=experiment,
+            stderr=f"Sampling failed: {e}",
+            learning_info=learning_info,
+        )
 
 
 def default_cli_dependencies() -> CLIDependencies:
@@ -228,7 +423,7 @@ def run_or_exit(
             logger.info(keyboard_interrupt_msg)
         # Do not exit on KeyboardInterrupt in this helper
         return
-    except (RuntimeError, OSError, ImportError, SystemError, ConnectionError) as e:
+    except (RuntimeError, OSError, ImportError) as e:
         # Generic mapping for unexpected exceptions: echo and exit with provided code
         logger = logging.getLogger(__name__)
         logger.error(f"{e}")
@@ -255,7 +450,7 @@ def _log_dir(
             contents = sorted([p.name for p in dir_path.iterdir()])
             logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
             logger.info(f"[{tag}]   Contents: {contents}")
-        except (OSError, PermissionError):
+        except OSError:
             logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
     else:
         logger.info(f"[{tag}] {dir_name} (missing): {dir_path}")
@@ -279,85 +474,63 @@ def _log_command_status(
         pass
 
 
-def _run_prepare(
+def _run_analyze(
     experiment: str,
-    prepare_cfg: PreparerConfig,
-    config_path: Path,
-    shared: Any,
-) -> None:
-    """Run the full prepare flow for an experiment."""
-    prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
-    pipeline = create_pipeline(prepare_cfg, shared)
-    pipeline.run()
-    prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
-
-
-def _run_train(
-    experiment: str,
-    train_cfg: TrainerConfig,
-    config_path: Path,
-    shared: Any,
-) -> None:
-    """Run the full training flow for an experiment."""
-    if not train_cfg.runtime:
-        train_cfg.logger.error("Runtime configuration is missing for training.")
-        raise typer.Exit(1)
-
-    _global_device_setup(
-        train_cfg.runtime.device,
-        train_cfg.runtime.dtype,
-        train_cfg.runtime.seed,
-    )
-
-    train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
-    _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
-
-    trainer = CoreTrainer(train_cfg, shared)
-    trainer.run()
-
-    train_cfg.logger.info(f"Trainer for {experiment} finished.")
-    _log_command_status("post-train", shared, shared.train_out_dir, train_cfg.logger)
-
-
-def _run_sample(
-    experiment: str,
-    sample_cfg: SamplerConfig,
-    config_path: Path,
-    shared: Any,
-) -> None:
-    """Run the full sampling flow for an experiment."""
-    if not sample_cfg.runtime:
-        sample_cfg.logger.error("Runtime configuration is missing for sampling.")
-        raise typer.Exit(1)
-
-    # Global setup is now handled inside the Sampler class
-    _global_device_setup(
-        sample_cfg.runtime.device,
-        sample_cfg.runtime.dtype,
-        sample_cfg.runtime.seed,
-    )
-
-    sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
-    _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
-    sampler = Sampler(sample_cfg, shared)
-    sampler.run()
-    sample_cfg.logger.info(f"Sampler for {experiment} finished.")
-    _log_command_status("post-sample", shared, shared.sample_out_dir, sample_cfg.logger)
-
-
-def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> None:
+    host: str,
+    port: int,
+    open_browser: bool,
+    learning_mode_engine: LearningModeEngine | None = None,
+) -> ToolResult:
     """Run analysis for an experiment.
 
     Only 'bundestag_char' is currently supported.
     """
-    # Raise for any experiment other than 'bundestag_char'
-    if experiment != "bundestag_char":
-        raise RuntimeError("analyze currently supports only 'bundestag_char'")
-    # Placeholder for actual analysis logic for bundestag_char
-    logger = logging.getLogger(__name__)
-    logger.info(
-        f"Analysis for '{experiment}' not implemented. Host={host}, Port={port}, Open={open_browser}"
-    )
+    try:
+        # Raise for any experiment other than 'bundestag_char'
+        if experiment != "bundestag_char":
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="ml",
+                category="analyze",
+                command=experiment,
+                stderr=f"analyze currently supports only 'bundestag_char', got: {experiment}",
+            )
+
+        # Placeholder for actual analysis logic for bundestag_char
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Analysis for '{experiment}' not implemented. Host={host}, Port={port}, Open={open_browser}"
+        )
+
+        # Generate learning info if learning mode is enabled
+        learning_info = None
+        if learning_mode_engine:
+            learning_info = learning_mode_engine.explain_command(
+                command=experiment,
+                context="model analysis",
+                category="analyze",
+                executed_commands=[f"analyze {experiment}"],
+            )
+
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=experiment,
+            stdout=f"Analysis placeholder executed for {experiment} (Host={host}, Port={port}, Open={open_browser})",
+            learning_info=learning_info,
+        )
+    except Exception as e:
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="ml",
+            category="analyze",
+            command=experiment,
+            stderr=f"Analysis failed: {e}",
+        )
 
 
 # --- CLI definition --------------------------------------------------------
@@ -399,6 +572,23 @@ def global_options(
             ),
         ),
     ] = None,
+    learning_mode: Annotated[
+        bool,
+        typer.Option(
+            "--learning-mode",
+            help="Enable educational explanations for ML workflow operations",
+        ),
+    ] = False,
+    verbosity: Annotated[
+        int,
+        typer.Option(
+            "--verbosity",
+            "-v",
+            help="Learning mode verbosity: 0=minimal, 1=standard, 2=comprehensive",
+            min=0,
+            max=2,
+        ),
+    ] = 1,
 ) -> None:
     """Global options applied to all subcommands."""
     # Validate --exp-config immediately if provided
@@ -406,6 +596,12 @@ def global_options(
         logger = logging.getLogger(__name__)
         logger.error(f"Config file not found: {exp_config}")
         raise typer.Exit(2)
+
+    # Store learning mode settings in context
+    if ctx.obj is None:
+        ctx.obj = {}
+    ctx.obj["learning_mode"] = learning_mode
+    ctx.obj["verbosity"] = VerbosityLevel(verbosity)
 
     try:
         # Ensure INFO-level logs (including status) are visible by default
@@ -428,9 +624,21 @@ def prepare(
     exp_config_path = _extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
+    # Get learning mode settings from context
+    learning_mode = ctx.obj.get("learning_mode", False) if ctx.obj else False
+    verbosity = (
+        ctx.obj.get("verbosity", VerbosityLevel.STANDARD)
+        if ctx.obj
+        else VerbosityLevel.STANDARD
+    )
+    learning_engine = LearningModeEngine(verbosity) if learning_mode else None
+
     def _do_prepare() -> None:
         exp = deps.load_experiment(experiment, exp_config_path)
-        deps.run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
+        result = deps.run_prepare(
+            experiment, exp.prepare, exp.shared.config_path, exp.shared, learning_engine
+        )
+        _handle_tool_result(result, learning_mode)
 
     run_or_exit(
         _do_prepare,
@@ -447,8 +655,19 @@ def train(
     exp_config_path = _extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
+    # Get learning mode settings from context
+    learning_mode = ctx.obj.get("learning_mode", False) if ctx.obj else False
+    verbosity = (
+        ctx.obj.get("verbosity", VerbosityLevel.STANDARD)
+        if ctx.obj
+        else VerbosityLevel.STANDARD
+    )
+    learning_engine = LearningModeEngine(verbosity) if learning_mode else None
+
     run_or_exit(
-        lambda: _run_train_cmd(experiment, exp_config_path, deps),
+        lambda: _run_train_cmd(
+            experiment, exp_config_path, deps, learning_engine, learning_mode
+        ),
         keyboard_interrupt_msg="\nTraining cancelled.",
     )
 
@@ -462,8 +681,19 @@ def sample(
     exp_config_path = _extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
+    # Get learning mode settings from context
+    learning_mode = ctx.obj.get("learning_mode", False) if ctx.obj else False
+    verbosity = (
+        ctx.obj.get("verbosity", VerbosityLevel.STANDARD)
+        if ctx.obj
+        else VerbosityLevel.STANDARD
+    )
+    learning_engine = LearningModeEngine(verbosity) if learning_mode else None
+
     run_or_exit(
-        lambda: _run_sample_cmd(experiment, exp_config_path, deps),
+        lambda: _run_sample_cmd(
+            experiment, exp_config_path, deps, learning_engine, learning_mode
+        ),
         keyboard_interrupt_msg="\nSampling cancelled.",
     )
 
@@ -483,7 +713,17 @@ def analyze(
     ),
 ) -> None:
     """Run analysis for an experiment (not implemented)."""
-    _run_analyze(experiment, host, port, open_browser)
+    # Get learning mode settings from context
+    learning_mode = ctx.obj.get("learning_mode", False) if ctx.obj else False
+    verbosity = (
+        ctx.obj.get("verbosity", VerbosityLevel.STANDARD)
+        if ctx.obj
+        else VerbosityLevel.STANDARD
+    )
+    learning_engine = LearningModeEngine(verbosity) if learning_mode else None
+
+    result = _run_analyze(experiment, host, port, open_browser, learning_engine)
+    _handle_tool_result(result, learning_mode)
 
 
 def main(argv: list[str] | None = None) -> int | None:
@@ -507,26 +747,36 @@ def _run_train_cmd(
     experiment: str,
     exp_config_path: Path | None,
     deps: CLIDependencies | None = None,
+    learning_engine: LearningModeEngine | None = None,
+    learning_mode: bool = False,
 ) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
     if deps is None:
         deps = get_cli_dependencies()
     exp = deps.load_experiment(experiment, exp_config_path)
     deps.ensure_train_prerequisites(exp)
-    deps.run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
+    result = deps.run_train(
+        experiment, exp.train, exp.shared.config_path, exp.shared, learning_engine
+    )
+    _handle_tool_result(result, learning_mode)
 
 
 def _run_sample_cmd(
     experiment: str,
     exp_config_path: Path | None,
     deps: CLIDependencies | None = None,
+    learning_engine: LearningModeEngine | None = None,
+    learning_mode: bool = False,
 ) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
     if deps is None:
         deps = get_cli_dependencies()
     exp = deps.load_experiment(experiment, exp_config_path)
     deps.ensure_sample_prerequisites(exp)
-    deps.run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
+    result = deps.run_sample(
+        experiment, exp.sample, exp.shared.config_path, exp.shared, learning_engine
+    )
+    _handle_tool_result(result, learning_mode)
 
 
 if __name__ == "__main__":

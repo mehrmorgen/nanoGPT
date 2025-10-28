@@ -651,3 +651,323 @@ class TestingTools:
             )
 
         return result
+
+    def _cosmic_ray_session_file(self) -> Path:
+        """Get the path to the Cosmic Ray session file."""
+        return Path(".cache/cosmic-ray/session.sqlite")
+
+    def mutation_reset(self, args: List[str]) -> ToolResult:
+        """Remove the cached Cosmic Ray session.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-reset"
+        )
+
+        session_file = self._cosmic_ray_session_file()
+        if session_file.exists():
+            try:
+                session_file.unlink()
+                output = f"Removed Cosmic Ray session: {session_file}"
+            except Exception as exc:
+                raise ToolExecutionError(
+                    f"Failed to remove Cosmic Ray session file: {session_file}",
+                    reason=f"File deletion failed: {exc}",
+                    rationale="Session file must be removable for clean mutation testing",
+                ) from exc
+        else:
+            output = f"Cosmic Ray session file does not exist: {session_file}"
+
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=output,
+            stderr="",
+            operation_id=operation_id,
+        )
+
+    def mutation_summary(self, args: List[str]) -> ToolResult:
+        """Show a summary of the current Cosmic Ray configuration.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with configuration summary
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-summary"
+        )
+
+        try:
+            # Import cosmic ray functionality
+            from cosmic_ray.config import load_config
+            from cosmic_ray.modules import find_modules
+
+            config_file = Path("pyproject.toml")
+            cfg = load_config(str(config_file))
+
+            # Extract configuration details
+            session_cfg = cfg.get("session", {})
+            session_path = Path(
+                session_cfg.get("path", ".cache/cosmic-ray/session.sqlite")
+            )
+
+            test_runner_cfg = cfg.get("test-runner", {})
+            test_command = test_runner_cfg.get("command", "pytest")
+
+            # Find modules to mutate
+            modules_cfg = cfg.get("modules", {})
+            modules = find_modules(modules_cfg)
+
+            output_lines = [
+                f"[mutation] config: {config_file}",
+                f"[mutation] session: {session_path}",
+                f"[mutation] test command: {test_command}",
+                f"[mutation] modules to mutate: {len(modules)}",
+            ]
+
+            for module in sorted(modules)[:5]:  # Show first 5 modules
+                output_lines.append(f"[mutation]   - {module}")
+
+            if len(modules) > 5:
+                output_lines.append(f"[mutation]   ... and {len(modules) - 5} more")
+
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="\\n".join(output_lines),
+                stderr="",
+                operation_id=operation_id,
+            )
+
+        except ImportError as e:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
+                operation_id=operation_id,
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"Failed to generate mutation summary: {e}",
+                operation_id=operation_id,
+            )
+
+    def mutation_init(self, args: List[str]) -> ToolResult:
+        """Initialize the Cosmic Ray session database if needed.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-init"
+        )
+
+        session_file = self._cosmic_ray_session_file()
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Run cosmic-ray init, allowing non-zero exit (reusing existing session)
+        result = self._subprocess_runner.run_uv_command(
+            ["cosmic-ray", "init", "pyproject.toml", str(session_file)],
+            cwd=self.root_path,
+            timeout=self.config.testing.timeout,
+            operation_id=operation_id,
+        )
+
+        # Adjust output based on result
+        if result.success:
+            output = "Cosmic Ray session initialized"
+        else:
+            output = "Cosmic Ray init skipped (reusing existing session)"
+            # Convert to success since this is expected behavior
+            result = ToolResult(
+                success=True,
+                exit_code=0,
+                stdout=output,
+                stderr=result.stderr,
+                operation_id=operation_id,
+            )
+
+        return result
+
+    def mutation_exec(self, args: List[str]) -> ToolResult:
+        """Execute mutation tests with Cosmic Ray.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-exec"
+        )
+
+        session_file = self._cosmic_ray_session_file()
+        if not session_file.exists():
+            raise ToolExecutionError(
+                "Cosmic Ray session file not found",
+                reason=f"Missing session file: {session_file}",
+                rationale="Mutation execution requires initialized session database",
+            )
+
+        return self._subprocess_runner.run_uv_command(
+            ["cosmic-ray", "exec", "pyproject.toml", str(session_file)],
+            cwd=self.root_path,
+            timeout=self.config.testing.timeout,
+            operation_id=operation_id,
+        )
+
+    def mutation_report(self, args: List[str]) -> ToolResult:
+        """Generate a mutation testing report.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with report details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-report"
+        )
+
+        try:
+            import sqlite3
+            from collections import Counter
+            from cosmic_ray.config import load_config
+
+            config_file = Path("pyproject.toml")
+            cfg = load_config(str(config_file))
+            session_cfg = cfg.get("session", {})
+            session_path = Path(
+                session_cfg.get("path", ".cache/cosmic-ray/session.sqlite")
+            )
+
+            if not session_path.exists():
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="[mutation] session file not found: no results to report",
+                    stderr="",
+                    operation_id=operation_id,
+                )
+
+            with sqlite3.connect(session_path) as conn:
+                conn.row_factory = lambda cursor, row: row[0]
+                total = (
+                    conn.execute("SELECT COUNT(*) FROM work_results").fetchone() or 0
+                )
+                outcomes = Counter(
+                    conn.execute(
+                        "SELECT COALESCE(test_outcome, 'UNKNOWN') FROM work_results"
+                    )
+                )
+
+            output_lines = [f"[mutation] mutants processed: {total}"]
+            if outcomes:
+                for outcome, count in sorted(outcomes.items()):
+                    label = outcome.lower()
+                    output_lines.append(f"[mutation]   {label}: {count}")
+
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="\\n".join(output_lines),
+                stderr="",
+                operation_id=operation_id,
+            )
+
+        except ImportError as e:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
+                operation_id=operation_id,
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"Failed to generate mutation report: {e}",
+                operation_id=operation_id,
+            )
+
+    def mutation_run(self, args: List[str]) -> ToolResult:
+        """Run the full mutation testing pipeline.
+
+        Args:
+            args: Additional arguments (ignored)
+
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="mutation-run"
+        )
+
+        # Run mutation testing pipeline
+        steps = [
+            ("reset", self.mutation_reset),
+            ("summary", self.mutation_summary),
+            ("init", self.mutation_init),
+            ("exec", self.mutation_exec),
+            ("report", self.mutation_report),
+        ]
+
+        results = []
+        combined_stdout = ""
+        combined_stderr = ""
+
+        for step_name, step_func in steps:
+            try:
+                result = step_func([])
+                results.append((step_name, result))
+
+                if result.stdout:
+                    combined_stdout += f"Mutation {step_name}:\\n{result.stdout}\\n"
+                if result.stderr:
+                    combined_stderr += (
+                        f"Mutation {step_name} warnings:\\n{result.stderr}\\n"
+                    )
+
+                if not result.success:
+                    # Return failure at first failed step
+                    return ToolResult(
+                        success=False,
+                        exit_code=result.exit_code,
+                        stdout=combined_stdout,
+                        stderr=combined_stderr,
+                        operation_id=operation_id,
+                    )
+
+            except Exception as exc:
+                return ToolResult(
+                    success=False,
+                    exit_code=1,
+                    stdout=combined_stdout,
+                    stderr=f"Mutation {step_name} failed: {exc}",
+                    operation_id=operation_id,
+                )
+
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=combined_stdout,
+            stderr=combined_stderr,
+            operation_id=operation_id,
+        )

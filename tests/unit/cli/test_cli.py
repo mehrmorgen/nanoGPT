@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 import ml_playground.cli as cli
 from ml_playground.cli import app, override_cli_dependencies, CLIDependencies
 from ml_playground.configuration.models import ExperimentConfig
+from ml_playground.tools.core.interfaces import ToolResult
 
 
 @pytest.fixture
@@ -365,10 +366,12 @@ class TestHelperCoverage:
         assert any("not implemented" in msg for msg in caplog.messages)
 
     def test_run_analyze_unknown_experiment_raises(self) -> None:
-        """_run_analyze should raise for unsupported experiments."""
+        """_run_analyze should return failure for unsupported experiments."""
 
-        with pytest.raises(RuntimeError):
-            cli._run_analyze("other", "127.0.0.1", 8050, True)
+        result = cli._run_analyze("other", "127.0.0.1", 8050, True)
+        assert not result.success
+        assert result.exit_code == 1
+        assert "analyze currently supports only 'bundestag_char'" in result.stderr
 
     def test_analyze_command_invokes_helper(
         self, runner: CliRunner, caplog: pytest.LogCaptureFixture
@@ -414,17 +417,40 @@ class TestHelperCoverage:
             calls["ensure"].append(exp_cfg)
 
         def fake_run(
-            experiment: str, train_cfg: Any, config_path: Path, shared_cfg: Any
-        ) -> None:
+            experiment: str,
+            train_cfg: Any,
+            config_path: Path,
+            shared_cfg: Any,
+            learning_engine: Any = None,
+        ) -> ToolResult:
             calls["run"].append((experiment, train_cfg, config_path, shared_cfg))
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command=experiment,
+            )
 
         deps = CLIDependencies(
             load_experiment=fake_load,
             ensure_train_prerequisites=fake_ensure,
             ensure_sample_prerequisites=lambda _: None,
-            run_prepare=lambda *_: None,
+            run_prepare=lambda *args: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
             run_train=fake_run,
-            run_sample=lambda *_: None,
+            run_sample=lambda *args: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command="test",
+            ),
         )
 
         with override_cli_dependencies(deps):
@@ -454,16 +480,39 @@ class TestHelperCoverage:
             calls["ensure"].append(exp_cfg)
 
         def fake_run(
-            experiment: str, sample_cfg: Any, config_path: Path, shared_cfg: Any
-        ) -> None:
+            experiment: str,
+            sample_cfg: Any,
+            config_path: Path,
+            shared_cfg: Any,
+            learning_engine: Any = None,
+        ) -> ToolResult:
             calls["run"].append((experiment, sample_cfg, config_path, shared_cfg))
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command=experiment,
+            )
 
         deps = CLIDependencies(
             load_experiment=fake_load,
             ensure_train_prerequisites=lambda _: None,
             ensure_sample_prerequisites=fake_ensure,
-            run_prepare=lambda *_: None,
-            run_train=lambda *_: None,
+            run_prepare=lambda *args: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
+            run_train=lambda *args: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command="test",
+            ),
             run_sample=fake_run,
         )
 
@@ -526,13 +575,13 @@ class TestAnalysisGuardRails:
     """Test _run_analyze experiment validation."""
 
     def test_analyze_rejects_non_bundestag_char(self) -> None:
-        """Test RuntimeError for unsupported experiments."""
+        """Test failure result for unsupported experiments."""
         from ml_playground.cli import _run_analyze
 
-        with pytest.raises(
-            RuntimeError, match="analyze currently supports only 'bundestag_char'"
-        ):
-            _run_analyze("shakespeare", "127.0.0.1", 8050, True)
+        result = _run_analyze("shakespeare", "127.0.0.1", 8050, True)
+        assert not result.success
+        assert result.exit_code == 1
+        assert "analyze currently supports only 'bundestag_char'" in result.stderr
 
     def test_analyze_accepts_bundestag_char(
         self, caplog: pytest.LogCaptureFixture
@@ -622,3 +671,553 @@ class TestDirectoryLoggingResilience:
 
         # Should not raise
         _log_command_status("tag", shared, tmp_path, logging.getLogger(__name__))
+
+
+class TestMLWorkflowLearningModeIntegration:
+    """Test learning mode integration with ML workflow commands."""
+
+    def test_learning_mode_flag_parsing(self, runner: CliRunner) -> None:
+        """Test that learning mode flags are properly parsed."""
+        # Test learning mode flag is accepted
+        result = runner.invoke(app, ["--learning-mode", "--help"])
+        assert result.exit_code == 0
+
+        # Test verbosity flag is accepted
+        result = runner.invoke(app, ["--verbosity", "2", "--help"])
+        assert result.exit_code == 0
+
+        # Test combined flags
+        result = runner.invoke(app, ["--learning-mode", "--verbosity", "1", "--help"])
+        assert result.exit_code == 0
+
+    def test_learning_mode_context_storage(self, runner: CliRunner) -> None:
+        """Test that learning mode settings are stored in context."""
+        import typer
+
+        # Create a test command that checks context
+        test_app = typer.Typer()
+
+        @test_app.callback()
+        def global_options(
+            ctx: typer.Context,
+            learning_mode: bool = typer.Option(False, "--learning-mode"),
+            verbosity: int = typer.Option(1, "--verbosity", min=0, max=2),
+        ) -> None:
+            if ctx.obj is None:
+                ctx.obj = {}
+            ctx.obj["learning_mode"] = learning_mode
+            ctx.obj["verbosity"] = verbosity
+
+        @test_app.command()
+        def test_cmd(ctx: typer.Context) -> None:
+            assert ctx.obj is not None
+            assert "learning_mode" in ctx.obj
+            assert "verbosity" in ctx.obj
+
+        # Test with learning mode enabled
+        result = runner.invoke(
+            test_app, ["--learning-mode", "--verbosity", "2", "test-cmd"]
+        )
+        assert result.exit_code == 0
+
+    def test_prepare_command_with_learning_mode(self, tmp_path: Path) -> None:
+        """Test prepare command integrates learning mode correctly."""
+        from ml_playground.cli import _run_prepare_impl
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+        from ml_playground.configuration.models import PreparerConfig, SharedConfig
+
+        # Create minimal configs
+        shared = SharedConfig(
+            experiment="test",
+            config_path=tmp_path / "config.toml",
+            project_home=tmp_path,
+            dataset_dir=tmp_path / "dataset",
+            train_out_dir=tmp_path / "train",
+            sample_out_dir=tmp_path / "sample",
+        )
+
+        prepare_cfg = PreparerConfig(
+            raw_dir=tmp_path / "raw",
+        )
+
+        # Create learning mode engine
+        learning_engine = LearningModeEngine(VerbosityLevel.STANDARD)
+
+        # This will fail due to missing data, but should return ToolResult with learning info
+        result = _run_prepare_impl(
+            "bundestag_char",
+            prepare_cfg,
+            tmp_path / "config.toml",
+            shared,
+            learning_engine,
+        )
+
+        # Verify ToolResult structure
+        assert not result.success  # Expected to fail due to missing data
+        assert result.operation_id.namespace == "ml"
+        assert result.operation_id.category == "prepare"
+        assert result.operation_id.command == "bundestag_char"
+        assert result.learning_info is not None
+        assert len(result.learning_info.explanations) > 0
+        assert len(result.learning_info.best_practices) > 0
+
+    def test_train_command_with_learning_mode(self) -> None:
+        """Test train command learning mode integration using mocked dependencies."""
+        from ml_playground.cli import _run_train_cmd
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+        from ml_playground.cli import CLIDependencies, override_cli_dependencies
+        from types import SimpleNamespace
+
+        # Create learning mode engine
+        learning_engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+
+        # Mock dependencies to avoid complex configuration setup
+        calls = []
+
+        def mock_load_experiment(name: str, path: Path | None) -> Any:
+            return SimpleNamespace(
+                train="mock_train_cfg",
+                shared=SimpleNamespace(config_path=Path("test.toml")),
+            )
+
+        def mock_ensure_prerequisites(config: Any) -> None:
+            pass
+
+        def mock_run_train(
+            experiment: str,
+            config: Any,
+            config_path: Path,
+            shared: Any,
+            learning_engine: Any = None,
+        ) -> ToolResult:
+            calls.append(("run_train", experiment, learning_engine is not None))
+            # Create result with learning info if learning_engine provided
+            learning_info = None
+            if learning_engine:
+                learning_info = learning_engine.explain_command(
+                    experiment, "model training", "train"
+                )
+
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command=experiment,
+                learning_info=learning_info,
+            )
+
+        deps = CLIDependencies(
+            load_experiment=mock_load_experiment,
+            ensure_train_prerequisites=mock_ensure_prerequisites,
+            ensure_sample_prerequisites=mock_ensure_prerequisites,
+            run_prepare=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
+            run_train=mock_run_train,
+            run_sample=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command="test",
+            ),
+        )
+
+        with override_cli_dependencies(deps):
+            _run_train_cmd(
+                "bundestag_char", None, deps, learning_engine, learning_mode=True
+            )
+
+        # Verify that the learning engine was passed through
+        assert len(calls) == 1
+        assert calls[0][0] == "run_train"
+        assert calls[0][1] == "bundestag_char"
+        assert calls[0][2] is True  # learning_engine was provided
+
+    def test_sample_command_with_learning_mode(self) -> None:
+        """Test sample command learning mode integration using mocked dependencies."""
+        from ml_playground.cli import _run_sample_cmd
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+        from ml_playground.cli import CLIDependencies, override_cli_dependencies
+        from types import SimpleNamespace
+
+        # Create learning mode engine
+        learning_engine = LearningModeEngine(VerbosityLevel.MINIMAL)
+
+        # Mock dependencies to avoid complex configuration setup
+        calls = []
+
+        def mock_load_experiment(name: str, path: Path | None) -> Any:
+            return SimpleNamespace(
+                sample="mock_sample_cfg",
+                shared=SimpleNamespace(config_path=Path("test.toml")),
+            )
+
+        def mock_ensure_prerequisites(config: Any) -> None:
+            pass
+
+        def mock_run_sample(
+            experiment: str,
+            config: Any,
+            config_path: Path,
+            shared: Any,
+            learning_engine: Any = None,
+        ) -> ToolResult:
+            calls.append(("run_sample", experiment, learning_engine is not None))
+            # Create result with learning info if learning_engine provided
+            learning_info = None
+            if learning_engine:
+                learning_info = learning_engine.explain_command(
+                    experiment, "text generation", "sample"
+                )
+
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command=experiment,
+                learning_info=learning_info,
+            )
+
+        deps = CLIDependencies(
+            load_experiment=mock_load_experiment,
+            ensure_train_prerequisites=mock_ensure_prerequisites,
+            ensure_sample_prerequisites=mock_ensure_prerequisites,
+            run_prepare=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
+            run_train=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command="test",
+            ),
+            run_sample=mock_run_sample,
+        )
+
+        with override_cli_dependencies(deps):
+            _run_sample_cmd(
+                "bundestag_qwen15b_lora_mps",
+                None,
+                deps,
+                learning_engine,
+                learning_mode=True,
+            )
+
+        # Verify that the learning engine was passed through
+        assert len(calls) == 1
+        assert calls[0][0] == "run_sample"
+        assert calls[0][1] == "bundestag_qwen15b_lora_mps"
+        assert calls[0][2] is True  # learning_engine was provided
+
+    def test_analyze_command_with_learning_mode(self) -> None:
+        """Test analyze command integrates learning mode correctly."""
+        from ml_playground.cli import _run_analyze
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        # Create learning mode engine
+        learning_engine = LearningModeEngine(VerbosityLevel.STANDARD)
+
+        # Test with supported experiment
+        result = _run_analyze(
+            "bundestag_char", "127.0.0.1", 8050, True, learning_engine
+        )
+
+        # Verify ToolResult structure
+        assert result.success  # Should succeed as it's just a placeholder
+        assert result.operation_id.namespace == "ml"
+        assert result.operation_id.category == "analyze"
+        assert result.operation_id.command == "bundestag_char"
+        assert result.learning_info is not None
+        assert len(result.learning_info.explanations) > 0
+
+    def test_handle_tool_result_displays_learning_info(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that _handle_tool_result properly displays learning information."""
+        from ml_playground.cli import _handle_tool_result
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        # Create learning info
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        learning_info = engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+
+        # Create ToolResult with learning info
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command="bundestag_char",
+            stdout="Preparation completed successfully",
+            learning_info=learning_info,
+        )
+
+        # Test with learning mode enabled
+        _handle_tool_result(result, learning_mode=True)
+
+        captured = capsys.readouterr()
+        assert "📚 Learning Mode - What this command does:" in captured.out
+        assert "💡 Best Practices:" in captured.out
+        assert "🔗 Related Concepts:" in captured.out
+        assert "Converts raw text files into character-level tokens" in captured.out
+
+    def test_handle_tool_result_without_learning_mode(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that _handle_tool_result doesn't display learning info when disabled."""
+        from ml_playground.cli import _handle_tool_result
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        # Create learning info
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        learning_info = engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+
+        # Create ToolResult with learning info
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command="bundestag_char",
+            stdout="Preparation completed successfully",
+            learning_info=learning_info,
+        )
+
+        # Test with learning mode disabled
+        _handle_tool_result(result, learning_mode=False)
+
+        captured = capsys.readouterr()
+        assert "📚 Learning Mode" not in captured.out
+        assert "💡 Best Practices" not in captured.out
+        assert "🔗 Related Concepts" not in captured.out
+        assert "Preparation completed successfully" in captured.out
+
+    def test_ml_workflow_educational_content_coverage(self) -> None:
+        """Test that educational content exists for all ML workflow operations."""
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+
+        # Test prepare operations
+        for experiment in ["bundestag_char", "bundestag_tiktoken"]:
+            result = engine.explain_command(experiment, "data preparation", "prepare")
+            assert len(result.explanations) > 0, (
+                f"No explanations for prepare.{experiment}"
+            )
+            assert len(result.best_practices) > 0, (
+                f"No best practices for prepare.{experiment}"
+            )
+            assert len(result.related_concepts) > 0, (
+                f"No related concepts for prepare.{experiment}"
+            )
+
+        # Test train operations
+        for experiment in ["bundestag_char", "bundestag_qwen15b_lora_mps"]:
+            result = engine.explain_command(experiment, "model training", "train")
+            assert len(result.explanations) > 0, (
+                f"No explanations for train.{experiment}"
+            )
+            assert len(result.best_practices) > 0, (
+                f"No best practices for train.{experiment}"
+            )
+            assert len(result.related_concepts) > 0, (
+                f"No related concepts for train.{experiment}"
+            )
+
+        # Test sample operations
+        for experiment in ["bundestag_char", "bundestag_qwen15b_lora_mps"]:
+            result = engine.explain_command(experiment, "text generation", "sample")
+            assert len(result.explanations) > 0, (
+                f"No explanations for sample.{experiment}"
+            )
+            assert len(result.best_practices) > 0, (
+                f"No best practices for sample.{experiment}"
+            )
+            assert len(result.related_concepts) > 0, (
+                f"No related concepts for sample.{experiment}"
+            )
+
+        # Test analyze operations
+        result = engine.explain_command("bundestag_char", "model analysis", "analyze")
+        assert len(result.explanations) > 0, (
+            "No explanations for analyze.bundestag_char"
+        )
+        assert len(result.best_practices) > 0, (
+            "No best practices for analyze.bundestag_char"
+        )
+        assert len(result.related_concepts) > 0, (
+            "No related concepts for analyze.bundestag_char"
+        )
+
+    def test_verbosity_levels_affect_content_length(self) -> None:
+        """Test that different verbosity levels provide different amounts of content."""
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        # Test with different verbosity levels
+        minimal_engine = LearningModeEngine(VerbosityLevel.MINIMAL)
+        standard_engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        comprehensive_engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+
+        # Get results for the same command at different verbosity levels
+        minimal_result = minimal_engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+        standard_result = standard_engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+        comprehensive_result = comprehensive_engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+
+        # Comprehensive should have more content than standard, standard more than minimal
+        assert len(comprehensive_result.explanations) >= len(
+            standard_result.explanations
+        )
+        assert len(standard_result.explanations) >= len(minimal_result.explanations)
+
+        # Best practices should be empty for minimal mode
+        assert len(minimal_result.best_practices) == 0
+        assert len(standard_result.best_practices) > 0
+        assert len(comprehensive_result.best_practices) > 0
+
+
+class TestToolResultIntegration:
+    """Test ToolResult integration with ML workflow commands."""
+
+    def test_tool_result_creation_with_ml_namespace(self) -> None:
+        """Test ToolResult creation with ML namespace validation."""
+        # Test valid ML categories
+        for category in ["prepare", "train", "sample", "analyze"]:
+            result = ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category=category,
+                command="test",
+            )
+            assert result.operation_id.namespace == "ml"
+            assert result.operation_id.category == category
+            assert str(result.operation_id) == f"ml.{category}.test"
+
+    def test_tool_result_with_learning_info(self) -> None:
+        """Test ToolResult with learning information."""
+        from ml_playground.tools.core.learning_mode import (
+            LearningModeEngine,
+            VerbosityLevel,
+        )
+
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        learning_info = engine.explain_command(
+            "bundestag_char", "data preparation", "prepare"
+        )
+
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command="bundestag_char",
+            learning_info=learning_info,
+        )
+
+        assert result.learning_info is not None
+        assert result.learning_info.explanations == learning_info.explanations
+        assert result.learning_info.best_practices == learning_info.best_practices
+        assert result.learning_info.related_concepts == learning_info.related_concepts
+
+    def test_tool_result_error_handling(self) -> None:
+        """Test ToolResult creation for error cases."""
+        result = ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="ml",
+            category="prepare",
+            command="test",
+            stderr="Preparation failed: missing input data",
+        )
+
+        assert not result.success
+        assert result.exit_code == 1
+        assert "missing input data" in result.stderr
+        assert result.stdout == ""
+
+    def test_cli_dependencies_interface_compatibility(self) -> None:
+        """Test that CLIDependencies interface works with ToolResult."""
+        from ml_playground.cli import CLIDependencies
+
+        def mock_load_experiment(name: str, path: Path | None) -> Any:
+            # This would normally load a real config, but we'll create a mock
+            raise NotImplementedError("Mock function for interface testing")
+
+        def mock_ensure_prerequisites(config: ExperimentConfig) -> None:
+            pass
+
+        def mock_run_operation(
+            experiment: str,
+            config: Any,
+            config_path: Path,
+            shared: Any,
+            learning_engine: Any = None,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command=experiment,
+            )
+
+        # Test that the interface can be created with ToolResult-returning functions
+        deps = CLIDependencies(
+            load_experiment=mock_load_experiment,
+            ensure_train_prerequisites=mock_ensure_prerequisites,
+            ensure_sample_prerequisites=mock_ensure_prerequisites,
+            run_prepare=mock_run_operation,
+            run_train=mock_run_operation,
+            run_sample=mock_run_operation,
+        )
+
+        # Verify the interface is properly typed
+        assert callable(deps.run_prepare)
+        assert callable(deps.run_train)
+        assert callable(deps.run_sample)

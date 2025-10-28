@@ -270,7 +270,7 @@ class TestAIGuidelines:
         assert len(subprocess_runner.calls) == 1
         command = subprocess_runner.calls[0]["command"]
         assert "python" in command
-        assert "tools/setup_ai_guidelines.py" in command
+        assert "scripts/setup_ai_guidelines.py" in command
         assert "ruff" in command
 
     def test_ai_guidelines_empty_tool(

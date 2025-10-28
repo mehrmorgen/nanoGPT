@@ -6,10 +6,12 @@ This package contains the concrete implementations of different tool categories:
 - Environment tools (setup, sync, clean, verify)
 - CI tools (coverage, mutation testing, quality gates)
 - Agentic tools (AI-assisted development workflows)
+- Dev tools (GitHub PR management, cleanup utilities)
 """
 
 from .agentic import AgenticTools
 from .ci import CITools
+from .dev import DevTools
 from .environment import EnvironmentTools
 from .quality import QualityTools
 from .testing import TestingTools
@@ -17,6 +19,7 @@ from .testing import TestingTools
 __all__ = [
     "AgenticTools",
     "CITools",
+    "DevTools",
     "EnvironmentTools",
     "QualityTools",
     "TestingTools",

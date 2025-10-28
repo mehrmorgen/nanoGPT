@@ -97,7 +97,7 @@ class LearningModeEngine:
         Returns:
             Formatted output string with optional educational content
         """
-        output_lines = []
+        output_lines: List[str] = []
 
         # Always show the basic result
         if tool_result.success:
@@ -126,7 +126,7 @@ class LearningModeEngine:
         self, command: str, context: str, category: str, base_content: Dict[str, Any]
     ) -> List[str]:
         """Generate explanations based on verbosity level."""
-        explanations = []
+        explanations: List[str] = []
 
         if self.verbosity == VerbosityLevel.MINIMAL:
             # Just basic command info
@@ -156,7 +156,7 @@ class LearningModeEngine:
         if self.verbosity == VerbosityLevel.MINIMAL:
             return []
 
-        best_practices = []
+        best_practices: List[str] = []
 
         # Add command-specific best practices
         if base_content.get("best_practices"):
@@ -176,7 +176,7 @@ class LearningModeEngine:
         if self.verbosity == VerbosityLevel.MINIMAL:
             return []
 
-        related_concepts = []
+        related_concepts: List[str] = []
 
         # Add command-specific related concepts
         if base_content.get("related_concepts"):
@@ -186,7 +186,7 @@ class LearningModeEngine:
 
     def _format_learning_info(self, learning_info: LearningInfo) -> List[str]:
         """Format learning information for display."""
-        lines = []
+        lines: List[str] = []
 
         if learning_info.commands_executed:
             lines.append("\n📋 Commands executed:")
@@ -237,6 +237,30 @@ class LearningModeEngine:
                 "Use AI tools to augment, not replace, human judgment",
                 "Review AI-generated code carefully before integration",
                 "Maintain clear guidelines for AI-assisted development workflows",
+            ],
+            "prepare": [
+                "Validate data quality and distribution before training",
+                "Document data preprocessing steps for reproducibility",
+                "Use consistent preprocessing across training and inference",
+                "Monitor data splits to prevent leakage between train/test sets",
+            ],
+            "train": [
+                "Monitor training and validation metrics to detect overfitting",
+                "Save model checkpoints regularly to prevent data loss",
+                "Use appropriate learning rate schedules for stable convergence",
+                "Validate model outputs during training to ensure quality",
+            ],
+            "sample": [
+                "Experiment with sampling parameters to achieve desired output quality",
+                "Use appropriate prompts that match training data distribution",
+                "Generate multiple samples to assess model consistency",
+                "Evaluate generated content for quality and appropriateness",
+            ],
+            "analyze": [
+                "Use multiple evaluation metrics for comprehensive assessment",
+                "Compare model performance against appropriate baselines",
+                "Include both automatic metrics and human evaluation",
+                "Document analysis results for future improvement",
             ],
         }
 
@@ -1389,6 +1413,208 @@ class LearningModeEngine:
                     "End-to-end mutation testing workflows",
                     "Test suite quality validation",
                     "Systematic test improvement processes",
+                ],
+            },
+            # ML Workflow educational content
+            "prepare.bundestag_char": {
+                "minimal_explanation": "Prepares character-level tokenized data from Bundestag speeches",
+                "standard_explanation": [
+                    "Converts raw text files into character-level tokens for training",
+                    "Creates train/validation splits with proper data handling",
+                    "Generates vocabulary and saves preprocessed datasets",
+                ],
+                "comprehensive_explanation": [
+                    "Data preparation is the foundation of any successful ML project",
+                    "This step converts raw Bundestag speech transcripts into character-level tokens",
+                    "Character-level tokenization treats each character as a separate token, enabling fine-grained text generation",
+                    "The process includes data cleaning, train/validation splitting, and vocabulary creation",
+                    "Proper data preparation ensures consistent, reproducible training results",
+                    "The prepared data is saved in a format optimized for efficient training",
+                ],
+                "best_practices": [
+                    "Always validate your data splits to ensure no data leakage between train/test",
+                    "Monitor data quality and distribution during preparation",
+                    "Use consistent preprocessing across training and inference",
+                    "Document your data preparation steps for reproducibility",
+                ],
+                "related_concepts": [
+                    "Character-level vs. word-level tokenization",
+                    "Data preprocessing and cleaning",
+                    "Train/validation/test splits",
+                    "Vocabulary construction and management",
+                ],
+            },
+            "prepare.bundestag_tiktoken": {
+                "minimal_explanation": "Prepares BPE-tokenized data from Bundestag speeches using tiktoken",
+                "standard_explanation": [
+                    "Uses GPT-2 BPE tokenization via tiktoken for subword-level processing",
+                    "Creates efficient token sequences for transformer training",
+                    "Handles German text with robust subword tokenization",
+                ],
+                "comprehensive_explanation": [
+                    "Byte Pair Encoding (BPE) tokenization provides a balance between character and word-level approaches",
+                    "tiktoken implements the same tokenization used by GPT models, ensuring compatibility",
+                    "BPE handles out-of-vocabulary words by breaking them into subword units",
+                    "This approach is particularly effective for German text with compound words",
+                    "The tokenization creates a vocabulary of subword units that can represent any text",
+                    "Proper tokenization is crucial for model performance and generalization",
+                ],
+                "best_practices": [
+                    "Use consistent tokenization between training and inference",
+                    "Validate tokenization quality on sample texts",
+                    "Consider language-specific tokenization challenges",
+                    "Monitor vocabulary size and coverage",
+                ],
+                "related_concepts": [
+                    "Byte Pair Encoding (BPE)",
+                    "Subword tokenization strategies",
+                    "tiktoken and GPT tokenization",
+                    "Multilingual text processing",
+                ],
+            },
+            "train.bundestag_char": {
+                "minimal_explanation": "Trains a character-level language model on Bundestag data",
+                "standard_explanation": [
+                    "Implements transformer-based language modeling with character tokens",
+                    "Uses gradient descent optimization with learning rate scheduling",
+                    "Monitors training metrics and saves model checkpoints",
+                ],
+                "comprehensive_explanation": [
+                    "Language model training teaches the model to predict the next character in a sequence",
+                    "The transformer architecture uses self-attention to capture long-range dependencies",
+                    "Training involves forward passes (prediction) and backward passes (gradient computation)",
+                    "Learning rate scheduling helps the model converge to better solutions",
+                    "Checkpointing saves model state at regular intervals for recovery and evaluation",
+                    "Proper training requires balancing model capacity, data size, and computational resources",
+                    "Monitoring loss curves helps detect overfitting and training issues",
+                ],
+                "best_practices": [
+                    "Monitor training and validation loss to detect overfitting",
+                    "Use appropriate learning rate schedules for stable convergence",
+                    "Save checkpoints regularly to prevent data loss",
+                    "Validate model outputs during training to ensure quality",
+                ],
+                "related_concepts": [
+                    "Transformer architecture and self-attention",
+                    "Language modeling objectives",
+                    "Gradient descent optimization",
+                    "Learning rate scheduling strategies",
+                ],
+            },
+            "train.bundestag_qwen15b_lora_mps": {
+                "minimal_explanation": "Fine-tunes Qwen2.5-1.5B model using LoRA on Apple Silicon",
+                "standard_explanation": [
+                    "Uses Parameter-Efficient Fine-Tuning (PEFT) with Low-Rank Adaptation",
+                    "Optimized for Apple Silicon MPS (Metal Performance Shaders)",
+                    "Fine-tunes only a small subset of parameters while keeping base model frozen",
+                ],
+                "comprehensive_explanation": [
+                    "LoRA (Low-Rank Adaptation) enables efficient fine-tuning of large language models",
+                    "Instead of updating all parameters, LoRA adds small trainable matrices to existing layers",
+                    "This approach reduces memory usage and training time while maintaining performance",
+                    "MPS acceleration leverages Apple Silicon's unified memory architecture",
+                    "The Qwen2.5-1.5B model provides a good balance of capability and efficiency",
+                    "Fine-tuning adapts the pre-trained model to domain-specific data (Bundestag speeches)",
+                    "PEFT techniques make large model training accessible on consumer hardware",
+                ],
+                "best_practices": [
+                    "Choose appropriate LoRA rank based on task complexity and resources",
+                    "Monitor GPU memory usage to avoid out-of-memory errors",
+                    "Use gradient checkpointing for memory-efficient training",
+                    "Validate fine-tuned model performance on held-out data",
+                ],
+                "related_concepts": [
+                    "Parameter-Efficient Fine-Tuning (PEFT)",
+                    "Low-Rank Adaptation (LoRA)",
+                    "Apple Silicon MPS optimization",
+                    "Transfer learning and domain adaptation",
+                ],
+            },
+            "sample.bundestag_char": {
+                "minimal_explanation": "Generates text samples from the trained character-level model",
+                "standard_explanation": [
+                    "Uses the trained model to generate new text character by character",
+                    "Implements sampling strategies like temperature and top-k filtering",
+                    "Produces coherent text in the style of Bundestag speeches",
+                ],
+                "comprehensive_explanation": [
+                    "Text generation uses the trained model to predict and sample next characters",
+                    "Temperature controls randomness: lower values produce more deterministic text",
+                    "Top-k sampling limits choices to the k most likely next characters",
+                    "The generation process starts with a prompt and iteratively extends it",
+                    "Quality of generated text reflects the model's understanding of language patterns",
+                    "Sampling strategies balance creativity with coherence in generated text",
+                    "Character-level generation can produce novel words and creative language use",
+                ],
+                "best_practices": [
+                    "Experiment with different temperature values for desired creativity levels",
+                    "Use appropriate prompts that match your training data distribution",
+                    "Generate multiple samples to assess model consistency",
+                    "Evaluate generated text quality both automatically and manually",
+                ],
+                "related_concepts": [
+                    "Autoregressive text generation",
+                    "Sampling strategies and temperature",
+                    "Top-k and nucleus (top-p) sampling",
+                    "Prompt engineering and conditioning",
+                ],
+            },
+            "sample.bundestag_qwen15b_lora_mps": {
+                "minimal_explanation": "Generates text using the fine-tuned Qwen model with LoRA adapters",
+                "standard_explanation": [
+                    "Loads the base Qwen model with trained LoRA adapters",
+                    "Generates text using advanced sampling techniques",
+                    "Produces high-quality German text in Bundestag speech style",
+                ],
+                "comprehensive_explanation": [
+                    "Inference combines the frozen base model with learned LoRA adaptations",
+                    "The fine-tuned model generates text that reflects both general language knowledge and domain-specific patterns",
+                    "Advanced sampling techniques like nucleus sampling improve generation quality",
+                    "The model can generate coherent, contextually appropriate German political discourse",
+                    "LoRA adapters can be easily swapped to change the model's behavior",
+                    "Generation quality benefits from the large-scale pre-training of the base model",
+                    "Proper inference setup ensures consistent and reproducible text generation",
+                ],
+                "best_practices": [
+                    "Load LoRA adapters correctly to ensure fine-tuned behavior",
+                    "Use appropriate generation parameters for your use case",
+                    "Validate generated content for quality and appropriateness",
+                    "Consider ethical implications of generated political content",
+                ],
+                "related_concepts": [
+                    "LoRA adapter loading and inference",
+                    "Advanced sampling techniques",
+                    "Domain-specific text generation",
+                    "Responsible AI and content generation ethics",
+                ],
+            },
+            "analyze.bundestag_char": {
+                "minimal_explanation": "Analyzes model performance and generated text quality (placeholder)",
+                "standard_explanation": [
+                    "Would provide comprehensive analysis of model training metrics",
+                    "Would evaluate generated text quality using various metrics",
+                    "Would offer insights into model behavior and performance",
+                ],
+                "comprehensive_explanation": [
+                    "Model analysis is crucial for understanding training effectiveness and model behavior",
+                    "Analysis would include training curve visualization, loss progression, and convergence patterns",
+                    "Text quality evaluation uses metrics like perplexity, BLEU scores, and human evaluation",
+                    "Performance analysis helps identify overfitting, underfitting, and optimization issues",
+                    "Comparative analysis against baselines provides context for model performance",
+                    "Analysis results guide decisions about model architecture, training procedures, and deployment",
+                    "Comprehensive analysis ensures models meet quality standards before production use",
+                ],
+                "best_practices": [
+                    "Use multiple evaluation metrics to get a complete picture of model performance",
+                    "Compare against appropriate baselines and previous model versions",
+                    "Include both automatic metrics and human evaluation",
+                    "Document analysis results for future reference and improvement",
+                ],
+                "related_concepts": [
+                    "Model evaluation metrics and methodologies",
+                    "Training curve analysis and interpretation",
+                    "Text quality assessment techniques",
+                    "Performance benchmarking and comparison",
                 ],
             },
         }
