@@ -93,3 +93,4 @@ Testing
 - See `tests/*/README.md` for folder-specific scope and patterns.
 ```
 # Test pre-commit hook
+# Test pre-commit hook again
