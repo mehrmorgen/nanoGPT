@@ -92,3 +92,4 @@ Testing
 - See `.dev-guidelines/README.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.
 ```
+# Test pre-commit hook
