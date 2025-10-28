@@ -31,7 +31,7 @@ class CITools:
         self.config = config
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
-        self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
+        self.pre_commit_config = root_path / ".pre-commit-config.yaml"
         self._subprocess_runner = subprocess_runner or _default_runner
 
     @property

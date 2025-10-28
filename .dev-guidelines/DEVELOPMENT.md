@@ -95,7 +95,7 @@ For focused iterations, rely on task-specific commands (e.g., `uv run pytest pat
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `uv run ci-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uv run tools ci quality-gate`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently

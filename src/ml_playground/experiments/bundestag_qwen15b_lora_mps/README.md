@@ -28,8 +28,8 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-uv run env-tasks setup
-uv run env-tasks verify
+uv run tools env setup
+uv run tools env verify
 ```
 
 ## How to Run

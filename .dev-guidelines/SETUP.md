@@ -119,10 +119,10 @@ Notes:
 
 ```bash
 # Full gate: ruff (lint+format), pyright, mypy, pytest
-uv run ci-tasks quality
+uv run tools ci quality-gate
 
 # Extended: optional mutation testing (Cosmic Ray)
-uv run ci-tasks quality-ext
+uv run tools ci quality-ext
 ```
 
 ## Quick Troubleshooting

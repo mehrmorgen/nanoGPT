@@ -94,6 +94,14 @@ class EnvironmentTools:
 
         results.append("Synchronized all dependency groups")
 
+        # Setup git hooks
+        hooks_result = self._setup_git_hooks(operation_id)
+        if hooks_result.success:
+            results.append("Configured git hooks")
+        else:
+            # Don't fail setup if hooks fail, just warn
+            results.append(f"Warning: Git hooks setup failed: {hooks_result.stderr}")
+
         # Combine outputs
         combined_stdout = venv_result.stdout
         if sync_result.stdout:
@@ -345,6 +353,123 @@ class EnvironmentTools:
             stderr="",
             operation_id=operation_id,
         )
+
+    def _setup_git_hooks(self, operation_id: OperationId) -> ToolResult:
+        """Setup git hooks by creating pre-commit hook in .git/hooks.
+        
+        Args:
+            operation_id: Operation identifier for tracking
+            
+        Returns:
+            ToolResult with setup status
+        """
+        import shutil
+        
+        git_hooks_dir = self.root_path / ".git" / "hooks"
+        
+        # Handle git worktrees
+        git_file = self.root_path / ".git"
+        if git_file.is_file():
+            # This is a worktree, read the gitdir
+            try:
+                gitdir_content = git_file.read_text().strip()
+                if gitdir_content.startswith("gitdir: "):
+                    gitdir_path = gitdir_content[8:]  # Remove "gitdir: " prefix
+                    git_hooks_dir = Path(gitdir_path) / "hooks"
+            except Exception:
+                pass  # Fall back to default behavior
+        
+        try:
+            # Create hooks directory if it doesn't exist
+            git_hooks_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create pre-commit hook
+            pre_commit_hook = git_hooks_dir / "pre-commit"
+            hook_content = '''#!/usr/bin/env bash
+# Pre-commit hook using pre-commit framework with uv
+
+set -euo pipefail
+
+# Hard enforcement BEFORE pre-commit's isolated staging: scan working tree tests/ for mocks
+if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
+  if [ -n "$files" ]; then
+    found=0
+    tokens=(
+      'monkeypatch'
+      'pytest.MonkeyPatch'
+      'unittest.mock'
+      'from unittest import mock'
+      'pytest_mock'
+      'MagicMock'
+      'patch('
+    )
+    while IFS= read -r f; do
+      for t in "${tokens[@]}"; do
+        lines=$(grep -n "$t" "$f" || true)
+        # Drop matches where the actual file content (after the colon) is a comment
+        # or where the token only appears inside string literals (e.g., "patch(")
+        lines=$(echo "$lines" | awk -F: -v tok="$t" '
+          function has_token_outside(line, tok,    i, c, in_single, in_double, tok_len) {
+            in_single = 0; in_double = 0; tok_len = length(tok);
+            for (i = 1; i <= length(line) - tok_len + 1; i++) {
+              c = substr(line, i, 1);
+              if (c == "\"" && substr(line, i - 1, 1) != "\\\\") {
+                in_double = !in_double;
+              } else if (c == "'"'"'" && substr(line, i - 1, 1) != "\\\\") {
+                in_single = !in_single;
+              }
+              if (!in_single && !in_double && substr(line, i, tok_len) == tok) {
+                return 1;
+              }
+            }
+            return 0;
+          }
+          {
+            line = $0; sub(/^[^:]*:/, "", line);
+            if (line ~ /^[[:space:]]*#/) next;
+            if (has_token_outside(line, tok)) print $0;
+          }
+        ' || true)
+        if [ -n "$lines" ]; then
+          echo "$lines"
+          found=1
+        fi
+      done
+    done <<EOF
+$(echo "$files")
+EOF
+    if [ "$found" -eq 1 ]; then
+      echo 'Error: found disallowed mocking APIs in tests. Use fixtures/DI per .dev-guidelines/TESTING.md.' >&2
+      exit 1
+    fi
+  fi
+fi
+
+echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)"
+uv run pre-commit run
+
+# Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.
+'''
+            
+            pre_commit_hook.write_text(hook_content)
+            pre_commit_hook.chmod(0o755)
+            
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout=f"Created pre-commit hook at {pre_commit_hook}. Pre-commit config is in .pre-commit-config.yaml.",
+                stderr="",
+                operation_id=operation_id,
+            )
+            
+        except Exception as exc:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"Failed to setup git hooks: {exc}",
+                operation_id=operation_id,
+            )
 
     def ai_guidelines(
         self, args: List[str], tool: str, dry_run: bool = False

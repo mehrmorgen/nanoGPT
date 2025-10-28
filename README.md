@@ -94,3 +94,4 @@ Testing
 ```
 # Test pre-commit hook
 # Test pre-commit hook again
+# Test integrated pre-commit config

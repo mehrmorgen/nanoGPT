@@ -52,8 +52,8 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner**: `uv run test-tasks test` (invokes pytest under the hood)
-- **Coverage**: `uv run ci-tasks coverage-badge`
+- **Runner**: `uv run tools test run` (invokes pytest under the hood)
+- **Coverage**: `uv run tools test coverage-badge`
   (generates reports under `.cache/coverage` and refreshes
   `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
   `docs/assets/coverage-branches.svg`)

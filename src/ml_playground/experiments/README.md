@@ -142,8 +142,8 @@ Paste the following into `src/ml_playground/experiments/<name>/README.md` and re
 ## Environment Setup (preferred)
 
 ```bash
-uv run env-tasks setup
-uv run env-tasks verify
+uv run tools env setup
+uv run tools env verify
 ````
 
 ## How to Run

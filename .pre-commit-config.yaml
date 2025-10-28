@@ -1,5 +1,4 @@
 repos:
-
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.9.6
   hooks:
@@ -30,21 +29,19 @@ repos:
         mkdir -p "${COVERAGE_DIR}"
         if ! compgen -G "${CACHE_GLOB}" > /dev/null; then
           rm -f "${CACHE_GLOB}"
-          uv run ci-tasks coverage-test
+          uv run tools test coverage
         fi
         if ! compgen -G "${COVERAGE_DIR}/coverage.sqlite"* > /dev/null; then
-          echo "[error] No coverage data; run 'uv run ci-tasks coverage-test'." >&2
+          echo "[error] No coverage data; run 'uv run tools test coverage'." >&2
           exit 2
         fi
         if compgen -G "${COVERAGE_DIR}/coverage.sqlite."* > /dev/null; then
           COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
         fi
         COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m
-        uv run python tools/ci_tasks.py coverage-threshold
+        uv run tools ci coverage-threshold
     language: system
     pass_filenames: false
-- repo: local
-  hooks:
   - id: pyright
     name: pyright
     entry: bash
@@ -55,8 +52,6 @@ repos:
         uv run basedpyright --level error src/ml_playground
     language: system
     pass_filenames: false
-- repo: local
-  hooks:
   - id: mypy
     name: mypy
     entry: bash

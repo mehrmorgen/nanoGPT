@@ -63,8 +63,8 @@ events.out.tfevents.*
 **/out/
 
 # Vendor llama.cpp binaries and build artifacts (do not commit)
-tools/llama_cpp/llama-gguf
-tools/llama_cpp/llama-quantize
+scripts/llama_cpp/llama-gguf
+scripts/llama_cpp/llama-quantize
 
 # Local editor/workspace folders
 .windsurf/
