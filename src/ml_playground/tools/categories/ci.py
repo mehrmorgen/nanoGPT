@@ -9,23 +9,30 @@ from typing import List, Tuple
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import run_uv_command
+from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
 
 
 class CITools:
     """CI/CD tools implementation."""
 
-    def __init__(self, config: ToolsConfig, root_path: Path) -> None:
+    def __init__(
+        self, 
+        config: ToolsConfig, 
+        root_path: Path,
+        subprocess_runner: SubprocessRunner | None = None,
+    ) -> None:
         """Initialize CI tools.
 
         Args:
             config: Tool configuration
             root_path: Project root path
+            subprocess_runner: Subprocess runner for dependency injection
         """
         self.config = config
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
         self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
+        self._subprocess_runner = subprocess_runner or _default_runner
 
     @property
     def category(self) -> str:
@@ -59,7 +66,7 @@ class CITools:
         )
 
         # Run pre-commit on all files
-        precommit_result = run_uv_command(
+        precommit_result = self._subprocess_runner.run_uv_command(
             [
                 "pre-commit",
                 "run",
@@ -77,7 +84,7 @@ class CITools:
             return precommit_result
 
         # Run integration tests
-        integration_result = run_uv_command(
+        integration_result = self._subprocess_runner.run_uv_command(
             ["python", "-m", "pytest", "-m", "integration", "--no-cov"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -88,7 +95,7 @@ class CITools:
             return integration_result
 
         # Run acceptance tests
-        acceptance_result = run_uv_command(
+        acceptance_result = self._subprocess_runner.run_uv_command(
             ["python", "-m", "pytest", "tests/acceptance"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -99,7 +106,7 @@ class CITools:
             return acceptance_result
 
         # Run e2e tests
-        e2e_result = run_uv_command(
+        e2e_result = self._subprocess_runner.run_uv_command(
             ["python", "-m", "pytest", "tests/e2e"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -155,7 +162,7 @@ class CITools:
         results = []
 
         for hook in hooks:
-            result = run_uv_command(
+            result = self._subprocess_runner.run_uv_command(
                 [
                     "pre-commit",
                     "run",
@@ -329,7 +336,7 @@ class CITools:
         json_path = self.cache_dir / "coverage" / "coverage.json"
         if not json_path.exists():
             # Try to generate coverage report first
-            coverage_result = run_uv_command(
+            coverage_result = self._subprocess_runner.run_uv_command(
                 ["coverage", "json", "-o", str(json_path)],
                 cwd=self.root_path,
                 env={"COVERAGE_FILE": str(self._coverage_file())},
@@ -345,7 +352,7 @@ class CITools:
                 )
 
         # Generate badges
-        return run_uv_command(
+        return self._subprocess_runner.run_uv_command(
             ["python", "tools/coverage_badges.py", str(json_path), "docs/assets"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -400,7 +407,7 @@ class CITools:
             namespace="tools", category=self.category, command="mutation-summary"
         )
 
-        return run_uv_command(
+        return self._subprocess_runner.run_uv_command(
             ["python", "tools/mutation_summary.py", "--config", "pyproject.toml"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -424,7 +431,7 @@ class CITools:
         session_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Run cosmic-ray init, allowing non-zero exit (reusing existing session)
-        result = run_uv_command(
+        result = self._subprocess_runner.run_uv_command(
             ["cosmic-ray", "init", "pyproject.toml", str(session_file)],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -468,7 +475,7 @@ class CITools:
                 rationale="Mutation execution requires initialized session database",
             )
 
-        return run_uv_command(
+        return self._subprocess_runner.run_uv_command(
             ["cosmic-ray", "exec", "pyproject.toml", str(session_file)],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
@@ -488,7 +495,7 @@ class CITools:
             namespace="tools", category=self.category, command="mutation-report"
         )
 
-        return run_uv_command(
+        return self._subprocess_runner.run_uv_command(
             ["python", "tools/mutation_report.py", "--config", "pyproject.toml"],
             cwd=self.root_path,
             timeout=self.config.ci.timeout,

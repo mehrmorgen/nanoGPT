@@ -164,7 +164,7 @@ cache-dir = ".cache/ruff"
 
 [tool.ruff.lint]
 extend-select = [
-  "TID252", # flake8-tidy-imports banned API
+  "TID251", # flake8-tidy-imports banned API
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -270,10 +270,7 @@ omit = [
     "**/mlruns/*",
     "**/.hf_cache/*",
     "**/.cache/*",
-    "**/tools/*",
-    "**/_remote_module_non_scriptable.py",
-    # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "src/ml_playground/analysis/*",
+    "src/ml_playground/tools/*",
 ]
 
 [tool.coverage.report]
@@ -285,8 +282,8 @@ exclude_lines = [
 ]
 show_missing = true
 omit = [
-    # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "src/ml_playground/analysis/*",
+    # Exclude tools - already excluded above but being explicit
+    "src/ml_playground/tools/*",
 ]
 skip_covered = false
 # Align with CI gate threshold for unit+property suites  

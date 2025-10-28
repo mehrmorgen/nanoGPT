@@ -1268,3 +1268,156 @@ def test_data_config_requires_ngram_one_for_non_tiktoken() -> None:
             tokenizer="word",
             ngram_size=2,
         )
+
+
+def test_resolve_if_relative_edge_cases(tmp_path: Path) -> None:
+    """Test edge cases in _resolve_if_relative function to cover missing lines."""
+    from ml_playground.configuration.models import _resolve_if_relative
+
+    # Test with non-string, non-Path value (should return as-is) - covers line 60
+    result = _resolve_if_relative(123, tmp_path)
+    assert result == 123
+
+    # Test with None value
+    result = _resolve_if_relative(None, tmp_path)
+    assert result is None
+
+
+def test_type_checking_branch_coverage() -> None:
+    """Test TYPE_CHECKING branch to cover line 25."""
+    # This line is only executed at import time, but we can verify the constants exist
+    from ml_playground.configuration.models import (
+        READ_POLICY_LATEST,
+        READ_POLICY_BEST,
+        DEFAULT_READ_POLICY,
+    )
+
+    assert READ_POLICY_LATEST == "latest"
+    assert READ_POLICY_BEST == "best"
+    assert DEFAULT_READ_POLICY == "best"
+
+
+def test_coerce_path_edge_cases() -> None:
+    """Test _coerce_path function edge cases to cover missing lines."""
+    from ml_playground.configuration.models import _coerce_path
+
+    # Test with invalid string that can't be converted to Path - covers lines 100-101
+    result = _coerce_path("")
+    assert result == Path("")  # Empty string is valid Path
+
+    # Test with object that raises exception during Path conversion
+    class BadPathLike:
+        def __str__(self) -> str:
+            raise ValueError("Cannot convert to string")
+
+    result = _coerce_path(BadPathLike())
+    assert result is None
+
+
+def test_experiment_config_path_resolution_edge_cases(tmp_path: Path) -> None:
+    """Test edge cases in ExperimentConfig path resolution to cover missing lines."""
+    from ml_playground.configuration.models import ExperimentConfig
+
+    cfg_path = tmp_path / "cfg.toml"
+
+    # Test with shared data that has config_path but no other path fields - covers line 271
+    data = {
+        "shared": {"config_path": cfg_path, "experiment": "test"},
+        "prepare": {"raw_dir": "data"},
+        "train": {
+            "runtime": {"out_dir": "train_out"},
+            "model": {},
+            "data": {},
+            "optim": {},
+            "schedule": {},
+        },
+        "sample": {"runtime": {"out_dir": "sample_out"}, "sample": {}},
+    }
+
+    # This should not raise and should process the paths
+    result = ExperimentConfig._resolve_paths(data)
+    assert "shared" in result
+
+
+def test_cross_field_validator_coverage() -> None:
+    """Test cross-field validators to cover missing lines."""
+    from ml_playground.configuration.models import (
+        _ConfigCrossFieldValidator,
+        RuntimeConfig,
+        LRSchedule,
+    )
+
+    # Test runtime validator directly - covers line 313
+    runtime = RuntimeConfig(
+        out_dir=Path("out"),
+        log_interval=1,
+        eval_interval=2,
+    )
+    # This should not raise
+    _ConfigCrossFieldValidator.runtime(runtime)
+
+    # Test LR schedule validator - covers lines 464-467, 485-487
+    schedule = LRSchedule(
+        decay_lr=True,
+        warmup_iters=100,
+        lr_decay_iters=1000,
+        min_lr=0.01,
+    )
+    # This should not raise
+    _ConfigCrossFieldValidator.lr_schedule(schedule)
+
+
+def test_normalize_runtime_out_dir_edge_cases(tmp_path: Path) -> None:
+    """Test _normalize_runtime_out_dir function edge cases."""
+    from ml_playground.configuration.models import ExperimentConfig
+
+    cfg_path = tmp_path / "cfg.toml"
+
+    # Test with section that doesn't have runtime - covers lines 525-528, 530-533
+    data = {
+        "shared": {"config_path": cfg_path},
+        "train": {
+            "model": {},
+            "data": {},
+            "optim": {},
+            "schedule": {},
+        },  # No runtime section
+        "sample": {"sample": {}},  # No runtime section
+    }
+
+    result = ExperimentConfig._resolve_paths(data)
+    assert "train" in result
+    assert "sample" in result
+
+
+def test_shared_config_path_coercion_edge_cases(tmp_path: Path) -> None:
+    """Test SharedConfig path coercion edge cases."""
+    from ml_playground.configuration.models import SharedConfig
+
+    cfg_path = tmp_path / "cfg.toml"
+
+    # Test with data that has config_path but other fields are not paths - covers lines 548, 563
+    data = {
+        "config_path": cfg_path,
+        "experiment": "test",
+        "project_home": 123,  # Not a path-like object
+        "dataset_dir": None,  # None value
+        "train_out_dir": cfg_path,  # Valid path
+        "sample_out_dir": "relative_path",  # String path
+    }
+
+    result = SharedConfig._resolve_shared_paths(data)
+    assert result["project_home"] == 123  # Should remain unchanged
+    assert result["dataset_dir"] is None  # Should remain unchanged
+    assert isinstance(result["train_out_dir"], Path)
+    assert isinstance(result["sample_out_dir"], Path)
+
+
+def test_peft_config_target_modules_edge_case() -> None:
+    """Test PeftConfig target_modules coercion edge case - covers line 501."""
+    from ml_playground.configuration.models import TrainerConfig
+
+    # Test with data that doesn't have target_modules key
+    data = {"enabled": True, "r": 8}
+    peft = TrainerConfig.PeftConfig.model_validate(data)
+    assert peft.target_modules == ()  # Should use default empty tuple

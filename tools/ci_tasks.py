@@ -154,6 +154,7 @@ def coverage_test() -> None:
         f"--data-file={dest_cov}",
         "-m",
         "pytest",
+        "-q",
         "-n",
         "0",
         "tests/unit",
@@ -224,9 +225,12 @@ def coverage_threshold(
     """Fail when coverage metrics drop below configured thresholds from pyproject.toml."""
     # Always read thresholds from config
     line_threshold, branch_threshold = _read_coverage_thresholds_from_config()
-    
+
     if line_threshold == 0.0 and branch_threshold == 0.0:
-        typer.echo("[coverage] No thresholds configured in pyproject.toml [tool.ml_playground.coverage.thresholds]", err=True)
+        typer.echo(
+            "[coverage] No thresholds configured in pyproject.toml [tool.ml_playground.coverage.thresholds]",
+            err=True,
+        )
         raise typer.Exit(1)
     dest_cov = utils.coverage_file()
     if not dest_cov.exists():

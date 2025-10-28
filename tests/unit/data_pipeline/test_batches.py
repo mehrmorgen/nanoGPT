@@ -179,3 +179,17 @@ def test_simple_batches_sequential_val_split_wraps(tmp_path: Path) -> None:
     # Cursor update should wrap around independently for val split
     x_next, _ = batches.get_batch("val")
     assert not torch.equal(x_val, x_next)
+
+
+def test_simple_batches_meta_dtype_uint16_explicit(tmp_path: Path) -> None:
+    """Test SimpleBatches with explicit uint16 dtype in meta to cover the elif branch."""
+
+    arr = np.arange(16, dtype=np.uint16)
+    # Create meta with explicit uint16 dtype to trigger the elif dts == "uint16" branch
+    ddir = _dataset_dir(tmp_path, train=arr, val=arr, meta={"dtype": "uint16"})
+    cfg = DataConfig(batch_size=2, block_size=4, sampler="random")
+    batches = SimpleBatches(cfg, device=CPU, dataset_dir=ddir)
+
+    # Verify that uint16 dtype is correctly set
+    assert batches.train.arr.dtype == np.uint16
+    assert batches.val.arr.dtype == np.uint16
