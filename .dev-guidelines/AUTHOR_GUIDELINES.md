@@ -37,7 +37,7 @@ description: Author responsibilities and workflows for code review submissions
 
 - Respond promptly: aim to reply or push updates within one business day to keep context warm.
 - Prefer discussion over debate: summarize what you heard and propose next steps when disagreements arise.
-- Use project tooling: run `uv run python tools/review.py list --pr <number> --unreplied --unresolved` daily until the review closes.
+- Use project tooling: run `uv run tools dev review-list <pr_number> --unreplied --unresolved` daily until the review closes.
 - Document decisions: capture significant design outcomes directly in the PR conversation for future discoverability.
 
 ## After Approval

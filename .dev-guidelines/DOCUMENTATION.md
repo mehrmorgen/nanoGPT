@@ -140,7 +140,7 @@ ml_playground/experiments/shakespeare/
 ## Tests and Tools READMEs
 
 - Tests (`tests/*/README.md`): keep to purpose, how to run, principles, folder structure. No deep internal details.
-- Tools (e.g., `tools/llama_cpp/README.md`): short purpose, exact usage, and a small annotated tree.
+- Scripts (e.g., `scripts/llama_cpp/README.md`): short purpose, exact usage, and a small annotated tree.
 
 ## Maintenance
 

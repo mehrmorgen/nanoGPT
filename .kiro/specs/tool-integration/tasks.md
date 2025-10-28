@@ -266,33 +266,32 @@ The base branch is currently working on removing all BasedPyright warnings and e
   - remove the leftovers from our project folder
   - run the tests to make sure we don't have any leftovers
 
-
-- [ ] 8. FUTURE: Integrate with ML workflow CLI (DELAYED until after base branch merge)
+- [x] 8. FUTURE: Integrate with ML workflow CLI (DELAYED until after base branch merge)
   - **NOTE: This phase should be delayed until the base branch strict mode work is complete**
   - Refactor existing `cli.py` to use shared ToolResult infrastructure
   - Add learning mode support to prepare, train, sample, analyze commands
   - Integrate shared configuration management patterns
   - _Requirements: 8.1, 8.2, 8.3, 10.6_
 
-- [ ] 8.1 FUTURE: Refactor ML CLI to use ToolResult
+- [x] 8.1 FUTURE: Refactor ML CLI to use ToolResult
   - Update `src/ml_playground/cli.py` to use ToolResult for all operations
   - Implement operation_id generation for ML workflow commands
   - Add consistent error handling using shared error types
   - _Requirements: 8.1, 8.2_
 
-- [ ] 8.2 FUTURE: Add learning mode to ML workflow commands
+- [x] 8.2 FUTURE: Add learning mode to ML workflow commands
   - Integrate LearningModeEngine with prepare, train, sample, analyze commands
   - Add educational explanations for ML workflow operations
   - Implement verbosity level support for ML command explanations
   - _Requirements: 10.6_
 
-- [ ] 8.3 FUTURE: Add comprehensive ML workflow explanations
+- [x] 8.3 FUTURE: Add comprehensive ML workflow explanations
   - Create detailed explanations for prepare, train, sample, analyze operations
   - Add machine learning best practices and software engineering principles
   - Include operations and security considerations for ML workflows
   - _Requirements: 10.3, 10.4_
 
-- [ ] 8.4 FUTURE: Write unit tests for ML CLI integration
+- [x] 8.4 FUTURE: Write unit tests for ML CLI integration
   - **NO MOCKING ALLOWED**: Absolutely no `unittest.mock`, `pytest_mock`, `MagicMock`, `patch(`, `monkeypatch`
   - Test ToolResult integration with existing ML workflow commands
   - Validate learning mode functionality for ML operations

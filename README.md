@@ -7,7 +7,7 @@ This module provides a single, one-way interface to prepare data, train, and sam
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 - Developer Guidelines: see `.dev-guidelines/README.md` for setup, development workflow, and policies.
-- Tools index: see `tools/README.md` for helper scripts and usage.
+- Development tools: use `uv run tools --help` for integrated development tooling.
 
 ## Documentation abstraction policy
 
@@ -30,12 +30,9 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   ├── integration/           # multi-module tests via Python APIs
 │   ├── e2e/                   # CLI-level smoke tests
 │   └── acceptance/            # higher-level behaviors and policies
-├── tools/                     # legacy developer tooling CLIs (see tools/README.md)
-│   ├── ci_tasks.py            # legacy quality, coverage, mutation flows (use `uv run tools ci` instead)
-│   ├── env_tasks.py           # legacy environment helpers (use `uv run tools env` instead)
-│   ├── lint_tasks.py          # legacy lint bundles (use `uv run tools quality` instead)
-│   ├── lit_tasks.py           # uv-backed LIT helpers
-│   └── test_tasks.py          # legacy pytest orchestration (use `uv run tools test` instead)
+├── scripts/                   # specialized utility scripts
+│   ├── setup_ai_guidelines.py # AI development guidelines setup
+│   └── llama_cpp/             # GGUF model conversion utilities
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
@@ -54,7 +51,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
 - Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
-- Review comment triage: use `uv run python tools/review.py list --pr <number> --unreplied --unresolved` to spot pending feedback; map comment URLs/IDs in `replies.json` for `bulk-reply`, and list comment IDs in `delete.json` for `uv run python tools/review.py delete --pr <number> --comments delete.json`.
+- Review comment triage: use `uv run tools dev review-list <pr_number> --unreplied --unresolved` to spot pending feedback; use `uv run tools dev review-bulk-reply <pr_number> --replies replies.json` for bulk replies, and `uv run tools dev review-delete <pr_number> --comments delete.json` to delete comments.
 
 Setup and Developer Workflow
 - See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
@@ -88,7 +85,7 @@ TensorBoard (auto-enabled)
 
 GGUF export (vendor approach)
 
-- See `tools/llama_cpp/README.md` for the exact steps.
+- See `scripts/llama_cpp/README.md` for the exact steps.
 
 Testing
 
