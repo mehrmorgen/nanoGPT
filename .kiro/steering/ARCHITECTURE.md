@@ -1,1 +1,0 @@
-../../.dev-guidelines/ARCHITECTURE.md
