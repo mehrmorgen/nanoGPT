@@ -193,8 +193,11 @@ class TestConfigPaths:
     )
     @settings(max_examples=50)
     def test_experiment_path_computation(self, experiment: str) -> None:
+        import os
+
         path = config_loading.get_cfg_path(experiment, None)
-        assert str(path).endswith(f"experiments/{experiment}/config.toml")
+        expected_suffix = os.path.join("experiments", experiment, "config.toml")
+        assert str(path).endswith(expected_suffix)
         assert path.is_absolute()
 
     @given(
