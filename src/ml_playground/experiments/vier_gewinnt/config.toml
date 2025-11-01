@@ -62,9 +62,9 @@ dtype = "float32"
 compile = false
 
 [sample.sample]
-start = "1,2,1,3,1,4,1" # Example start of a game
-num_samples = 5
-max_new_tokens = 10
+start = "6" # Example start of a game
+num_samples = 2
+max_new_tokens = 100
 temperature = 0.8
 top_k = 3
 

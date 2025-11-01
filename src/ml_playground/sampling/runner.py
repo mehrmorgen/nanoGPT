@@ -25,6 +25,7 @@ from ml_playground.configuration.models import (
 from ml_playground.core.error_handling import DataError, FileOperationError
 from ml_playground.models.core.model import GPT
 from ml_playground.data_pipeline.transforms.io import setup_tokenizer
+from ml_playground.experiments.vier_gewinnt.game import VierGewinntGame
 
 
 """
@@ -190,7 +191,7 @@ class Sampler:
         self.logger.info("Sampling...")
         with torch.no_grad():
             with self.ctx:
-                for _ in range(self.sample_cfg.num_samples):
+                for i in range(self.sample_cfg.num_samples):
                     y = self.model.generate(
                         x,
                         self.sample_cfg.max_new_tokens,
@@ -198,8 +199,45 @@ class Sampler:
                         top_k=self.sample_cfg.top_k,
                     )
                     output_tensor = y[0].detach().cpu()
-                    output = self._decode_tokens(output_tensor)
-                    self.logger.info(output)
+
+                    if self.shared.experiment == "vier_gewinnt":
+                        self.logger.info(
+                            f"--- Sample {i + 1}/{self.sample_cfg.num_samples} ---"
+                        )
+                        game = VierGewinntGame()
+                        moves_str = self._decode_tokens(output_tensor)
+                        processed_moves_str = moves_str.replace("\n", ",")
+
+                        try:
+                            moves = [
+                                int(m) for m in processed_moves_str.split(",") if m
+                            ]
+                        except ValueError:
+                            self.logger.error(f"Could not parse moves: {moves_str}")
+                            continue
+
+                        for move in moves:
+                            if game.winner != 0:
+                                self.logger.info(
+                                    f"Game over. Player {game.winner} has won."
+                                )
+                                break
+                            player = game.get_current_player()
+                            success, error = game.make_move(move)
+                            if success:
+                                self.logger.info(f"Player {player} plays column {move}")
+                                # Use a raw logger or a logger with a formatter that handles newlines
+                                for line in str(game).splitlines():
+                                    self.logger.info(line)
+                            else:
+                                self.logger.warning(
+                                    f"Skipping invalid move {move}: {error}"
+                                )
+                        self.logger.info("--- End of Game ---")
+                    else:
+                        output = self._decode_tokens(output_tensor)
+                        self.logger.info(output)
+
                     self.logger.info("---------------")
 
     def _decode_tokens(self, token_tensor: torch.Tensor) -> str:

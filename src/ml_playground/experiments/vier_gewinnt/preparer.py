@@ -4,9 +4,11 @@ Each game is a sequence of moves.
 The board is 7x6.
 Moves are integers from 0 to 6, representing the column.
 """
+
 import os
 import random
 import numpy as np
+
 
 class Preparer:
     def __init__(self, num_games=10000):
@@ -29,22 +31,22 @@ class Preparer:
         # Check horizontal
         for row in range(6):
             for col in range(4):
-                if all(board[row][col+i] == player for i in range(4)):
+                if all(board[row][col + i] == player for i in range(4)):
                     return True
         # Check vertical
         for row in range(3):
             for col in range(7):
-                if all(board[row+i][col] == player for i in range(4)):
+                if all(board[row + i][col] == player for i in range(4)):
                     return True
         # Check diagonal (down-right)
         for row in range(3):
             for col in range(4):
-                if all(board[row+i][col+i] == player for i in range(4)):
+                if all(board[row + i][col + i] == player for i in range(4)):
                     return True
         # Check diagonal (up-right)
         for row in range(3, 6):
             for col in range(4):
-                if all(board[row-i][col+i] == player for i in range(4)):
+                if all(board[row - i][col + i] == player for i in range(4)):
                     return True
         return False
 
@@ -66,20 +68,22 @@ class Preparer:
         return moves
 
     def prepare(self):
-        dataset_dir = os.path.join(os.path.dirname(__file__), 'datasets')
+        dataset_dir = os.path.join(os.path.dirname(__file__), "datasets")
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
-        
-        file_path = os.path.join(dataset_dir, 'games.txt')
 
-        with open(file_path, 'w') as f:
+        file_path = os.path.join(dataset_dir, "games.txt")
+
+        with open(file_path, "w") as f:
             for _ in range(self.num_games):
                 game = self.generate_game()
-                f.write(','.join(map(str, game)) + '\n')
+                f.write(",".join(map(str, game)) + "\n")
+
 
 def main():
     preparer = Preparer()
     preparer.prepare()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

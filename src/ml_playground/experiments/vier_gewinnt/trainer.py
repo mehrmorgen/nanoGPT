@@ -1,6 +1,7 @@
 """
 This script runs the trainer for the vier_gewinnt experiment.
 """
+
 import sys
 from pathlib import Path
 
@@ -10,23 +11,25 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(project_root))
 
-from ml_playground.configuration.loading import load_full_experiment_config
-from ml_playground.training.loop.runner import Trainer as CoreTrainer
-from ml_playground.cli import _global_device_setup
-
 
 def main():
     """
     Runs the training for the vier_gewinnt experiment.
     """
+    from ml_playground.configuration.loading import load_full_experiment_config
+    from ml_playground.training.loop.runner import Trainer as CoreTrainer
+    from ml_playground.cli import _global_device_setup
+
     experiment_name = "vier_gewinnt"
     # Assume config.toml is in the same directory as this script
     config_path = Path(__file__).parent / "config.toml"
-    
+
     # The project home is 4 levels up from this script
     project_home = Path(__file__).resolve().parents[4]
 
-    print(f"Loading configuration for experiment '{experiment_name}' from '{config_path}'")
+    print(
+        f"Loading configuration for experiment '{experiment_name}' from '{config_path}'"
+    )
     exp_config = load_full_experiment_config(
         config_path=config_path,
         project_home=project_home,
@@ -47,7 +50,7 @@ def main():
     )
 
     print(f"Running trainer for experiment: {experiment_name}")
-    
+
     trainer = CoreTrainer(train_cfg, shared_cfg)
     trainer.run()
 
