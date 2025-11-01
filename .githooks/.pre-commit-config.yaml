@@ -16,6 +16,7 @@ repos:
       - mdformat-frontmatter
       - mdformat-tables
     files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
+    exclude: '^GEMINI\.md$'
 - repo: local
   hooks:
   - id: pyright
