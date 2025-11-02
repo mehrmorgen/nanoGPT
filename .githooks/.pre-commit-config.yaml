@@ -21,7 +21,7 @@ repos:
   hooks:
   - id: pyright
     name: pyright
-    entry: C:/cygwin64/bin/bash.exe
+    entry: bash
     args:
       - -c
       - |
@@ -33,7 +33,7 @@ repos:
   hooks:
   - id: mypy
     name: mypy
-    entry: C:/cygwin64/bin/bash.exe
+    entry: bash
     args:
       - -c
       - |
