@@ -42,9 +42,9 @@ Operational policies for authoring, maintaining, and monitoring CI workflows in 
 
 ## Caching Strategy
 
-- Cache compiled dependencies (virtual environments, wheels, etc.) using keys derived from immutable inputs such as lock files, runtime versions, and operating system.
-- Keep caches scoped to a single concern (virtual environment, lint caches, build artifacts) to avoid unnecessary invalidations and oversized uploads.
-- Prune caches as part of the workflow when they are mutated to prevent uncontrolled growth, while leaving restored environments intact.
+- Prefer `uv` wheel caches and targeted tool caches (`pre-commit`, `ruff`, etc.) keyed off immutable artifacts such as `uv.lock` or config hashes; avoid broad `.venv` caches in short-running gates so dependency syncs always reflect the lockfile.
+- Keep caches scoped to a single concern to avoid unnecessary invalidations and oversized uploads.
+- Prune caches as part of the workflow when they are mutated to prevent uncontrolled growth, while leaving restored tool caches intact.
 - Capture platform-specific prerequisites (system packages, toolchain dependencies) in reusable setup steps so cache misses remain deterministic.
 - Refer to `../.github/README.md` for the concrete cache keys and caching actions currently in use.
 
