@@ -1272,14 +1272,14 @@ def test_data_config_requires_ngram_one_for_non_tiktoken() -> None:
 
 def test_resolve_if_relative_edge_cases(tmp_path: Path) -> None:
     """Test edge cases in _resolve_if_relative function to cover missing lines."""
-    from ml_playground.configuration.models import _resolve_if_relative
+    from ml_playground.configuration.utils import resolve_if_relative
 
     # Test with non-string, non-Path value (should return as-is) - covers line 60
-    result = _resolve_if_relative(123, tmp_path)
+    result = resolve_if_relative(123, tmp_path)
     assert result == 123
 
     # Test with None value
-    result = _resolve_if_relative(None, tmp_path)
+    result = resolve_if_relative(None, tmp_path)
     assert result is None
 
 
@@ -1299,10 +1299,10 @@ def test_type_checking_branch_coverage() -> None:
 
 def test_coerce_path_edge_cases() -> None:
     """Test _coerce_path function edge cases to cover missing lines."""
-    from ml_playground.configuration.models import _coerce_path
+    from ml_playground.configuration.utils import coerce_path
 
     # Test with invalid string that can't be converted to Path - covers lines 100-101
-    result = _coerce_path("")
+    result = coerce_path("")
     assert result == Path("")  # Empty string is valid Path
 
     # Test with object that raises exception during Path conversion
@@ -1310,7 +1310,7 @@ def test_coerce_path_edge_cases() -> None:
         def __str__(self) -> str:
             raise ValueError("Cannot convert to string")
 
-    result = _coerce_path(BadPathLike())
+    result = coerce_path(BadPathLike())
     assert result is None
 
 
@@ -1341,30 +1341,21 @@ def test_experiment_config_path_resolution_edge_cases(tmp_path: Path) -> None:
 
 def test_cross_field_validator_coverage() -> None:
     """Test cross-field validators to cover missing lines."""
-    from ml_playground.configuration.models import (
-        _ConfigCrossFieldValidator,
-        RuntimeConfig,
-        LRSchedule,
-    )
+    from ml_playground.configuration.models import RuntimeConfig, LRSchedule
 
-    # Test runtime validator directly - covers line 313
-    runtime = RuntimeConfig(
+    # Instantiating should trigger validators without exceptions
+    RuntimeConfig(
         out_dir=Path("out"),
         log_interval=1,
         eval_interval=2,
     )
-    # This should not raise
-    _ConfigCrossFieldValidator.runtime(runtime)
 
-    # Test LR schedule validator - covers lines 464-467, 485-487
-    schedule = LRSchedule(
+    LRSchedule(
         decay_lr=True,
         warmup_iters=100,
         lr_decay_iters=1000,
         min_lr=0.01,
     )
-    # This should not raise
-    _ConfigCrossFieldValidator.lr_schedule(schedule)
 
 
 def test_normalize_runtime_out_dir_edge_cases(tmp_path: Path) -> None:

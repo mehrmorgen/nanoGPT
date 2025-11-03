@@ -2,11 +2,11 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from ml_playground.analysis.sample_quality import (
-    _extract_header,
-    _line_stats,
-    _ngram_stats,
-    _find_anomalies,
+from ml_playground.analysis.sample_quality_public import (
+    extract_header,
+    line_stats,
+    ngram_stats,
+    find_anomalies,
     analyze_sample_text,
     analyze_sample_file,
     format_analysis,
@@ -21,14 +21,14 @@ def test_extract_header_variants():
         "Jahr: 2022",
         "Some body line",
     ]
-    h = _extract_header(lines)
+    h = extract_header(lines)
     assert h.speaker == "Dr. Example"
     assert h.topic == "Haushalt"
     assert h.year == "2021"
     assert h.year_count == 2
 
     lines2 = ["no header here"]
-    h2 = _extract_header(lines2)
+    h2 = extract_header(lines2)
     assert (
         h2.speaker is None
         and h2.topic is None
@@ -49,7 +49,7 @@ def test_line_stats_repeats_and_runs():
         "c",
         "c",
     ]
-    ls = _line_stats(lines)
+    ls = line_stats(lines)
     assert ls.total_lines == len(lines)
     assert ls.non_empty_lines == 8
     assert ls.longest_identical_run == 3
@@ -58,11 +58,11 @@ def test_line_stats_repeats_and_runs():
 
 def test_ngram_stats_and_fallback():
     lines = ["Hello, world! Hello."]
-    ns = _ngram_stats(lines, 1)
+    ns = ngram_stats(lines, 1)
     assert ns.n == 1
     assert ns.unique_ngrams > 0
 
-    ns2 = _ngram_stats(lines, 0)  # fallback to 3
+    ns2 = ngram_stats(lines, 0)  # fallback to 3
     assert ns2.n == 3
 
 
@@ -73,7 +73,7 @@ def test_find_anomalies_trailing_and_years():
         "Body mentions 2018 and 1999 too",
         "unfinished line with year 2025",
     ]
-    an = _find_anomalies(lines)
+    an = find_anomalies(lines)
     assert an.trailing_incomplete_line is True
     assert (
         "2018" in an.stray_year_tokens

@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import shlex
+from typing import Dict
+
+import pytest
+from pytest_bdd import given, scenarios, then, when, parsers
+
+
+scenarios("../features/tools_cli.feature")
+scenarios("../features/runtime_cli.feature")
+
+
+@pytest.fixture()
+def cli_context() -> Dict[str, object]:
+    return {}
+
+
+@given("the project root")
+def given_project_root(project_root):  # type: ignore[no-untyped-def]
+    return project_root
+
+
+@when(parsers.parse('I invoke the "{command}" CLI with arguments "{arguments}"'))
+def invoke_cli(run_cli, cli_context, command: str, arguments: str) -> None:
+    cli_args = shlex.split(arguments) if arguments else []
+    result = run_cli(command, *cli_args)
+    cli_context["result"] = result
+
+
+@then(parsers.parse("the command exits with code {expected:d}"))
+def assert_exit_code(cli_context, expected: int) -> None:
+    result = cli_context.get("result")
+    assert result is not None, "CLI result missing from context"
+    assert result.returncode == expected, result.stderr
+
+
+@then("the output contains:")
+def assert_output_contains(cli_context, datatable) -> None:
+    result = cli_context.get("result")
+    assert result is not None, "CLI result missing from context"
+    combined_output = (result.stdout or "") + (result.stderr or "")
+    for row in datatable[1:]:
+        expected = row[0]
+        assert expected in combined_output, f"Missing expected text: {expected}"

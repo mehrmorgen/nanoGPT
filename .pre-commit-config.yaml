@@ -3,7 +3,7 @@ repos:
     rev: v0.9.6
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix, --statistics]
       - id: ruff-format
   - repo: https://github.com/executablebooks/mdformat
     rev: 0.7.22
@@ -17,11 +17,7 @@ repos:
         files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
   - repo: local
     hooks:
-      - id: coverage-threshold
-        name: coverage threshold (from config)
-        entry: uv run tools test coverage-threshold
-        language: system
-        pass_filenames: false
+      # Type checking (medium)
       - id: pyright
         name: pyright
         entry: bash
@@ -29,7 +25,7 @@ repos:
           - -c
           - |
             set -euo pipefail
-            uv run basedpyright --level error src/ml_playground
+            uv run basedpyright --level error --verbose src/ml_playground
         language: system
         pass_filenames: false
       - id: mypy
@@ -42,9 +38,50 @@ repos:
             uv run mypy --incremental
         language: system
         pass_filenames: false
-  - repo: https://github.com/jendrikseipp/vulture
-    rev: v2.11
-    hooks:
+
+      # Dead code scan (medium)
       - id: vulture
-        args: [src/ml_playground, --min-confidence, "90"]
+        name: vulture
+        entry: uv run vulture
+        args: [-v, src/ml_playground, --min-confidence, "90"]
+        language: system
+        pass_filenames: false
+
+      # Test stages (heavier)
+      - id: pytest-regression
+        name: regression tests
+        entry: uv
+        args: [run, pytest, -q, -rA, tests/regression]
+        language: system
+        pass_filenames: false
+      - id: pytest-integration
+        name: integration tests
+        entry: uv
+        args: [run, pytest, -q, -rA, tests/integration, --no-cov]
+        language: system
+        pass_filenames: false
+      - id: pytest-acceptance
+        name: acceptance tests
+        entry: uv
+        args: [run, pytest, -q, -rA, tests/acceptance]
+        language: system
+        pass_filenames: false
+      - id: pytest-e2e
+        name: e2e tests
+        entry: uv
+        args: [run, pytest, -q, -rA, tests/e2e]
+        language: system
+        pass_filenames: false
+
+      # Coverage threshold (heaviest)
+      - id: coverage-threshold
+        name: unit and property tests with coverage threshold
+        entry: bash
+        args:
+          - -c
+          - |
+            set -euo pipefail
+            uv run tools test coverage-report --verbose
+            uv run tools test coverage-threshold --verbose
+        language: system
         pass_filenames: false

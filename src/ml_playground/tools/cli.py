@@ -28,13 +28,12 @@ logger = logging.getLogger(__name__)
 app = typer.Typer(
     name="tools",
     help="ML Playground unified development tools",
-    no_args_is_help=True,
+    no_args_is_help=False,
     rich_markup_mode="rich",
 )
 
 # Subcommand groups (will be populated in later phases)
 quality_app = typer.Typer(
-    name="quality",
     help="Code quality tools (lint, format, typecheck)",
     no_args_is_help=True,
 )
@@ -255,6 +254,46 @@ def quality_lint(
         raise typer.Exit(1)
 
 
+@test_app.command("coverage")
+def test_coverage(
+    line_threshold: Annotated[
+        float,
+        typer.Option("--line-threshold", help="Minimum line coverage (0 = config)"),
+    ] = 0.0,
+    branch_threshold: Annotated[
+        float,
+        typer.Option("--branch-threshold", help="Minimum branch coverage (0 = config)"),
+    ] = 0.0,
+    force_regen: Annotated[
+        bool,
+        typer.Option("--force-regen", help="Force regenerating coverage data"),
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", help="Show verbose artifacts")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Run full coverage pipeline (report + threshold) in one command."""
+
+    try:
+        tools = _get_testing_tools()
+        result = tools.coverage(
+            args or [],
+            line_threshold=line_threshold or 0.0,
+            branch_threshold=branch_threshold or 0.0,
+            verbose=verbose,
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+            force_regen=force_regen,
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 @quality_app.command("format")
 def quality_format(
     args: Annotated[
@@ -385,85 +424,80 @@ def quality_all(
         raise typer.Exit(1)
 
 
-# Testing commands
+def _invoke_tests(
+    ctx: typer.Context,
+    test_dir: str,
+    pattern: str | None,
+    extra_args: list[str],
+) -> None:
+    try:
+        tools = _get_testing_tools()
+        args = list(extra_args)
+        if pattern:
+            args.extend(["-k", pattern])
+
+        ctx_obj = getattr(ctx, "obj", None)
+        if not isinstance(ctx_obj, dict):
+            ctx_obj = {}
+        learning_mode = bool(ctx_obj.get("learning_mode", False))
+        verbosity = int(ctx_obj.get("verbosity", 1))
+
+        suite_map = {
+            "tests/unit": "unit",
+            "tests/property": "property_tests",
+            "tests/regression": "regression",
+        }
+        method_name = suite_map.get(test_dir)
+        if method_name is None:
+            raise ToolExecutionError(
+                f"Unsupported test suite: {test_dir}",
+                reason="No registered TestingTools handler",
+                rationale="Add a dedicated TestingTools method for this suite or update CLI dispatch.",
+            )
+
+        suite_fn = getattr(tools, method_name)
+        result = suite_fn(  # type: ignore[operator]
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity,
+        )
+        _handle_tool_result(result)
+    except ToolExecutionError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 @test_app.command("unit")
 def test_unit(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pytest arguments")
-    ] = None,
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[list[str] | None, typer.Argument()] = None,
 ) -> None:
     """Run unit tests."""
-    try:
-        tools = _get_testing_tools()
-        result = tools.unit(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
 
-
-@test_app.command("integration")
-def test_integration(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pytest arguments")
-    ] = None,
-) -> None:
-    """Run integration tests."""
-    try:
-        tools = _get_testing_tools()
-        result = tools.integration(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@test_app.command("e2e")
-def test_e2e(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pytest arguments")
-    ] = None,
-) -> None:
-    """Run end-to-end tests."""
-    try:
-        tools = _get_testing_tools()
-        result = tools.e2e(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
-@test_app.command("acceptance")
-def test_acceptance(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pytest arguments")
-    ] = None,
-) -> None:
-    """Run acceptance tests."""
-    try:
-        tools = _get_testing_tools()
-        result = tools.acceptance(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    _invoke_tests(ctx, "tests/unit", pattern, list(extra_args or []))
 
 
 @test_app.command("property")
 def test_property(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pytest arguments")
-    ] = None,
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[list[str] | None, typer.Argument()] = None,
 ) -> None:
-    """Run property-based tests."""
-    try:
-        tools = _get_testing_tools()
-        result = tools.property_tests(args or [])
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    """Run property-based tests using Hypothesis."""
+
+    _invoke_tests(ctx, "tests/property", pattern, list(extra_args or []))
+
+
+@test_app.command("regression")
+def test_regression(
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[Optional[List[str]], typer.Argument()] = None,
+) -> None:
+    """Run regression suites (policy guards, slow checks)."""
+
+    _invoke_tests(ctx, "tests/regression", pattern, list(extra_args or []))
 
 
 @test_app.command("all")
@@ -500,12 +534,6 @@ def test_coverage_test(
 
 @test_app.command("coverage-report")
 def test_coverage_report(
-    fail_under: Annotated[
-        float,
-        typer.Option(
-            "--fail-under", help="Fail if total coverage is below this threshold"
-        ),
-    ] = 0.0,
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Print discovered coverage artifacts")
     ] = False,
@@ -516,9 +544,7 @@ def test_coverage_report(
     """Generate coverage reports."""
     try:
         tools = _get_testing_tools()
-        result = tools.coverage_report(
-            args or [], fail_under=fail_under, verbose=verbose
-        )
+        result = tools.coverage_report(args or [], verbose=verbose)
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)

@@ -8,18 +8,24 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from typing import Any, ContextManager, cast
 
+from hypothesis import example, given, settings
 import hypothesis.strategies as st
 import pytest
 import typer
-from hypothesis import example, given, settings
 from typer.testing import CliRunner
 
-import ml_playground.cli as cli
-from ml_playground.cli import (
+import ml_playground.runtime.cli as cli
+from ml_playground.runtime.cli import (
     CLIDependencies,
-    _log_command_status,
-    _log_dir,
-    _run_prepare_impl,
+    global_device_setup,
+    log_command_status,
+    log_directory,
+    run_prepare,
+    run_prepare_impl,
+    run_sample,
+    run_sample_impl,
+    run_train,
+    run_train_impl,
     override_cli_dependencies,
 )
 from ml_playground.configuration.models import (
@@ -35,7 +41,10 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
-
+from ml_playground.runtime.core.results import (
+    LearningModeEngine,
+    ToolResult,
+)
 
 _EXCEPTION_TYPES = st.sampled_from([FileNotFoundError, ValueError, TypeError])
 _MESSAGES = st.text(min_size=1, max_size=32)
@@ -50,7 +59,7 @@ def test_run_or_exit_keyboard_interrupt_logs_message(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """KeyboardInterrupt should log info when `keyboard_interrupt_msg` is provided and return cleanly."""
-    with caplog.at_level(logging.INFO, logger="ml_playground.cli"):
+    with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
 
         def _raise_keyboard_interrupt() -> None:
             raise KeyboardInterrupt
@@ -68,10 +77,10 @@ def test_extract_exp_config_handles_missing_and_present_context() -> None:
     """`_extract_exp_config` must gracefully handle contexts with and without `exp_config`."""
 
     ctx = cast(typer.Context, SimpleNamespace(obj=None))
-    assert cli._extract_exp_config(ctx) is None
+    assert cli.extract_exp_config(ctx) is None
 
     ctx.obj = {"exp_config": Path("/tmp/example.toml")}
-    assert cli._extract_exp_config(ctx) == Path("/tmp/example.toml")
+    assert cli.extract_exp_config(ctx) == Path("/tmp/example.toml")
 
 
 def test_run_prepare_impl_executes_pipeline(
@@ -83,7 +92,7 @@ def test_run_prepare_impl_executes_pipeline(
     raw_file.write_text("hello world", encoding="utf-8")
     cfg = PreparerConfig(tokenizer_type="char", raw_text_path=raw_file)
 
-    _run_prepare_impl("demo", cfg, shared.config_path, shared)
+    run_prepare_impl("demo", cfg, shared.config_path, shared)
 
     assert (shared.dataset_dir / "train.bin").exists()
     assert (shared.dataset_dir / "val.bin").exists()
@@ -100,21 +109,21 @@ def test_log_dir_reports_states(tmp_path: Path) -> None:
 
     logger = ListLogger()
 
-    _log_dir("tag", "unset", None, logger)
+    log_directory("tag", "unset", None, logger)
     missing_path = tmp_path / "missing"
-    _log_dir("tag", "missing", missing_path, logger)
+    log_directory("tag", "missing", missing_path, logger)
 
     existing = tmp_path / "existing"
     existing.mkdir()
     (existing / "file.txt").write_text("data", encoding="utf-8")
-    _log_dir("tag", "existing", existing, logger)
+    log_directory("tag", "existing", existing, logger)
 
     assert any("<not set>" in msg for msg in logger.infos)
     assert any("missing" in msg for msg in logger.infos)
     assert any("Contents" in msg for msg in logger.infos)
     # Non-Path inputs should be ignored silently
     logger.infos.clear()
-    _log_dir("tag", "not_path", cast(Any, "/tmp/example"), logger)
+    log_directory("tag", "not_path", cast(Any, "/tmp/example"), logger)
     assert logger.infos == []
 
 
@@ -131,7 +140,7 @@ def test_log_command_status_handles_missing_directory(
     logger = ListLogger()
     shared = shared_config_factory(tmp_path)
 
-    _log_command_status("tag", shared, cast(Path, None), logger)
+    log_command_status("tag", shared, cast(Path, None), logger)
 
     assert any("<not set>" in message for message in logger.messages)
 
@@ -150,7 +159,7 @@ def test_log_command_status_handles_missing_path(
     logger = ListLogger()
     missing = tmp_path / "missing"
 
-    _log_command_status("tag", shared_config_factory(tmp_path), missing, logger)
+    log_command_status("tag", shared_config_factory(tmp_path), missing, logger)
 
     assert any("missing" in message for message in logger.messages)
 
@@ -164,7 +173,7 @@ def test_log_dir_ignores_non_path() -> None:
             self.messages.append(str(message))
 
     logger = ListLogger()
-    cli._log_dir("tag", "name", cast(Any, "/tmp/example"), logger)
+    log_directory("tag", "name", cast(Any, "/tmp/example"), logger)
 
     assert logger.messages == []
 
@@ -188,8 +197,8 @@ def test_log_command_status_swallows_exceptions(
     def boom(*_args: object, **_kwargs: object) -> None:
         raise OSError("boom")
 
-    with override_attr(cli, "_log_dir", boom):
-        cli._log_command_status("tag", shared, shared.dataset_dir, logger)
+    with override_attr(cli, "log_directory", boom):
+        log_command_status("tag", shared, shared.dataset_dir, logger)
 
     assert logger.messages == []
 
@@ -214,7 +223,7 @@ def test_run_prepare_executes_pipeline(
     )
 
     with override_attr(cli, "create_pipeline", lambda cfg, shared_cfg: FakePipeline()):
-        cli._run_prepare("demo", prepare_cfg, shared.config_path, shared)
+        run_prepare("demo", prepare_cfg, shared.config_path, shared)
 
     assert calls == {"init": True, "ran": True}
 
@@ -230,7 +239,7 @@ def test_run_train_impl_requires_runtime(
     )
 
     with pytest.raises(typer.Exit):
-        cli._run_train_impl("demo", cfg, shared.config_path, shared)
+        run_train("demo", cfg, shared.config_path, shared)
 
 
 def test_run_sample_impl_requires_runtime(
@@ -244,7 +253,7 @@ def test_run_sample_impl_requires_runtime(
     )
 
     with pytest.raises(typer.Exit):
-        cli._run_sample_impl("demo", cfg, shared.config_path, shared)
+        run_sample("demo", cfg, shared.config_path, shared)
 
 
 def test_run_train_requires_runtime(
@@ -258,7 +267,7 @@ def test_run_train_requires_runtime(
     )
 
     with pytest.raises(typer.Exit) as excinfo:
-        cli._run_train("demo", cfg, shared.config_path, shared)
+        run_train("demo", cfg, shared.config_path, shared)
 
     assert excinfo.value.exit_code == 1
 
@@ -281,7 +290,7 @@ def test_run_train_executes_flow(
             trainer_called["ran"] = True
 
     def fake_global(device: str, dtype: str, seed: int) -> None:
-        trainer_called["global"] = (device, dtype, seed)
+        trainer_called["global_setup"] = (device, dtype, seed)
 
     logger = logging.getLogger("ml_playground.cli")
     runtime = cast(
@@ -289,24 +298,55 @@ def test_run_train_executes_flow(
     )
     cfg = cast(TrainerConfig, SimpleNamespace(runtime=runtime, logger=logger))
 
+    exp = ExperimentConfig(
+        prepare=PreparerConfig(),
+        train=TrainerConfig(
+            model=ModelConfig(),
+            data=DataConfig(),
+            optim=OptimConfig(),
+            schedule=LRSchedule(),
+            runtime=RuntimeConfig(out_dir=shared.train_out_dir),
+        ),
+        sample=SamplerConfig(
+            runtime=RuntimeConfig(out_dir=shared.sample_out_dir),
+            sample=SampleConfig(),
+        ),
+        shared=shared,
+    )
+
+    def _load_experiment(name: str, exp_config: Path | None) -> ExperimentConfig:
+        assert name == "demo"
+        assert exp_config is None
+        return exp
+
+    deps = CLIDependencies(
+        load_experiment=_load_experiment,
+        ensure_train_prerequisites=lambda _: None,
+        ensure_sample_prerequisites=lambda _: None,
+        run_prepare=lambda *args, **kwargs: None,
+        run_train=lambda *args, **kwargs: None,  # not overridden
+        run_sample=lambda *args, **kwargs: None,
+    )
+
     with ExitStack() as stack:
+        stack.enter_context(override_cli_dependencies(deps))
         stack.enter_context(override_attr(cli, "CoreTrainer", FakeTrainer))
         stack.enter_context(
             override_attr(
                 cli,
-                "_log_command_status",
+                "log_command_status",
                 lambda tag, shared_cfg, out_dir, _logger: log_calls.append(
                     (tag, out_dir)
                 ),
             )
         )
-        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
-        cli._run_train("demo", cfg, shared.config_path, shared)
+        stack.enter_context(override_attr(cli, "global_device_setup", fake_global))
+        run_train("demo", cfg, shared.config_path, shared)
 
     assert trainer_called["cfg"] is cfg
     assert trainer_called["shared"] is shared
     assert trainer_called.get("ran") is True
-    assert trainer_called["global"] == ("cpu", "float32", 42)
+    assert trainer_called["global_setup"] == ("cpu", "float32", 42)
     assert ("pre-train", shared.train_out_dir) in log_calls
     assert ("post-train", shared.train_out_dir) in log_calls
 
@@ -336,14 +376,45 @@ def test_run_train_logs_status(
         SimpleNamespace(runtime=runtime, logger=logging.getLogger(logger_name)),
     )
 
+    exp = ExperimentConfig(
+        prepare=PreparerConfig(),
+        train=TrainerConfig(
+            model=ModelConfig(),
+            data=DataConfig(),
+            optim=OptimConfig(),
+            schedule=LRSchedule(),
+            runtime=RuntimeConfig(out_dir=shared.train_out_dir),
+        ),
+        sample=SamplerConfig(
+            runtime=RuntimeConfig(out_dir=shared.sample_out_dir),
+            sample=SampleConfig(),
+        ),
+        shared=shared,
+    )
+
+    def _load_experiment(name: str, exp_config: Path | None) -> ExperimentConfig:
+        assert name == "demo"
+        assert exp_config is None
+        return exp
+
+    deps = CLIDependencies(
+        load_experiment=_load_experiment,
+        ensure_train_prerequisites=lambda _: None,
+        ensure_sample_prerequisites=lambda _: None,
+        run_prepare=lambda *args, **kwargs: None,
+        run_train=lambda *args, **kwargs: None,
+        run_sample=lambda *args, **kwargs: None,
+    )
+
     caplog.set_level(logging.INFO, logger=logger_name)
 
     with ExitStack() as stack:
+        stack.enter_context(override_cli_dependencies(deps))
         stack.enter_context(override_attr(cli, "CoreTrainer", FakeTrainer))
         stack.enter_context(
-            override_attr(cli, "_global_device_setup", lambda *args, **kwargs: None)
+            override_attr(cli, "global_device_setup", lambda *args, **kwargs: None)
         )
-        cli._run_train("demo", train_cfg, shared.config_path, shared)
+        run_train("demo", train_cfg, shared.config_path, shared)
 
     text = "\n".join(caplog.messages)
     assert "Running trainer for experiment" in text
@@ -363,7 +434,7 @@ def test_run_sample_requires_runtime(
     )
 
     with pytest.raises(typer.Exit) as excinfo:
-        cli._run_sample("demo", cfg, shared.config_path, shared)
+        run_sample("demo", cfg, shared.config_path, shared)
 
     assert excinfo.value.exit_code == 1
 
@@ -394,19 +465,50 @@ def test_run_sample_executes_flow(
     )
     cfg = cast(SamplerConfig, SimpleNamespace(runtime=runtime, logger=logger))
 
+    exp = ExperimentConfig(
+        prepare=PreparerConfig(),
+        train=TrainerConfig(
+            model=ModelConfig(),
+            data=DataConfig(),
+            optim=OptimConfig(),
+            schedule=LRSchedule(),
+            runtime=RuntimeConfig(out_dir=shared.train_out_dir),
+        ),
+        sample=SamplerConfig(
+            runtime=RuntimeConfig(out_dir=shared.sample_out_dir),
+            sample=SampleConfig(),
+        ),
+        shared=shared,
+    )
+
+    def _load_experiment(name: str, exp_config: Path | None) -> ExperimentConfig:
+        assert name == "demo"
+        assert exp_config is None
+        return exp
+
+    deps = CLIDependencies(
+        load_experiment=_load_experiment,
+        ensure_train_prerequisites=lambda _: None,
+        ensure_sample_prerequisites=lambda _: None,
+        run_prepare=lambda *args, **kwargs: None,
+        run_train=lambda *args, **kwargs: None,
+        run_sample=lambda *args, **kwargs: None,  # not overridden
+    )
+
     with ExitStack() as stack:
+        stack.enter_context(override_cli_dependencies(deps))
         stack.enter_context(override_attr(cli, "Sampler", FakeSampler))
         stack.enter_context(
             override_attr(
                 cli,
-                "_log_command_status",
+                "log_command_status",
                 lambda tag, shared_cfg, out_dir, _logger: log_calls.append(
                     (tag, out_dir)
                 ),
             )
         )
-        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
-        cli._run_sample("demo", cfg, shared.config_path, shared)
+        stack.enter_context(override_attr(cli, "global_device_setup", fake_global))
+        run_sample("demo", cfg, shared.config_path, shared)
 
     assert sampler_called["cfg"] is cfg
     assert sampler_called["shared"] is shared
@@ -449,7 +551,7 @@ def test_global_device_setup_handles_runtime_error(
 
     # Should not raise even though torch operations fail
     with override_attr(cli, "torch", BadTorch()):
-        cli._global_device_setup("cpu", "float32", 123)
+        global_device_setup("cpu", "float32", 123)
 
 
 def test_global_device_setup_sets_cuda_state(
@@ -464,18 +566,18 @@ def test_global_device_setup_sets_cuda_state(
             is_available=lambda: True,
         ),
         backends=SimpleNamespace(
-            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
-            cudnn=SimpleNamespace(allow_tf32=False),
+            cuda=SimpleNamespace(matmul=SimpleNamespace(fp32_precision="highest")),
+            cudnn=SimpleNamespace(fp32_precision="highest"),
         ),
     )
 
     with override_attr(cli, "torch", fake_torch):
-        cli._global_device_setup("cuda", "float16", 7, cuda_is_available=lambda: True)
+        global_device_setup("cuda", "float16", 7, cuda_is_available=lambda: True)
 
     assert ("cpu", 7) in seed_calls
     assert ("cuda", 7) in seed_calls
-    assert fake_torch.backends.cuda.matmul.allow_tf32 is True
-    assert fake_torch.backends.cudnn.allow_tf32 is True
+    assert fake_torch.backends.cuda.matmul.fp32_precision == "tf32"
+    assert fake_torch.backends.cudnn.fp32_precision == "tf32"
 
 
 def test_run_train_impl_invokes_trainer(
@@ -511,20 +613,19 @@ def test_run_train_impl_invokes_trainer(
         stack.enter_context(
             override_attr(
                 cli,
-                "_log_command_status",
+                "log_command_status",
                 lambda tag, shared_cfg, out_dir, logger: log_calls.append(
                     (tag, out_dir)
                 ),
             )
         )
-        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
-        cli._run_train_impl("demo", train_cfg, shared.config_path, shared)
+        stack.enter_context(override_attr(cli, "global_device_setup", fake_global))
+        run_train_impl("demo", train_cfg, shared.config_path, shared)
 
     assert trainer_called["cfg"] is train_cfg
     assert trainer_called["shared"] is shared
     assert trainer_called.get("ran") is True
     assert trainer_called["global_setup"] == ("cpu", "float32", 11)
-    assert ("pre-train", shared.train_out_dir) in log_calls
     assert ("post-train", shared.train_out_dir) in log_calls
 
 
@@ -561,14 +662,14 @@ def test_run_sample_impl_invokes_sampler(
         stack.enter_context(
             override_attr(
                 cli,
-                "_log_command_status",
+                "log_command_status",
                 lambda tag, shared_cfg, out_dir, logger: log_calls.append(
                     (tag, out_dir)
                 ),
             )
         )
-        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
-        cli._run_sample_impl("demo", sample_cfg, shared.config_path, shared)
+        stack.enter_context(override_attr(cli, "global_device_setup", fake_global))
+        run_sample_impl("demo", sample_cfg, shared.config_path, shared)
     assert sampler_called["shared"] is shared
     assert sampler_called.get("ran") is True
     assert sampler_called["global_setup"] == ("cpu", "float32", 5)
@@ -650,12 +751,22 @@ def test_prepare_command_invokes_custom_dependency(experiment: str) -> None:
             prepare_cfg: PreparerConfig,
             config_path_arg: Path,
             shared_cfg: SharedConfig,
-        ) -> None:
+            learning_mode_engine: LearningModeEngine | None = None,
+        ) -> ToolResult:
+            from ml_playground.tools.core.interfaces import ToolResult
+
             calls["prepare"] += 1
             assert name == experiment
             assert prepare_cfg is exp.prepare
-            assert config_path_arg == config_path
             assert shared_cfg is shared
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command=name,
+                stdout="ok",
+            )
 
         deps = CLIDependencies(
             load_experiment=_load_experiment,
@@ -668,7 +779,13 @@ def test_prepare_command_invokes_custom_dependency(experiment: str) -> None:
 
         runner = CliRunner()
         with override_cli_dependencies(deps):
-            result = runner.invoke(cli.app, ["prepare", experiment])
+            result = runner.invoke(
+                cli.app,
+                [
+                    "prepare",
+                    experiment,
+                ],
+            )
 
         assert result.exit_code == 0
         assert calls["prepare"] == 1

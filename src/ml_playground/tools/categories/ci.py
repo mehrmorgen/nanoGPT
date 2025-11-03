@@ -49,7 +49,11 @@ class CITools:
             (self.cache_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     def quality_gate(self, args: List[str]) -> ToolResult:
-        """Run the full pre-commit quality gate.
+        """Run the pre-commit quality gate only.
+
+        Pre-commit now includes regression, integration, acceptance and e2e tests,
+        as well as coverage threshold. Therefore, this gate defers entirely to
+        pre-commit and surfaces a clear, structured summary.
 
         Args:
             args: Additional pre-commit arguments
@@ -61,82 +65,40 @@ class CITools:
             namespace="tools", category=self.category, command="quality-gate"
         )
 
-        # Run pre-commit on all files
+        # Run pre-commit on all files (authoritative gate)
+        precommit_cmd = [
+            "pre-commit",
+            "run",
+            "-v",
+            "--config",
+            str(self.pre_commit_config),
+            "--all-files",
+            *args,
+        ]
         precommit_result = self._subprocess_runner.run_uv_command(
-            [
-                "pre-commit",
-                "run",
-                "--config",
-                str(self.pre_commit_config),
-                "--all-files",
-                *args,
-            ],
+            precommit_cmd,
             cwd=self.root_path,
             timeout=self.config.ci.timeout,
             operation_id=operation_id,
         )
 
-        if not precommit_result.success:
-            return precommit_result
-
-        # Run integration tests
-        integration_result = self._subprocess_runner.run_uv_command(
-            ["python", "-m", "pytest", "-m", "integration", "--no-cov"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-        if not integration_result.success:
-            return integration_result
-
-        # Run acceptance tests
-        acceptance_result = self._subprocess_runner.run_uv_command(
-            ["python", "-m", "pytest", "tests/acceptance"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-        if not acceptance_result.success:
-            return acceptance_result
-
-        # Run e2e tests
-        e2e_result = self._subprocess_runner.run_uv_command(
-            ["python", "-m", "pytest", "tests/e2e"],
-            cwd=self.root_path,
-            timeout=self.config.ci.timeout,
-            operation_id=operation_id,
-        )
-
-        # Combine outputs
-        combined_stdout = ""
+        status = "PASS" if precommit_result.success else "FAIL"
+        summary_lines = [
+            "Quality Gate Summary:",
+            f"- pre-commit: {status}",
+            "",
+            "Command executed:",
+            "  • " + " ".join(precommit_cmd),
+        ]
+        stdout = "\n".join(summary_lines)
         if precommit_result.stdout:
-            combined_stdout += f"Pre-commit:\n{precommit_result.stdout}\n"
-        if integration_result.stdout:
-            combined_stdout += f"Integration tests:\n{integration_result.stdout}\n"
-        if acceptance_result.stdout:
-            combined_stdout += f"Acceptance tests:\n{acceptance_result.stdout}\n"
-        if e2e_result.stdout:
-            combined_stdout += f"E2E tests:\n{e2e_result.stdout}"
-
-        combined_stderr = ""
-        if precommit_result.stderr:
-            combined_stderr += f"Pre-commit errors:\n{precommit_result.stderr}\n"
-        if integration_result.stderr:
-            combined_stderr += (
-                f"Integration test errors:\n{integration_result.stderr}\n"
-            )
-        if acceptance_result.stderr:
-            combined_stderr += f"Acceptance test errors:\n{acceptance_result.stderr}\n"
-        if e2e_result.stderr:
-            combined_stderr += f"E2E test errors:\n{e2e_result.stderr}"
+            stdout += f"\n\nPre-commit output:\n{precommit_result.stdout}"
 
         return ToolResult(
-            success=e2e_result.success,
-            exit_code=e2e_result.exit_code,
-            stdout=combined_stdout,
-            stderr=combined_stderr,
+            success=precommit_result.success,
+            exit_code=precommit_result.exit_code,
+            stdout=stdout,
+            stderr=precommit_result.stderr or "",
             operation_id=operation_id,
         )
 
@@ -332,7 +294,6 @@ class CITools:
         # Generate badges directly
         try:
             import json
-            from pathlib import Path
 
             # Read coverage data
             with open(json_path) as f:
@@ -340,8 +301,8 @@ class CITools:
 
             total_coverage = coverage_data.get("totals", {}).get("percent_covered", 0)
 
-            # Create simple SVG badge
-            badge_dir = Path("docs/assets")
+            # Create simple SVG badge in configured directory (relative to root path)
+            badge_dir = (self.root_path / self.config.ci.badge_output_dir).resolve()
             badge_dir.mkdir(parents=True, exist_ok=True)
 
             # Determine color based on coverage

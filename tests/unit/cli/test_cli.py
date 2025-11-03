@@ -10,8 +10,20 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-import ml_playground.cli as cli
-from ml_playground.cli import app, override_cli_dependencies, CLIDependencies
+import ml_playground.runtime.cli as cli
+from ml_playground.runtime.cli import (
+    app,
+    override_cli_dependencies,
+    CLIDependencies,
+    run_train_cmd,
+    run_sample_cmd,
+    run_analyze,
+    handle_tool_result,
+    run_prepare_impl,
+    log_directory,
+    log_command_status,
+    global_device_setup,
+)
 from ml_playground.configuration.models import ExperimentConfig
 from ml_playground.tools.core.interfaces import ToolResult
 
@@ -199,7 +211,7 @@ class TestCommandRunners:
         )
         with (
             override_cli_dependencies(deps),
-            caplog.at_level(logging.INFO, logger="ml_playground.cli"),
+            caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["prepare", "shakespeare"])
             assert result.exit_code == 0
@@ -227,7 +239,7 @@ class TestCommandRunners:
         )
         with (
             override_cli_dependencies(deps),
-            caplog.at_level(logging.INFO, logger="ml_playground.cli"),
+            caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["train", "shakespeare"])
             assert result.exit_code == 0
@@ -255,7 +267,7 @@ class TestCommandRunners:
         )
         with (
             override_cli_dependencies(deps),
-            caplog.at_level(logging.INFO, logger="ml_playground.cli"),
+            caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["sample", "shakespeare"])
             assert result.exit_code == 0
@@ -342,7 +354,7 @@ class TestHelperCoverage:
         def _raise_interrupt() -> None:
             raise KeyboardInterrupt()
 
-        with caplog.at_level(logging.INFO, logger="ml_playground.cli"):
+        with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
             cli.run_or_exit(_raise_interrupt, keyboard_interrupt_msg="Cancelled.")
 
         assert any("Cancelled." in msg for msg in caplog.messages)
@@ -355,20 +367,20 @@ class TestHelperCoverage:
 
         cli.run_or_exit(_raise_interrupt)
 
-    def test_run_analyze_logs_placeholder(
+    def testrun_analyze_logs_placeholder(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """_run_analyze should log a not implemented message for bundestag_char."""
+        """run_analyze should log a not implemented message for bundestag_char."""
 
-        with caplog.at_level(logging.INFO, logger="ml_playground.cli"):
-            cli._run_analyze("bundestag_char", "0.0.0.0", 9000, False)
+        with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
+            run_analyze("bundestag_char", "0.0.0.0", 9000, False)
 
         assert any("not implemented" in msg for msg in caplog.messages)
 
-    def test_run_analyze_unknown_experiment_raises(self) -> None:
-        """_run_analyze should return failure for unsupported experiments."""
+    def testrun_analyze_unknown_experiment_raises(self) -> None:
+        """run_analyze should return failure for unsupported experiments."""
 
-        result = cli._run_analyze("other", "127.0.0.1", 8050, True)
+        result = run_analyze("other", "127.0.0.1", 8050, True)
         assert not result.success
         assert result.exit_code == 1
         assert "analyze currently supports only 'bundestag_char'" in result.stderr
@@ -376,9 +388,9 @@ class TestHelperCoverage:
     def test_analyze_command_invokes_helper(
         self, runner: CliRunner, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Analyze CLI command should forward to _run_analyze."""
+        """Analyze CLI command should forward to run_analyze."""
 
-        with caplog.at_level(logging.INFO, logger="ml_playground.cli"):
+        with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
             result = runner.invoke(
                 app,
                 [
@@ -397,8 +409,8 @@ class TestHelperCoverage:
             "Analysis for 'bundestag_char'" in message for message in caplog.messages
         )
 
-    def test_run_train_cmd_uses_default_dependencies(self, tmp_path: Path) -> None:
-        """_run_train_cmd should request dependencies when none are provided."""
+    def testrun_train_cmd_uses_default_dependencies(self, tmp_path: Path) -> None:
+        """run_train_cmd should request dependencies when none are provided."""
 
         calls: dict[str, list[Any]] = {
             "load": [],
@@ -454,14 +466,14 @@ class TestHelperCoverage:
         )
 
         with override_cli_dependencies(deps):
-            cli._run_train_cmd("demo", None, deps=None)
+            run_train_cmd("demo", None, deps=None)
 
         assert calls["load"] == [("demo", None)]
         assert calls["ensure"] == [exp]
         assert calls["run"] == [("demo", "train_cfg", shared.config_path, shared)]
 
-    def test_run_sample_cmd_uses_default_dependencies(self, tmp_path: Path) -> None:
-        """_run_sample_cmd should request dependencies when none are provided."""
+    def testrun_sample_cmd_uses_default_dependencies(self, tmp_path: Path) -> None:
+        """run_sample_cmd should request dependencies when none are provided."""
 
         calls: dict[str, list[Any]] = {
             "load": [],
@@ -517,11 +529,95 @@ class TestHelperCoverage:
         )
 
         with override_cli_dependencies(deps):
-            cli._run_sample_cmd("demo", None, deps=None)
+            run_sample_cmd("demo", None, deps=None)
 
         assert calls["load"] == [("demo", None)]
         assert calls["ensure"] == [exp]
         assert calls["run"] == [("demo", "sample_cfg", shared.config_path, shared)]
+
+    def testrun_train_cmd_handles_failure_result(self) -> None:
+        """run_train_cmd should exit with failure when dependencies return errors."""
+
+        failure_result = ToolResult.create(
+            success=False,
+            exit_code=7,
+            namespace="ml",
+            category="train",
+            command="demo",
+            stderr="train failure",
+        )
+
+        deps = CLIDependencies(
+            load_experiment=lambda *_: SimpleNamespace(
+                train="train_cfg",
+                shared=SimpleNamespace(config_path=Path("cfg.toml")),
+            ),
+            ensure_train_prerequisites=lambda *_: None,
+            ensure_sample_prerequisites=lambda *_: None,
+            run_prepare=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
+            run_train=lambda *_: failure_result,
+            run_sample=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command="test",
+            ),
+        )
+
+        with override_cli_dependencies(deps):
+            with pytest.raises(typer.Exit) as excinfo:
+                run_train_cmd("demo", None, deps=None)
+
+        assert excinfo.value.exit_code == 7
+
+    def testrun_sample_cmd_handles_failure_result(self) -> None:
+        """run_sample_cmd should exit with failure when dependencies return errors."""
+
+        failure_result = ToolResult.create(
+            success=False,
+            exit_code=5,
+            namespace="ml",
+            category="sample",
+            command="demo",
+            stderr="sample failure",
+        )
+
+        deps = CLIDependencies(
+            load_experiment=lambda *_: SimpleNamespace(
+                sample="sample_cfg",
+                shared=SimpleNamespace(config_path=Path("cfg.toml")),
+            ),
+            ensure_train_prerequisites=lambda *_: None,
+            ensure_sample_prerequisites=lambda *_: None,
+            run_prepare=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command="test",
+            ),
+            run_train=lambda *_: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command="test",
+            ),
+            run_sample=lambda *_: failure_result,
+        )
+
+        with override_cli_dependencies(deps):
+            with pytest.raises(typer.Exit) as excinfo:
+                run_sample_cmd("demo", None, deps=None)
+
+        assert excinfo.value.exit_code == 5
 
     def test_complete_experiments_returns_known_experiments(self) -> None:
         """_complete_experiments should list available experiments including bundestag_char."""
@@ -540,25 +636,22 @@ class TestHelperCoverage:
 
 
 class TestDeviceSetupFallbacks:
-    """Test _global_device_setup error handling."""
+    """Test global_device_setup error handling."""
 
     def test_device_setup_swallows_cuda_errors(self) -> None:
         """Test that torch errors in device setup are swallowed."""
-        from ml_playground.cli import _global_device_setup
 
         # Should not raise, even with cuda available but error
-        _global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
+        global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
 
     def test_device_setup_success_path(self) -> None:
         """Test successful CUDA setup."""
-        from ml_playground.cli import _global_device_setup
 
         # Inject fake cuda available
-        _global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
+        global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
 
     def test_device_setup_explicit_cuda_override(self) -> None:
         """Test injecting cuda_is_available callable."""
-        from ml_playground.cli import _global_device_setup
 
         called = False
 
@@ -567,18 +660,16 @@ class TestDeviceSetupFallbacks:
             called = True
             return False
 
-        _global_device_setup("cpu", "float32", 42, cuda_is_available=fake_cuda)
+        global_device_setup("cpu", "float32", 42, cuda_is_available=fake_cuda)
         assert called
 
 
 class TestAnalysisGuardRails:
-    """Test _run_analyze experiment validation."""
+    """Test run_analyze experiment validation."""
 
     def test_analyze_rejects_non_bundestag_char(self) -> None:
         """Test failure result for unsupported experiments."""
-        from ml_playground.cli import _run_analyze
-
-        result = _run_analyze("shakespeare", "127.0.0.1", 8050, True)
+        result = cli.run_analyze("shakespeare", "127.0.0.1", 8050, True)
         assert not result.success
         assert result.exit_code == 1
         assert "analyze currently supports only 'bundestag_char'" in result.stderr
@@ -587,44 +678,41 @@ class TestAnalysisGuardRails:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test info log for supported experiment."""
-        from ml_playground.cli import _run_analyze
-
         with caplog.at_level("INFO"):
-            _run_analyze("bundestag_char", "127.0.0.1", 8050, True)
+            cli.run_analyze("bundestag_char", "127.0.0.1", 8050, True)
         assert "Analysis for 'bundestag_char' not implemented" in caplog.text
 
 
 class TestDirectoryLoggingResilience:
-    """Test _log_dir and _log_command_status error handling."""
+    """Test log_directory and log_command_status error handling."""
 
-    def test_log_dir_handles_unset_path(self, caplog: pytest.LogCaptureFixture) -> None:
+    def testlog_directory_handles_unset_path(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Test logging when dir_path is None."""
-        from ml_playground.cli import _log_dir
         import logging
 
         logger = logging.getLogger("test")
         with caplog.at_level("INFO"):
-            _log_dir("test", "test_dir", None, logger)
+            log_directory("test", "test_dir", None, logger)
         assert "<not set>" in caplog.text
 
-    def test_log_dir_handles_missing_directory(
+    def testlog_directory_handles_missing_directory(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
         """Test logging for non-existent directory."""
-        from ml_playground.cli import _log_dir
         import logging
 
         logger = logging.getLogger("test")
         missing_dir = tmp_path / "missing"
         with caplog.at_level("INFO"):
-            _log_dir("test", "test_dir", missing_dir, logger)
+            log_directory("test", "test_dir", missing_dir, logger)
         assert "(missing)" in caplog.text
 
-    def test_log_dir_handles_existing_directory(
+    def testlog_directory_handles_existing_directory(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
         """Test logging for existing directory."""
-        from ml_playground.cli import _log_dir
         import logging
 
         logger = logging.getLogger("test")
@@ -632,15 +720,14 @@ class TestDirectoryLoggingResilience:
         existing_dir.mkdir()
         (existing_dir / "file.txt").write_text("content")
         with caplog.at_level("INFO"):
-            _log_dir("test", "test_dir", existing_dir, logger)
+            log_directory("test", "test_dir", existing_dir, logger)
         assert "(exists)" in caplog.text
         assert "Contents:" in caplog.text
 
-    def test_log_dir_handles_unreadable_directory(
+    def testlog_directory_handles_unreadable_directory(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
         """Test logging for directory without read permission."""
-        from ml_playground.cli import _log_dir
         import logging
 
         logger = logging.getLogger("test")
@@ -649,15 +736,25 @@ class TestDirectoryLoggingResilience:
         os.chmod(unreadable_dir, 0o000)  # No permissions
         try:
             with caplog.at_level("INFO"):
-                _log_dir("test", "test_dir", unreadable_dir, logger)
+                log_directory("test", "test_dir", unreadable_dir, logger)
             assert "(exists)" in caplog.text
             # Should not crash, even if contents not listed
         finally:
             os.chmod(unreadable_dir, 0o755)  # Restore for cleanup
 
-    def test_log_command_status_handles_errors_gracefully(self, tmp_path: Path) -> None:
-        """Test _log_command_status handles OSError/ValueError/TypeError gracefully."""
-        from ml_playground.cli import _log_command_status
+    def testlog_directory_ignores_non_path_values(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """log_directory should ignore values that are not Path instances."""
+        logger = logging.getLogger("test")
+        with caplog.at_level("INFO"):
+            log_directory("test", "test_dir", "not-a-path", logger)
+        assert caplog.text == ""
+
+    def testlog_command_status_handles_errors_gracefully(
+        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
+    ) -> None:
+        """Test log_command_status handles OSError/ValueError/TypeError gracefully."""
         from ml_playground.configuration.models import SharedConfig
 
         shared = SharedConfig(
@@ -669,8 +766,45 @@ class TestDirectoryLoggingResilience:
             sample_out_dir=tmp_path / "sample",
         )
 
-        # Should not raise
-        _log_command_status("tag", shared, tmp_path, logging.getLogger(__name__))
+        class ExplodingPath(Path):  # type: ignore[misc]
+            _flavour = Path(".")._flavour
+
+            def iterdir(self):  # type: ignore[override]
+                raise OSError("boom")
+
+        exploding_dir = ExplodingPath(str(tmp_path / "explode"))
+
+        with caplog.at_level("INFO"):
+            log_command_status(
+                "tag", shared, exploding_dir, logging.getLogger(__name__)
+            )
+
+        assert "boom" not in caplog.text
+
+    def testlog_command_status_logs_expected_directories(
+        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
+    ) -> None:
+        """log_command_status should log out_dir and dataset_dir details."""
+        from ml_playground.configuration.models import SharedConfig
+
+        shared = SharedConfig(
+            experiment="test",
+            config_path=tmp_path / "config.toml",
+            project_home=tmp_path,
+            dataset_dir=tmp_path / "dataset",
+            train_out_dir=tmp_path / "train",
+            sample_out_dir=tmp_path / "sample",
+        )
+
+        shared.dataset_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = tmp_path / "output"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        with caplog.at_level("INFO"):
+            log_command_status("tag", shared, out_dir, logging.getLogger(__name__))
+
+        assert "[tag] out_dir" in caplog.text
+        assert "[tag] dataset_dir" in caplog.text
 
 
 class TestMLWorkflowLearningModeIntegration:
@@ -722,7 +856,6 @@ class TestMLWorkflowLearningModeIntegration:
 
     def test_prepare_command_with_learning_mode(self, tmp_path: Path) -> None:
         """Test prepare command integrates learning mode correctly."""
-        from ml_playground.cli import _run_prepare_impl
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
@@ -747,7 +880,7 @@ class TestMLWorkflowLearningModeIntegration:
         learning_engine = LearningModeEngine(VerbosityLevel.STANDARD)
 
         # This will fail due to missing data, but should return ToolResult with learning info
-        result = _run_prepare_impl(
+        result = run_prepare_impl(
             "bundestag_char",
             prepare_cfg,
             tmp_path / "config.toml",
@@ -766,12 +899,10 @@ class TestMLWorkflowLearningModeIntegration:
 
     def test_train_command_with_learning_mode(self) -> None:
         """Test train command learning mode integration using mocked dependencies."""
-        from ml_playground.cli import _run_train_cmd
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
         )
-        from ml_playground.cli import CLIDependencies, override_cli_dependencies
         from types import SimpleNamespace
 
         # Create learning mode engine
@@ -835,7 +966,7 @@ class TestMLWorkflowLearningModeIntegration:
         )
 
         with override_cli_dependencies(deps):
-            _run_train_cmd(
+            run_train_cmd(
                 "bundestag_char", None, deps, learning_engine, learning_mode=True
             )
 
@@ -847,12 +978,10 @@ class TestMLWorkflowLearningModeIntegration:
 
     def test_sample_command_with_learning_mode(self) -> None:
         """Test sample command learning mode integration using mocked dependencies."""
-        from ml_playground.cli import _run_sample_cmd
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
         )
-        from ml_playground.cli import CLIDependencies, override_cli_dependencies
         from types import SimpleNamespace
 
         # Create learning mode engine
@@ -916,7 +1045,7 @@ class TestMLWorkflowLearningModeIntegration:
         )
 
         with override_cli_dependencies(deps):
-            _run_sample_cmd(
+            run_sample_cmd(
                 "bundestag_qwen15b_lora_mps",
                 None,
                 deps,
@@ -932,7 +1061,6 @@ class TestMLWorkflowLearningModeIntegration:
 
     def test_analyze_command_with_learning_mode(self) -> None:
         """Test analyze command integrates learning mode correctly."""
-        from ml_playground.cli import _run_analyze
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
@@ -942,9 +1070,7 @@ class TestMLWorkflowLearningModeIntegration:
         learning_engine = LearningModeEngine(VerbosityLevel.STANDARD)
 
         # Test with supported experiment
-        result = _run_analyze(
-            "bundestag_char", "127.0.0.1", 8050, True, learning_engine
-        )
+        result = run_analyze("bundestag_char", "127.0.0.1", 8050, True, learning_engine)
 
         # Verify ToolResult structure
         assert result.success  # Should succeed as it's just a placeholder
@@ -954,11 +1080,10 @@ class TestMLWorkflowLearningModeIntegration:
         assert result.learning_info is not None
         assert len(result.learning_info.explanations) > 0
 
-    def test_handle_tool_result_displays_learning_info(
+    def testhandle_tool_result_displays_learning_info(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that _handle_tool_result properly displays learning information."""
-        from ml_playground.cli import _handle_tool_result
+        """Test that handle_tool_result properly displays learning information."""
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
@@ -982,7 +1107,7 @@ class TestMLWorkflowLearningModeIntegration:
         )
 
         # Test with learning mode enabled
-        _handle_tool_result(result, learning_mode=True)
+        handle_tool_result(result, learning_mode=True)
 
         captured = capsys.readouterr()
         assert "📚 Learning Mode - What this command does:" in captured.out
@@ -990,11 +1115,10 @@ class TestMLWorkflowLearningModeIntegration:
         assert "🔗 Related Concepts:" in captured.out
         assert "Converts raw text files into character-level tokens" in captured.out
 
-    def test_handle_tool_result_without_learning_mode(
+    def testhandle_tool_result_without_learning_mode(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that _handle_tool_result doesn't display learning info when disabled."""
-        from ml_playground.cli import _handle_tool_result
+        """Test that handle_tool_result doesn't display learning info when disabled."""
         from ml_playground.tools.core.learning_mode import (
             LearningModeEngine,
             VerbosityLevel,
@@ -1018,7 +1142,7 @@ class TestMLWorkflowLearningModeIntegration:
         )
 
         # Test with learning mode disabled
-        _handle_tool_result(result, learning_mode=False)
+        handle_tool_result(result, learning_mode=False)
 
         captured = capsys.readouterr()
         assert "📚 Learning Mode" not in captured.out
@@ -1183,7 +1307,6 @@ class TestToolResultIntegration:
 
     def test_cli_dependencies_interface_compatibility(self) -> None:
         """Test that CLIDependencies interface works with ToolResult."""
-        from ml_playground.cli import CLIDependencies
 
         def mock_load_experiment(name: str, path: Path | None) -> Any:
             # This would normally load a real config, but we'll create a mock
@@ -1208,7 +1331,7 @@ class TestToolResultIntegration:
             )
 
         # Test that the interface can be created with ToolResult-returning functions
-        deps = CLIDependencies(
+        deps = cli.CLIDependencies(
             load_experiment=mock_load_experiment,
             ensure_train_prerequisites=mock_ensure_prerequisites,
             ensure_sample_prerequisites=mock_ensure_prerequisites,

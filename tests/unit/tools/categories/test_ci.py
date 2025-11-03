@@ -12,6 +12,7 @@ from ml_playground.tools.categories.ci import CITools
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId
+from ml_playground.tools.core.errors import ToolExecutionError
 from tests.unit.tools.fakes import (
     FakeSubprocessRunner,
     create_success_result,
@@ -55,21 +56,37 @@ class TestQualityGate:
         self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
     ):
         """Test successful quality gate execution."""
-        # Configure fake runner to return success for all commands
+        # Configure fake runner to return success for pre-commit
         operation_id = OperationId(
             namespace="tools", category="ci", command="quality-gate"
         )
         success_result = create_success_result(operation_id, "All checks passed")
-        fake_runner.set_results(
-            [success_result, success_result, success_result, success_result]
-        )
+        fake_runner.set_results([success_result])
 
         result = ci_tools.quality_gate([])
 
         assert result.success is True
         assert result.exit_code == 0
-        # Verify that multiple commands were called (pre-commit, integration, acceptance, e2e)
-        assert len(fake_runner.calls) == 4
+        # Only one call (pre-commit) should be made now
+        assert len(fake_runner.calls) == 1
+        assert "Quality Gate Summary:" in (result.stdout or "")
+        assert "- pre-commit: PASS" in (result.stdout or "")
+
+    def test_quality_gate_aggregates_stderr(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-gate"
+        )
+        pre_commit = create_success_result(operation_id, "ok")
+        pre_commit.stderr = "pre-commit warning"
+        fake_runner.set_results([pre_commit])
+
+        result = ci_tools.quality_gate([])
+
+        assert result.success is True
+        # Stderr should include pre-commit stderr directly
+        assert "pre-commit warning" in (result.stderr or "")
 
     def test_quality_gate_precommit_failure(
         self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
@@ -90,6 +107,41 @@ class TestQualityGate:
         # Should stop after first failure
         assert len(fake_runner.calls) == 1
 
+    def test_quality_gate_success_summary_contains(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-gate"
+        )
+        precommit = create_success_result(operation_id, "precommit ok")
+        fake_runner.set_results([precommit])
+
+        result = ci_tools.quality_gate(["--verbose"])
+
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "Quality Gate Summary:" in (result.stdout or "")
+        assert "- pre-commit: PASS" in (result.stdout or "")
+        # Accept verbose flag position differences (e.g., 'pre-commit run -v --config ...')
+        assert "pre-commit run" in (result.stdout or "")
+        assert "--config" in (result.stdout or "")
+        assert len(fake_runner.calls) == 1
+
+    def test_precommit_stdout_is_appended_to_summary(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-gate"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "pre ok")])
+
+        result = ci_tools.quality_gate([])
+
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "Pre-commit output:\npre ok" in (result.stdout or "")
+        assert len(fake_runner.calls) == 1
+
     def test_quality_gate_with_args(
         self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
     ):
@@ -98,15 +150,13 @@ class TestQualityGate:
             namespace="tools", category="ci", command="quality-gate"
         )
         success_result = create_success_result(operation_id, "Success with args")
-        fake_runner.set_results(
-            [success_result, success_result, success_result, success_result]
-        )
+        fake_runner.set_results([success_result])
 
         result = ci_tools.quality_gate(["--verbose"])
 
         assert result.success is True
-        # Verify args were passed to the commands
-        assert len(fake_runner.calls) == 4
+        # Only one pre-commit call should be made
+        assert len(fake_runner.calls) == 1
 
 
 class TestQualityFast:
@@ -207,6 +257,26 @@ class TestQualityExt:
             ci_tools.quality_gate = original_quality_gate
 
 
+class TestCoverageBadgeAugmented:
+    """Additional coverage badge scenarios."""
+
+    def test_coverage_badge_generation_failure(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner, tmp_path: Path
+    ) -> None:
+        ci_tools.cache_dir = tmp_path / ".cache"
+        coverage_dir = ci_tools.cache_dir / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+
+        # Write malformed JSON and ensure error is handled gracefully
+        json_path.write_text("{not-json}")
+
+        result = ci_tools.coverage_badge([])
+
+        assert result.success is False
+        assert "Failed to generate coverage badge" in result.stderr
+
+
 class TestCoverageBadge:
     """Test coverage badge generation functionality."""
 
@@ -263,6 +333,46 @@ class TestCoverageBadge:
         # Should call coverage generation first
         assert len(fake_runner.calls) == 0  # Our mock doesn't use the fake_runner
 
+    def test_coverage_badge_fails_when_generation_fails(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner, tmp_path: Path
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="coverage-badge"
+        )
+        failure = create_failure_result(operation_id, 1, stderr="coverage json failed")
+        fake_runner.set_results([failure])
+        ci_tools.cache_dir = tmp_path / ".cache"
+
+        with pytest.raises(ToolExecutionError) as excinfo:
+            ci_tools.coverage_badge([])
+
+        assert "Failed to generate coverage JSON for badge creation" in str(
+            excinfo.value
+        )
+        assert fake_runner.calls  # ensure command executed
+
+    def test_coverage_badge_respects_configured_output_dir(
+        self, tmp_path: Path
+    ) -> None:
+        config = ToolsConfig()
+        config.ci.badge_output_dir = Path("artifacts/badges")
+        fake_runner = FakeSubprocessRunner()
+        ci_tools = CITools(config, tmp_path, subprocess_runner=fake_runner)
+
+        coverage_dir = tmp_path / ".cache" / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+        json_path.write_text('{"totals": {"percent_covered": 88.2}}')
+
+        result = ci_tools.coverage_badge([])
+
+        assert result.success is True
+        expected_badge = (
+            tmp_path / config.ci.badge_output_dir / "coverage.svg"
+        ).resolve()
+        assert expected_badge.exists()
+        assert "88.2% coverage" in result.stdout
+
 
 # Mutation testing moved to TestingTools
 
@@ -297,6 +407,24 @@ class TestQualityCILocal:
             result = ci_tools.quality_ci_local([])
             assert result.success is True
             assert result.exit_code == 0
+        finally:
+            subprocess.run = original_run
+
+    def test_quality_ci_local_generic_failure(self, ci_tools: CITools):
+        import subprocess
+        from ml_playground.tools.core.errors import ToolExecutionError
+
+        original_run = subprocess.run
+
+        def fake_run(*args, **kwargs):
+            raise RuntimeError("act not installed")
+
+        subprocess.run = fake_run
+
+        try:
+            with pytest.raises(ToolExecutionError) as exc_info:
+                ci_tools.quality_ci_local([])
+            assert "Failed to execute act command" in str(exc_info.value)
         finally:
             subprocess.run = original_run
 
