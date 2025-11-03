@@ -76,12 +76,7 @@ repos:
       # Coverage threshold (heaviest)
       - id: coverage-threshold
         name: unit and property tests with coverage threshold
-        entry: bash
-        args:
-          - -c
-          - |
-            set -euo pipefail
-            uv run tools test coverage-report --verbose
-            uv run tools test coverage-threshold --verbose
+        entry: uv
+        args: [run, tools, test, coverage, --verbose]
         language: system
         pass_filenames: false
