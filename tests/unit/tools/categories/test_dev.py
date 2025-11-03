@@ -12,7 +12,6 @@ import pytest
 from ml_playground.tools.categories import dev
 from ml_playground.tools.categories import environment as environment_module
 from ml_playground.tools.core.config import ToolsConfig
-from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from tests.unit.tools.fakes import FakeSubprocessRunner, create_success_result
 
@@ -118,25 +117,118 @@ def test_review_list_renders_threads(
     assert stub.filters_called_with["viewer"] == "bob"
 
 
-def test_review_list_missing_module_raises(
+def test_review_list_uses_builtin_review_module(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tools, _ = dev_tools
 
-    call_count = {"count": 0}
+    calls: list[list[str]] = []
 
-    def fake_import(_module: str) -> object:
-        call_count["count"] += 1
-        raise ModuleNotFoundError("scripts.review not found")
+    def fake_run_subprocess(command: list[str], **kwargs: object) -> ToolResult:
+        calls.append(command)
+        if command[:4] == ["git", "remote", "get-url", "origin"]:
+            return _make_result("git-remote", stdout="git@github.com:owner/repo.git\n")
+        if command[:3] == ["gh", "api", "graphql"]:
+            # Minimal GraphQL response, matching gh api graphql: root data{}, thread has no url; comment carries url
+            payload = (
+                '{"data":{"viewer":{"login":"bob"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[{'
+                '"isResolved":false,"comments":{"nodes":[{'
+                '"author":{"login":"alice"},"body":"Looks good","url":"https://example/review/1#discussion_r1","id":"C_xyz","databaseId":1,"createdAt":"2025-01-01T00:00:00Z"}]}}]}}}}}\n'
+            )
+            return _make_result("gh-graphql", stdout=payload)
+        return _make_result("noop", stdout="")
 
-    monkeypatch.setattr(dev.importlib, "import_module", fake_import)
+    monkeypatch.setattr(dev, "run_subprocess", fake_run_subprocess)
 
-    with pytest.raises(ToolExecutionError) as excinfo:
-        tools.review_list(pr_number=1)
+    result = tools.review_list(pr_number=42, unreplied=True, unresolved=False)
 
-    assert "Review helpers unavailable" in str(excinfo.value)
-    assert call_count["count"] == 1
+    assert result.success is True
+    assert "Thread:" in result.stdout
+    # Verify we attempted both git remote and gh graphql
+    assert any(cmd[:4] == ["git", "remote", "get-url", "origin"] for cmd in calls)
+    assert any(cmd[:3] == ["gh", "api", "graphql"] for cmd in calls)
+
+
+def test_review_bulk_reply_graphql_post(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tools, _ = dev_tools
+
+    calls: list[list[str]] = []
+
+    def fake_run_subprocess(command: list[str], **kwargs: object) -> ToolResult:
+        calls.append(command)
+        # First fetch threads
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "reviewThreads" in p for p in command if isinstance(p, str)
+        ):
+            payload = (
+                '{"data":{"viewer":{"login":"bob"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[{'
+                '"isResolved":false,"comments":{"nodes":[{'
+                '"author":{"login":"alice"},"body":"Looks good","url":"https://example/review/1#discussion_r1","id":"C_xyz","databaseId":1,"createdAt":"2025-01-01T00:00:00Z"}]}}]}}}}}\n'
+            )
+            return _make_result("gh-graphql", stdout=payload)
+        # Reply mutation
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "addPullRequestReviewComment" in p for p in command if isinstance(p, str)
+        ):
+            return _make_result("gh-reply", stdout="{}\n")
+        # Repo inference (not required for GraphQL reply but may be called elsewhere)
+        if command[:4] == ["git", "remote", "get-url", "origin"]:
+            return _make_result("git-remote", stdout="git@github.com:owner/repo.git\n")
+        return _make_result("noop", stdout="")
+
+    monkeypatch.setattr(dev, "run_subprocess", fake_run_subprocess)
+
+    replies = tmp_path / "replies.json"
+    replies.write_text('{"discussion_r1": "Thanks!"}')
+
+    result = tools.review_bulk_reply(42, replies)
+
+    assert result.success is True
+    # Ensure we posted a GraphQL reply using the resolved comment id
+    assert any(
+        cmd[:3] == ["gh", "api", "graphql"]
+        and any("inReplyTo=C_xyz" in part for part in cmd if isinstance(part, str))
+        for cmd in calls
+    )
+
+
+def test_review_bulk_reply_invalid_replies_format_is_ignored(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tools, _ = dev_tools
+
+    # Minimal fetch to allow reaching _load_replies
+    calls: list[list[str]] = []
+
+    def fake_run_subprocess(command: list[str], **kwargs: object) -> ToolResult:
+        calls.append(command)
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "reviewThreads" in p for p in command if isinstance(p, str)
+        ):
+            payload = '{"data":{"viewer":{"login":"bob"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}\n'
+            return _make_result("gh-graphql", stdout=payload)
+        return _make_result("noop", stdout="")
+
+    monkeypatch.setattr(dev, "run_subprocess", fake_run_subprocess)
+
+    bad = tmp_path / "replies.json"
+    bad.write_text("[]")  # list instead of object
+
+    result = tools.review_bulk_reply(42, bad)
+    assert result.success is True
+    # ensure no reply mutation attempted
+    assert not any(
+        c[:3] == ["gh", "api", "graphql"]
+        and any("addPullRequestReviewComment" in p for p in c if isinstance(p, str))
+        for c in calls
+    )
 
 
 def test_review_bulk_reply_invokes_helpers(
