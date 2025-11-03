@@ -94,6 +94,78 @@ class TestSetup:
         assert "sync" in sync_command
         assert "--all-groups" in sync_command
 
+    def test_setup_clear_removes_existing_env(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+        root_path: Path,
+    ) -> None:
+        """Ensure `clear=True` removes an existing virtual environment."""
+        venv_path = environment_tools.venv_path
+        venv_path.mkdir(parents=True, exist_ok=True)
+        (venv_path / "placeholder.txt").write_text("keep me", encoding="utf-8")
+
+        operation_id = OperationId(namespace="tools", category="env", command="setup")
+        subprocess_runner.set_results(
+            [
+                create_success_result(operation_id, "venv ok"),
+                create_success_result(operation_id, "sync ok"),
+            ]
+        )
+
+        result = environment_tools.setup([], clear=True)
+
+        assert result.success is True
+        assert "Removed existing virtual environment" in result.stdout
+        assert not venv_path.exists()
+
+    def test_setup_git_hook_failure_records_warning(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+        root_path: Path,
+    ) -> None:
+        """Git hook failure should not abort setup but emit a warning."""
+        git_dir = root_path / ".git"
+        git_dir.mkdir()
+        hooks_file = git_dir / "hooks"
+        hooks_file.write_text("not a directory", encoding="utf-8")
+
+        operation_id = OperationId(namespace="tools", category="env", command="setup")
+        subprocess_runner.set_results(
+            [
+                create_success_result(operation_id, "venv ok"),
+                create_success_result(operation_id, "sync ok"),
+            ]
+        )
+
+        result = environment_tools.setup([])
+
+        assert result.success is True
+        assert "Warning: Git hooks setup failed" in result.stdout
+
+    def test_setup_propogates_failure_from_uv_command(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        """If the initial uv venv command fails, setup should stop and bubble the failure."""
+
+        operation_id = OperationId(namespace="tools", category="env", command="setup")
+        subprocess_runner.set_results(
+            [
+                create_failure_result(operation_id, exit_code=2, stderr="uv failed"),
+                create_success_result(operation_id, "sync ok"),
+            ]
+        )
+
+        result = environment_tools.setup([])
+
+        assert result.success is False
+        assert result.exit_code == 2
+        assert len(subprocess_runner.calls) == 1
+        assert "uv failed" in (result.stderr or "")
+
 
 class TestSync:
     """Test dependency synchronization functionality."""
@@ -221,6 +293,24 @@ class TestClean:
         # Should contain information about cleanup
         assert "Cache" in result.stdout or "Cleaned" in result.stdout
 
+    def test_clean_removes_cache_and_pycache(
+        self, environment_tools: environment_module.EnvironmentTools
+    ) -> None:
+        """Ensure cache directories and __pycache__ folders are removed."""
+        cache_pytest = environment_tools.cache_dir / "pytest"
+        cache_pytest.mkdir(parents=True, exist_ok=True)
+        (cache_pytest / "state.bin").write_bytes(b"binary")
+
+        pycache_dir = environment_tools.root_path / "src" / "__pycache__"
+        pycache_dir.mkdir(parents=True, exist_ok=True)
+        (pycache_dir / "module.cpython-311.pyc").write_bytes(b"code")
+
+        result = environment_tools.clean([])
+
+        assert pycache_dir.exists() is False
+        assert "Removed" in result.stdout
+        assert "Cleaned" in result.stdout
+
 
 class TestInfo:
     """Test environment info functionality."""
@@ -242,6 +332,39 @@ class TestInfo:
         assert "Project root:" in result.stdout
         assert "Package name: ml_playground" in result.stdout
         assert "Virtual environment:" in result.stdout
+
+    def test_info_reports_import_failure(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        """If import command fails, info output notes the failure."""
+        operation_id = OperationId(namespace="tools", category="env", command="info")
+        subprocess_runner.set_results(
+            [create_failure_result(operation_id, stderr="Import failed")]
+        )
+
+        result = environment_tools.info([])
+
+        assert "import failed" not in result.stderr
+        assert "Package import: ✗" in result.stdout
+
+    def test_info_catches_runner_exceptions(
+        self, config: ToolsConfig, root_path: Path
+    ) -> None:
+        """Exceptions from the subprocess runner should be converted into a warning line."""
+
+        class RaisingRunner(FakeSubprocessRunner):
+            def run_uv_command(self, *args, **kwargs):  # type: ignore[override]
+                raise RuntimeError("runner blew up")
+
+        runner = RaisingRunner()
+        tools = environment_module.EnvironmentTools(config, root_path, runner)
+
+        result = tools.info([])
+
+        assert result.success is True
+        assert "Could not test ml_playground import" in result.stdout
 
 
 class TestAIGuidelines:
@@ -281,3 +404,112 @@ class TestAIGuidelines:
             environment_tools.ai_guidelines([], tool="", dry_run=False)
 
         assert "Missing tool name" in str(exc_info.value)
+
+    def test_ai_guidelines_dry_run_includes_flag(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        """Dry run should append the --dry-run flag."""
+        operation_id = OperationId(
+            namespace="tools", category="env", command="ai-guidelines"
+        )
+        subprocess_runner.set_results([create_success_result(operation_id)])
+
+        environment_tools.ai_guidelines([], tool="ruff", dry_run=True)
+
+        command = subprocess_runner.calls[0]["command"]
+        assert command[-1] == "--dry-run"
+
+
+class TestTensorboard:
+    """Test tensorboard helper."""
+
+    def test_tensorboard_success(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+        root_path: Path,
+    ) -> None:
+        logdir = root_path / "logs"
+        logdir.mkdir()
+
+        operation_id = OperationId(
+            namespace="tools", category="env", command="tensorboard"
+        )
+        subprocess_runner.set_results([create_success_result(operation_id, "tb")])
+
+        result = environment_tools.tensorboard([], logdir)
+
+        assert result.success is True
+        command = subprocess_runner.calls[0]["command"]
+        assert command[0] == "uv"
+        assert command[1] == "run"
+        assert "tensorboard" in command
+        assert "--logdir" in command
+        assert logdir.as_posix() in command
+
+    def test_tensorboard_missing_dir_raises(
+        self, environment_tools: environment_module.EnvironmentTools
+    ) -> None:
+        with pytest.raises(ToolExecutionError):
+            environment_tools.tensorboard([], environment_tools.root_path / "missing")
+
+    def test_tensorboard_non_directory_raises(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        root_path: Path,
+    ) -> None:
+        file_path = root_path / "log.txt"
+        file_path.write_text("not a directory", encoding="utf-8")
+
+        with pytest.raises(ToolExecutionError):
+            environment_tools.tensorboard([], file_path)
+
+
+class TestGgufHelp:
+    """Test GGUF help behavior."""
+
+    def test_gguf_help_adjusts_exit_code(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="env", command="gguf-help"
+        )
+        failure = create_failure_result(
+            operation_id,
+            exit_code=2,
+            stdout="usage: convert-hf-to-gguf",
+            stderr="",
+        )
+        subprocess_runner.set_results([failure])
+
+        result = environment_tools.gguf_help([])
+
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "GGUF converter help displayed" in result.stderr
+
+    def test_gguf_help_returns_original_failure_when_help_missing(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="env", command="gguf-help"
+        )
+        failure = create_failure_result(
+            operation_id,
+            exit_code=5,
+            stdout="",
+            stderr="no help available",
+        )
+        subprocess_runner.set_results([failure])
+
+        result = environment_tools.gguf_help([])
+
+        assert result.success is False
+        assert result.exit_code == 5
+        assert result.stderr == "no help available"

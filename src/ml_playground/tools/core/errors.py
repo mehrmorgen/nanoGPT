@@ -111,7 +111,13 @@ def handle_subprocess_failure(
             rationale="Tool arguments must be validated before execution to ensure predictable behavior",
         )
 
-    if exit_code == 124 or "timeout" in stderr.lower():  # Common timeout exit code
+    stderr_normalized = stderr.lower()
+
+    if (
+        exit_code == 124
+        or "timeout" in stderr_normalized
+        or "timed out" in stderr_normalized
+    ):
         timeout_msg = f" (timeout: {timeout_seconds}s)" if timeout_seconds else ""
         raise TimeoutError(
             f"Tool '{command}' timed out{timeout_msg}",

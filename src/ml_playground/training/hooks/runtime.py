@@ -30,13 +30,13 @@ _PT_DTYPES: dict[str, torch.dtype] = {
 }
 
 
-def _manual_seed(seed: int) -> None:
-    manual_seed_func = cast(Callable[[int], None], torch.manual_seed)
+def _manual_seed(seed: int, torch_module: Any = torch) -> None:
+    manual_seed_func = cast(Callable[[int], None], torch_module.manual_seed)
     manual_seed_func(seed)
 
 
-def _cuda_manual_seed(seed: int) -> None:
-    manual_seed_func = cast(Callable[[int], None], torch.cuda.manual_seed)
+def _cuda_manual_seed(seed: int, torch_module: Any = torch) -> None:
+    manual_seed_func = cast(Callable[[int], None], torch_module.cuda.manual_seed)
     manual_seed_func(seed)
 
 
@@ -46,26 +46,33 @@ def setup_runtime(
     cuda_available_func: Callable[[], bool] | None = None,
     cuda_seed_func: Callable[[int], None] | None = None,
     autocast_func: Callable[[str, torch.dtype], ContextManager[Any]] | None = None,
+    torch_module: Any = None,
 ) -> RuntimeContext:
     """Seed torch RNGs and configure autocast context based on runtime settings.
-
     Optional callables allow injecting test doubles for CUDA availability, seeding, and autocast creation.
     """
-    _manual_seed(int(cfg.runtime.seed))
+    torch_mod = torch_module if torch_module is not None else torch
+    _manual_seed(int(cfg.runtime.seed), torch_mod)
     try:
         cuda_available = (
             cuda_available_func()
             if cuda_available_func is not None
-            else torch.cuda.is_available()
+            else torch_mod.cuda.is_available()
         )
         if cuda_available:
             (
                 cuda_seed_func(int(cfg.runtime.seed))
                 if cuda_seed_func is not None
-                else _cuda_manual_seed(int(cfg.runtime.seed))
+                else _cuda_manual_seed(int(cfg.runtime.seed), torch_mod)
             )
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
+            # Use new TF32 API to avoid deprecation warnings
+            cuda_backends = cast(Any, torch_mod.backends.cuda)
+            cuda_matmul = cast(Any, cuda_backends.matmul)
+            if hasattr(cuda_matmul, "fp32_precision"):
+                cuda_matmul.fp32_precision = "tf32"
+            cudnn_backends = cast(Any, torch_mod.backends.cudnn)
+            if hasattr(cudnn_backends, "fp32_precision"):
+                cudnn_backends.fp32_precision = "tf32"
     except (RuntimeError, AssertionError, AttributeError):
         pass
 

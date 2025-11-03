@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 from contextlib import AbstractContextManager, nullcontext
+from types import SimpleNamespace
 
 from ml_playground.configuration.models import (
     DataConfig,
@@ -117,6 +118,7 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
     cfg = _make_config(device="cuda", dtype="float32")
 
     cuda_called = False
+    seed_calls: list[tuple[str, int]] = []
 
     def fake_cuda():
         nonlocal cuda_called
@@ -128,6 +130,7 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
     def fake_seed(seed: int) -> None:
         nonlocal seed_called
         seed_called = True
+        seed_calls.append(("cuda", seed))
 
     def fake_autocast(
         device_type: str, dtype: torch.dtype
@@ -135,16 +138,31 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
         del device_type, dtype
         return nullcontext()
 
+    fake_torch = SimpleNamespace(
+        manual_seed=lambda seed: seed_calls.append(("cpu", seed)),
+        cuda=SimpleNamespace(
+            manual_seed=lambda seed: seed_calls.append(("cuda", seed)),
+            is_available=lambda: True,
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(fp32_precision="highest")),
+            cudnn=SimpleNamespace(fp32_precision="highest"),
+        ),
+    )
+
     runtime = setup_runtime(
         cfg,
         cuda_available_func=fake_cuda,
         cuda_seed_func=fake_seed,
         autocast_func=fake_autocast,
+        torch_module=fake_torch,
     )
 
     assert cuda_called
     assert seed_called
     assert runtime.device_type == "cuda"
+    assert ("cpu", int(cfg.runtime.seed)) in seed_calls
+    assert ("cuda", int(cfg.runtime.seed)) in seed_calls
 
 
 def test_setup_runtime_injected_cuda_available_false() -> None:

@@ -7,7 +7,7 @@ from typing import Any, Callable
 import pytest
 from typer.testing import CliRunner
 
-from ml_playground.cli import CLIDependencies, app, override_cli_dependencies
+from ml_playground.runtime.cli import CLIDependencies, app, override_cli_dependencies
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.models import (
@@ -302,7 +302,7 @@ def test_analyze_command_rejects_non_bundestag() -> None:
 
 
 def test_analyze_command_logs_message(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.INFO, logger="ml_playground.cli")
+    caplog.set_level(logging.INFO, logger="ml_playground.runtime.cli")
     result = runner.invoke(app, ["analyze", "bundestag_char"])
     assert result.exit_code == 0
     assert any("not implemented" in msg.lower() for msg in caplog.messages)

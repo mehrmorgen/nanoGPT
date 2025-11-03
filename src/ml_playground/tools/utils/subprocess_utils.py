@@ -199,7 +199,6 @@ class RealSubprocessRunner:
         """
         # Standard pytest base arguments
         pytest_base = [
-            "-q",
             "-n",
             "auto",
             "-W",

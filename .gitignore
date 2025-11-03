@@ -74,6 +74,7 @@ scripts/llama_cpp/llama-quantize
 !.github/workflows
 .vscode
 .idea
+.kiro/steering
 # Local developer resources
 .ldres/*
 !.ldres/

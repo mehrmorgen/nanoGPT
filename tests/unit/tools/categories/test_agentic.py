@@ -4,19 +4,31 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from contextlib import contextmanager
 
 import pytest
 import yaml
 
 from ml_playground.tools.categories import agentic as agentic_module
+from ml_playground.tools.categories import testing as testing_module
 from ml_playground.tools.core import config as config_module
 from ml_playground.tools.core.config import ToolsConfig
-from ml_playground.tools.core.interfaces import OperationId
+from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from tests.unit.tools.fakes import (
     FakeSubprocessRunner,
     create_success_result,
     create_failure_result,
 )
+
+
+@contextmanager
+def swap_attr(target, name: str, value):
+    original = getattr(target, name)
+    setattr(target, name, value)
+    try:
+        yield
+    finally:
+        setattr(target, name, original)
 
 
 @pytest.fixture
@@ -205,6 +217,42 @@ class TestBatchReview:
         assert result.learning_info.commands_executed
         assert result.learning_info.explanations
 
+    def test_batch_review_handles_quality_failure(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        """If quality checks report failure, batch review exit code should be non-zero."""
+
+        class DeterministicAgenticTools(agentic_module.AgenticTools):
+            def _run_quality_batch(self) -> dict[str, object]:
+                return {
+                    "overall": {
+                        "status": "failed",
+                        "total_issues": 3,
+                        "success": False,
+                    }
+                }
+
+            def _run_test_batch(self) -> dict[str, object]:
+                return {
+                    "overall": {
+                        "status": "passed",
+                        "total_tests": 5,
+                        "success": True,
+                    }
+                }
+
+        agentic = DeterministicAgenticTools(config, root_path, subprocess_runner)
+
+        result = agentic.batch_review([], output_format="json")
+
+        assert result.success is False
+        assert result.exit_code == 1
+        payload = json.loads(result.stdout)
+        assert payload["overall_status"]["quality_status"] == "failed"
+
 
 class TestWorkflowHelper:
     """Test workflow helper functionality."""
@@ -310,6 +358,20 @@ class TestBatchQuality:
         assert "Quality Check Results" in result.stdout
         assert "Overall:" in result.stdout
 
+    def test_batch_quality_learning_mode_attaches_explanation(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        """Learning mode should attach explanations for batch quality."""
+
+        result = agentic_tools.batch_quality(
+            [], output_format="json", learning_mode=True, verbosity_level=2
+        )
+
+        assert result.success is True
+        assert result.learning_info is not None
+        assert result.learning_info.commands_executed
+        assert result.learning_info.explanations
+
 
 class TestBatchValidate:
     """Test batch validate functionality."""
@@ -383,6 +445,152 @@ class TestBatchValidate:
         assert "Quality Checks:" in result.stdout
         assert "Overall:" in result.stdout
 
+    def test_batch_validate_strict_success_with_stubbed_dependencies(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        """Test strict validation succeeds when dependent tools report success."""
+
+        class DeterministicAgenticTools(agentic_module.AgenticTools):
+            def _run_selective_quality_checks(
+                self, checks: list[str]
+            ) -> dict[str, object]:
+                return {
+                    "checks": {
+                        check: {
+                            "success": True,
+                            "exit_code": 0,
+                            "summary": "OK",
+                        }
+                        for check in checks
+                    },
+                    "success": True,
+                    "issues": [],
+                }
+
+            def _run_selective_test_checks(
+                self, test_types: list[str]
+            ) -> dict[str, object]:
+                return {
+                    "tests": {
+                        test_type: {
+                            "success": True,
+                            "exit_code": 0,
+                            "count": 5,
+                            "duration": "0.10s",
+                        }
+                        for test_type in test_types
+                    },
+                    "success": True,
+                    "issues": [],
+                }
+
+            def _check_coverage_requirements(
+                self, thresholds: dict[str, float]
+            ) -> dict[str, object]:
+                coverage = {"line_percentage": 100.0, "branch_percentage": 95.0}
+                return {
+                    "success": True,
+                    "issues": [],
+                    "coverage": coverage,
+                }
+
+        tools = DeterministicAgenticTools(config, root_path, subprocess_runner)
+
+        result = tools.batch_validate([], validation_level="strict")
+
+        assert result.success is True
+        assert result.exit_code == 0
+        output_data = json.loads(result.stdout)
+        assert output_data["overall_success"] is True
+        assert output_data["quality_results"]["success"] is True
+        assert output_data["test_results"]["success"] is True
+        assert output_data["coverage_results"]["success"] is True
+
+    def test_batch_validate_strict_fails_when_coverage_below_threshold(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        class DeterministicAgenticTools(agentic_module.AgenticTools):
+            def _run_selective_quality_checks(
+                self, checks: list[str]
+            ) -> dict[str, object]:
+                return {"checks": {}, "success": True, "issues": []}
+
+            def _run_selective_test_checks(
+                self, test_types: list[str]
+            ) -> dict[str, object]:
+                return {"tests": {}, "success": True, "issues": []}
+
+            def _check_coverage_requirements(
+                self, thresholds: dict[str, float]
+            ) -> dict[str, object]:
+                return {
+                    "success": False,
+                    "issues": ["Line coverage 85.0% below threshold 90.0%"],
+                    "coverage": {"line_percentage": 85.0, "branch_percentage": 80.0},
+                }
+
+        tools = DeterministicAgenticTools(config, root_path, subprocess_runner)
+
+        result = tools.batch_validate(
+            [], validation_level="strict", output_format="json"
+        )
+
+        assert result.success is False
+        payload = json.loads(result.stdout)
+        assert payload["overall_success"] is False
+        assert payload["coverage_results"]["success"] is False
+        assert "Line coverage 85.0% below threshold 90.0%" in payload["issues"]
+
+    def test_batch_validate_learning_mode_attaches_explanations(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        result = agentic_tools.batch_validate([], learning_mode=True, verbosity_level=2)
+
+        assert result.learning_info is not None
+        assert result.learning_info.commands_executed
+        assert result.learning_info.explanations
+
+    def test_batch_validate_handles_coverage_errors(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        class CoverageErrorAgentic(agentic_module.AgenticTools):
+            def _run_selective_quality_checks(
+                self, checks: list[str]
+            ) -> dict[str, object]:
+                return {"checks": {}, "success": True, "issues": []}
+
+            def _run_selective_test_checks(
+                self, test_types: list[str]
+            ) -> dict[str, object]:
+                return {"tests": {}, "success": True, "issues": []}
+
+            def _check_coverage_requirements(
+                self, thresholds: dict[str, float]
+            ) -> dict[str, object]:
+                return {
+                    "success": False,
+                    "issues": ["Coverage check error: boom"],
+                    "coverage": {},
+                }
+
+        tools = CoverageErrorAgentic(config, root_path, subprocess_runner)
+
+        result = tools.batch_validate([], validation_level="strict")
+
+        assert result.success is False
+        payload = json.loads(result.stdout)
+        assert payload["overall_success"] is False
+        assert any("Coverage check error" in issue for issue in payload["issues"])
+
 
 class TestWorkflowStatus:
     """Test workflow status functionality."""
@@ -438,12 +646,238 @@ class TestWorkflowStatus:
     ) -> None:
         """Test workflow status with learning mode enabled."""
         result = agentic_tools.workflow_status(
-            [], learning_mode=True, verbosity_level=1
+            [], learning_mode=True, verbosity_level=2
         )
 
         assert result.success is True
         assert result.learning_info.commands_executed
         assert result.learning_info.explanations
+
+    def test_workflow_status_handles_git_errors(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        class FailingGitRunner(FakeSubprocessRunner):
+            def run_subprocess(  # type: ignore[override]
+                self,
+                command,
+                *,
+                cwd=None,
+                env=None,
+                timeout=None,
+                operation_id: OperationId,
+                capture_output: bool = True,
+            ) -> "ToolResult":
+                raise RuntimeError("git not available")
+
+        runner = FailingGitRunner()
+        tools = agentic_module.AgenticTools(config, root_path, runner)
+
+        result = tools.workflow_status([], output_format="json")
+
+        payload = json.loads(result.stdout)
+        assert payload["git_status"]["status"] == "unknown"
+        assert "error" in payload["git_status"]
+
+    def test_get_coverage_status_returns_available(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        monkeypatch,
+    ) -> None:
+        coverage_file = root_path / ".cache" / "coverage" / "coverage.sqlite"
+        coverage_file.parent.mkdir(parents=True, exist_ok=True)
+        coverage_file.write_text("data", encoding="utf-8")
+
+        class StubTestingTools:
+            def __init__(self, _config, _root, _runner) -> None:
+                self._coverage_path = coverage_file
+
+            def _coverage_file(self) -> Path:
+                return self._coverage_path
+
+            def coverage_report(self, *_args, **_kwargs) -> ToolResult:
+                return ToolResult.create(
+                    success=True,
+                    exit_code=0,
+                    namespace="tools",
+                    category="test",
+                    command="coverage-report",
+                    stdout="TOTAL      100      80      40      32      80%   40%",
+                )
+
+        with swap_attr(testing_module, "TestingTools", StubTestingTools):
+            tools = agentic_module.AgenticTools(
+                config, root_path, FakeSubprocessRunner()
+            )
+            status = tools._get_coverage_status()
+
+        assert status["status"] == "available"
+        assert status["line_percentage"] == 80.0
+        assert status["branch_percentage"] == 40.0
+
+    def test_assess_readiness_reports_blockers(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        class DeterministicAgentic(agentic_module.AgenticTools):
+            def _get_quality_status(self) -> dict[str, object]:
+                return {"overall_status": "failed", "issues_count": 2}
+
+            def _get_test_status(self) -> dict[str, object]:
+                return {"overall_status": "failed", "total_tests": 5}
+
+            def _get_git_status(self) -> dict[str, object]:
+                return {"status": "dirty", "has_changes": True}
+
+        tools = DeterministicAgentic(config, root_path, subprocess_runner)
+
+        readiness = tools._assess_readiness()
+
+        assert readiness["ready_for_merge"] is False
+        assert "Quality checks failing (2 issues)" in readiness["blocking_issues"]
+        assert "Test failures detected" in readiness["blocking_issues"]
+        assert "Uncommitted changes present" in readiness["blocking_issues"]
+
+        class DeadcodeExceptionRunner(FakeSubprocessRunner):
+            def run_uv_command(  # type: ignore[override]
+                self,
+                args,
+                *,
+                cwd=None,
+                env=None,
+                timeout=None,
+                operation_id,
+                python=None,
+                no_project=False,
+            ):
+                if args and args[0] == "vulture":
+                    raise RuntimeError("deadcode crash")
+                return super().run_uv_command(
+                    args,
+                    cwd=cwd,
+                    env=env,
+                    timeout=timeout,
+                    operation_id=operation_id,
+                    python=python,
+                    no_project=no_project,
+                )
+
+        runner = DeadcodeExceptionRunner()
+        runner.set_results(
+            [
+                create_failure_result(
+                    OperationId(namespace="tools", category="quality", command="lint"),
+                    exit_code=2,
+                    stderr="Lint errors found",
+                ),
+                create_failure_result(
+                    OperationId(
+                        namespace="tools",
+                        category="quality",
+                        command="basedpyright",
+                    ),
+                    exit_code=3,
+                    stderr="Type errors found",
+                ),
+                create_success_result(
+                    OperationId(namespace="tools", category="quality", command="mypy"),
+                    stdout="Success: no issues found",
+                ),
+            ]
+        )
+
+        tools = agentic_module.AgenticTools(config, root_path, runner)
+
+        results = tools._run_quality_batch()
+
+        assert results["lint"]["status"] == "failed"
+        assert results["lint"]["issues"] == 1
+        assert results["typecheck"]["status"] == "failed"
+        assert results["deadcode"]["status"] == "error"
+        assert results["deadcode"]["error"] == "deadcode crash"
+        assert results["overall"]["status"] == "failed"
+        assert results["overall"]["total_issues"] >= 1
+
+    def test_run_test_batch_handles_exceptions_and_missing_coverage(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+    ) -> None:
+        """Ensure `_run_test_batch` copes with errors and missing coverage data."""
+
+        class DeterministicPytestRunner(FakeSubprocessRunner):
+            def __init__(self) -> None:
+                super().__init__()
+                self._call_index = 0
+
+            def run_pytest_command(  # type: ignore[override]
+                self,
+                args,
+                *,
+                cwd=None,
+                env=None,
+                timeout=None,
+                operation_id,
+            ):
+                self._call_index += 1
+                if self._call_index == 1:
+                    stdout = "collected 5 items\n.....\n5 passed in 0.42s"
+                    return create_success_result(operation_id, stdout=stdout)
+                raise RuntimeError("integration failure")
+
+        runner = DeterministicPytestRunner()
+        tools = agentic_module.AgenticTools(config, root_path, runner)
+
+        results = tools._run_test_batch()
+
+        assert results["unit"]["status"] == "passed"
+        assert results["unit"]["count"] == 5
+        assert results["unit"]["duration"] == "0.42s"
+        assert results["integration"]["status"] == "error"
+        assert results["integration"]["error"] == "integration failure"
+        assert results["coverage"]["status"] == "not_available"
+        assert results["overall"]["status"] == "failed"
+        assert results["overall"]["total_tests"] == 5
+
+    def test_get_coverage_status_handles_report_failure(
+        self,
+        config: ToolsConfig,
+        root_path: Path,
+    ) -> None:
+        class FailingCoverageTests(agentic_module.AgenticTools):
+            class CoverageRunner(FakeSubprocessRunner):
+                def run_uv_command(  # type: ignore[override]
+                    self,
+                    args,
+                    *,
+                    cwd=None,
+                    env=None,
+                    timeout=None,
+                    operation_id: OperationId,
+                    python=None,
+                    no_project: bool = False,
+                ):
+                    raise RuntimeError("coverage report failed")
+
+            def __init__(self, *args, **kwargs) -> None:
+                super().__init__(
+                    *args, subprocess_runner=self.CoverageRunner(), **kwargs
+                )
+
+        tools = FailingCoverageTests(config, root_path)
+        coverage_file = root_path / ".cache" / "coverage" / "coverage.sqlite"
+        coverage_file.parent.mkdir(parents=True, exist_ok=True)
+        coverage_file.write_text("data", encoding="utf-8")
+
+        status = tools._get_coverage_status()
+
+        assert status["status"] == "unknown"
+        assert "error" in status
 
 
 class TestHelperMethods:

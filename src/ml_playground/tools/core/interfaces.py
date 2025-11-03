@@ -57,7 +57,7 @@ class OperationId(BaseModel):
         # Get namespace from the model data
         namespace = info.data.get("namespace") if info.data else None
         if namespace == "tools":
-            valid_categories = {"ci", "quality", "test", "env", "agentic"}
+            valid_categories = {"ci", "quality", "test", "env", "agentic", "dev"}
             if v not in valid_categories:
                 raise ValueError(
                     f"Invalid tools category: {v}. Must be one of {valid_categories}"

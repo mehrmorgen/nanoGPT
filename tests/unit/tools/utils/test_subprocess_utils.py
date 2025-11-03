@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import sys
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
+import pytest
 
-from ml_playground.tools.core.interfaces import OperationId
+from ml_playground.tools.core.errors import TimeoutError as ToolTimeoutError
+from ml_playground.tools.core.interfaces import OperationId, ToolResult
+import ml_playground.tools.utils.subprocess_utils as subprocess_utils
 from ml_playground.tools.utils.subprocess_utils import (
+    RealSubprocessRunner,
     format_command,
+    run_pytest_command,
+    run_subprocess,
+    run_uv_command,
     validate_command_available,
 )
 from tests.unit.tools.fakes import (
@@ -15,6 +25,16 @@ from tests.unit.tools.fakes import (
     create_success_result,
     create_failure_result,
 )
+
+
+@contextmanager
+def install_default_runner(runner: FakeSubprocessRunner) -> Iterator[None]:
+    original_runner = subprocess_utils._default_runner
+    subprocess_utils._default_runner = runner
+    try:
+        yield
+    finally:
+        subprocess_utils._default_runner = original_runner
 
 
 class TestFormatCommand:
@@ -119,30 +139,6 @@ class TestFakeSubprocessRunner:
         assert len(runner.calls) == 1
         assert runner.calls[0]["cwd"] == test_cwd
 
-
-class TestUvCommand:
-    """Test uv command execution with fake."""
-
-    def test_default_uv_command(self) -> None:
-        """Test default uv command construction."""
-        operation_id = OperationId(
-            namespace="tools", category="test", command="example"
-        )
-        runner = FakeSubprocessRunner()
-
-        runner.run_uv_command(
-            ["pytest", "--version"],
-            operation_id=operation_id,
-        )
-
-        # Check command construction
-        assert len(runner.calls) == 1
-        call_args = runner.calls[0]["command"]
-        assert call_args[:2] == ["uv", "run"]
-        assert "--project" in call_args
-        assert "pytest" in call_args
-        assert "--version" in call_args
-
     def test_no_project_flag(self) -> None:
         """Test no-project flag."""
         operation_id = OperationId(
@@ -176,37 +172,176 @@ class TestUvCommand:
         )
 
         # Check command construction
-        assert len(runner.calls) == 1
         call_args = runner.calls[0]["command"]
         assert "--python" in call_args
         assert "3.11" in call_args
 
 
-class TestPytestCommand:
-    """Test pytest command execution with fake."""
+class TestRealSubprocessRunner:
+    """Tests covering RealSubprocessRunner execution paths."""
 
-    def test_pytest_base_args(self) -> None:
-        """Test pytest base arguments are included."""
+    def test_run_subprocess_success(self) -> None:
+        runner = RealSubprocessRunner()
         operation_id = OperationId(
-            namespace="tools", category="test", command="example"
+            namespace="tools", category="test", command="real-success"
         )
-        runner = FakeSubprocessRunner()
 
-        runner.run_pytest_command(
-            ["tests/unit"],
+        result = runner.run_subprocess(
+            [sys.executable, "-c", "print('ok')"],
             operation_id=operation_id,
         )
 
-        # Check command construction
-        assert len(runner.calls) == 1
-        call_args = runner.calls[0]["command"]
-        assert "pytest" in call_args
-        assert "-q" in call_args
-        assert "-n" in call_args
-        assert "auto" in call_args
-        assert "--strict-markers" in call_args
-        assert "--strict-config" in call_args
-        assert "tests/unit" in call_args
+        assert result.success is True
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "ok"
+
+    def test_run_subprocess_without_capture(self) -> None:
+        runner = RealSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="real-no-capture"
+        )
+
+        result = runner.run_subprocess(
+            [sys.executable, "-c", "print('ok')"],
+            operation_id=operation_id,
+            capture_output=False,
+        )
+
+        assert result.success is True
+        assert result.stdout == ""
+        assert result.stderr == ""
+
+    def test_run_subprocess_timeout_raises(self) -> None:
+        runner = RealSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="real-timeout"
+        )
+
+        with pytest.raises(ToolTimeoutError):
+            runner.run_subprocess(
+                [sys.executable, "-c", "import time; time.sleep(1)"],
+                operation_id=operation_id,
+                timeout=0.05,
+            )
+
+    def test_run_subprocess_os_error_raises(self) -> None:
+        runner = RealSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="real-os-error"
+        )
+
+        with pytest.raises(subprocess_utils.ToolExecutionError):
+            runner.run_subprocess(
+                ["command-that-does-not-exist-xyz"],
+                operation_id=operation_id,
+            )
+
+    def test_run_uv_command_includes_project(self, tmp_path: Path) -> None:
+        class RecordingRunner(RealSubprocessRunner):
+            def __init__(self) -> None:
+                self.commands: list[list[str]] = []
+
+            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+                self.commands.append(command)
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                    operation_id=kwargs["operation_id"],
+                )
+
+        runner = RecordingRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="uv-project"
+        )
+
+        runner.run_uv_command(["echo", "hi"], cwd=tmp_path, operation_id=operation_id)
+
+        recorded = runner.commands[0]
+        assert recorded[:2] == ["uv", "run"]
+        assert "--project" in recorded
+        assert str(tmp_path) in recorded
+
+    def test_run_uv_command_no_project(self) -> None:
+        class RecordingRunner(RealSubprocessRunner):
+            def __init__(self) -> None:
+                self.commands: list[list[str]] = []
+
+            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+                self.commands.append(command)
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                    operation_id=kwargs["operation_id"],
+                )
+
+        runner = RecordingRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="uv-noproject"
+        )
+
+        runner.run_uv_command(
+            ["echo", "hi"], no_project=True, operation_id=operation_id
+        )
+
+        recorded = runner.commands[0]
+        assert "--no-project" in recorded
+        assert "--project" not in recorded
+
+    def test_run_uv_command_python_flag(self) -> None:
+        class RecordingRunner(RealSubprocessRunner):
+            def __init__(self) -> None:
+                self.commands: list[list[str]] = []
+
+            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+                self.commands.append(command)
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                    operation_id=kwargs["operation_id"],
+                )
+
+        runner = RecordingRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="uv-python"
+        )
+
+        runner.run_uv_command(["echo"], python="3.12", operation_id=operation_id)
+
+        recorded = runner.commands[0]
+        assert "--python" in recorded
+        assert "3.12" in recorded
+
+    def test_run_pytest_command_builds_uv_invocation(self) -> None:
+        class RecordingRunner(RealSubprocessRunner):
+            def __init__(self) -> None:
+                self.commands: list[list[str]] = []
+
+            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+                self.commands.append(command)
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                    operation_id=kwargs["operation_id"],
+                )
+
+        runner = RecordingRunner()
+        operation_id = OperationId(namespace="tools", category="test", command="pytest")
+
+        runner.run_pytest_command(["tests/unit"], operation_id=operation_id)
+
+        recorded = runner.commands[0]
+        assert recorded[:2] == ["uv", "run"]
+        assert "pytest" in recorded
+        assert "tests/unit" in recorded
+        assert "-n" in recorded and "auto" in recorded
 
 
 class TestValidateCommandAvailable:
@@ -222,3 +357,46 @@ class TestValidateCommandAvailable:
         """Test detection of unavailable command."""
         result = validate_command_available("nonexistent-command-12345")
         assert result is False
+
+
+class TestModuleLevelWrappers:
+    """Tests for module-level helper functions delegating to default runner."""
+
+    def test_run_subprocess_delegates(self) -> None:
+        fake_runner = FakeSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="delegate-subprocess"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "ok")])
+
+        with install_default_runner(fake_runner):
+            result = run_subprocess(["echo", "hi"], operation_id=operation_id)
+
+        assert result.success is True
+        assert fake_runner.calls[0]["command"] == ["echo", "hi"]
+
+    def test_run_uv_command_delegates(self) -> None:
+        fake_runner = FakeSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="delegate-uv"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "uv ok")])
+
+        with install_default_runner(fake_runner):
+            result = run_uv_command(["pytest", "--version"], operation_id=operation_id)
+
+        assert result.success is True
+        assert fake_runner.calls[0]["command"][0:2] == ["uv", "run"]
+
+    def test_run_pytest_command_delegates(self) -> None:
+        fake_runner = FakeSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="delegate-pytest"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "pytest ok")])
+
+        with install_default_runner(fake_runner):
+            result = run_pytest_command(["tests/unit"], operation_id=operation_id)
+
+        assert result.success is True
+        assert fake_runner.calls[0]["command"][0] == "uv"

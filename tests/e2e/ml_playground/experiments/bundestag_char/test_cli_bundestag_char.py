@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from ml_playground.cli import main
+from ml_playground.runtime.cli import main
 
 
 @pytest.fixture()

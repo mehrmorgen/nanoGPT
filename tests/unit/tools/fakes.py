@@ -107,7 +107,6 @@ class FakeSubprocessRunner:
     ) -> ToolResult:
         """Fake pytest command execution."""
         pytest_base = [
-            "-q",
             "-n",
             "auto",
             "-W",

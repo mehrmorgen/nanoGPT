@@ -356,17 +356,16 @@ class EnvironmentTools:
 
     def _setup_git_hooks(self, operation_id: OperationId) -> ToolResult:
         """Setup git hooks by creating pre-commit hook in .git/hooks.
-        
+
         Args:
             operation_id: Operation identifier for tracking
-            
+
         Returns:
             ToolResult with setup status
         """
-        import shutil
-        
+
         git_hooks_dir = self.root_path / ".git" / "hooks"
-        
+
         # Handle git worktrees
         git_file = self.root_path / ".git"
         if git_file.is_file():
@@ -378,14 +377,14 @@ class EnvironmentTools:
                     git_hooks_dir = Path(gitdir_path) / "hooks"
             except Exception:
                 pass  # Fall back to default behavior
-        
+
         try:
             # Create hooks directory if it doesn't exist
             git_hooks_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Create pre-commit hook
             pre_commit_hook = git_hooks_dir / "pre-commit"
-            hook_content = '''#!/usr/bin/env bash
+            hook_content = """#!/usr/bin/env bash
 # Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail
@@ -445,15 +444,15 @@ EOF
   fi
 fi
 
-echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)"
+echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, coverage via uv)"
 uv run pre-commit run
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.
-'''
-            
+"""
+
             pre_commit_hook.write_text(hook_content)
             pre_commit_hook.chmod(0o755)
-            
+
             return ToolResult(
                 success=True,
                 exit_code=0,
@@ -461,7 +460,7 @@ uv run pre-commit run
                 stderr="",
                 operation_id=operation_id,
             )
-            
+
         except Exception as exc:
             return ToolResult(
                 success=False,
