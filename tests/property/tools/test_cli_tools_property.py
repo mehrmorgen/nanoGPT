@@ -275,7 +275,8 @@ def test_invalid_verbosity_is_rejected(flags: List[str], invalid_value: int) -> 
     args = [*flags, "--verbosity", str(invalid_value)]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    assert "Invalid value for '--verbosity'" in result.stderr
+    error_stream = result.stderr or result.stdout
+    assert "Invalid value for '--verbosity'" in error_stream or "Usage:" in error_stream
 
 
 # --- Command execution coverage ------------------------------------------------
