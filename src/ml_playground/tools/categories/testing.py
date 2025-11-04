@@ -77,11 +77,15 @@ class TestingTools:
             for file_path in sorted(base_path.rglob("*.py")):
                 try:
                     stat_result = file_path.stat()
+                    hasher = hashlib.sha256()
+                    with file_path.open("rb") as handle:
+                        for chunk in iter(lambda: handle.read(8192), b""):
+                            hasher.update(chunk)
                 except OSError:
                     continue
                 relative = file_path.relative_to(self.root_path).as_posix()
                 parts.append(
-                    f"{relative}:{stat_result.st_size}:{stat_result.st_mtime_ns}"
+                    f"{relative}:{stat_result.st_size}:{stat_result.st_mtime_ns}:{hasher.hexdigest()}"
                 )
 
         payload = "\n".join(parts)
