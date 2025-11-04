@@ -12,6 +12,7 @@ import pytest
 from ml_playground.tools.categories import dev
 from ml_playground.tools.categories import environment as environment_module
 from ml_playground.tools.core.config import ToolsConfig
+from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from tests.unit.tools.fakes import FakeSubprocessRunner, create_success_result
 
@@ -237,6 +238,57 @@ def test_review_bulk_reply_graphql_post(
     assert any(
         cmd[:3] == ["gh", "api", "graphql"]
         and any("inReplyTo=C_xyz" in part for part in cmd if isinstance(part, str))
+        for cmd in calls
+    )
+
+
+def test_review_bulk_reply_reports_failures(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tools, _ = dev_tools
+
+    calls: list[list[str]] = []
+
+    def fake_run_subprocess(command: list[str], **kwargs: object) -> ToolResult:
+        calls.append(command)
+        if command[:4] == ["git", "remote", "get-url", "origin"]:
+            return _make_result("git-remote", stdout="git@github.com:owner/repo.git\n")
+        if command[:3] == ["gh", "repo", "view"]:
+            return _make_result(
+                "gh-repo-view", stdout='{"owner":{"login":"owner"},"name":"repo"}\n'
+            )
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "reviewThreads" in p for p in command if isinstance(p, str)
+        ):
+            payload = (
+                '{"data":{"viewer":{"login":"bob"},"repository":{"pullRequest":{"reviewThreads":{"nodes":[{'
+                '"isResolved":false,"comments":{"nodes":[{'
+                '"author":{"login":"alice"},"body":"Looks good","url":"https://example/review/1#discussion_r1","id":"C_xyz","databaseId":1,"createdAt":"2025-01-01T00:00:00Z"}]}}]}}}}}\n'
+            )
+            return _make_result("gh-graphql", stdout=payload)
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "addPullRequestReviewComment" in p for p in command if isinstance(p, str)
+        ):
+            return _make_result("gh-reply", stdout="", success=False)
+        return _make_result("noop", stdout="")
+
+    monkeypatch.setattr(dev, "run_subprocess", fake_run_subprocess)
+
+    replies = tmp_path / "replies.json"
+    replies.write_text('{"discussion_r1": "Thanks!"}', encoding="utf-8")
+
+    with pytest.raises(ToolExecutionError):
+        tools.review_bulk_reply(42, replies)
+
+    assert any(
+        cmd[:3] == ["gh", "api", "graphql"]
+        and any(
+            "addPullRequestReviewComment" in part
+            for part in cmd
+            if isinstance(part, str)
+        )
         for cmd in calls
     )
 

@@ -257,7 +257,7 @@ class DevTools:
                 if comment_id is None:
                     continue
                 mutation = (
-                    "mutation($inReplyTo:String!,$body:String!){"
+                    "mutation($inReplyTo:ID!,$body:String!){"
                     " addPullRequestReviewComment(input:{inReplyTo:$inReplyTo, body:$body}){"
                     "   comment { id }"
                     " }"
@@ -274,13 +274,24 @@ class DevTools:
                     "-F",
                     f"body={body}",
                 ]
-                _ = run_subprocess(
+                result = run_subprocess(
                     args,
                     cwd=self.root_path,
                     operation_id=OperationId(
                         namespace="tools", category="dev", command="review-reply-gql"
                     ),
                 )
+                if not result.success:
+                    raise ToolExecutionError(
+                        "Failed to send reply via GitHub CLI",
+                        reason=result.stderr
+                        or result.stdout
+                        or "gh api graphql failed",
+                        rationale=(
+                            "Ensure your GitHub token has permission to comment on the PR "
+                            "and that the comment identifier matches an existing thread."
+                        ),
+                    )
 
         def _load_comment_targets(path: Path) -> list[str]:
             import json
