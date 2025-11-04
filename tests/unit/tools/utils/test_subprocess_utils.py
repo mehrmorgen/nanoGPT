@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -35,6 +36,17 @@ def install_default_runner(runner: FakeSubprocessRunner) -> Iterator[None]:
         yield
     finally:
         subprocess_utils._default_runner = original_runner
+
+
+@pytest.fixture(autouse=True)
+def reset_dry_run_env() -> Iterator[None]:
+    original = os.environ.get("ML_PLAYGROUND_TOOLS_DRY_RUN")
+    os.environ.pop("ML_PLAYGROUND_TOOLS_DRY_RUN", None)
+    try:
+        yield
+    finally:
+        if original is not None:
+            os.environ["ML_PLAYGROUND_TOOLS_DRY_RUN"] = original
 
 
 class TestFormatCommand:

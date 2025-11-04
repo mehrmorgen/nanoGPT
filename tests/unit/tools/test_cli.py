@@ -653,10 +653,22 @@ class TestQualityCommands:
 
         class StubQualityTools:
             def __init__(self) -> None:
-                self.calls: list[list[str]] = []
+                self.calls: list[dict[str, object]] = []
 
-            def lint(self, args: list[str]) -> ToolResult:
-                self.calls.append(args)
+            def lint(
+                self,
+                args: list[str],
+                *,
+                learning_mode: bool,
+                verbosity_level: int,
+            ) -> ToolResult:
+                self.calls.append(
+                    {
+                        "args": args,
+                        "learning_mode": learning_mode,
+                        "verbosity": verbosity_level,
+                    }
+                )
                 return ToolResult.create(
                     success=True,
                     exit_code=0,
@@ -674,13 +686,23 @@ class TestQualityCommands:
 
         assert result.exit_code == 0
         assert "lint ok" in result.stdout
-        assert stub.calls == [["--fix"]]
+        assert stub.calls == [
+            {"args": ["--fix"], "learning_mode": False, "verbosity": 1}
+        ]
 
     def test_quality_format_failure(self, monkeypatch) -> None:
         """`quality format` should propagate failure exit codes."""
 
         class StubQualityTools:
-            def format(self, _args: list[str]) -> ToolResult:
+            def format(
+                self,
+                _args: list[str],
+                *,
+                learning_mode: bool,
+                verbosity_level: int,
+            ) -> ToolResult:
+                assert learning_mode is False
+                assert verbosity_level == 1
                 return ToolResult.create(
                     success=False,
                     exit_code=5,
@@ -818,7 +840,7 @@ class TestCoverageCommands:
                 verbose: bool,
                 learning_mode: bool,
                 verbosity_level: int,
-                force_regen: bool,
+                force_regen: bool = False,
             ) -> ToolResult:
                 captured.append(
                     {
@@ -879,7 +901,13 @@ class TestCoverageCommands:
                 line_threshold: float,
                 branch_threshold: float,
                 verbose: bool,
+                learning_mode: bool,
+                verbosity_level: int,
+                force_regen: bool = False,
             ) -> ToolResult:
+                assert learning_mode is False
+                assert verbosity_level == 1
+                assert force_regen is False
                 return ToolResult.create(
                     success=False,
                     exit_code=6,
@@ -1254,10 +1282,18 @@ class TestInvokeTests:
     ) -> None:
         stub = self.StubTestingTools()
         with swap_attr(tools_cli, "_get_testing_tools", lambda: stub):
-            ctx = SimpleNamespace(obj={"learning_mode": True, "verbosity": 2})
-            tools_cli._invoke_tests(
-                ctx, "tests/unit", pattern="selected", extra_args=["-q"]
-            )
+            original_learning = tools_cli.state.learning_mode
+            original_verbosity = tools_cli.state.verbosity
+            try:
+                tools_cli.state.learning_mode = True
+                tools_cli.state.verbosity = 2
+                ctx = SimpleNamespace(obj={})
+                tools_cli._invoke_tests(
+                    ctx, "tests/unit", pattern="selected", extra_args=["-q"]
+                )
+            finally:
+                tools_cli.state.learning_mode = original_learning
+                tools_cli.state.verbosity = original_verbosity
 
         assert stub.received is not None
         assert stub.received["args"] == ["-q", "-k", "selected"]

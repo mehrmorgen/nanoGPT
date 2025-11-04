@@ -94,9 +94,24 @@ class RealSubprocessRunner:
         if isinstance(cwd, str):
             cwd = Path(cwd)
 
+        dry_run_flag = os.environ.get("ML_PLAYGROUND_TOOLS_DRY_RUN")
+
         try:
+            if dry_run_flag == "1":
+                formatted = format_command(command)
+                stdout = f"[dry-run] Command execution skipped.\n  $ {formatted}"
+                result = ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout=stdout,
+                    stderr="",
+                    operation_id=operation_id,
+                )
+                result.learning_info.commands_executed.append(formatted)
+                return result
+
             # Execute the process
-            result = subprocess.run(
+            completed = subprocess.run(
                 command,
                 cwd=cwd,
                 env=run_env,
@@ -107,10 +122,10 @@ class RealSubprocessRunner:
 
             # Create ToolResult
             return ToolResult(
-                success=result.returncode == 0,
-                exit_code=result.returncode,
-                stdout=result.stdout if capture_output else "",
-                stderr=result.stderr if capture_output else "",
+                success=completed.returncode == 0,
+                exit_code=completed.returncode,
+                stdout=completed.stdout if capture_output else "",
+                stderr=completed.stderr if capture_output else "",
                 operation_id=operation_id,
             )
 

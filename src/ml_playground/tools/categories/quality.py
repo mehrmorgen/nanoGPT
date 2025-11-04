@@ -159,7 +159,9 @@ class QualityTools:
 
         return result
 
-    def lint_check(self, args: List[str]) -> ToolResult:
+    def lint_check(
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
+    ) -> ToolResult:
         """Run Ruff in check-only mode (alias for lint).
 
         Args:
@@ -169,7 +171,11 @@ class QualityTools:
             ToolResult with execution details
         """
         # This is an alias for lint command
-        return self.lint(args)
+        return self.lint(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
 
     def deadcode(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
@@ -249,7 +255,9 @@ class QualityTools:
 
         return result
 
-    def pyright(self, args: List[str]) -> ToolResult:
+    def pyright(
+        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
+    ) -> ToolResult:
         """Run BasedPyright type checks (Pyright CLI alias).
 
         Args:
@@ -259,7 +267,11 @@ class QualityTools:
             ToolResult with execution details
         """
         # This is an alias for basedpyright command
-        return self.basedpyright(args)
+        return self.basedpyright(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
 
     def mypy(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
@@ -318,10 +330,18 @@ class QualityTools:
         )
 
         # Run BasedPyright first
-        basedpyright_result = self.basedpyright(args)
+        basedpyright_result = self.basedpyright(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
 
         # Run Mypy regardless of BasedPyright result
-        mypy_result = self.mypy(args)
+        mypy_result = self.mypy(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
 
         # Combine results
         combined_stdout = ""
@@ -382,9 +402,21 @@ class QualityTools:
         )
 
         # Run all quality checks
-        lint_result = self.lint(args)
-        typecheck_result = self.typecheck(args)
-        deadcode_result = self.deadcode(args)
+        lint_result = self.lint(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
+        typecheck_result = self.typecheck(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
+        deadcode_result = self.deadcode(
+            args,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
+        )
 
         # Combine results
         results = [

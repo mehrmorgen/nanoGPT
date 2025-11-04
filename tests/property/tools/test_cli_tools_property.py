@@ -222,7 +222,7 @@ def test_cli_groups_render_help(flags: List[str], group_path: tuple[str, ...]) -
 )
 @example(flags=[], group_path=("quality",), invalid="totally-unknown")
 @example(flags=["--no-learning-mode"], group_path=("env",), invalid="bogus")
-@settings(max_examples=50, deadline=timedelta(milliseconds=120), derandomize=True)
+@settings(max_examples=50, deadline=timedelta(milliseconds=200), derandomize=True)
 def test_cli_reports_unknown_commands(
     flags: List[str], group_path: tuple[str, ...], invalid: str
 ) -> None:

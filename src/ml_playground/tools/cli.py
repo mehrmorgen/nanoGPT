@@ -5,6 +5,7 @@ all development tools under logical subcommands with learning mode support.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -173,6 +174,10 @@ def main(
         state.verbosity = verbosity
 
     state.dry_run = dry_run
+    if state.dry_run:
+        os.environ["ML_PLAYGROUND_TOOLS_DRY_RUN"] = "1"
+    else:
+        os.environ.pop("ML_PLAYGROUND_TOOLS_DRY_RUN", None)
 
 
 # Helper function to get tool instances
@@ -247,7 +252,11 @@ def quality_lint(
     """Run Ruff lint checks."""
     try:
         tools = _get_quality_tools()
-        result = tools.lint(args or [])
+        result = tools.lint(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -303,7 +312,11 @@ def quality_format(
     """Auto-fix and format code with Ruff."""
     try:
         tools = _get_quality_tools()
-        result = tools.format(args or [])
+        result = tools.format(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -319,7 +332,11 @@ def quality_lint_check(
     """Run Ruff in check-only mode (alias for lint)."""
     try:
         tools = _get_quality_tools()
-        result = tools.lint_check(args or [])
+        result = tools.lint_check(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -335,7 +352,11 @@ def quality_deadcode(
     """Scan for dead code using vulture."""
     try:
         tools = _get_quality_tools()
-        result = tools.deadcode(args or [])
+        result = tools.deadcode(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -351,7 +372,11 @@ def quality_basedpyright(
     """Run BasedPyright type checks."""
     try:
         tools = _get_quality_tools()
-        result = tools.basedpyright(args or [])
+        result = tools.basedpyright(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -367,7 +392,11 @@ def quality_pyright(
     """Run BasedPyright type checks (Pyright CLI alias)."""
     try:
         tools = _get_quality_tools()
-        result = tools.pyright(args or [])
+        result = tools.pyright(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -383,7 +412,11 @@ def quality_mypy(
     """Run Mypy type checks."""
     try:
         tools = _get_quality_tools()
-        result = tools.mypy(args or [])
+        result = tools.mypy(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -400,7 +433,11 @@ def quality_typecheck(
     """Run both BasedPyright and Mypy type checks."""
     try:
         tools = _get_quality_tools()
-        result = tools.typecheck(args or [])
+        result = tools.typecheck(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -417,7 +454,11 @@ def quality_all(
     """Run all quality checks (lint, typecheck, deadcode)."""
     try:
         tools = _get_quality_tools()
-        result = tools.all_checks(args or [])
+        result = tools.all_checks(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -436,11 +477,8 @@ def _invoke_tests(
         if pattern:
             args.extend(["-k", pattern])
 
-        ctx_obj = getattr(ctx, "obj", None)
-        if not isinstance(ctx_obj, dict):
-            ctx_obj = {}
-        learning_mode = bool(ctx_obj.get("learning_mode", False))
-        verbosity = int(ctx_obj.get("verbosity", 1))
+        learning_mode = state.learning_mode
+        verbosity = state.verbosity
 
         suite_map = {
             "tests/unit": "unit",
@@ -456,11 +494,7 @@ def _invoke_tests(
             )
 
         suite_fn = getattr(tools, method_name)
-        result = suite_fn(  # type: ignore[operator]
-            args,
-            learning_mode=learning_mode,
-            verbosity_level=verbosity,
-        )
+        result = suite_fn(args, learning_mode=learning_mode, verbosity_level=verbosity)  # type: ignore[operator]
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -509,7 +543,11 @@ def test_all(
     """Run all tests."""
     try:
         tools = _get_testing_tools()
-        result = tools.all_tests(args or [])
+        result = tools.all_tests(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -525,7 +563,11 @@ def test_coverage_test(
     """Run tests with coverage collection."""
     try:
         tools = _get_testing_tools()
-        result = tools.coverage_test(args or [])
+        result = tools.coverage_test(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -544,7 +586,12 @@ def test_coverage_report(
     """Generate coverage reports."""
     try:
         tools = _get_testing_tools()
-        result = tools.coverage_report(args or [], verbose=verbose)
+        result = tools.coverage_report(
+            args or [],
+            verbose=verbose,
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -581,6 +628,8 @@ def test_coverage_threshold(
             line_threshold=line_threshold,
             branch_threshold=branch_threshold,
             verbose=verbose,
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
         )
         _handle_tool_result(result)
     except ToolExecutionError as e:
@@ -597,7 +646,11 @@ def test_clean(
     """Clean test artifacts and caches."""
     try:
         tools = _get_testing_tools()
-        result = tools.clean(args or [])
+        result = tools.clean(
+            args or [],
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
         _handle_tool_result(result)
     except ToolExecutionError as e:
         typer.echo(f"Error: {e}", err=True)

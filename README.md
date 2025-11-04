@@ -39,12 +39,12 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 ## Policy
 
-  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
-  - `uv run tools env <command>` for environment setup, cache cleanup, and dependency management.
-  - `uv run tools quality <command>` for lint/format bundles when you need faster feedback.
-  - `uv run tools test <command>` for pytest suites and coverage reporting.
-  - `uv run tools ci <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
-  - `uv run tools agentic <command>` for AI-assisted development workflows and batch operations.
+- `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
+- `uv run tools env <command>` for environment setup, cache cleanup, and dependency management.
+- `uv run tools quality <command>` for lint/format bundles when you need faster feedback.
+- `uv run tools test <command>` for pytest suites and coverage reporting.
+- `uv run tools ci <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
+- `uv run tools agentic <command>` for AI-assisted development workflows and batch operations.
 - The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
 - Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
