@@ -117,6 +117,50 @@ def test_review_list_renders_threads(
     assert stub.filters_called_with["viewer"] == "bob"
 
 
+def test_review_list_includes_full_comment_body(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools, _ = dev_tools
+
+    class _VerboseStub(_ReviewStub):
+        def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> object:  # noqa: ANN401
+            assert owner == "owner"
+            assert repo == "repo"
+            assert pr_number == 42
+            body = (
+                "First line of comment that exceeds any truncation threshold by being long."
+                " Second sentence continues with more details to ensure we keep everything.\n"
+                "Second line with additional guidance."
+            )
+            return SimpleNamespace(
+                threads=[
+                    SimpleNamespace(
+                        url="https://example/review/verbose",
+                        is_resolved=False,
+                        comments=[
+                            SimpleNamespace(
+                                author="mentor",
+                                viewer_did_author=False,
+                                body=body,
+                            )
+                        ],
+                    )
+                ],
+                viewer="bob",
+            )
+
+    monkeypatch.setattr(tools, "_review_module", lambda: _VerboseStub())
+
+    result = tools.review_list(pr_number=42)
+
+    assert "First line of comment" in result.stdout
+    assert "Second sentence continues" in result.stdout
+    assert "Second line with additional guidance." in result.stdout
+    # Ensure the output is not truncated with ellipsis
+    assert "... Second sentence" not in result.stdout
+
+
 def test_review_list_uses_builtin_review_module(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
     monkeypatch: pytest.MonkeyPatch,

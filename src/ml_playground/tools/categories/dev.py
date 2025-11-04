@@ -345,8 +345,17 @@ class DevTools:
                     if comment.viewer_did_author
                     else comment.author
                 )
-                snippet = comment.body.replace("\n", " ")[:100]
-                lines.append(f"  - {author}: {snippet}...")
+                body = comment.body.rstrip("\n")
+                if not body:
+                    lines.append(f"  - {author}:")
+                    lines.append("    <no content>")
+                    continue
+
+                body_lines = body.splitlines()
+                first_line = body_lines[0]
+                lines.append(f"  - {author}: {first_line}")
+                for continuation in body_lines[1:]:
+                    lines.append(f"    {continuation}")
             lines.append("")
 
         if not found:
