@@ -279,7 +279,7 @@ def test_review_bulk_reply_reports_failures(
     replies = tmp_path / "replies.json"
     replies.write_text('{"discussion_r1": "Thanks!"}', encoding="utf-8")
 
-    with pytest.raises(ToolExecutionError):
+    with pytest.raises(ToolExecutionError) as exc_info:
         tools.review_bulk_reply(42, replies)
 
     assert any(
@@ -291,6 +291,7 @@ def test_review_bulk_reply_reports_failures(
         )
         for cmd in calls
     )
+    assert "Failed to send reply via GitHub CLI" in str(exc_info.value)
 
 
 def test_review_bulk_reply_invalid_replies_format_is_ignored(
