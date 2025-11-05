@@ -13,11 +13,11 @@ from typing import List, Optional, Dict, Any
 import typer
 from typing_extensions import Annotated
 
-from ml_playground.tools.categories.ci import CITools
-from ml_playground.tools.categories.dev import DevTools
-from ml_playground.tools.categories.environment import EnvironmentTools
-from ml_playground.tools.categories.quality import QualityTools
-from ml_playground.tools.categories.testing import TestingTools
+from ml_playground.tools.ci import CITools
+from ml_playground.tools.dev import DevTools
+from ml_playground.tools.environment import EnvironmentTools
+from ml_playground.tools.quality import QualityTools
+from ml_playground.tools.testing import TestingTools
 from ml_playground.tools.core.config import load_tools_config, ToolsConfig
 from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutionError
 
@@ -215,7 +215,7 @@ def _get_ci_tools() -> CITools:
 
 def _get_agentic_tools():
     """Get agentic tools instance."""
-    from ml_playground.tools.categories.agentic import AgenticTools
+    from ml_playground.tools.agentic import AgenticTools
 
     if state.config is None:
         load_config_with_error_handling(state.project_root)
