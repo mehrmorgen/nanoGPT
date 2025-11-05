@@ -24,12 +24,13 @@ Minimal I/O with strict config injection (see `[prepare]` in TOML):
 - LoRA (PEFT) adapters for efficient finetuning
 - Optional structure tokens for metadata preservation
 
-For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+uv run tools env setup
+uv run tools env verify
 # Install PEFT/Transformers if not already present in your env
 uv add peft transformers torch tensorboard
 ```
@@ -148,7 +149,7 @@ src/ml_playground/experiments/speakger/
 
 - Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

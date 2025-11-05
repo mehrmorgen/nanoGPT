@@ -1,5 +1,13 @@
 # Sampling Package
 
+<details>
+<summary>Related documentation</summary>
+
+- [Framework Utilities](../../../docs/framework_utilities.md) – Sampling configuration and helpers referenced by this package.
+- [LIT Integration](../../../docs/LIT.md) – Web-based analysis workflows that consume sampling outputs.
+
+</details>
+
 ## Purpose
 
 Model inference and text generation utilities for `ml_playground`. Provides checkpoint loading, model setup, and
@@ -24,8 +32,3 @@ from ml_playground.configuration.models import SamplerConfig
 sampler = Sampler(config, shared_config)
 sampler.run()
 ```
-
-## Related Documentation
-
-- [Framework Utilities](../docs/framework_utilities.md) - Sampling configuration
-- [LIT Integration](../docs/LIT.md) - Web-based model analysis

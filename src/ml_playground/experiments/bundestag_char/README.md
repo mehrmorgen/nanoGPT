@@ -1,5 +1,13 @@
 # Bundestag (Char-Level)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/DOCUMENTATION.md](../../../../.dev-guidelines/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, progress reporting, and training.
+
+</details>
+
 Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
 
 ## Overview
@@ -23,12 +31,13 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
-  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
+  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+uv run tools env setup
+uv run tools env verify
 ```
 
 ## Strict configuration injection
@@ -114,9 +123,9 @@ tokenizer = "word"
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

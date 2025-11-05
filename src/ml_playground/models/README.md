@@ -1,5 +1,13 @@
 # Models Package
 
+<details>
+<summary>Related documentation</summary>
+
+- [Framework Utilities](../../docs/framework_utilities.md) – Model configuration helpers and shared utilities.
+- [.dev-guidelines/DEVELOPMENT.md](../../.dev-guidelines/DEVELOPMENT.md) – Architectural expectations and quality standards for model code.
+
+</details>
+
 ## Purpose
 
 Neural network architecture and model implementations for `ml_playground`. Provides modular GPT-based models with proper
@@ -25,7 +33,3 @@ from ml_playground.models.core.config import GPTConfig
 config = GPTConfig(block_size=1024, vocab_size=50000, n_layer=12)
 model = GPT(config)
 ```
-
-## Related Documentation
-
-- [Framework Utilities](../docs/framework_utilities.md) - Model configuration options

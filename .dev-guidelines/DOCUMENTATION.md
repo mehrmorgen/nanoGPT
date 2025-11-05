@@ -22,6 +22,8 @@ READMEs, tests READMEs, and tools.
 - [Required Sections per Experiment Readme](#required-sections-per-experiment-readme)
 - [Folder Tree Standard](#folder-tree-standard)
 - [Linking to Framework Docs](#linking-to-framework-docs)
+- [Environment Commands](#environment-commands)
+- [Link Hygiene](#link-hygiene)
 - [Markdown Style (mdformat)](#markdown-style-mdformat)
 - [Guideline Divergence Documentation](#guideline-divergence-documentation)
 - [Cross-Referencing](#cross-referencing)
@@ -72,10 +74,34 @@ ml_playground/experiments/shakespeare/
 - When referring to shared helpers or patterns, link to `docs/framework_utilities.md` rather than duplicating
   explanations.
 - Example line: “For framework utilities, see `docs/framework_utilities.md`.”
+- Align experiment/package README links with actual directory depth. For example, from `src/ml_playground/experiments/<name>/` use `../../../../docs/framework_utilities.md`.
+
+## Environment Commands
+
+- Standardize environment setup snippets to:
+
+  ```bash
+  uv run tools env setup
+  uv run tools env verify
+  ```
+
+- If additional packages are required (e.g., PEFT extras) list them explicitly after the verify command.
+
+- Documentation must mirror the commands present in the current codebase. Avoid referencing deprecated shorthands like `uv run setup` or legacy aliases.
+
+- Historical documents (e.g., change logs, architectural retrospectives, roadmaps) may mention past commands, but annotate them as historical context to prevent confusion.
+
+## Link Hygiene
+
+- Use relative links exclusively for in-repo references. Verify the path from the README’s location before committing.
+- When linking to `.dev-guidelines/*`, start from the current directory depth (e.g., `../../../.dev-guidelines/DEVELOPMENT.md`).
+- Include framework/utilities links only when the referenced section adds context beyond what the current README covers.
+- Run `uv run tools ci quality-gate` (delegates to pre-commit) to catch broken links and ensure mdformat coverage across `docs/`, `src/ml_playground/`, `tests/`, `scripts/`, and `.dev-guidelines/`.
+- Avoid absolute links to repository files; they break when branches diverge or when the repository is accessed offline. Absolute URLs are only appropriate for external resources.
 
 ## Markdown Style (mdformat)
 
-- Run `uv run mdformat <file.md>` (or rely on `uv run tools ci quality-gate`) to format Markdown consistently.
+- Run `uv run mdformat <file.md>` (or rely on `uv run tools ci quality-gate`) to format Markdown consistently. The pre-commit hook enforces mdformat across repository Markdown including `scripts/**/*.md`.
 - Maintain one blank line above and below headings.
 - Ensure a blank line before and after lists; mdformat enforces indentation automatically.
 - Add a blank line before and after fenced code blocks and specify a language when possible.

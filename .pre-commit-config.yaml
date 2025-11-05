@@ -14,7 +14,7 @@ repos:
           - mdformat-gfm
           - mdformat-frontmatter
           - mdformat-tables
-        files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
+        files: '^(docs|src/ml_playground|tests|scripts|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
   - repo: local
     hooks:
       # Type checking (medium)

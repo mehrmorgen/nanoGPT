@@ -1,21 +1,29 @@
 # Test Suites
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/TESTING.md](../.dev-guidelines/TESTING.md) – Authoritative testing policies, suite scopes, and gating rules.
+- [.dev-guidelines/DOCUMENTATION.md](../.dev-guidelines/DOCUMENTATION.md) – Documentation standards applied to test READMEs.
+
+</details>
+
 The `tests/` directory hosts all automated checks. Each subfolder documents its own
 scope; this top-level README provides the high-level testing policy and entry points.
 
 ## Structure
 
-```text
+```bash
 tests/
-├── README.md            - this file
-├── acceptance/          - policy and workflow enforcement via CLI
-├── conftest.py          - shared fixtures limited to stable, deterministic helpers
-├── e2e/                 - end-to-end CLI smoke tests
-├── integration/         - multi-module behaviors using public APIs
-├── property/            - Hypothesis properties scoped as part of coverage gates
-├── support/             - shared data/assets for tests (read-only)
-└── unit/                - exemplar-driven unit tests (fast, deterministic)
-    └── <package>/       - mirrors `src/ml_playground/<package>/` for unit tests
+├── README.md            # this file
+├── acceptance/          # policy and workflow enforcement via CLI
+├── conftest.py          # shared fixtures limited to stable, deterministic helpers
+├── e2e/                 # end-to-end CLI smoke tests
+├── integration/         # multi-module behaviors using public APIs
+├── property/            # Hypothesis properties scoped as part of coverage gates
+├── support/             # shared data/assets for tests (read-only)
+└── unit/                # exemplar-driven unit tests (fast, deterministic)
+    └── <package>/       # mirrors `src/ml_playground/<package>/` for unit tests
 ```
 
 Unit tests always live under `tests/unit/<package>/...`, mirroring the namespace

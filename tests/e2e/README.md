@@ -1,5 +1,13 @@
 # End-to-End (E2E) Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/TESTING.md](../../.dev-guidelines/TESTING.md) – Suite scopes, gating rules, and fixture policies.
+- [.dev-guidelines/DOCUMENTATION.md](../../.dev-guidelines/DOCUMENTATION.md) – README structure requirements and folder tree standards.
+
+</details>
+
 E2E tests exercise the application via public entry points (usually the CLI) in a realistic, but tiny, environment.
 They validate wiring across modules, configuration loading/merging, logging, and basic I/O.
 
@@ -37,12 +45,12 @@ They validate wiring across modules, configuration loading/merging, logging, and
 
 ## Folder structure
 
-```text
+```bash
 tests/e2e/
-├── README.md                - scope, patterns, and how to run E2E tests
-├── conftest.py              - E2E pytest setup and markers
-└── ml_playground/           - E2E-specific helpers and tests
-    ├── experiments/         - tiny configs/fixtures for E2E
-    ├── test_sample_smoke.py - CLI sampling smoke test
-    └── test_train_smoke.py  - CLI training smoke test
+├── README.md                # scope, patterns, and how to run E2E tests
+├── conftest.py              # E2E pytest setup and markers
+└── ml_playground/           # E2E-specific helpers and tests
+    ├── experiments/         # tiny configs/fixtures for E2E
+    ├── test_sample_smoke.py # CLI sampling smoke test
+    └── test_train_smoke.py  # CLI training smoke test
 ```

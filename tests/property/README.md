@@ -24,12 +24,12 @@ configuration stays isolated.
 
 ## Folder Structure
 
-```text
+```bash
 tests/property/
-├── README.md                       - this file
-├── cli/                            - CLI-facing properties
-├── configuration/                  - TOML loading and config invariants
-└── data_pipeline/                  - data preparation/tokenization properties
+├── README.md                       # this file
+├── cli/                            # CLI-facing properties
+├── configuration/                  # TOML loading and config invariants
+└── data_pipeline/                  # data preparation/tokenization properties
 ```
 
 ## Running

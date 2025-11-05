@@ -1,5 +1,13 @@
 # Bundestag Finetuning (Qwen2.5‑1.5B + LoRA on MPS)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/DOCUMENTATION.md](../../../../.dev-guidelines/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, error handling, and runtime orchestration.
+
+</details>
+
 Preset of the generic HF+PEFT integration to fine‑tune Qwen2.5‑1.5B on Bundestag speeches. Uses LoRA adapters and is optimized for Apple Silicon (MPS). CUDA also supported.
 
 ## Overview
@@ -23,7 +31,7 @@ Preset of the generic HF+PEFT integration to fine‑tune Qwen2.5‑1.5B on Bunde
 - Evaluation runs periodically; TensorBoard logs at `out_dir/logs/tb`
 - Adapters saved to `out_dir/adapters/{best,last,final}`
 
-For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
@@ -105,7 +113,7 @@ src/ml_playground/experiments/bundestag_qwen15b_lora_mps/
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).

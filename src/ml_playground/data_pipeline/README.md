@@ -1,32 +1,65 @@
 # Data Pipeline Package
 
+<details>
+<summary>Related documentation</summary>
+
+- [docs/framework_utilities.md](../../docs/framework_utilities.md) – Canonical reference for preparation helpers, tokenizer protocol usage, and metadata guarantees.
+- [.dev-guidelines/DOCUMENTATION.md](../../.dev-guidelines/DOCUMENTATION.md) – README structure, abstraction levels, and folder tree standards.
+- [.dev-guidelines/DEVELOPMENT.md](../../.dev-guidelines/DEVELOPMENT.md) – Data handling policies, typing expectations, and quality gates.
+
+</details>
+
 ## Purpose
 
-Data pipeline utilities for preparing, transforming, and batching training data in `ml_playground` experiments. Handles
-tokenization, data loading, and batch sampling with strict typing and validation.
+Shared preparation utilities that transform raw experiment data into standardized binaries and metadata. The package provides:
+
+- A deterministic preparation pipeline that writes `train.bin`, `val.bin`, and `meta.pkl` using centralized IO helpers.
+- Integration with the unified tokenizer protocol (`char`, `word`, `tiktoken`) through the factory in `ml_playground.core.tokenizer`.
+- File-state diffing so experiments can report which artifacts were created or updated during preparation runs.
 
 ## Structure
 
-- `preparer.py` - Main data preparation workflow
-- `tokenizers.py` - Tokenizer interface and implementations
-
-## Key APIs
-
-- `create_pipeline()` - Data pipeline factory
-- `prepare_dataset()` - Run preparation workflow
-- `write_metadata()` - Persist standardized metadata
-
-## Usage Example
-
-```python
-from ml_playground.data_pipeline.preparer import prepare_dataset
-from ml_playground.core.tokenizer import create_tokenizer
-
-pipeline = create_pipeline(config, shared_config)
-outcome = pipeline.run()
+```bash
+src/ml_playground/data_pipeline/
+├── README.md        # package overview (this file)
+├── preparer.py      # Preparation pipeline orchestration and public factory
+├── transforms/      # Tokenization and IO helpers (prepare_with_tokenizer, write_bin_and_meta)
+├── sampling/        # Utilities reused by sampling flows (e.g., dataset iterators)
+└── sources/         # Pluggable data sources and loaders
 ```
 
-## Related Documentation
+## Core Concepts
 
-- [Framework Utilities](../docs/framework_utilities.md) - Data preparation guidelines
-- [Development Guidelines](../.dev-guidelines/DEVELOPMENT.md) - Data handling standards
+- **`PreparationOutcome`** – Captures created/updated/skipped files plus metadata returned by the pipeline.
+- **`create_pipeline()`** – Factory that wires a `PreparerConfig` and `SharedConfig` into a `_PreparationPipeline` instance.
+- **Tokenization** – Delegates to `prepare_with_tokenizer()` in `transforms/tokenization.py`, which consumes a `Tokenizer` from `ml_playground.core.tokenizer`. This honors the centralized tokenizer protocol (char, word, tiktoken) described in the repository memory.
+- **File-state tracking** – `snapshot_file_states()` and `diff_file_states()` (re-exported from `transforms.io`) let experiments emit precise change logs for datasets.
+- **Standardized metadata** – `write_bin_and_meta()` persists tensor binaries alongside a `meta.pkl` that records tokenizer details, vocabulary size, and other experiment-defined extras.
+
+## Typical Usage
+
+```python
+from pathlib import Path
+
+from ml_playground.configuration.models import PreparerConfig, SharedConfig
+from ml_playground.data_pipeline.preparer import create_pipeline
+
+cfg = PreparerConfig(
+    raw_text_path=Path("datasets/input.txt"),
+    tokenizer_type="tiktoken",
+    extras={},
+)
+shared = SharedConfig(dataset_dir=Path("datasets"))
+
+pipeline = create_pipeline(cfg, shared)
+outcome = pipeline.run()
+
+print(outcome.created_files)
+print(outcome.metadata["tokenizer_type"])  # e.g., "tiktoken"
+```
+
+## Notes
+
+- All tokenizers must be created via `ml_playground.core.tokenizer.create_tokenizer()` or injected through `PreparerConfig.tokenizer_factory` to stay compliant with the centralized protocol.
+- Keep new transforms deterministic and side-effect free; any filesystem writes should go through `write_bin_and_meta()` or helpers that provide atomic semantics.
+- Update `docs/framework_utilities.md` alongside significant pipeline changes so experiments and CLI documentation remain in sync.

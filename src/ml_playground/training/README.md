@@ -1,5 +1,13 @@
 # Training Package
 
+<details>
+<summary>Related documentation</summary>
+
+- [Framework Utilities](../../docs/framework_utilities.md) – Training configuration helpers referenced by this package.
+- [.dev-guidelines/DEVELOPMENT.md](../../.dev-guidelines/DEVELOPMENT.md) – Training workflow and quality standards.
+
+</details>
+
 ## Purpose
 
 Training orchestration package providing complete training loop management, checkpointing, evaluation hooks, and LR
@@ -27,8 +35,3 @@ from ml_playground.configuration.models import TrainerConfig
 trainer = Trainer(config, shared_config)
 final_iter, best_loss = trainer.run()
 ```
-
-## Related Documentation
-
-- [Framework Utilities](../docs/framework_utilities.md) - Training configuration
-- [Development Guidelines](../.dev-guidelines/DEVELOPMENT.md) - Quality standards

@@ -1,5 +1,13 @@
 # Experiments (Mid‑Level Overview)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/DOCUMENTATION.md](../../../.dev-guidelines/DOCUMENTATION.md) – Required sections, abstraction levels, and folder tree standards for experiment docs.
+- [Framework Utilities](../../../docs/framework_utilities.md) – Shared helpers for preparation, training, and sampling referenced by experiments.
+
+</details>
+
 This directory hosts self‑contained experiments. Each experiment bundles:
 
 - its data preparation logic (`preparer.py`),
@@ -30,7 +38,7 @@ Universal meta policy
 - Use `ml_playground.data_pipeline.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
 - The CLI will fail fast at train/sample time if `meta.pkl` is missing.
 
-All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
+All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../docs/framework_utilities.md).
 
 ## Folder structure (this directory)
 

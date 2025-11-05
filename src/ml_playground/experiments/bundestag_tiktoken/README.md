@@ -1,5 +1,13 @@
 # Bundestag (tiktoken BPE)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/DOCUMENTATION.md](../../../../.dev-guidelines/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, error handling, and progress reporting.
+
+</details>
+
 Byte-Pair Encoding (BPE) experiment using tiktoken to tokenize Bundestag speeches into uint32 token IDs.
 
 ## Overview
@@ -23,12 +31,13 @@ Byte-Pair Encoding (BPE) experiment using tiktoken to tokenize Bundestag speeche
 - Tokenize with tiktoken (cl100k_base by default) into uint32 arrays
 - Model hyperparameters and runtime behavior controlled by TOML
 - TensorBoard logs written to out_dir/logs/tb
-  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
+  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+uv run tools env setup
+uv run tools env verify
 ```
 
 ## Strict configuration injection
@@ -77,21 +86,14 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.
 ## Folder structure
 
 ```bash
-# experiment documentation (this file)
 src/ml_playground/experiments/bundestag_tiktoken/
-├── README.md        
-# sample/preset config for real runs
-├── config.toml      
-# tiny defaults for tests
-├── test_config.toml 
-# dataset preparation (tiktoken BPE, write bins/meta)
-├── preparer.py      
-# NanoGPT-style training orchestration
-├── trainer.py       
-# generation/sampling entrypoints
-├── sampler.py       
-# prepared dataset artifacts written here
-└── datasets/        
+├── README.md        # experiment documentation (this file)
+├── config.toml      # sample/preset config for real runs
+├── test_config.toml # tiny defaults for tests
+├── preparer.py      # dataset preparation (tiktoken BPE, write bins/meta)
+├── trainer.py       # NanoGPT-style training orchestration
+├── sampler.py       # generation/sampling entrypoints
+└── datasets/        # prepared dataset artifacts written here
 ```
 
 ## Troubleshooting
@@ -105,9 +107,9 @@ src/ml_playground/experiments/bundestag_tiktoken/
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

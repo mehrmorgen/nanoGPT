@@ -1,5 +1,13 @@
 # Integration Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/TESTING.md](../../.dev-guidelines/TESTING.md) – Integration suite scope, gating rules, and fixture policies.
+- [.dev-guidelines/DOCUMENTATION.md](../../.dev-guidelines/DOCUMENTATION.md) – README structure requirements and folder tree standards.
+
+</details>
+
 Integration tests verify that multiple components work together correctly via Python APIs (not necessarily the CLI).
 They use real code paths and small in-memory or tiny on-disk data.
 
@@ -17,10 +25,10 @@ They use real code paths and small in-memory or tiny on-disk data.
 
 ## Folder structure
 
-```text
+```bash
 tests/integration/
-├── README.md                    - scope and patterns for integration tests
-├── conftest.py                  - integration pytest setup/markers
-├── test_datasets_shakespeare.py - integration of dataset helpers
-└── test_speakger_pilot.py       - integration around SpeakGer pipeline
+├── README.md                    # scope and patterns for integration tests
+├── conftest.py                  # integration pytest setup/markers
+├── test_datasets_shakespeare.py # integration of dataset helpers
+└── test_speakger_pilot.py       # integration around SpeakGer pipeline
 ```

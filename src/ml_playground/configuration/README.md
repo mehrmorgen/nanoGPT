@@ -1,5 +1,13 @@
 # Configuration Package
 
+<details>
+<summary>Related documentation</summary>
+
+- [Framework Utilities](../../docs/framework_utilities.md) – Configuration helpers shared across experiments.
+- [.dev-guidelines/DEVELOPMENT.md](../../.dev-guidelines/DEVELOPMENT.md) – Configuration policies and quality standards.
+
+</details>
+
 ## Purpose
 
 Configuration management utilities for `ml_playground`. Provides Pydantic models and loading helpers for experiment
@@ -23,8 +31,3 @@ from ml_playground.configuration.loading import load_full_experiment_config
 
 config = load_full_experiment_config(config_path, project_home, experiment_name)
 ```
-
-## Related Documentation
-
-- [Framework Utilities](../docs/framework_utilities.md) - Configuration guidelines
-- [Development Guidelines](../.dev-guidelines/DEVELOPMENT.md) - Configuration policies

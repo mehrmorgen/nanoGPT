@@ -53,18 +53,18 @@ Property-based tests using Hypothesis complement example-driven unit tests. They
 
 ## Folder structure
 
-```text
+```bash
 tests/unit/
-├── README.md                       - scope and rules for unit tests
-├── analysis/                       - analysis-related unit tests
-├── configuration/                  - configuration models and loading
-├── core/                           - core utilities (tokenizer, error handling)
-├── data_pipeline/                  - data sources/transforms/sampling/preparer
-├── experiments/                    - experiment-specific unit tests
-├── sampling/                       - inference and sampling runner
-├── training/                       - training loop, hooks, checkpointing, schedulers
-├── test_public_api_policy.py       - enforcement of public API policy
-└── conftest.py                     - unit pytest fixtures and helpers
+├── README.md                       # scope and rules for unit tests
+├── analysis/                       # analysis-related unit tests
+├── configuration/                  # configuration models and loading
+├── core/                           # core utilities (tokenizer, error handling)
+├── data_pipeline/                  # data sources/transforms/sampling/preparer
+├── experiments/                    # experiment-specific unit tests
+├── sampling/                       # inference and sampling runner
+├── training/                       # training loop, hooks, checkpointing, schedulers
+├── test_public_api_policy.py       # enforcement of public API policy
+└── conftest.py                     # unit pytest fixtures and helpers
 ```
 
 ## Documentation

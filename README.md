@@ -1,19 +1,23 @@
 # ml-playground: strict, typed, UV-only training/sampling module
 
 ![Line Coverage](docs/assets/coverage-lines.svg)
-![Branch Coverage](docs/assets/coverage-branches.svg)
 
 This module provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 - Developer Guidelines: see `.dev-guidelines/README.md` for setup, development workflow, and policies.
 - Development tools: use `uv run tools --help` for integrated development tooling.
+- Coverage badges: `uv run tools ci coverage-badge` (integrated directly)
+
+AI Development Guidelines
+
+- Use `uv run tools env ai-guidelines <tool_name>` to set up AI guidelines symlinks.
+- The previous `scripts/setup_ai_guidelines.py` has been integrated and is no longer needed.
 
 ## Documentation abstraction policy
 
 - Top-level docs are high-level and describe the why and the overall layout.
 - Each subfolder contains its own `README.md` with a focused scope and a folder tree.
-- The deeper you go in the directory tree, the lower the level of abstraction and the more operational details you’ll find.
 
 ## Repository structure (high-level)
 
@@ -31,29 +35,21 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   ├── e2e/                   # CLI-level smoke tests
 │   └── acceptance/            # higher-level behaviors and policies
 ├── scripts/                   # specialized utility scripts
-│   ├── setup_ai_guidelines.py # AI development guidelines setup
 │   └── llama_cpp/             # GGUF model conversion utilities
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
+```
 
-## Policy
-
-- `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
-- `uv run tools env <command>` for environment setup, cache cleanup, and dependency management.
-- `uv run tools quality <command>` for lint/format bundles when you need faster feedback.
-- `uv run tools test <command>` for pytest suites and coverage reporting.
-- `uv run tools ci <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
-- `uv run tools agentic <command>` for AI-assisted development workflows and batch operations.
-- The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
 - Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
 - Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
-- Review comment triage: use `uv run tools dev review-list <pr_number> --unreplied --unresolved` to spot pending feedback; use `uv run tools dev review-bulk-reply <pr_number> --replies replies.json` for bulk replies, and `uv run tools dev review-delete <pr_number> --comments delete.json` to delete comments.
+- **Review management**: `uv run tools dev review-*` (was `scripts/review.py`). For triage, use `uv run tools dev review-list <pr_number> --unreplied --unresolved`; for bulk replies, `uv run tools dev review-bulk-reply <pr_number> --replies replies.json`; to delete comments, `uv run tools dev review-delete <pr_number> --comments delete.json`.
 
 Setup and Developer Workflow
+
 - See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
 
 Datasets
@@ -91,4 +87,6 @@ Testing
 
 - See `.dev-guidelines/README.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.
+
+```
 ```
