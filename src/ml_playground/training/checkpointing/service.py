@@ -17,7 +17,8 @@ from ml_playground.configuration.models import (
     SharedConfig,
     READ_POLICY_BEST,
 )
-from ml_playground.core.error_handling import CheckpointError, LoggerLike
+from ml_playground.core.error_handling import CheckpointError
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.models.core.model import GPT
 from ml_playground.training.ema import EMA
 

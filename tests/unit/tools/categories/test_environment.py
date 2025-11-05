@@ -373,28 +373,14 @@ class TestAIGuidelines:
     def test_ai_guidelines_success(
         self,
         environment_tools: environment_module.EnvironmentTools,
-        subprocess_runner: FakeSubprocessRunner,
     ) -> None:
         """Test successful AI guidelines setup."""
-        operation_id = OperationId(
-            namespace="tools", category="env", command="ai-guidelines"
-        )
-        expected_result = create_success_result(
-            operation_id, "AI guidelines set up for ruff"
-        )
-        subprocess_runner.set_results([expected_result])
-
-        result = environment_tools.ai_guidelines([], tool="ruff", dry_run=False)
+        result = environment_tools.ai_guidelines([], tool="windsurf", dry_run=True)
 
         assert result.success is True
         assert str(result.operation_id) == "tools.env.ai-guidelines"
-
-        # Check command construction
-        assert len(subprocess_runner.calls) == 1
-        command = subprocess_runner.calls[0]["command"]
-        assert "python" in command
-        assert "scripts/setup_ai_guidelines.py" in command
-        assert "ruff" in command
+        # Should produce informative output
+        assert "[dry-run]" in result.stdout or "done." in result.stdout
 
     def test_ai_guidelines_empty_tool(
         self, environment_tools: environment_module.EnvironmentTools
@@ -408,18 +394,11 @@ class TestAIGuidelines:
     def test_ai_guidelines_dry_run_includes_flag(
         self,
         environment_tools: environment_module.EnvironmentTools,
-        subprocess_runner: FakeSubprocessRunner,
     ) -> None:
         """Dry run should append the --dry-run flag."""
-        operation_id = OperationId(
-            namespace="tools", category="env", command="ai-guidelines"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id)])
-
-        environment_tools.ai_guidelines([], tool="ruff", dry_run=True)
-
-        command = subprocess_runner.calls[0]["command"]
-        assert command[-1] == "--dry-run"
+        result = environment_tools.ai_guidelines([], tool="windsurf", dry_run=True)
+        assert result.success is True
+        assert "[dry-run]" in result.stdout
 
 
 class TestTensorboard:

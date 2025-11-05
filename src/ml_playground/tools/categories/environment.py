@@ -10,6 +10,7 @@ from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import EnvironmentSetupError, ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
+from ml_playground.tools.categories.dev import DevTools
 
 
 class EnvironmentTools:
@@ -494,17 +495,25 @@ uv run pre-commit run
                 rationale="AI guidelines setup requires a specific tool name to configure",
             )
 
-        # Build command
-        cmd = ["python", "scripts/setup_ai_guidelines.py", tool]
-        if dry_run:
-            cmd.append("--dry-run")
-
-        return self.subprocess_runner.run_uv_command(
-            cmd,
-            cwd=self.root_path,
-            timeout=self.config.environment.timeout,
-            operation_id=operation_id,
-        )
+        # Delegate to integrated implementation in DevTools
+        try:
+            dev = DevTools(
+                config=self.config,
+                root_path=self.root_path,
+                subprocess_runner=self.subprocess_runner,
+            )
+            result = dev.setup_ai_guidelines(tool=tool, dry_run=dry_run)
+            # Attach our operation_id for consistent CLI reporting
+            result.operation_id = operation_id
+            return result
+        except Exception as exc:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr=f"Failed to setup AI guidelines: {exc}",
+                operation_id=operation_id,
+            )
 
     def tensorboard(
         self, args: List[str], logdir: Path, port: int = 6006, host: str = "127.0.0.1"

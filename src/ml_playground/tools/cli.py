@@ -162,7 +162,7 @@ def main(
 
     Use --learning-mode to see underlying commands and educational explanations.
     """
-    # Load configuration first
+    # Load configuration first (unit tests expect this to happen at entry)
     load_config_with_error_handling(project_root)
 
     # Set global options, preferring explicit CLI args over config defaults
@@ -184,7 +184,7 @@ def main(
 def _get_quality_tools() -> QualityTools:
     """Get quality tools instance."""
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return QualityTools(state.config, state.project_root or Path.cwd())
 
@@ -192,7 +192,7 @@ def _get_quality_tools() -> QualityTools:
 def _get_testing_tools() -> TestingTools:
     """Get testing tools instance."""
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return TestingTools(state.config, state.project_root or Path.cwd())
 
@@ -200,7 +200,7 @@ def _get_testing_tools() -> TestingTools:
 def _get_environment_tools() -> EnvironmentTools:
     """Get environment tools instance."""
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return EnvironmentTools(state.config, state.project_root or Path.cwd())
 
@@ -208,7 +208,7 @@ def _get_environment_tools() -> EnvironmentTools:
 def _get_ci_tools() -> CITools:
     """Get CI tools instance."""
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return CITools(state.config, state.project_root or Path.cwd())
 
@@ -218,7 +218,7 @@ def _get_agentic_tools():
     from ml_playground.tools.categories.agentic import AgenticTools
 
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return AgenticTools(state.config, state.project_root or Path.cwd())
 
@@ -226,7 +226,7 @@ def _get_agentic_tools():
 def _get_dev_tools() -> DevTools:
     """Get dev tools instance."""
     if state.config is None:
-        load_config_with_error_handling()
+        load_config_with_error_handling(state.project_root)
     assert state.config is not None, "Config should be loaded"
     return DevTools(config=state.config)
 
