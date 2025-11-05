@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 from typing import Any, List
 
-from ml_playground.tools.categories.ci import CITools
+from ml_playground.tools.ci import CITools
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId

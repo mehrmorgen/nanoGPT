@@ -444,7 +444,7 @@ This is a machine learning playground project with the following key components:
 
     def _run_quality_batch(self) -> Dict[str, Any]:
         """Run batch quality checks and return structured results."""
-        from ml_playground.tools.categories.quality import QualityTools
+        from ml_playground.tools.quality import QualityTools
 
         quality_tools = QualityTools(
             self.config, self.root_path, self.subprocess_runner
@@ -536,7 +536,7 @@ This is a machine learning playground project with the following key components:
 
     def _run_test_batch(self) -> Dict[str, Any]:
         """Run batch test summary and return structured results."""
-        from ml_playground.tools.categories.testing import TestingTools
+        from ml_playground.tools.testing import TestingTools
 
         testing_tools = TestingTools(
             self.config, self.root_path, self.subprocess_runner
@@ -994,7 +994,7 @@ This is a machine learning playground project with the following key components:
 
     def _run_selective_quality_checks(self, checks: List[str]) -> Dict[str, Any]:
         """Run selective quality checks based on configuration."""
-        from ml_playground.tools.categories.quality import QualityTools
+        from ml_playground.tools.quality import QualityTools
 
         quality_tools = QualityTools(
             self.config, self.root_path, self.subprocess_runner
@@ -1031,7 +1031,7 @@ This is a machine learning playground project with the following key components:
 
     def _run_selective_test_checks(self, test_types: List[str]) -> Dict[str, Any]:
         """Run selective test checks based on configuration."""
-        from ml_playground.tools.categories.testing import TestingTools
+        from ml_playground.tools.testing import TestingTools
 
         testing_tools = TestingTools(
             self.config, self.root_path, self.subprocess_runner
@@ -1187,7 +1187,7 @@ This is a machine learning playground project with the following key components:
     def _get_coverage_status(self) -> Dict[str, Any]:
         """Get coverage status."""
         try:
-            from ml_playground.tools.categories.testing import TestingTools
+            from ml_playground.tools.testing import TestingTools
 
             testing_tools = TestingTools(
                 self.config, self.root_path, self.subprocess_runner

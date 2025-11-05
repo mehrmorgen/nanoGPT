@@ -60,10 +60,10 @@ def test_tools_cli_getters_return_instances(tmp_path) -> None:
     e = cli._get_environment_tools()
     c = cli._get_ci_tools()
 
-    from ml_playground.tools.categories.quality import QualityTools as QT
-    from ml_playground.tools.categories.testing import TestingTools as TT
-    from ml_playground.tools.categories.environment import EnvironmentTools as ET
-    from ml_playground.tools.categories.ci import CITools as CT
+    from ml_playground.tools.quality import QualityTools as QT
+    from ml_playground.tools.testing import TestingTools as TT
+    from ml_playground.tools.environment import EnvironmentTools as ET
+    from ml_playground.tools.ci import CITools as CT
 
     assert isinstance(q, QT)
     assert isinstance(t, TT)

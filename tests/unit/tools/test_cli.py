@@ -1174,7 +1174,7 @@ class TestToolFactories:
             ("_get_ci_tools", "ml_playground.tools.cli.CITools", True),
             (
                 "_get_agentic_tools",
-                "ml_playground.tools.categories.agentic.AgenticTools",
+                "ml_playground.tools.agentic.AgenticTools",
                 True,
             ),
             ("_get_dev_tools", "ml_playground.tools.cli.DevTools", False),

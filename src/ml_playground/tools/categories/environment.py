@@ -10,7 +10,7 @@ from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import EnvironmentSetupError, ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
-from ml_playground.tools.categories.dev import DevTools
+from ml_playground.tools.dev import DevTools
 
 
 class EnvironmentTools:

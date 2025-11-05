@@ -6,7 +6,7 @@ from pathlib import Path
 
 from hypothesis import given, settings, strategies as st
 
-from ml_playground.tools.categories.testing import TestingTools as _TestingTools
+from ml_playground.tools.testing import TestingTools as _TestingTools
 from ml_playground.tools.core.config import ToolsConfig
 from tests.unit.tools.fakes import FakeSubprocessRunner
 

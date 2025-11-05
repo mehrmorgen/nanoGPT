@@ -10,7 +10,7 @@ from typing import Iterator
 
 import pytest
 
-from ml_playground.tools.categories import dev
+from ml_playground.tools import dev
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
@@ -677,7 +677,7 @@ def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
     # Initialize state using repository root config
     cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
     tools = cli._get_dev_tools()
-    from ml_playground.tools.categories.dev import DevTools as DevToolsClass
+    from ml_playground.tools.dev import DevTools as DevToolsClass
 
     assert isinstance(tools, DevToolsClass)
 

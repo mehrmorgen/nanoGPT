@@ -11,7 +11,7 @@ from typing import Iterator
 
 import pytest
 
-from ml_playground.tools.categories import testing as testing_module
+from ml_playground.tools import testing as testing_module
 from ml_playground.tools.core import config as config_module
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError

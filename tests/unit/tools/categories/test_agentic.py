@@ -9,8 +9,8 @@ from contextlib import contextmanager
 import pytest
 import yaml
 
-from ml_playground.tools.categories import agentic as agentic_module
-from ml_playground.tools.categories import testing as testing_module
+from ml_playground.tools import agentic as agentic_module
+from ml_playground.tools import testing as testing_module
 from ml_playground.tools.core import config as config_module
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
