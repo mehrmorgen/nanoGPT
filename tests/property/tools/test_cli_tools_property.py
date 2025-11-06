@@ -18,14 +18,14 @@ import ml_playground.tools.cli as tools_cli
 
 # Modules whose `_default_runner` attribute should mirror the deterministic runner during tests
 TARGET_RUNNER_MODULES = [
-    # Legacy category modules where Tools classes are defined
-    "ml_playground.tools.categories.quality",
-    "ml_playground.tools.categories.testing",
-    "ml_playground.tools.categories.dev",
-    # New shims that re-export classes and expose _default_runner
+    # Shims that re-export classes and expose _default_runner
     "ml_playground.tools.quality",
     "ml_playground.tools.testing",
     "ml_playground.tools.dev",
+    # Implementation modules where _default_runner is bound at import time
+    "ml_playground.tools.quality.quality",
+    "ml_playground.tools.testing.testing",
+    "ml_playground.tools.dev.dev",
 ]
 
 CLI_RUNNER = CliRunner()

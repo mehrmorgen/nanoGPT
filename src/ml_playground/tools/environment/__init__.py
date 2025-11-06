@@ -6,8 +6,6 @@ Keeps public API stable during migration.
 
 from __future__ import annotations
 
-from ml_playground.tools.categories.environment import (
-    EnvironmentTools as EnvironmentTools,
-)
+from .environment import EnvironmentTools as EnvironmentTools
 
 __all__ = ["EnvironmentTools"]

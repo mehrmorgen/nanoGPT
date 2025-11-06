@@ -123,12 +123,18 @@ def test_env_and_ci_commands_use_tool_getter_stubs() -> None:
 
 def test_testing_coverage_threshold_failure_raises() -> None:
     class StubTesting:
-        def coverage_threshold(self, *a, **k):
+        def coverage(self, *a, **k):
             return make_result(success=False, stderr="threshold fail")
 
     with swap_attr(cli, "_get_testing_tools", lambda: StubTesting()):
         with pytest.raises(ClickExit):
-            cli.test_coverage_threshold(0.0, 0.0, False, None)
+            cli.test_coverage(
+                line_threshold=0.0,
+                branch_threshold=0.0,
+                force_regen=False,
+                verbose=False,
+                args=None,
+            )
 
 
 def test_testing_command_dispatch_with_stubs() -> None:
@@ -145,13 +151,18 @@ def test_testing_command_dispatch_with_stubs() -> None:
         def all_tests(self, args, *, learning_mode: bool, verbosity_level: int):
             return make_result(success=True, stdout="all ok")
 
-        def coverage_test(self, args, *, learning_mode: bool, verbosity_level: int):
-            return make_result(success=True, stdout="cov test ok")
-
-        def coverage_report(
-            self, args, *, verbose: bool, learning_mode: bool, verbosity_level: int
+        def coverage(
+            self,
+            args,
+            *,
+            line_threshold: float | None = None,
+            branch_threshold: float | None = None,
+            verbose: bool = False,
+            learning_mode: bool,
+            verbosity_level: int,
+            force_regen: bool = False,
         ):
-            return make_result(success=True, stdout="cov report ok")
+            return make_result(success=True, stdout="coverage ok")
 
         def clean(self, args, *, learning_mode: bool, verbosity_level: int):
             return make_result(success=True, stdout="clean ok")
@@ -161,8 +172,13 @@ def test_testing_command_dispatch_with_stubs() -> None:
         cli.test_property(ctx=None, pattern=None, extra_args=None)
         cli.test_regression(ctx=None, pattern=None, extra_args=None)
         cli.test_all(None)
-        cli.test_coverage_test(None)
-        cli.test_coverage_report(verbose=False, args=None)
+        cli.test_coverage(
+            line_threshold=0.0,
+            branch_threshold=0.0,
+            force_regen=False,
+            verbose=False,
+            args=None,
+        )
         cli.test_clean(None)
 
 

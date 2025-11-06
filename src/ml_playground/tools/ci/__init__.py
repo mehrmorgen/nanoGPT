@@ -6,6 +6,6 @@ This keeps public API stable while we migrate code into this package.
 
 from __future__ import annotations
 
-from ml_playground.tools.categories.ci import CITools as CITools
+from .ci import CITools as CITools
 
 __all__ = ["CITools"]

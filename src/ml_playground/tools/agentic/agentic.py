@@ -1071,7 +1071,7 @@ This is a machine learning playground project with the following key components:
         self, thresholds: Dict[str, float]
     ) -> Dict[str, Any]:
         """Check coverage requirements against thresholds."""
-        from ml_playground.tools.categories.testing import TestingTools
+        from ml_playground.tools.testing import TestingTools
 
         testing_tools = TestingTools(
             self.config, self.root_path, self.subprocess_runner

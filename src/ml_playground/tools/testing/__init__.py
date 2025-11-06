@@ -6,7 +6,7 @@ Keeps public API stable during migration.
 
 from __future__ import annotations
 
-from ml_playground.tools.categories.testing import TestingTools as TestingTools
+from .testing import TestingTools as TestingTools
 from ml_playground.tools.utils.subprocess_utils import (
     _default_runner as _default_runner,
 )

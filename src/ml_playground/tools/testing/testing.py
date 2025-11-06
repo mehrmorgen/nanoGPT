@@ -1226,7 +1226,8 @@ class TestingTools:
 
         all_passed = line_pass and branch_pass
         coverage_files = self._collect_undercovered_files(coverage_data)
-        if not all_passed and coverage_files:
+        # Always report under-covered files if any exist, regardless of threshold pass/fail
+        if coverage_files:
             info_lines.append("")
             info_lines.append("Files below 100% coverage:")
             tree_lines = self._format_undercovered_tree(coverage_files)

@@ -6,7 +6,7 @@ This keeps public API stable while we migrate code into this package.
 
 from __future__ import annotations
 
-from ml_playground.tools.categories.dev import DevTools as DevTools
+from .dev import DevTools as DevTools
 from ml_playground.tools.utils.subprocess_utils import (
     _default_runner as _default_runner,
 )

@@ -6,6 +6,6 @@ Keeps public API stable during migration.
 
 from __future__ import annotations
 
-from ml_playground.tools.categories.agentic import AgenticTools as AgenticTools
+from .agentic import AgenticTools as AgenticTools
 
 __all__ = ["AgenticTools"]

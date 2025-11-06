@@ -358,41 +358,61 @@ class TestCLIErrorBranches:
         assert captured["verbosity_level"] == 2
         assert captured["force_regen"] is True
 
-    def test_cli_coverage_test_failure_exits_nonzero(self, monkeypatch) -> None:
+    def test_cli_coverage_failure_exits_nonzero(self, monkeypatch) -> None:
         class FakeTestingTools:
-            def coverage_test(self, *_args: object, **_kwargs: object) -> ToolResult:
+            def coverage(
+                self,
+                _args: list[str],
+                *,
+                line_threshold: float | None = None,
+                branch_threshold: float | None = None,
+                verbose: bool = False,
+                learning_mode: bool = False,
+                verbosity_level: int = 1,
+                force_regen: bool = False,
+            ) -> ToolResult:
                 return ToolResult.create(
                     success=False,
                     exit_code=7,
                     namespace="tools",
                     category="test",
-                    command="coverage-test",
-                    stderr="coverage test failed",
+                    command="coverage",
+                    stderr="coverage failed",
                 )
 
         with swap_attr(tools_cli, "_get_testing_tools", lambda: FakeTestingTools()):
-            result = self.runner.invoke(tools_cli.app, ["test", "coverage-test"])
+            result = self.runner.invoke(tools_cli.app, ["test", "coverage"])
 
         assert result.exit_code == 7
-        assert "coverage test failed" in (result.stderr or result.stdout)
+        assert "coverage failed" in (result.stderr or result.stdout)
 
-    def test_cli_coverage_report_runs_successfully(self, monkeypatch) -> None:
+    def test_cli_coverage_runs_successfully(self, monkeypatch) -> None:
         class FakeTestingTools:
-            def coverage_report(self, *_args: object, **_kwargs: object) -> ToolResult:
+            def coverage(
+                self,
+                _args: list[str],
+                *,
+                line_threshold: float | None = None,
+                branch_threshold: float | None = None,
+                verbose: bool = False,
+                learning_mode: bool = False,
+                verbosity_level: int = 1,
+                force_regen: bool = False,
+            ) -> ToolResult:
                 return ToolResult.create(
                     success=True,
                     exit_code=0,
                     namespace="tools",
                     category="test",
-                    command="coverage-report",
-                    stdout="report ok",
+                    command="coverage",
+                    stdout="coverage ok",
                 )
 
         with swap_attr(tools_cli, "_get_testing_tools", lambda: FakeTestingTools()):
-            result = self.runner.invoke(tools_cli.app, ["test", "coverage-report"])
+            result = self.runner.invoke(tools_cli.app, ["test", "coverage"])
 
         assert result.exit_code == 0
-        assert "report ok" in result.stdout
+        assert "coverage ok" in result.stdout
 
 
 class TestLearnCommands:
@@ -890,16 +910,16 @@ class TestCoverageCommands:
             }
         ]
 
-    def test_test_coverage_threshold_failure(self, monkeypatch) -> None:
-        """Failure from `coverage_threshold` should propagate exit codes."""
+    def test_test_coverage_failure_with_thresholds(self, monkeypatch) -> None:
+        """Failure from unified `coverage` should propagate exit codes and respect thresholds options."""
 
         class StubTestingTools:
-            def coverage_threshold(
+            def coverage(
                 self,
                 args: list[str],
                 *,
-                line_threshold: float,
-                branch_threshold: float,
+                line_threshold: float | None,
+                branch_threshold: float | None,
                 verbose: bool,
                 learning_mode: bool,
                 verbosity_level: int,
@@ -907,13 +927,14 @@ class TestCoverageCommands:
             ) -> ToolResult:
                 assert learning_mode is False
                 assert verbosity_level == 1
-                assert force_regen is False
+                assert line_threshold == 95.0
+                assert branch_threshold == 80.0
                 return ToolResult.create(
                     success=False,
                     exit_code=6,
                     namespace="tools",
                     category="test",
-                    command="coverage-threshold",
+                    command="coverage",
                     stderr="threshold failed",
                 )
 
@@ -922,7 +943,7 @@ class TestCoverageCommands:
                 tools_cli.app,
                 [
                     "test",
-                    "coverage-threshold",
+                    "coverage",
                     "--line-threshold",
                     "95",
                     "--branch-threshold",
