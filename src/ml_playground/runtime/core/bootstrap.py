@@ -21,37 +21,37 @@ class CLIDependencies:
 Factory = Callable[[], CLIDependencies]
 
 
-_DEFAULT_FACTORY: Factory | None = None
-_CURRENT: CLIDependencies | None = None
+_default_factory: Factory | None = None
+_current: CLIDependencies | None = None
 
 
 def configure_runtime_cli_dependencies(factory: Factory) -> None:
     """Register the factory used to build default runtime CLI dependencies."""
 
-    global _DEFAULT_FACTORY, _CURRENT
-    _DEFAULT_FACTORY = factory
-    _CURRENT = factory()
+    global _default_factory, _current
+    _default_factory = factory
+    _current = factory()
 
 
 def reset_runtime_cli_dependencies() -> None:
     """Reset the current runtime CLI dependencies to the default factory."""
 
-    global _CURRENT
-    if _DEFAULT_FACTORY is None:
-        _CURRENT = None
+    global _current
+    if _default_factory is None:
+        _current = None
     else:
-        _CURRENT = _DEFAULT_FACTORY()
+        _current = _default_factory()
 
 
 def get_runtime_cli_dependencies() -> CLIDependencies:
     """Return the currently configured runtime CLI dependencies."""
 
-    global _CURRENT
-    if _CURRENT is None:
-        if _DEFAULT_FACTORY is None:  # pragma: no cover - defensive guard
+    global _current
+    if _current is None:
+        if _default_factory is None:  # pragma: no cover - defensive guard
             raise RuntimeError("Runtime CLI dependencies have not been configured.")
-        _CURRENT = _DEFAULT_FACTORY()
-    return _CURRENT
+        _current = _default_factory()
+    return _current
 
 
 @contextmanager
@@ -60,13 +60,13 @@ def override_runtime_cli_dependencies(
 ) -> Generator[None, None, None]:
     """Temporarily override runtime CLI dependencies within a context."""
 
-    global _CURRENT
-    previous = get_runtime_cli_dependencies()
-    _CURRENT = deps
+    global _current
+    previous = _current
     try:
+        _current = deps
         yield
     finally:
-        _CURRENT = previous
+        _current = previous
 
 
 __all__ = [

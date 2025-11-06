@@ -172,6 +172,15 @@ include = [
     "src/ml_playground",
     "tests",
 ]
+exclude = [
+    "src/ml_playground/tools",
+    "src/ml_playground/experiments/speakger",
+    "src/ml_playground/experiments/bundestag_char",
+    "tests/unit/tools",
+    "tests/property/tools",
+    "tests/acceptance",
+    "tests/e2e",
+]
 stubPath = "typings"
 
 [[tool.basedpyright.executionEnvironments]]

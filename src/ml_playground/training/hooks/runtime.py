@@ -66,8 +66,8 @@ def setup_runtime(
                 else _cuda_manual_seed(int(cfg.runtime.seed), torch_mod)
             )
             # Use new TF32 API to avoid deprecation warnings
-            cuda_backends = cast(Any, torch_mod.backends.cuda)
-            cuda_matmul = cast(Any, cuda_backends.matmul)
+            cuda_backends = torch_mod.backends.cuda
+            cuda_matmul = cuda_backends.matmul
             if hasattr(cuda_matmul, "fp32_precision"):
                 cuda_matmul.fp32_precision = "tf32"
             cudnn_backends = cast(Any, torch_mod.backends.cudnn)

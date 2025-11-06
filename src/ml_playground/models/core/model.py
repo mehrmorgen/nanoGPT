@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, cast
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -27,13 +27,12 @@ class GPT(nn.Module):
         config: ModelConfig | GPTConfig,
         logger: LoggerLike | None,
     ) -> None:
-        super().__init__()
+        super().__init__()  # pyright: ignore[reportUnknownMemberType]
         if isinstance(config, ModelConfig):
             config = build_gpt_config(config)
-        config = cast(GPTConfig, config)
 
         vocab_size = config.vocab_size
-        if vocab_size is None:
+        if not vocab_size:
             raise ValueError("GPTConfig.vocab_size must be set")
 
         self.config: GPTConfig = config
