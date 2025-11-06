@@ -170,10 +170,17 @@ def format_undercovered_tree(
     return render(root, "")
 
 
-def format_tool_invocation(tool: str, args: List[str]) -> str:
+def format_tool_invocation(
+    tool: str, args: List[str], *, prefix: str = "uv run"
+) -> str:
     suffix = f" {' '.join(args)}" if args else ""
-    return f"Executed: uv run tools test {tool}{suffix}"
+    if prefix:
+        return f"Executed: {prefix} tools test {tool}{suffix}"
+    return f"Executed: tools test {tool}{suffix}"
 
 
-def format_command(command: list[str]) -> str:
-    return "Executed: " + " ".join(command)
+def format_command(command: list[str], *, prefix: str | None = "uv run") -> str:
+    cmd = " ".join(command)
+    if prefix:
+        return f"Executed: {prefix} {cmd}"
+    return f"Executed: {cmd}"

@@ -195,10 +195,14 @@ class TestingTools:
         return _format_undercovered_tree_helper(entries)
 
     def _format_tool_invocation(self, tool: str, args: List[str]) -> str:
-        return _format_tool_invocation_helper(tool, args)
+        return _format_tool_invocation_helper(
+            tool, args, prefix=self.config.display_command_prefix
+        )
 
     def _format_command(self, command: list[str]) -> str:
-        return _format_command_helper(command)
+        return _format_command_helper(
+            command, prefix=self.config.display_command_prefix
+        )
 
     def _ensure_coverage_data(
         self,

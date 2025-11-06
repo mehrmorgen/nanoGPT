@@ -264,7 +264,7 @@ def test_coverage_threshold_auto_generates_and_reports_totals(
     assert runner.pytest_calls
 
     stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
+    assert stdout_lines[0].startswith("Executed: uv run coverage json -o ")
     assert "Executed: uv run tools test coverage" in stdout_lines
     assert any("Automatically ran coverage" in line for line in stdout_lines)
     assert _extract_tree(stdout_lines) == []
@@ -983,10 +983,10 @@ def test_coverage_threshold_fallback_runs_pytest_when_no_data(
     assert result.success is True
     assert runner.pytest_calls
     stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
+    assert stdout_lines[0].startswith("Executed: uv run coverage json -o ")
     assert "Executed: uv run tools test coverage" in stdout_lines
     assert any("Coverage pipeline generated no data" in line for line in stdout_lines)
-    assert any(line.startswith("Executed: pytest ") for line in stdout_lines)
+    assert any(line.startswith("Executed: uv run pytest ") for line in stdout_lines)
     assert _extract_tree(stdout_lines) == []
 
 
@@ -1009,7 +1009,7 @@ def test_coverage_threshold_fails_when_totals_low(
 
     assert result.success is False
     stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
+    assert stdout_lines[0].startswith("Executed: uv run coverage json -o ")
     tree_lines = _extract_tree(stdout_lines)
     assert tree_lines[:2] == ["└── src/", "    └── ml_playground/"]
     assert any("alpha.py: line = 82.00%" in line for line in tree_lines)
@@ -1140,7 +1140,7 @@ class TestCoverageHelpers:
         assert invocation == "Executed: uv run tools test unit --verbose"
 
         command = testing_tools._format_command(["pytest", "tests/unit"])
-        assert command == "Executed: pytest tests/unit"
+        assert command == "Executed: uv run pytest tests/unit"
 
     def test_collect_undercovered_files_parses_branch_percentage(
         self, testing_tools: testing_module.TestingTools

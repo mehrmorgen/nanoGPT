@@ -187,6 +187,10 @@ class ToolsConfig(BaseModel):
     default_verbosity: int = Field(
         default=1, description="Default verbosity level for learning mode (0-2)"
     )
+    display_command_prefix: str = Field(
+        default="uv run",
+        description="Prefix used when displaying executed commands (e.g., 'uv run')",
+    )
 
     @field_validator("default_verbosity")
     @classmethod
@@ -307,6 +311,7 @@ def get_tool_config(category: str, project_root: Path | None = None) -> ToolConf
 DEFAULT_TOOLS_CONFIG = {
     "learning_mode_default": False,
     "default_verbosity": 1,
+    "display_command_prefix": "uv run",
     "quality": {
         "enabled": True,
         "timeout": 120,
