@@ -273,8 +273,7 @@ class TestLearningModeEngine:
             "unit",
             "integration",
             "e2e",
-            "coverage-test",
-            "coverage-report",
+            "coverage",
         ]
         for command in test_commands:
             content_key = f"test.{command}"

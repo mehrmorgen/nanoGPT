@@ -327,6 +327,224 @@ class FakeJsonHandler:
         self.filesystem.write_text(file_path, content)
 
 
+# ---------------- Shared runners for coverage flows ----------------
+
+
+class RecordingRunner:
+    """Baseline fake runner collecting pytest/uv invocations."""
+
+    def __init__(self) -> None:
+        self.pytest_calls: list[dict[str, object]] = []
+        self.uv_calls: list[dict[str, object]] = []
+
+    def run_subprocess(
+        self,
+        command: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        capture_output: bool = True,
+    ) -> ToolResult:
+        return create_success_result(operation_id, stdout="subprocess")
+
+    def run_pytest_command(
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+    ) -> ToolResult:
+        self.pytest_calls.append({"args": args, "env": env, "cwd": cwd})
+        if env and "COVERAGE_FILE" in env:
+            coverage_path = Path(env["COVERAGE_FILE"])  # type: ignore[index]
+            coverage_path.parent.mkdir(parents=True, exist_ok=True)
+            coverage_path.write_bytes(b"data")
+        return create_success_result(operation_id, stdout="pytest")
+
+    def run_uv_command(
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        python: Optional[str] = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
+        if args[:2] == ["coverage", "json"]:
+            out_path = Path(args[args.index("-o") + 1])
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                json.dumps(
+                    {
+                        "totals": {
+                            "num_statements": 100,
+                            "covered_lines": 100,
+                            "num_branches": 10,
+                            "covered_branches": 10,
+                        },
+                        "files": {},
+                    }
+                )
+            )
+        if args[:2] == ["coverage", "combine"] and env and "COVERAGE_FILE" in env:
+            coverage_path = Path(env["COVERAGE_FILE"])  # type: ignore[index]
+            coverage_path.parent.mkdir(parents=True, exist_ok=True)
+            coverage_path.write_bytes(b"combined")
+        return create_success_result(operation_id, stdout="uv")
+
+
+class MetricsRunner(RecordingRunner):
+    def __init__(self) -> None:
+        super().__init__()
+        self._payload = {
+            "totals": {
+                "num_statements": 10,
+                "covered_lines": 9,
+                "num_branches": 4,
+                "covered_branches": 3,
+            },
+            "files": {
+                "src/ml_playground/tools/a.py": {
+                    "summary": {
+                        "percent_covered_display": "90.00",
+                        "num_branches": 2,
+                        "covered_branches": 1,
+                    }
+                },
+                "src/ml_playground/tools/nested/b.py": {
+                    "summary": {
+                        "percent_covered": 75.0,
+                        "num_branches": 2,
+                        "covered_branches": 2,
+                    }
+                },
+            },
+        }
+
+    def run_uv_command(  # type: ignore[override]
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        python: Optional[str] = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        result = super().run_uv_command(
+            args,
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+            operation_id=operation_id,
+            python=python,
+            no_project=no_project,
+        )
+        if args[:2] == ["coverage", "json"]:
+            out_path = Path(args[args.index("-o") + 1])
+            out_path.write_text(json.dumps(self._payload))
+        return result
+
+
+class PytestFailureRunner(RecordingRunner):
+    def run_pytest_command(  # type: ignore[override]
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+    ) -> ToolResult:
+        return create_failure_result(operation_id, stderr="pytest failed")
+
+
+class CombineFailureRunner(RecordingRunner):
+    def run_uv_command(  # type: ignore[override]
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        python: Optional[str] = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        # Record call like RecordingRunner
+        self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
+        if args[:2] == ["coverage", "combine"]:
+            return create_failure_result(operation_id, stderr="combine failed")
+        return create_success_result(operation_id, stdout="ok")
+
+
+class FailingJsonRunner(RecordingRunner):
+    def run_uv_command(  # type: ignore[override]
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        python: Optional[str] = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        if args[:2] == ["coverage", "json"]:
+            return create_failure_result(operation_id, stderr="json failed")
+        return create_success_result(operation_id, stdout="ok")
+
+
+class ReportFailureRunner(RecordingRunner):
+    def run_uv_command(  # type: ignore[override]
+        self,
+        args: list[str],
+        *,
+        cwd: Optional[Union[str, Path]] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+        operation_id: OperationId,
+        python: Optional[str] = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        if args[:3] == ["coverage", "report", "-m"]:
+            return create_failure_result(operation_id, stderr="terminal report failed")
+        return create_success_result(operation_id, stdout="ok")
+
+
+# ---------------- Shared helpers for coverage tests ----------------
+
+
+def create_sample_source_file(root_path: Path) -> Path:
+    source_dir = root_path / "src" / "ml_playground" / "tools"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    sample_file = source_dir / "sample_module.py"
+    sample_file.write_text("value = 0", encoding="utf-8")
+    return sample_file
+
+
+def write_manifest(root_path: Path, fingerprint: str) -> Path:
+    manifest_path = root_path / ".cache" / "coverage" / "coverage_manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps({"fingerprint": fingerprint}), encoding="utf-8")
+    return manifest_path
+
+
+def write_coverage_file(root_path: Path, payload: bytes = b"data") -> Path:
+    coverage_path = root_path / ".cache" / "coverage" / "coverage.sqlite"
+    coverage_path.parent.mkdir(parents=True, exist_ok=True)
+    coverage_path.write_bytes(payload)
+    return coverage_path
+
+
 def create_success_result(
     operation_id: OperationId, stdout: str = "", stderr: str = ""
 ) -> ToolResult:

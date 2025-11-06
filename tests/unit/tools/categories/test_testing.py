@@ -265,8 +265,8 @@ def test_coverage_threshold_auto_generates_and_reports_totals(
 
     stdout_lines = result.stdout.splitlines()
     assert stdout_lines[0].startswith("Executed: coverage json -o ")
-    assert "Executed: uv run tools test coverage-test" in stdout_lines
-    assert any("Automatically ran coverage-test" in line for line in stdout_lines)
+    assert "Executed: uv run tools test coverage" in stdout_lines
+    assert any("Automatically ran coverage" in line for line in stdout_lines)
     assert _extract_tree(stdout_lines) == []
     assert "✅ SUCCESS" in result.stderr
 
@@ -432,7 +432,7 @@ def test_ensure_coverage_data_fails_when_no_artifacts_generated(
     assert isinstance(result, ToolResult)
     assert result.success is False
     assert "Coverage data not produced automatically" in result.stderr
-    assert any("Coverage-test generated no data" in note for note in notes)
+    assert any("Coverage pipeline generated no data" in note for note in notes)
 
 
 def test_coverage_report_verbose_lists_artifacts(
@@ -984,8 +984,8 @@ def test_coverage_threshold_fallback_runs_pytest_when_no_data(
     assert runner.pytest_calls
     stdout_lines = result.stdout.splitlines()
     assert stdout_lines[0].startswith("Executed: coverage json -o ")
-    assert "Executed: uv run tools test coverage-test" in stdout_lines
-    assert any("Coverage-test generated no data" in line for line in stdout_lines)
+    assert "Executed: uv run tools test coverage" in stdout_lines
+    assert any("Coverage pipeline generated no data" in line for line in stdout_lines)
     assert any(line.startswith("Executed: pytest ") for line in stdout_lines)
     assert _extract_tree(stdout_lines) == []
 
@@ -1211,7 +1211,7 @@ class TestCoverageHelpers:
         )
 
         assert result is None
-        assert any("Automatically ran coverage-test" in note for note in notes)
+        assert any("Automatically ran coverage" in note for note in notes)
         assert env["COVERAGE_FILE"] == str(coverage_file)
 
     def test_ensure_coverage_data_fails_when_combine_fails(

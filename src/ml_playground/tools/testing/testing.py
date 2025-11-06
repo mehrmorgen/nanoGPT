@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast, Literal
+from typing import Any, Dict, List, Optional, Callable, cast
 
 import tomllib
 
@@ -18,6 +17,17 @@ from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import LearningInfo, OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
+from ml_playground.tools.testing.coverage_helpers import (
+    clean_pytest_output as _clean_pytest_output_helper,
+    collect_undercovered_files as _collect_undercovered_files_helper,
+    compute_coverage_fingerprint as _compute_coverage_fingerprint_helper,
+    format_command as _format_command_helper,
+    format_tool_invocation as _format_tool_invocation_helper,
+    format_undercovered_tree as _format_undercovered_tree_helper,
+    read_coverage_manifest as _read_coverage_manifest_helper,
+    write_coverage_manifest as _write_coverage_manifest_helper,
+)
+from ml_playground.tools.testing import mutation as _mutation
 
 
 class TestingTools:
@@ -64,68 +74,21 @@ class TestingTools:
 
     def _compute_coverage_fingerprint(self) -> str:
         """Compute a fingerprint representing the current coverage-relevant sources."""
-
-        include_paths = [
-            self.root_path / "src" / "ml_playground" / "tools",
-            self.root_path / "tests",
-        ]
-
-        parts: list[str] = []
-        for base_path in include_paths:
-            if not base_path.exists():
-                continue
-            for file_path in sorted(base_path.rglob("*.py")):
-                try:
-                    stat_result = file_path.stat()
-                    hasher = hashlib.sha256()
-                    with file_path.open("rb") as handle:
-                        for chunk in iter(lambda: handle.read(8192), b""):
-                            hasher.update(chunk)
-                except OSError:
-                    continue
-                relative = file_path.relative_to(self.root_path).as_posix()
-                parts.append(
-                    f"{relative}:{stat_result.st_size}:{stat_result.st_mtime_ns}:{hasher.hexdigest()}"
-                )
-
-        payload = "\n".join(parts)
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return _compute_coverage_fingerprint_helper(self.root_path)
 
     def _read_coverage_manifest(self) -> dict[str, Any] | None:
         """Load the stored coverage fingerprint manifest if it exists."""
-
-        manifest_path = self._coverage_manifest_path()
-        if not manifest_path.exists():
-            return None
-        try:
-            with manifest_path.open(encoding="utf-8") as manifest_file:
-                return json.load(manifest_file)
-        except (OSError, json.JSONDecodeError):
-            return None
+        return _read_coverage_manifest_helper(self._coverage_manifest_path())
 
     def _write_coverage_manifest(self, *, fingerprint: str) -> None:
         """Persist the current coverage fingerprint."""
-
-        manifest_path = self._coverage_manifest_path()
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"fingerprint": fingerprint}
-        with manifest_path.open("w", encoding="utf-8") as manifest_file:
-            json.dump(payload, manifest_file)
+        _write_coverage_manifest_helper(
+            self._coverage_manifest_path(), fingerprint=fingerprint
+        )
 
     def _clean_pytest_output(self, output: str) -> str:
         """Remove pytest progress lines and xdist status messages."""
-
-        cleaned_lines: list[str] = []
-        for line in output.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("bringing up nodes"):
-                continue
-            if self._PYTEST_PROGRESS_RE.fullmatch(stripped):
-                continue
-            cleaned_lines.append(line)
-        return "\n".join(cleaned_lines)
+        return _clean_pytest_output_helper(output)
 
     def _clean_pytest_result(self, result: ToolResult) -> ToolResult:
         if result.stdout:
@@ -224,83 +187,18 @@ class TestingTools:
     def _collect_undercovered_files(
         self, coverage_data: dict[str, Any]
     ) -> list[tuple[str, float, float | None]]:
-        files = coverage_data.get("files", {})
-        undercovered: list[tuple[str, float, float | None]] = []
-        for path, info in files.items():
-            summary = info.get("summary", {})
-            percent = summary.get("percent_covered")
-            if percent is None:
-                display = summary.get("percent_covered_display")
-                if isinstance(display, str):
-                    try:
-                        percent = float(display)
-                    except ValueError:
-                        continue
-            if percent is None:
-                continue
-            percent_float = float(percent)
-            branch_percent: float | None = None
-            num_branches = summary.get("num_branches")
-            covered_branches = summary.get("covered_branches")
-            if isinstance(num_branches, (int, float)) and num_branches:
-                try:
-                    branch_percent = float(covered_branches) / float(num_branches) * 100
-                except (TypeError, ZeroDivisionError):
-                    branch_percent = None
-            if percent_float < 100.0:
-                undercovered.append((path, percent_float, branch_percent))
-        undercovered.sort(key=lambda item: (item[1], item[0]))
-        return undercovered
+        return _collect_undercovered_files_helper(coverage_data)
 
     def _format_undercovered_tree(
         self, entries: list[tuple[str, float, float | None]]
     ) -> list[str]:
-        root: dict[str, Any] = {}
-
-        for path, line_pct, branch_pct in entries:
-            parts = Path(path).parts
-            node = root
-            for part in parts[:-1]:
-                node = node.setdefault(part, {})
-            node.setdefault("__files__", []).append((parts[-1], line_pct, branch_pct))
-
-        def render(node: dict[str, Any], prefix: str) -> list[str]:
-            lines: list[str] = []
-            dir_names = sorted(name for name in node.keys() if name != "__files__")
-            files = sorted(node.get("__files__", []), key=lambda item: item[0])
-
-            # Combine directories and files to determine connector usage
-            combined: list[tuple[str, Literal["dir", "file"], Any]] = [
-                (name, "dir", node[name]) for name in dir_names
-            ]
-            combined.extend((file_info[0], "file", file_info) for file_info in files)
-
-            for idx, (name, kind, payload) in enumerate(combined):
-                is_last = idx == len(combined) - 1
-                connector = "└── " if is_last else "├── "
-                if kind == "dir":
-                    lines.append(f"{prefix}{connector}{name}/")
-                    child_prefix = prefix + ("    " if is_last else "│   ")
-                    lines.extend(render(payload, child_prefix))
-                else:
-                    _, line_pct, branch_pct = payload
-                    branch_text = (
-                        f" branch = {branch_pct:.2f}%" if branch_pct is not None else ""
-                    )
-                    lines.append(
-                        f"{prefix}{connector}{name}: line = {line_pct:.2f}%{branch_text}"
-                    )
-
-            return lines
-
-        return render(root, "")
+        return _format_undercovered_tree_helper(entries)
 
     def _format_tool_invocation(self, tool: str, args: List[str]) -> str:
-        suffix = f" {' '.join(args)}" if args else ""
-        return f"Executed: uv run tools test {tool}{suffix}"
+        return _format_tool_invocation_helper(tool, args)
 
     def _format_command(self, command: list[str]) -> str:
-        return "Executed: " + " ".join(command)
+        return _format_command_helper(command)
 
     def _ensure_coverage_data(
         self,
@@ -379,7 +277,7 @@ class TestingTools:
             exit_code=1,
             stdout="",
             stderr=(
-                "Coverage data not produced automatically. Run `tools test coverage-test` manually "
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
                 "and re-run the command."
             ),
             operation_id=operation_id,
@@ -433,7 +331,8 @@ class TestingTools:
     ) -> tuple[ToolResult | None, list[str]]:
         if executed_commands is None:
             executed_commands = []
-        coverage_tool_cmd = self._format_tool_invocation("coverage-test", args)
+        # Record that we invoked the unified coverage tool to generate data
+        coverage_tool_cmd = self._format_tool_invocation("coverage", args)
         if coverage_tool_cmd not in executed_commands:
             executed_commands.append(coverage_tool_cmd)
         coverage_result = self.coverage_test(
@@ -444,7 +343,7 @@ class TestingTools:
         if not coverage_result.success:
             return coverage_result, []
 
-        message = "Automatically ran coverage-test to generate coverage data."
+        message = "Automatically ran coverage to generate coverage data."
         if verbose:
             extra_lines: list[str] = []
             if coverage_result.stdout:
@@ -505,7 +404,7 @@ class TestingTools:
         if not result.success:
             return result, []
 
-        message = "Coverage-test generated no data; reran pytest to create coverage artifacts."
+        message = "Coverage pipeline generated no data; reran pytest to create coverage artifacts."
         if verbose:
             extra_lines: list[str] = []
             if result.stdout:
@@ -1421,333 +1320,74 @@ class TestingTools:
 
         return result
 
-    def _cosmic_ray_session_file(self) -> Path:
-        """Get the path to the Cosmic Ray session file."""
-        return Path(".cache/cosmic-ray/session.sqlite")
-
     def mutation_reset(self, args: List[str]) -> ToolResult:
-        """Remove the cached Cosmic Ray session.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-reset"
-        )
-
-        session_file = self._cosmic_ray_session_file()
-        if session_file.exists():
-            try:
-                session_file.unlink()
-                output = f"Removed Cosmic Ray session: {session_file}"
-            except Exception as exc:
-                raise ToolExecutionError(
-                    f"Failed to remove Cosmic Ray session file: {session_file}",
-                    reason=f"File deletion failed: {exc}",
-                    rationale="Session file must be removable for clean mutation testing",
-                ) from exc
-        else:
-            output = f"Cosmic Ray session file does not exist: {session_file}"
-
-        return ToolResult(
-            success=True,
-            exit_code=0,
-            stdout=output,
-            stderr="",
-            operation_id=operation_id,
-        )
+        """Remove the cached Cosmic Ray session (delegated)."""
+        return _mutation.mutation_reset(self.config, self.root_path)
 
     def mutation_summary(self, args: List[str]) -> ToolResult:
-        """Show a summary of the current Cosmic Ray configuration.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with configuration summary
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-summary"
-        )
-
-        try:
-            # Import cosmic ray functionality
-            from cosmic_ray.config import load_config
-            from cosmic_ray.modules import find_modules
-
-            config_file = Path("pyproject.toml")
-            cfg = cast(Mapping[str, Any], load_config(str(config_file)))
-
-            # Extract configuration details
-            session_cfg = cfg.get("session", {})
-            session_mapping = (
-                cast(Mapping[str, Any], session_cfg)
-                if isinstance(session_cfg, Mapping)
-                else {}
-            )
-            session_path = Path(
-                session_mapping.get("path", ".cache/cosmic-ray/session.sqlite")
-            )
-
-            test_runner_cfg = cfg.get("test-runner", {})
-            test_runner_mapping = (
-                cast(Mapping[str, Any], test_runner_cfg)
-                if isinstance(test_runner_cfg, Mapping)
-                else {}
-            )
-            test_command = test_runner_mapping.get("command", "pytest")
-
-            # Find modules to mutate
-            modules_cfg = cfg.get("modules", {})
-            modules_input: Any = (
-                modules_cfg if isinstance(modules_cfg, Mapping) else modules_cfg
-            )
-            modules = tuple(find_modules(cast(Any, modules_input)))
-
-            output_lines = [
-                f"[mutation] config: {config_file}",
-                f"[mutation] session: {session_path}",
-                f"[mutation] test command: {test_command}",
-                f"[mutation] modules to mutate: {len(modules)}",
-            ]
-
-            for module in sorted(modules)[:5]:  # Show first 5 modules
-                output_lines.append(f"[mutation]   - {module}")
-
-            if len(modules) > 5:
-                output_lines.append(f"[mutation]   ... and {len(modules) - 5} more")
-
-            return ToolResult(
-                success=True,
-                exit_code=0,
-                stdout="\\n".join(output_lines),
-                stderr="",
-                operation_id=operation_id,
-            )
-
-        except ImportError as e:
-            return ToolResult(
-                success=False,
-                exit_code=1,
-                stdout="",
-                stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
-                operation_id=operation_id,
-            )
-        except Exception as e:
-            return ToolResult(
-                success=False,
-                exit_code=1,
-                stdout="",
-                stderr=f"Failed to generate mutation summary: {e}",
-                operation_id=operation_id,
-            )
+        """Show a summary of the current Cosmic Ray configuration (delegated)."""
+        return _mutation.mutation_summary(self.config, self.root_path)
 
     def mutation_init(self, args: List[str]) -> ToolResult:
-        """Initialize the Cosmic Ray session database if needed.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-init"
+        """Initialize the Cosmic Ray session database if needed (delegated)."""
+        return _mutation.mutation_init(
+            self.config, self.root_path, self.subprocess_runner
         )
-
-        session_file = self._cosmic_ray_session_file()
-        session_file.parent.mkdir(parents=True, exist_ok=True)
-
-        # Run cosmic-ray init, allowing non-zero exit (reusing existing session)
-        result = self.subprocess_runner.run_uv_command(
-            ["cosmic-ray", "init", "pyproject.toml", str(session_file)],
-            cwd=self.root_path,
-            timeout=self.config.testing.timeout,
-            operation_id=operation_id,
-        )
-
-        # Adjust output based on result
-        if result.success:
-            output = "Cosmic Ray session initialized"
-        else:
-            output = "Cosmic Ray init skipped (reusing existing session)"
-            # Convert to success since this is expected behavior
-            result = ToolResult(
-                success=True,
-                exit_code=0,
-                stdout=output,
-                stderr=result.stderr,
-                operation_id=operation_id,
-            )
-
-        return result
 
     def mutation_exec(self, args: List[str]) -> ToolResult:
-        """Execute mutation tests with Cosmic Ray.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-exec"
-        )
-
-        session_file = self._cosmic_ray_session_file()
-        if not session_file.exists():
-            raise ToolExecutionError(
-                "Cosmic Ray session file not found",
-                reason=f"Missing session file: {session_file}",
-                rationale="Mutation execution requires initialized session database",
-            )
-
-        return self.subprocess_runner.run_uv_command(
-            ["cosmic-ray", "exec", "pyproject.toml", str(session_file)],
-            cwd=self.root_path,
-            timeout=self.config.testing.timeout,
-            operation_id=operation_id,
+        """Execute mutation tests with Cosmic Ray (delegated)."""
+        return _mutation.mutation_exec(
+            self.config, self.root_path, self.subprocess_runner
         )
 
     def mutation_report(self, args: List[str]) -> ToolResult:
-        """Generate a mutation testing report.
-
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with report details
-        """
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mutation-report"
-        )
-
-        try:
-            import sqlite3
-            from collections import Counter
-            from cosmic_ray.config import load_config
-
-            config_file = Path("pyproject.toml")
-            cfg = cast(Mapping[str, Any], load_config(str(config_file)))
-            session_cfg = cfg.get("session", {})
-            session_mapping = (
-                cast(Mapping[str, Any], session_cfg)
-                if isinstance(session_cfg, Mapping)
-                else {}
-            )
-            session_path = Path(
-                session_mapping.get("path", ".cache/cosmic-ray/session.sqlite")
-            )
-
-            if not session_path.exists():
-                return ToolResult(
-                    success=True,
-                    exit_code=0,
-                    stdout="[mutation] session file not found: no results to report",
-                    stderr="",
-                    operation_id=operation_id,
-                )
-
-            with sqlite3.connect(session_path) as conn:
-                conn.row_factory = lambda _cursor, row: row[0]
-                total = (
-                    conn.execute("SELECT COUNT(*) FROM work_results").fetchone() or 0
-                )
-                outcomes = Counter(
-                    conn.execute(
-                        "SELECT COALESCE(test_outcome, 'UNKNOWN') FROM work_results"
-                    )
-                )
-
-            output_lines = [f"[mutation] mutants processed: {total}"]
-            if outcomes:
-                for outcome, count in sorted(outcomes.items()):
-                    label = outcome.lower()
-                    output_lines.append(f"[mutation]   {label}: {count}")
-
-            return ToolResult(
-                success=True,
-                exit_code=0,
-                stdout="\\n".join(output_lines),
-                stderr="",
-                operation_id=operation_id,
-            )
-
-        except ImportError as e:
-            return ToolResult(
-                success=False,
-                exit_code=1,
-                stdout="",
-                stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
-                operation_id=operation_id,
-            )
-        except Exception as e:
-            return ToolResult(
-                success=False,
-                exit_code=1,
-                stdout="",
-                stderr=f"Failed to generate mutation report: {e}",
-                operation_id=operation_id,
-            )
+        """Generate a mutation testing report (delegated)."""
+        return _mutation.mutation_report(self.config, self.root_path)
 
     def mutation_run(self, args: List[str]) -> ToolResult:
-        """Run the full mutation testing pipeline.
+        """Run the full mutation testing pipeline, calling instance methods.
 
-        Args:
-            args: Additional arguments (ignored)
-
-        Returns:
-            ToolResult with execution details
+        This preserves subclass override points for tests while keeping
+        individual step implementations delegated to the mutation module.
         """
         operation_id = OperationId(
             namespace="tools", category=self.category, command="mutation-run"
         )
 
-        # Run mutation testing pipeline
-        steps = [
-            ("reset", self.mutation_reset),
-            ("summary", self.mutation_summary),
-            ("init", self.mutation_init),
-            ("exec", self.mutation_exec),
-            ("report", self.mutation_report),
+        steps: list[tuple[str, Callable[[], ToolResult]]] = [
+            ("reset", lambda: self.mutation_reset([])),
+            ("summary", lambda: self.mutation_summary([])),
+            ("init", lambda: self.mutation_init([])),
+            ("exec", lambda: self.mutation_exec([])),
+            ("report", lambda: self.mutation_report([])),
         ]
 
-        results = []
         combined_stdout = ""
         combined_stderr = ""
 
-        for step_name, step_func in steps:
+        for step_name, step in steps:
             try:
-                result = step_func([])
-                results.append((step_name, result))
-
+                result = step()
                 if result.stdout:
-                    combined_stdout += f"Mutation {step_name}:\\n{result.stdout}\\n"
+                    combined_stdout += f"Mutation {step_name}:\n{result.stdout}\n"
                 if result.stderr:
                     combined_stderr += (
-                        f"Mutation {step_name} warnings:\\n{result.stderr}\\n"
+                        f"Mutation {step_name} warnings:\n{result.stderr}\n"
                     )
-
                 if not result.success:
-                    # Return failure at first failed step
                     return ToolResult(
                         success=False,
                         exit_code=result.exit_code,
                         stdout=combined_stdout,
-                        stderr=combined_stderr,
+                        stderr=combined_stderr or result.stderr,
                         operation_id=operation_id,
                     )
-
-            except Exception as exc:
+            except Exception as e:  # pragma: no cover - defensive
                 return ToolResult(
                     success=False,
                     exit_code=1,
                     stdout=combined_stdout,
-                    stderr=f"Mutation {step_name} failed: {exc}",
+                    stderr=f"Mutation {step_name} failed: {e}",
                     operation_id=operation_id,
                 )
 

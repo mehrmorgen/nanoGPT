@@ -302,6 +302,30 @@ class LearningModeEngine:
                     "Mocking and stubbing for dependencies",
                 ],
             },
+            "test.coverage": {
+                "minimal_explanation": "Runs the unified coverage pipeline (generate data, build reports, and enforce thresholds)",
+                "standard_explanation": [
+                    "Executes tests under coverage to produce a coverage database",
+                    "Generates JSON and terminal reports to summarize coverage",
+                    "Enforces line and branch thresholds to guard against regressions",
+                ],
+                "comprehensive_explanation": [
+                    "The unified coverage command orchestrates data generation (coverage run + combine), reporting (json, terminal, html/xml), and threshold checks",
+                    "Line coverage measures executed lines; branch coverage measures decision paths taken",
+                    "Under-covered files are listed to guide targeted test improvements",
+                    "Thresholds act as a quality gate and should be realistic but progressively improved",
+                ],
+                "best_practices": [
+                    "Use coverage results to guide meaningful tests rather than chasing 100%",
+                    "Track both line and branch coverage for balanced insight",
+                    "Investigate persistent under-covered files and add tests where it matters",
+                ],
+                "related_concepts": [
+                    "Line vs branch coverage",
+                    "Quality gates",
+                    "Mutation testing",
+                ],
+            },
             "test.integration": {
                 "minimal_explanation": "Tests how different components work together",
                 "standard_explanation": [
