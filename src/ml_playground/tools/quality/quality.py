@@ -70,11 +70,14 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="lint",
                 context="Analyzing code for style violations and potential bugs",
                 category=self.category,
-                executed_commands=[" ".join(ruff_args)],
+                executed_commands=[
+                    f"{prefix} {' '.join(ruff_args)}" if prefix else " ".join(ruff_args)
+                ],
             )
 
         return result
@@ -147,13 +150,22 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="format",
                 context="Automatically formatting code to match style standards",
                 category=self.category,
                 executed_commands=[
-                    f"ruff check --fix . {' '.join(args)}".strip(),
-                    f"ruff format . {' '.join(args)}".strip(),
+                    (
+                        f"{prefix} ruff check --fix . {' '.join(args)}".strip()
+                        if prefix
+                        else f"ruff check --fix . {' '.join(args)}".strip()
+                    ),
+                    (
+                        f"{prefix} ruff format . {' '.join(args)}".strip()
+                        if prefix
+                        else f"ruff format . {' '.join(args)}".strip()
+                    ),
                 ],
             )
 
@@ -207,11 +219,16 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="deadcode",
                 context="Scanning for unused code that can be safely removed",
                 category=self.category,
-                executed_commands=[" ".join(vulture_args)],
+                executed_commands=[
+                    f"{prefix} {' '.join(vulture_args)}"
+                    if prefix
+                    else " ".join(vulture_args)
+                ],
             )
 
         return result
@@ -246,11 +263,16 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="basedpyright",
                 context="Performing static type checking using BasedPyright",
                 category=self.category,
-                executed_commands=[" ".join(basedpyright_args)],
+                executed_commands=[
+                    f"{prefix} {' '.join(basedpyright_args)}"
+                    if prefix
+                    else " ".join(basedpyright_args)
+                ],
             )
 
         return result
@@ -285,11 +307,14 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="mypy",
                 context="Performing static type checking using MyPy",
                 category=self.category,
-                executed_commands=[" ".join(mypy_args)],
+                executed_commands=[
+                    f"{prefix} {' '.join(mypy_args)}" if prefix else " ".join(mypy_args)
+                ],
             )
 
         return result
@@ -354,13 +379,22 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="typecheck",
                 context="Running multiple type checkers for comprehensive analysis",
                 category=self.category,
                 executed_commands=[
-                    f"basedpyright {self.pkg_path} {' '.join(args)}".strip(),
-                    f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip(),
+                    (
+                        f"{prefix} basedpyright {self.pkg_path} {' '.join(args)}".strip()
+                        if prefix
+                        else f"basedpyright {self.pkg_path} {' '.join(args)}".strip()
+                    ),
+                    (
+                        f"{prefix} mypy --incremental {self.pkg_path} {' '.join(args)}".strip()
+                        if prefix
+                        else f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip()
+                    ),
                 ],
             )
 
@@ -433,15 +467,32 @@ class QualityTools:
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            prefix = self.config.display_command_prefix
             result.learning_info = self.learning_engine.explain_command(
                 command="all",
                 context="Running all quality checks for comprehensive code analysis",
                 category=self.category,
                 executed_commands=[
-                    f"ruff check . {' '.join(args)}".strip(),
-                    f"basedpyright {self.pkg_path} {' '.join(args)}".strip(),
-                    f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip(),
-                    f"vulture {self.pkg_path} --min-confidence 90 {' '.join(args)}".strip(),
+                    (
+                        f"{prefix} ruff check . {' '.join(args)}".strip()
+                        if prefix
+                        else f"ruff check . {' '.join(args)}".strip()
+                    ),
+                    (
+                        f"{prefix} basedpyright {self.pkg_path} {' '.join(args)}".strip()
+                        if prefix
+                        else f"basedpyright {self.pkg_path} {' '.join(args)}".strip()
+                    ),
+                    (
+                        f"{prefix} mypy --incremental {self.pkg_path} {' '.join(args)}".strip()
+                        if prefix
+                        else f"mypy --incremental {self.pkg_path} {' '.join(args)}".strip()
+                    ),
+                    (
+                        f"{prefix} vulture {self.pkg_path} --min-confidence 90 {' '.join(args)}".strip()
+                        if prefix
+                        else f"vulture {self.pkg_path} --min-confidence 90 {' '.join(args)}".strip()
+                    ),
                 ],
             )
 

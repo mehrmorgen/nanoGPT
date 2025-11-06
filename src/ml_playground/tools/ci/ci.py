@@ -84,12 +84,14 @@ class CITools:
         )
 
         status = "PASS" if precommit_result.success else "FAIL"
+        prefix = self.config.display_command_prefix
+        shown_cmd = (f"{prefix} " if prefix else "") + " ".join(precommit_cmd)
         summary_lines = [
             "Quality Gate Summary:",
             f"- pre-commit: {status}",
             "",
             "Command executed:",
-            "  • " + " ".join(precommit_cmd),
+            "  • " + shown_cmd,
         ]
         stdout = "\n".join(summary_lines)
         if precommit_result.stdout:
