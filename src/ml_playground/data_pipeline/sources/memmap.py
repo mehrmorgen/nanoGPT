@@ -20,6 +20,13 @@ class MemmapReader:
     arr: npt.NDArray[Any]
     length: int
 
+    def close(self) -> None:
+        """Explicitly close the memmap array and release the file handle."""
+        if self.arr is not None:
+            self.arr.flush()
+            del self.arr
+            self.arr = None
+
     @classmethod
     def open(cls, path: Path, *, dtype: np.dtype[Any]) -> "MemmapReader":
         arr: npt.NDArray[Any] = np.memmap(path, dtype=dtype, mode="r")

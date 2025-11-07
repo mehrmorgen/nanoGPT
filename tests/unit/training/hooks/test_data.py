@@ -75,12 +75,15 @@ def test_initialize_batches_creates_simple_batches() -> None:
 
         batches = initialize_batches(cfg, shared)
 
-        # Should return a SimpleBatches instance
-        assert batches is not None
-        # The dataset_dir should be used from shared config
-        assert hasattr(batches, "get_batch")  # Should have the get_batch method
+        try:
+            # Should return a SimpleBatches instance
+            assert batches is not None
+            # The dataset_dir should be used from shared config
+            assert hasattr(batches, "get_batch")  # Should have the get_batch method
 
-        # Should be able to get a batch
-        x, y = batches.get_batch("train")
-        assert x.shape == (2, 4)  # batch_size=2, block_size=4
-        assert y.shape == (2, 4)
+            # Should be able to get a batch
+            x, y = batches.get_batch("train")
+            assert x.shape == (2, 4)  # batch_size=2, block_size=4
+            assert y.shape == (2, 4)
+        finally:
+            batches.close()
