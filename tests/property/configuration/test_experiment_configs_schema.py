@@ -24,6 +24,7 @@ ALL_CONFIG_PATHS = _discover_experiment_configs()
     ids=[p.parent.name for p in ALL_CONFIG_PATHS],
 )
 def test_experiment_config_validates(config_path: Path) -> None:
+    """Test experiment config validates."""
     experiment_name = config_path.parent.name
     cfg = load_full_experiment_config(
         config_path=config_path,

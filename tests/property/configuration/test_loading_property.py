@@ -120,6 +120,7 @@ train = "not-a-table"
 
 
 def test_load_sample_config_requires_sample_section(tmp_path: Path) -> None:
+    """Test load sample config requires sample section."""
     config_path = tmp_path / "config.toml"
     config_path.write_text("", encoding="utf-8")
 
@@ -128,6 +129,7 @@ def test_load_sample_config_requires_sample_section(tmp_path: Path) -> None:
 
 
 def test_load_train_config_merges_defaults(tmp_path: Path) -> None:
+    """Test load train config merges defaults."""
     defaults_path = _write_default_config(tmp_path)
     config_path = tmp_path / "override.toml"
     config_path.write_text(

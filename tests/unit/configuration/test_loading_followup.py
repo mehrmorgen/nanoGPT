@@ -23,11 +23,7 @@ def test_list_experiments_with_config_missing_root(tmp_path: Path) -> None:
 
 
 def test_get_default_config_path_with_installed_project_root() -> None:
-    """Explicit project_root equal to package parent should use package defaults.
-
-    This simulates running from an installed package where the project root is the
-    parent of the package directory.
-    """
+    """Test project_root pointing to package parent uses package defaults."""
     package_root = Path(config_loading.__file__).resolve().parent.parent
     project_root = package_root.parent
 
@@ -41,6 +37,7 @@ def test_get_default_config_path_with_installed_project_root() -> None:
 
 
 def test_load_sample_config_honors_default_config_path(tmp_path: Path) -> None:
+    """Test load sample config honors default config path."""
     # default config providing the required sample defaults
     default_path = (
         tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
@@ -70,6 +67,7 @@ start = "\\n"
 
 
 def test_load_prepare_config_honors_default_config_path(tmp_path: Path) -> None:
+    """Test load prepare config honors default config path."""
     default_path = (
         tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 
 def merge_mappings(
@@ -24,9 +24,11 @@ def merge_mappings(
     for key, override_value in override.items():
         base_value = base.get(key)
         if isinstance(base_value, Mapping) and isinstance(override_value, Mapping):
+            base_mapping = cast(Mapping[str, Any], base_value)
+            override_mapping = cast(Mapping[str, Any], override_value)
             merged[key] = merge_mappings(
-                base_value,
-                override_value,
+                base_mapping,
+                override_mapping,
                 override_only=override_only,
             )
         else:
