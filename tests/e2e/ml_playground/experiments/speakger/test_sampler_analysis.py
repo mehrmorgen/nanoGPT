@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import torch
 import pytest
@@ -155,7 +156,8 @@ def test_sampler_writes_json_stats_and_prints_analysis(
     # JSON contents minimal checks
     data = json.loads(jsons[0].read_text(encoding="utf-8"))
     assert data["dataset"] == "speakger"
-    assert data["best_val_loss"] == pytest.approx(3.4015)
+    best_val_loss = cast(float, data["best_val_loss"])
+    assert math.isclose(best_val_loss, 3.4015, rel_tol=1e-6)
     assert "analysis" in data
     a = data["analysis"]
     # Sections present
