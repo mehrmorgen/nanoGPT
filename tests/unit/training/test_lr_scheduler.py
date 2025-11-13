@@ -1,30 +1,51 @@
 from __future__ import annotations
 
-import pytest
+import math
 
 from ml_playground.training.optim.lr_scheduler import get_lr
 
 
+def _assert_close(
+    actual: float,
+    expected: float,
+    *,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 0.0,
+) -> None:
+    assert math.isclose(actual, expected, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
 def test_warmup_phase_linear_scaling() -> None:
+    """Test warmup phase linear scaling."""
     # Warmup: linear from 0 -> base_lr over `warmup` steps
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
     decay_iters = 110
 
-    assert get_lr(
-        0, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(0.0)
-    assert get_lr(
-        5, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(0.5)
+    _assert_close(
+        get_lr(
+            0, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        0.0,
+    )
+    _assert_close(
+        get_lr(
+            5, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        0.5,
+    )
     # At warmup boundary, cosine decay starts; ratio becomes 0 -> full base_lr
-    assert get_lr(
-        10, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(1.0)
+    _assert_close(
+        get_lr(
+            10, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        1.0,
+    )
 
 
 def test_cosine_decay_midpoint() -> None:
+    """Test cosine decay midpoint."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -32,28 +53,39 @@ def test_cosine_decay_midpoint() -> None:
     # Midpoint of decay (ratio=0.5) -> coeff=0.5, so halfway between base and min
     it = 60  # ratio = (60-10)/(110-10) = 0.5
     expected = min_lr + 0.5 * (base_lr - min_lr)  # 0.1 + 0.5*0.9 = 0.55
-    assert get_lr(
-        it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(expected)
+    _assert_close(
+        get_lr(
+            it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        expected,
+    )
 
 
 def test_end_of_decay_and_beyond() -> None:
+    """Test end of decay and beyond."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
     decay_iters = 110
 
     # At decay_iters we should be at min_lr (ratio=1 -> coeff=0)
-    assert get_lr(
-        110, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(min_lr)
+    _assert_close(
+        get_lr(
+            110, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        min_lr,
+    )
     # Beyond decay_iters we clamp to min_lr
-    assert get_lr(
-        200, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(min_lr)
+    _assert_close(
+        get_lr(
+            200, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        min_lr,
+    )
 
 
 def test_cosine_decay_quarter_and_three_quarters() -> None:
+    """Test cosine decay quarter and three quarters."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -68,32 +100,55 @@ def test_cosine_decay_quarter_and_three_quarters() -> None:
 
     coeff_q = 0.5 * (1.0 + _math.cos(_math.pi * 0.25))
     expected_q = min_lr + coeff_q * (base_lr - min_lr)
-    assert get_lr(
-        it_q, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(expected_q, rel=1e-6, abs=1e-9)
+    _assert_close(
+        get_lr(
+            it_q, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        expected_q,
+        rel_tol=1e-6,
+        abs_tol=1e-9,
+    )
 
     # Three-quarters (ratio=0.75)
     it_tq = 85  # (85-10)/(110-10) = 75/100 = 0.75
     coeff_tq = 0.5 * (1.0 + _math.cos(_math.pi * 0.75))
     expected_tq = min_lr + coeff_tq * (base_lr - min_lr)
-    assert get_lr(
-        it_tq, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(expected_tq, rel=1e-6, abs=1e-9)
+    _assert_close(
+        get_lr(
+            it_tq,
+            warmup=warmup,
+            decay_iters=decay_iters,
+            min_lr=min_lr,
+            base_lr=base_lr,
+        ),
+        expected_tq,
+        rel_tol=1e-6,
+        abs_tol=1e-9,
+    )
 
 
 def test_warmup_additional_points() -> None:
+    """Test warmup additional points."""
     base_lr = 1.0
     min_lr = 0.0
     warmup = 8
     decay_iters = 108
     # Additional warmup checks to catch numeric literal mutations
     for it in (1, 2, 3, 7):
-        assert get_lr(
-            it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-        ) == pytest.approx(base_lr * it / warmup)
+        _assert_close(
+            get_lr(
+                it,
+                warmup=warmup,
+                decay_iters=decay_iters,
+                min_lr=min_lr,
+                base_lr=base_lr,
+            ),
+            base_lr * it / warmup,
+        )
 
 
 def test_cosine_shape_properties_many_points() -> None:
+    """Test cosine shape properties many points."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -140,7 +195,7 @@ def test_cosine_shape_properties_many_points() -> None:
         lr = get_lr(
             it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
         )
-        assert lr == pytest.approx(expected, rel=1e-6, abs=1e-9)
+        _assert_close(lr, expected, rel_tol=1e-6, abs_tol=1e-9)
 
     # Cosine symmetry: lr(r) + lr(1-r) == base_lr + min_lr
     for r in [0.2, 0.3, 0.4]:
@@ -152,7 +207,7 @@ def test_cosine_shape_properties_many_points() -> None:
         lr2 = get_lr(
             it2, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
         )
-        assert (lr1 + lr2) == pytest.approx(base_lr + min_lr, rel=1e-6, abs=1e-9)
+        _assert_close(lr1 + lr2, base_lr + min_lr, rel_tol=1e-6, abs_tol=1e-9)
 
     # Dense ratio sweep to validate cosine constants are correct
     # Map ratios to specific it values: it = warmup + r*(decay_iters - warmup)
@@ -163,24 +218,33 @@ def test_cosine_shape_properties_many_points() -> None:
         lr = get_lr(
             it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
         )
-        assert lr == pytest.approx(expected, rel=1e-6, abs=1e-9)
+        _assert_close(lr, expected, rel_tol=1e-6, abs_tol=1e-9)
 
 
 def test_nontrivial_params_precision() -> None:
-    # Use nontrivial parameters and validate a couple of points with approx
+    """Test nontrivial params precision."""
+    # Use nontrivial parameters and validate a couple of points with our close helper
     base_lr = 2.5
     min_lr = 0.25
     warmup = 8
     decay_iters = 108
 
     # Warmup scale
-    assert get_lr(
-        4, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(base_lr * 4 / warmup)
+    _assert_close(
+        get_lr(
+            4, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        base_lr * 4 / warmup,
+    )
 
     # Some interior point
     it = 58  # ratio = (58-8)/(108-8) = 50/100 = 0.5 -> coeff=0.5
     expected = min_lr + 0.5 * (base_lr - min_lr)
-    assert get_lr(
-        it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
-    ) == pytest.approx(expected, rel=1e-6, abs=1e-9)
+    _assert_close(
+        get_lr(
+            it, warmup=warmup, decay_iters=decay_iters, min_lr=min_lr, base_lr=base_lr
+        ),
+        expected,
+        rel_tol=1e-6,
+        abs_tol=1e-9,
+    )
