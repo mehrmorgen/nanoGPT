@@ -47,6 +47,7 @@ class _StubTokenizer:
 
 
 def test_logger_like_accepts_structural_loggers() -> None:
+    """Test logger like accepts structural loggers."""
     logger = _CompliantLogger()
     assert isinstance(logger, LoggerLike)
 
@@ -56,6 +57,7 @@ def test_logger_like_accepts_structural_loggers() -> None:
 
 
 def test_logger_like_rejects_missing_methods() -> None:
+    """Test logger like rejects missing methods."""
     class MissingWarnLogger:
         def debug(self, msg: str, *args: object, **kwargs: object) -> None:
             pass
@@ -70,6 +72,7 @@ def test_logger_like_rejects_missing_methods() -> None:
 
 
 def test_logger_like_protocol_placeholders_are_noops() -> None:
+    """Test logger like protocol placeholders are noops."""
     sentinel: Any = object()
     primitive = cast(LoggerLike, sentinel)
     assert getattr(LoggerLike, "debug")(primitive, "msg") is None
@@ -84,6 +87,7 @@ class _RuntimeTokenizer(Tokenizer, Protocol):
 
 
 def test_tokenizer_protocol_accepts_full_implementation() -> None:
+    """Test tokenizer protocol accepts full implementation."""
     tokenizer = _StubTokenizer()
     assert isinstance(tokenizer, _RuntimeTokenizer)
     assert tokenizer.name == "stub"
@@ -93,6 +97,7 @@ def test_tokenizer_protocol_accepts_full_implementation() -> None:
 
 
 def test_tokenizer_protocol_rejects_incomplete_implementation() -> None:
+    """Test tokenizer protocol rejects incomplete implementation."""
     class MissingDecodeTokenizer:
         @property
         def name(self) -> str:
@@ -113,6 +118,7 @@ def test_tokenizer_protocol_rejects_incomplete_implementation() -> None:
 
 
 def test_tokenizer_protocol_placeholders_execute_without_error() -> None:
+    """Test tokenizer protocol placeholders execute without error."""
     tokenizer = _StubTokenizer()
 
     assert _RuntimeTokenizer.name.fget(tokenizer) is None  # type: ignore[attr-defined]

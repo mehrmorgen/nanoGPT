@@ -31,6 +31,7 @@ class _RaisingPath(Path):
 
 
 def test_snapshot_file_states_handles_oserror(tmp_path: Path) -> None:
+    """Test snapshot file states handles oserror."""
     underlying = tmp_path / "sentinel"
     sentinel = _RaisingPath(underlying)
     snapshot = snapshot_file_states([cast(Path, sentinel)])
@@ -38,6 +39,7 @@ def test_snapshot_file_states_handles_oserror(tmp_path: Path) -> None:
 
 
 def test_diff_file_states_tracks_created_updated_and_skipped(tmp_path: Path) -> None:
+    """Test diff file states tracks created updated and skipped."""
     created_path = tmp_path / "created.bin"
     updated_path = tmp_path / "updated.bin"
     removed_path = tmp_path / "removed.bin"
@@ -67,6 +69,7 @@ def test_diff_file_states_tracks_created_updated_and_skipped(tmp_path: Path) -> 
 
 
 def test_snapshot_file_states_handles_disappearing_path(tmp_path: Path) -> None:
+    """Test snapshot file states handles disappearing path."""
     base = tmp_path / "vanish"
 
     class VanishingPath(type(base)):  # type: ignore[misc]
@@ -89,3 +92,74 @@ def test_snapshot_file_states_handles_disappearing_path(tmp_path: Path) -> None:
     ghost = VanishingPath(base)
     states = snapshot_file_states([ghost])
     assert states[ghost] == (False, 0.0, 0)
+
+
+def test_diff_file_states_detects_updated_mtime(tmp_path: Path) -> None:
+    """diff_file_states should detect files with changed mtime."""
+    import time
+
+    path = tmp_path / "file.txt"
+    path.write_text("content")
+
+    before = snapshot_file_states([path])
+
+    # Wait and modify file to change mtime
+    time.sleep(0.01)
+    path.write_text("new content")
+
+    created, updated, skipped = diff_file_states([path], before)
+
+    assert path in updated
+    assert path not in created
+    assert path not in skipped
+
+
+def test_diff_file_states_detects_updated_size(tmp_path: Path) -> None:
+    """diff_file_states should detect files with changed size."""
+    import time
+
+    path = tmp_path / "file.txt"
+    path.write_text("x")
+
+    before = snapshot_file_states([path])
+
+    # Wait and modify file to change size
+    time.sleep(0.01)
+    path.write_text("much longer content")
+
+    created, updated, skipped = diff_file_states([path], before)
+
+    assert path in updated
+    assert path not in created
+    assert path not in skipped
+
+
+def test_diff_file_states_detects_deleted_file(tmp_path: Path) -> None:
+    """diff_file_states should detect deleted files."""
+    path = tmp_path / "file.txt"
+    path.write_text("content")
+
+    before = snapshot_file_states([path])
+
+    path.unlink()
+
+    created, updated, skipped = diff_file_states([path], before)
+
+    assert path not in created
+    assert path not in updated
+    assert path not in skipped
+
+
+def test_diff_file_states_unchanged_file(tmp_path: Path) -> None:
+    """diff_file_states should detect unchanged files."""
+    path = tmp_path / "file.txt"
+    path.write_text("content")
+
+    before = snapshot_file_states([path])
+
+    # Don't modify, just check again
+    created, updated, skipped = diff_file_states([path], before)
+
+    assert path not in created
+    assert path not in updated
+    assert path in skipped

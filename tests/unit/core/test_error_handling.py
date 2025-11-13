@@ -30,6 +30,7 @@ from ml_playground.core.error_handling import (
 
 
 def test_ml_playground_error_reports_reason_and_rationale() -> None:
+    """Test ml playground error reports reason and rationale."""
     err = MLPlaygroundError(
         "Boom",
         reason="Demonstration failure",
@@ -45,6 +46,7 @@ def test_ml_playground_error_reports_reason_and_rationale() -> None:
 
 
 def test_setup_logging_idempotent_and_level() -> None:
+    """Test setup logging idempotent and level."""
     name = "ml_pg_test_logger"
     # capture log output
     stream = io.StringIO()
@@ -70,6 +72,7 @@ def test_setup_logging_idempotent_and_level() -> None:
 
 
 def test_safe_call_success_and_defaults() -> None:
+    """Test safe call success and defaults."""
     def ok(x: int) -> int:
         return x + 1
 
@@ -84,6 +87,7 @@ def test_safe_call_success_and_defaults() -> None:
 
 
 def test_safe_file_operation_wraps_ioerror() -> None:
+    """Test safe file operation wraps ioerror."""
     def bad_io() -> NoReturn:
         raise OSError("disk full")
 
@@ -95,6 +99,7 @@ def test_safe_file_operation_wraps_ioerror() -> None:
 
 
 def test_validate_file_and_directory(tmp_path: Path) -> None:
+    """Test validate file and directory."""
     f = tmp_path / "file.txt"
     d = tmp_path / "dir"
     f.write_text("x", encoding="utf-8")
@@ -124,6 +129,7 @@ def test_validate_file_and_directory(tmp_path: Path) -> None:
 
 
 def test_validate_config_value() -> None:
+    """Test validate config value."""
     with pytest.raises(ValidationError) as missing:
         validate_config_value(None, "x", int, required=True)
     assert missing.value.reason == "Configuration entry absent"
@@ -137,6 +143,7 @@ def test_validate_config_value() -> None:
 
 
 def test_format_error_message() -> None:
+    """Test format error message."""
     msg = format_error_message(ValueError("nope"))
     assert "nope" in msg
     msg2 = format_error_message(ValueError("nope"), context="ctx")
@@ -144,6 +151,7 @@ def test_format_error_message() -> None:
 
 
 def test_progress_reporter_percentages(caplog: pytest.LogCaptureFixture) -> None:
+    """Test progress reporter percentages."""
     caplog.set_level(logging.INFO)
     logger = logging.getLogger("ml_pg_progress_percent")
     pr = ProgressReporter(logger=logger, total_steps=5)
@@ -233,6 +241,7 @@ def test_log_helpers_no_details(caplog: pytest.LogCaptureFixture) -> None:
 def test_progress_reporter_clamps_and_log_helpers(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Test progress reporter clamps and log helpers."""
     caplog.set_level(logging.INFO)
     logger = logging.getLogger("ml_pg_progress_clamp")
     pr = ProgressReporter(logger=logger, total_steps=4)
@@ -254,6 +263,7 @@ def test_progress_reporter_clamps_and_log_helpers(
 
 
 def test_detailed_exception_protocol_executes() -> None:
+    """Test detailed exception protocol executes."""
     message_getter = DetailedException.__dict__["message"].fget  # type: ignore[index]
     assert message_getter is not None
     reason_getter = DetailedException.__dict__["reason"].fget  # type: ignore[index]
@@ -272,6 +282,7 @@ def test_detailed_exception_protocol_executes() -> None:
 
 
 def test_handle_exception_logs_non_keyboard(tmp_path: Path) -> None:
+    """Test handle exception logs non keyboard."""
     stream = io.StringIO()
     logger = logging.getLogger("ml_pg_test_non_kb")
     logger.handlers.clear()
@@ -289,6 +300,7 @@ def test_handle_exception_logs_non_keyboard(tmp_path: Path) -> None:
 def test_progress_reporter_message_without_total(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Test progress reporter message without total."""
     caplog.set_level(logging.INFO)
     logger = logging.getLogger("ml_pg_progress_message")
     pr = ProgressReporter(logger=logger)

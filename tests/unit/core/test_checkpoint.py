@@ -54,6 +54,7 @@ def _noop_add_safe_globals(_: Iterable[Any]) -> None:
 def test_checkpoint_manager_rotation_and_latest(
     tmp_path: Path, ckpt_obj: Checkpoint, out_dir: Path
 ) -> None:
+    """Test checkpoint manager rotation and latest."""
     out = out_dir
     mgr = CheckpointManager(out, atomic=False, keep_last=2, keep_best=1)
 
@@ -81,6 +82,7 @@ def test_checkpoint_manager_rotation_and_latest(
 def test_checkpoint_manager_best_rotation_and_sidecar_cleanup(
     tmp_path: Path, ckpt_obj: Checkpoint, out_dir: Path
 ) -> None:
+    """Test checkpoint manager best rotation and sidecar cleanup."""
     out = out_dir
     logger = logging.getLogger("test")
     mgr = CheckpointManager(out, atomic=False, keep_last=0, keep_best=1)
@@ -151,6 +153,7 @@ def test_checkpoint_manager_best_rotation_and_sidecar_cleanup(
 
 
 def test_discovery_and_errors_in_init(tmp_path: Path) -> None:
+    """Test discovery and errors in init."""
     out = tmp_path / "out"
     out.mkdir()
 
@@ -163,6 +166,7 @@ def test_discovery_and_errors_in_init(tmp_path: Path) -> None:
 
 
 def test_load_latest_errors_and_type_validation(tmp_path: Path) -> None:
+    """Test load latest errors and type validation."""
     out = tmp_path / "out"
     out.mkdir()
     mgr = CheckpointManager(out, atomic=False)
@@ -181,6 +185,7 @@ def test_load_latest_errors_and_type_validation(tmp_path: Path) -> None:
 
 
 def test_keep_policy_validation() -> None:
+    """Test keep policy validation."""
     with pytest.raises(CheckpointError):
         _ = CheckpointManager(Path("/tmp/does-not-matter"), keep_last=-1)
     with pytest.raises(CheckpointError):
@@ -193,6 +198,7 @@ def test_keep_policy_validation() -> None:
 
 
 def test_checkpoint_from_payload_success(ckpt_obj: Checkpoint) -> None:
+    """Test checkpoint from payload success."""
     payload = ckpt_obj.to_dict()
     restored = Checkpoint.from_payload(payload)
     assert restored.iter_num == ckpt_obj.iter_num
@@ -201,6 +207,7 @@ def test_checkpoint_from_payload_success(ckpt_obj: Checkpoint) -> None:
 
 
 def test_checkpoint_from_payload_missing_key(ckpt_obj: Checkpoint) -> None:
+    """Test checkpoint from payload missing key."""
     payload = ckpt_obj.to_dict()
     payload.pop("model")  # type: ignore[arg-type]
     with pytest.raises(CheckpointError, match="missing required fields: model"):
@@ -208,6 +215,7 @@ def test_checkpoint_from_payload_missing_key(ckpt_obj: Checkpoint) -> None:
 
 
 def test_checkpoint_from_payload_wrong_type(ckpt_obj: Checkpoint) -> None:
+    """Test checkpoint from payload wrong type."""
     payload = ckpt_obj.to_dict()
     payload["iter_num"] = "oops"  # type: ignore[assignment]
     with pytest.raises(CheckpointError, match="iter_num"):
@@ -247,6 +255,7 @@ def test_checkpoint_from_payload_handles_optional_ema(ckpt_obj: Checkpoint) -> N
 
 
 def test_save_checkpoint_atomic_and_readback(tmp_path: Path) -> None:
+    """Test save checkpoint atomic and readback."""
     # Atomic save via CheckpointManager should create only final file, no lingering .tmp
     mgr = CheckpointManager(out_dir=tmp_path, atomic=True, keep_last=1, keep_best=0)
     ckpt = Checkpoint(
@@ -279,6 +288,7 @@ def test_save_checkpoint_atomic_and_readback(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_non_atomic(tmp_path: Path) -> None:
+    """Test save checkpoint non atomic."""
     mgr = CheckpointManager(out_dir=tmp_path, atomic=False, keep_last=1, keep_best=0)
     ckpt = Checkpoint(
         model={"w": torch.tensor([3, 4])},
