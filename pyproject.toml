@@ -167,19 +167,23 @@ cache_dir = ".cache/mypy"
 
 [tool.basedpyright]
 pythonVersion = "3.13"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 include = [
     "src/ml_playground",
     "tests",
 ]
 exclude = [
     "src/ml_playground/tools",
-    "src/ml_playground/experiments/speakger",
-    "src/ml_playground/experiments/bundestag_char",
     "tests/unit/tools",
     "tests/property/tools",
-    "tests/acceptance",
-    "tests/e2e",
+    "tests/acceptance/tools",
+     "src/ml_playground/runtime",
+    "tests/unit/runtime",
+    "tests/property/runtime",
+    "tests/acceptance/runtime",
+    "tests/unit/cli",
+    "tests/property/cli",
+    "tests/acceptance/cli",
 ]
 stubPath = "typings"
 
@@ -276,7 +280,7 @@ precision = 2
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
 line_threshold = 90.0
-branch_threshold = 70.0
+branch_threshold = 83.0
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"
