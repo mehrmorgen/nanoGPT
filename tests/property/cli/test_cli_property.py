@@ -87,6 +87,7 @@ def test_run_prepare_impl_executes_pipeline(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test run prepare impl executes pipeline."""
     shared = shared_config_factory(tmp_path)
     raw_file = tmp_path / "raw.txt"
     raw_file.write_text("hello world", encoding="utf-8")
@@ -100,6 +101,7 @@ def test_run_prepare_impl_executes_pipeline(
 
 
 def test_log_dir_reports_states(tmp_path: Path) -> None:
+    """Test log dir reports states."""
     class ListLogger:
         def __init__(self) -> None:
             self.infos: list[str] = []
@@ -130,6 +132,7 @@ def test_log_dir_reports_states(tmp_path: Path) -> None:
 def test_log_command_status_handles_missing_directory(
     tmp_path: Path, shared_config_factory: Callable[[Path], SharedConfig]
 ) -> None:
+    """Test log command status handles missing directory."""
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -149,6 +152,7 @@ def test_log_command_status_handles_missing_path(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test log command status handles missing path."""
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -165,6 +169,7 @@ def test_log_command_status_handles_missing_path(
 
 
 def test_log_dir_ignores_non_path() -> None:
+    """Test log dir ignores non path."""
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -183,6 +188,7 @@ def test_log_command_status_swallows_exceptions(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test log command status swallows exceptions."""
     shared = shared_config_factory(tmp_path)
 
     class ListLogger:
@@ -208,6 +214,7 @@ def test_run_prepare_executes_pipeline(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test run prepare executes pipeline."""
     shared = shared_config_factory(tmp_path)
     calls: dict[str, Any] = {}
 
@@ -232,6 +239,7 @@ def test_run_train_impl_requires_runtime(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test run train impl requires runtime."""
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         TrainerConfig,
@@ -246,6 +254,7 @@ def test_run_sample_impl_requires_runtime(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test run sample impl requires runtime."""
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         SamplerConfig,
@@ -260,6 +269,7 @@ def test_run_train_requires_runtime(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test run train requires runtime."""
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         TrainerConfig,
@@ -277,6 +287,7 @@ def test_run_train_executes_flow(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test run train executes flow."""
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []
     trainer_called: dict[str, Any] = {}
@@ -357,6 +368,7 @@ def test_run_train_logs_status(
     override_attr: Callable[[object, str, object], ContextManager[None]],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Test run train logs status."""
     shared = shared_config_factory(tmp_path)
 
     class FakeTrainer:
@@ -427,6 +439,7 @@ def test_run_sample_requires_runtime(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test run sample requires runtime."""
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         SamplerConfig,
@@ -444,6 +457,7 @@ def test_run_sample_executes_flow(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test run sample executes flow."""
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []
     sampler_called: dict[str, Any] = {}
@@ -519,6 +533,7 @@ def test_run_sample_executes_flow(
 
 
 def test_global_options_handles_ensure_object_errors() -> None:
+    """Test global options handles ensure object errors."""
     class BadContext:
         def __init__(self) -> None:
             self.obj: dict[str, object] | None = None
@@ -533,6 +548,7 @@ def test_global_options_handles_ensure_object_errors() -> None:
 
 
 def test_run_or_exit_handles_runtime_error() -> None:
+    """Test run or exit handles runtime error."""
     def _raise() -> None:
         raise RuntimeError("boom")
 
@@ -545,6 +561,7 @@ def test_run_or_exit_handles_runtime_error() -> None:
 def test_global_device_setup_handles_runtime_error(
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test global device setup handles runtime error."""
     class BadTorch:
         def manual_seed(self, seed: int) -> None:  # pragma: no cover - invoked
             raise RuntimeError("fail")
@@ -557,6 +574,7 @@ def test_global_device_setup_handles_runtime_error(
 def test_global_device_setup_sets_cuda_state(
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test global device setup sets cuda state."""
     seed_calls: list[tuple[str, int]] = []
 
     fake_torch = SimpleNamespace(
@@ -585,6 +603,7 @@ def test_run_train_impl_invokes_trainer(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test run train impl invokes trainer."""
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []
     trainer_called: dict[str, Any] = {}
@@ -634,6 +653,7 @@ def test_run_sample_impl_invokes_sampler(
     shared_config_factory: Callable[[Path], SharedConfig],
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
+    """Test run sample impl invokes sampler."""
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []
     sampler_called: dict[str, Any] = {}
