@@ -19,6 +19,7 @@ from ml_playground.data_pipeline.transforms.tokenization import (
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.core.file_state import FileState
 
 
 @dataclass(frozen=True)
@@ -153,7 +154,7 @@ class _PreparationPipeline:
             self._shared.dataset_dir / "meta.pkl",
         ]
 
-    def output_snapshot(self, paths: Iterable[Path]) -> dict:
+    def output_snapshot(self, paths: Iterable[Path]) -> dict[Path, FileState]:
         return snapshot_file_states(paths)
 
 

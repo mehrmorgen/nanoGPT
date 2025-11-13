@@ -93,12 +93,14 @@ class _FakeTiktoken:
 
 
 def test_split_train_val_ratio() -> None:
+    """Test split train val ratio."""
     train, val = split_train_val("abcdefghij", split=0.7)
     assert train == "abcdefg"
     assert val == "hij"
 
 
 def test_split_train_val_edges() -> None:
+    """Test split train val edges."""
     text = "abcdef"
     # split=0 -> all val
     train, val = split_train_val(text, split=0.0)
@@ -114,6 +116,7 @@ def test_split_train_val_edges() -> None:
 
 
 def test_create_standardized_metadata_basic() -> None:
+    """Test create standardized metadata basic."""
     tok = CharTokenizer(vocab={"a": 1, "b": 2})
     meta = create_standardized_metadata(tok, train_tokens=5, val_tokens=3)
     assert meta["meta_version"] == 1
@@ -126,6 +129,7 @@ def test_create_standardized_metadata_basic() -> None:
 
 
 def test_create_standardized_metadata_sets_flags_and_extras() -> None:
+    """Test create standardized metadata sets flags and extras."""
     tok = DummyTok()
     meta = create_standardized_metadata(
         tok, train_tokens=10, val_tokens=4, extras={"x": 1}
@@ -138,6 +142,7 @@ def test_create_standardized_metadata_sets_flags_and_extras() -> None:
 
 
 def test_create_standardized_metadata_tiktoken_enrichment() -> None:
+    """Test create standardized metadata tiktoken enrichment."""
     tok = _FakeTiktoken()
     meta = create_standardized_metadata(tok, train_tokens=3, val_tokens=2)
     assert meta["tokenizer_type"] == "tiktoken"
@@ -150,6 +155,7 @@ def test_create_standardized_metadata_tiktoken_enrichment() -> None:
 
 
 def test_prepare_with_tokenizer_arrays_and_meta() -> None:
+    """Test prepare with tokenizer arrays and meta."""
     tok = CharTokenizer(vocab={"a": 1, "b": 2})
     train, val, meta, tokenizer = prepare_with_tokenizer("abba", tok, split=0.5)
     assert isinstance(train, np.ndarray) and train.dtype == np.uint16
@@ -164,6 +170,7 @@ def test_prepare_with_tokenizer_arrays_and_meta() -> None:
 
 
 def test_prepare_with_tokenizer_splits_and_encodes() -> None:
+    """Test prepare with tokenizer splits and encodes."""
     tok = DummyTok()
     text = "abcdefghij"  # len 10 -> split 9/1 by default
     train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(text, tok)
@@ -176,6 +183,7 @@ def test_prepare_with_tokenizer_splits_and_encodes() -> None:
 
 
 def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
+    """Test prepare with tokenizer word vocab rebuild."""
     # Include punctuation to exercise regex tokenization path
     text = "Hello, world! Hello"
     tok = WordTokenizer()
@@ -187,6 +195,7 @@ def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
 
 
 def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None:
+    """Test write bin and meta logging exception is ignored."""
     class RaisingLogger:
         def info(self, _message: str) -> None:
             raise ValueError("fail")
@@ -196,6 +205,7 @@ def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None
 
 
 def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
+    """Test write bin and meta already exists logs."""
     ds = tmp_path / "ds"
     ds.mkdir(parents=True, exist_ok=True)
     # Pre-create valid artifacts to trigger early-return logging path
@@ -261,6 +271,7 @@ def _make_shared(tmp_path: Path) -> SharedConfig:
 
 
 def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
+    """Test pipeline run uses tokenizer factory."""
     text_path = tmp_path / "raw.txt"
     text_path.write_text("abba", encoding="utf-8")
     shared = _make_shared(tmp_path)
@@ -288,6 +299,7 @@ def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
 
 
 def test_pipeline_prepare_from_text_respects_meta_extras(tmp_path: Path) -> None:
+    """Test pipeline prepare from text respects meta extras."""
     shared = _make_shared(tmp_path)
     cfg = PreparerConfig(
         raw_text_path=tmp_path / "raw.txt",  # unused; prepare_from_text provides text
@@ -303,6 +315,7 @@ def test_pipeline_prepare_from_text_respects_meta_extras(tmp_path: Path) -> None
 
 
 def test_pipeline_resolves_custom_data_config(tmp_path: Path) -> None:
+    """Test pipeline resolves custom data config."""
     shared = _make_shared(tmp_path)
     data_cfg = DataConfig(
         train_bin="train-custom.bin",
@@ -324,6 +337,7 @@ def test_pipeline_resolves_custom_data_config(tmp_path: Path) -> None:
 
 
 def test_pipeline_rejects_invalid_data_config(tmp_path: Path) -> None:
+    """Test pipeline rejects invalid data config."""
     shared = _make_shared(tmp_path)
     cfg = PreparerConfig(
         raw_text_path=tmp_path / "text.txt",
@@ -336,6 +350,7 @@ def test_pipeline_rejects_invalid_data_config(tmp_path: Path) -> None:
 
 
 def test_pipeline_split_validation(tmp_path: Path) -> None:
+    """Test pipeline split validation."""
     shared = _make_shared(tmp_path)
     cfg = PreparerConfig(
         raw_text_path=tmp_path / "text.txt",
@@ -353,6 +368,7 @@ def test_pipeline_split_validation(tmp_path: Path) -> None:
 
 
 def test_pipeline_load_raw_text_with_read_fn(tmp_path: Path) -> None:
+    """Test pipeline load raw text with read fn."""
     text_path = tmp_path / "raw.txt"
     text_path.write_text("ignored", encoding="utf-8")
     shared = _make_shared(tmp_path)
@@ -376,6 +392,7 @@ def test_pipeline_load_raw_text_with_read_fn(tmp_path: Path) -> None:
 
 
 def test_pipeline_load_raw_text_missing_path(tmp_path: Path) -> None:
+    """Test pipeline load raw text missing path."""
     shared = _make_shared(tmp_path)
     cfg = PreparerConfig(tokenizer_type="char")  # raw_text_path defaults to None
     pipeline = create_pipeline(cfg, shared)
@@ -387,6 +404,7 @@ def test_pipeline_load_raw_text_missing_path(tmp_path: Path) -> None:
 
 
 def test_seed_text_file_copies_first_existing_candidate(tmp_path: Path) -> None:
+    """Test seed text file copies first existing candidate."""
     src1 = tmp_path / "a.txt"
     src2 = tmp_path / "b.txt"
     dst = tmp_path / "out" / "seed.txt"
@@ -400,6 +418,7 @@ def test_seed_text_file_copies_first_existing_candidate(tmp_path: Path) -> None:
 
 
 def test_seed_text_file_noop_if_dst_exists(tmp_path: Path) -> None:
+    """Test seed text file noop if dst exists."""
     src = tmp_path / "in.txt"
     dst = tmp_path / "dst.txt"
     src.write_text("hello", encoding="utf-8")
@@ -411,6 +430,7 @@ def test_seed_text_file_noop_if_dst_exists(tmp_path: Path) -> None:
 
 
 def test_seed_text_file_raises_when_no_candidates_exist(tmp_path: Path) -> None:
+    """Test seed text file raises when no candidates exist."""
     dst = tmp_path / "dst.txt"
     with pytest.raises(FileNotFoundError):
         seed_text_file(dst, [tmp_path / "missing1.txt", tmp_path / "missing2.txt"])
