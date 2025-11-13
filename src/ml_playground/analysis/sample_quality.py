@@ -3,11 +3,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter, defaultdict
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Sequence
 import re
 
 
 HEADER_KEYS = ("Sprecher:", "Thema:", "Jahr:")
+
+
+__all__ = [
+    "Header",
+    "LineStats",
+    "NgramStats",
+    "Anomalies",
+    "SampleAnalysis",
+    "extract_header",
+    "line_stats",
+    "ngram_stats",
+    "find_anomalies",
+    "analyze_sample_text",
+    "analyze_sample_file",
+    "format_analysis",
+]
 
 
 @dataclass(frozen=True)
@@ -149,6 +165,30 @@ def _find_anomalies(lines: list[str]) -> Anomalies:
         trailing_incomplete_line=trailing_incomplete,
         stray_year_tokens=sorted(set(stray)),
     )
+
+
+def extract_header(lines: Sequence[str]) -> Header:
+    """Public helper that normalizes arbitrary sequences before header parsing."""
+
+    return _extract_header(list(lines))
+
+
+def line_stats(lines: Sequence[str]) -> LineStats:
+    """Public helper that computes line statistics from any string sequence."""
+
+    return _line_stats(list(lines))
+
+
+def ngram_stats(lines: Sequence[str], n: int) -> NgramStats:
+    """Public helper that computes n-gram statistics for arbitrary sequences."""
+
+    return _ngram_stats(list(lines), n)
+
+
+def find_anomalies(lines: Sequence[str]) -> Anomalies:
+    """Public helper exposing anomaly detection with standard inputs."""
+
+    return _find_anomalies(list(lines))
 
 
 def analyze_sample_text(text: str, ngram_n: int = 3) -> SampleAnalysis:
