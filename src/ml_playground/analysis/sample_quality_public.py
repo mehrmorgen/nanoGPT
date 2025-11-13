@@ -8,11 +8,11 @@ from .sample_quality import (
     SampleAnalysis,
     analyze_sample_file,
     analyze_sample_text,
+    extract_header,
+    find_anomalies,
     format_analysis,
-    _extract_header as extract_header,
-    _find_anomalies as find_anomalies,
-    _line_stats as line_stats,
-    _ngram_stats as ngram_stats,
+    line_stats,
+    ngram_stats,
 )
 
 __all__ = [

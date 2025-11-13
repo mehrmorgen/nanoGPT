@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Tests for `ml_playground.analysis.lit.integration` utilities."""
 
 from __future__ import annotations
@@ -5,7 +6,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Optional
+from typing import Dict, Mapping, Optional
 
 import pytest
 
@@ -126,7 +127,11 @@ def test_run_server_bundestag_char_invokes_server_factory(tmp_path: Path) -> Non
     class ServerApp:
         instances: list["ServerApp"] = []
 
-        def __init__(self, models, datasets):
+        def __init__(
+            self,
+            models: Mapping[str, object],
+            datasets: Mapping[str, object],
+        ) -> None:
             self.models = models
             self.datasets = datasets
             self.calls: list[tuple[int, str, bool]] = []
@@ -136,7 +141,9 @@ def test_run_server_bundestag_char_invokes_server_factory(tmp_path: Path) -> Non
             self.calls.append((port, host, open_browser))
 
     class ServerFactory:
-        def __call__(self, models, datasets):
+        def __call__(
+            self, models: Mapping[str, object], datasets: Mapping[str, object]
+        ) -> ServerApp:
             return ServerApp(models, datasets)
 
     server_module.Server = ServerFactory()  # type: ignore[attr-defined]
