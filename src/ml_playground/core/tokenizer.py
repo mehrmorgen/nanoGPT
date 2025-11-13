@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Literal
+from collections.abc import Callable, Mapping, Sequence
+from numbers import Integral, Real
 from types import MappingProxyType
+from typing import Any, Literal, cast
+
 import numpy as np
 import numpy.typing as npt
+
 from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
@@ -13,11 +17,11 @@ __all__ = ["Tokenizer", "create_tokenizer"]
 class CharTokenizer:
     """Character-level tokenizer that maps single characters to integer ids."""
 
-    def __init__(self, vocab: Optional[Dict[str, int]] = None):
+    def __init__(self, vocab: dict[str, int] | None = None) -> None:
         self._name = "char"
         if vocab is not None:
-            self.stoi = vocab
-            self.itos = {i: s for s, i in vocab.items()}
+            self.stoi: dict[str, int] = dict(vocab)
+            self.itos: dict[int, str] = {i: s for s, i in vocab.items()}
             self._itos_array: npt.NDArray[np.object_] = self._build_lookup_array()
         else:
             # Default character-level vocabulary will be built during training
@@ -71,11 +75,11 @@ class CharTokenizer:
 class WordTokenizer:
     """Word-level tokenizer that segments text via a simple regex pattern."""
 
-    def __init__(self, vocab: Optional[Dict[str, int]] = None):
+    def __init__(self, vocab: dict[str, int] | None = None) -> None:
         self._name = "word"
         if vocab is not None:
-            self.stoi = vocab
-            self.itos = {i: s for s, i in vocab.items()}
+            self.stoi: dict[str, int] = dict(vocab)
+            self.itos: dict[int, str] = {i: s for s, i in vocab.items()}
             self._itos_array: npt.NDArray[np.object_] = self._build_lookup_array()
         else:
             # Default word-level vocabulary will be built during training
@@ -170,34 +174,88 @@ class TiktokenTokenizer:
     @property
     def vocab(self) -> Mapping[str, int]:
         # tiktoken exposes mergeable ranks as a dict[str, int]; use it when available
-        ranks = getattr(self.encoder, "_mergeable_ranks", None)
-        if isinstance(ranks, dict):
-            return MappingProxyType(ranks)
+        ranks_obj = getattr(self.encoder, "_mergeable_ranks", None)
+        if isinstance(ranks_obj, Mapping):
+            ranks_map = cast(Mapping[str, int | float | bool], ranks_obj)
+            typed_ranks = {str(token): int(rank) for token, rank in ranks_map.items()}
+            return MappingProxyType(typed_ranks)
         # Fallback to empty mapping if ranks is not available or not a dict
         return MappingProxyType({})
 
 
+def _coerce_vocab_mapping(value: Mapping[object, object]) -> dict[str, int]:
+    typed: dict[str, int] = {}
+    for key_obj, val_obj in value.items():
+        key = str(key_obj)
+        if isinstance(val_obj, bool):
+            typed[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Integral):
+            typed[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Real):
+            typed[key] = int(float(val_obj))
+            continue
+        raise TypeError("vocab values must be numeric or boolean")
+    return typed
+
+
 def create_tokenizer(
-    tokenizer_type: Literal["char", "word", "tiktoken"], **kwargs
+    tokenizer_type: Literal["char", "word", "tiktoken"], **kwargs: Any
 ) -> Tokenizer:
-    """Factory for known tokenizer implementations.
+    """Factory for known tokenizer implementations."""
 
-    Args:
-        tokenizer_type: Name of the tokenizer family to instantiate.
-        **kwargs: Implementation-specific keyword arguments (e.g., vocab, encoding_name).
-
-    Returns:
-        A concrete `Tokenizer` implementation associated with the supplied name.
-
-    Raises:
-        ValueError: If an unknown tokenizer type is requested.
-    """
+    tokenizer_kwargs: dict[str, Any] = dict(kwargs)
     if tokenizer_type == "char":
-        return CharTokenizer(**kwargs)
+        vocab_obj = tokenizer_kwargs.pop("vocab", None)
+        if vocab_obj is None:
+            vocab_mapping: dict[str, int] | None = None
+        elif isinstance(vocab_obj, Mapping):
+            mapping_obj = cast(Mapping[object, object], vocab_obj)
+            vocab_mapping = _coerce_vocab_mapping(mapping_obj)
+        else:
+            raise TypeError("vocab must be a mapping when provided")  # pragma: no cover
+
+        if tokenizer_kwargs:
+            raise ValueError(  # pragma: no cover
+                "Unsupported keyword arguments for char tokenizer: "
+                f"{sorted(tokenizer_kwargs.keys())}"
+            )
+        return CharTokenizer(vocab=vocab_mapping)
+
     if tokenizer_type == "word":
-        return WordTokenizer(**kwargs)
+        vocab_obj = tokenizer_kwargs.pop("vocab", None)
+        if vocab_obj is None:
+            vocab_mapping = None
+        elif isinstance(vocab_obj, Mapping):
+            mapping_obj = cast(Mapping[object, object], vocab_obj)
+            vocab_mapping = _coerce_vocab_mapping(mapping_obj)
+        else:
+            raise TypeError("vocab must be a mapping when provided")
+
+        if tokenizer_kwargs:
+            raise ValueError(  # pragma: no cover
+                "Unsupported keyword arguments for word tokenizer: "
+                f"{sorted(tokenizer_kwargs.keys())}"
+            )
+        return WordTokenizer(vocab=vocab_mapping)
+
     if tokenizer_type == "tiktoken":
-        encoding_name = kwargs.pop("encoding_name", "cl100k_base")
-        loader = kwargs.pop("loader", None)
-        return TiktokenTokenizer(encoding_name=encoding_name, loader=loader)
+        encoding_name_obj = tokenizer_kwargs.pop("encoding_name", "cl100k_base")
+        if not isinstance(encoding_name_obj, str):
+            raise TypeError("encoding_name must be a string")  # pragma: no cover
+        loader_obj = tokenizer_kwargs.pop("loader", None)
+        if loader_obj is None:
+            loader: Callable[[], Any] | None = None
+        elif callable(loader_obj):
+            loader = cast(Callable[[], Any], loader_obj)
+        else:
+            raise TypeError("loader must be callable when provided")  # pragma: no cover
+
+        if tokenizer_kwargs:
+            raise ValueError(  # pragma: no cover
+                "Unsupported keyword arguments for tiktoken tokenizer: "
+                f"{sorted(tokenizer_kwargs.keys())}"
+            )
+        return TiktokenTokenizer(encoding_name=encoding_name_obj, loader=loader)
     raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")
