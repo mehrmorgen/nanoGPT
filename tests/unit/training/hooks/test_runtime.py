@@ -138,10 +138,16 @@ def test_setup_runtime_injected_cuda_available_true() -> None:
         del device_type, dtype
         return nullcontext()
 
+    def _seed_cpu(seed: int) -> None:
+        seed_calls.append(("cpu", seed))
+
+    def _seed_cuda(seed: int) -> None:
+        seed_calls.append(("cuda", seed))
+
     fake_torch = SimpleNamespace(
-        manual_seed=lambda seed: seed_calls.append(("cpu", seed)),
+        manual_seed=_seed_cpu,
         cuda=SimpleNamespace(
-            manual_seed=lambda seed: seed_calls.append(("cuda", seed)),
+            manual_seed=_seed_cuda,
             is_available=lambda: True,
         ),
         backends=SimpleNamespace(
@@ -232,4 +238,100 @@ def test_setup_runtime_injected_autocast_func() -> None:
     runtime = setup_runtime(cfg, autocast_func=fake_autocast)
 
     assert autocast_called
+    assert runtime.device_type == "cuda"
+
+
+def test_setup_runtime_cuda_backends_without_fp32_precision() -> None:
+    """setup_runtime should handle CUDA backends without fp32_precision attribute."""
+    cfg = _make_config(device="cuda", dtype="float32")
+
+    def fake_cuda():
+        return True
+
+    def fake_seed(seed: int) -> None:
+        pass
+
+    def fake_autocast(
+        device_type: str, dtype: torch.dtype
+    ) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    def _seed_cpu_noop(seed: int) -> None:
+        del seed
+
+    def _seed_cuda_noop(seed: int) -> None:
+        del seed
+
+    fake_torch = SimpleNamespace(
+        manual_seed=_seed_cpu_noop,
+        cuda=SimpleNamespace(
+            manual_seed=_seed_cuda_noop,
+            is_available=lambda: True,
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace()),  # No fp32_precision
+            cudnn=SimpleNamespace(),  # No fp32_precision
+        ),
+    )
+
+    runtime = setup_runtime(
+        cfg,
+        cuda_available_func=fake_cuda,
+        cuda_seed_func=fake_seed,
+        autocast_func=fake_autocast,
+        torch_module=fake_torch,
+    )
+
+    assert runtime.device_type == "cuda"
+
+
+def test_setup_runtime_cuda_exception_handling_attribute_error() -> None:
+    """setup_runtime should handle AttributeError in CUDA setup."""
+    cfg = _make_config(device="cuda", dtype="float32")
+
+    def fake_cuda():
+        return True
+
+    def fake_seed(seed: int) -> None:
+        raise AttributeError("Missing CUDA attribute")
+
+    def fake_autocast(
+        device_type: str, dtype: torch.dtype
+    ) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    runtime = setup_runtime(
+        cfg,
+        cuda_available_func=fake_cuda,
+        cuda_seed_func=fake_seed,
+        autocast_func=fake_autocast,
+    )
+
+    # Should not raise, should handle the exception gracefully
+    assert runtime.device_type == "cuda"
+
+
+def test_setup_runtime_cuda_exception_handling_assertion_error() -> None:
+    """setup_runtime should handle AssertionError in CUDA setup."""
+    cfg = _make_config(device="cuda", dtype="float32")
+
+    def fake_cuda():
+        return True
+
+    def fake_seed(seed: int) -> None:
+        raise AssertionError("CUDA assertion failed")
+
+    def fake_autocast(
+        device_type: str, dtype: torch.dtype
+    ) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    runtime = setup_runtime(
+        cfg,
+        cuda_available_func=fake_cuda,
+        cuda_seed_func=fake_seed,
+        autocast_func=fake_autocast,
+    )
+
+    # Should not raise, should handle the exception gracefully
     assert runtime.device_type == "cuda"

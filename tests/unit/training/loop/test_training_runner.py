@@ -404,6 +404,7 @@ def trainer_harness(tmp_path: Path) -> TrainerHarness:
 def test_train_eval_only_breaks_early_and_returns(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test train eval only breaks early and returns."""
     saved_calls: list[SavePayload] = []
     fixture = trainer_harness.build(
         evaluation=default_evaluation(),
@@ -422,6 +423,7 @@ def test_train_eval_only_breaks_early_and_returns(
 def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test train writes best checkpoint on improvement after first iter."""
     calls: EvaluationMap = {
         0: {"train": 0.6, "val": 0.5},
         1: {"train": 0.5, "val": 0.2},
@@ -445,6 +447,7 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
 def test_trainer_updates_optimizer_lr_via_get_lr(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer updates optimizer lr via get lr."""
     lr_calls: list[Tuple[int, float]] = []
 
     def track_lr(iteration: int, schedule: LRSchedule, optim: OptimConfig) -> float:
@@ -475,6 +478,7 @@ def test_trainer_updates_optimizer_lr_via_get_lr(
 def test_trainer_tensorboard_logging_handles_writer_errors(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer tensorboard logging handles writer errors."""
     logger = LoggerStub()
 
     class ExplodingWriter:
@@ -511,6 +515,7 @@ def test_trainer_tensorboard_logging_handles_writer_errors(
 def test_trainer_warns_when_final_checkpoint_fails(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer warns when final checkpoint fails."""
     logger = LoggerStub()
     trainer_harness.build(
         evaluation=default_evaluation(),
@@ -529,6 +534,7 @@ def test_trainer_warns_when_final_checkpoint_fails(
 def test_trainer_warns_when_metadata_propagation_fails(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer warns when metadata propagation fails."""
     logger = LoggerStub()
     trainer_harness.build(
         evaluation=default_evaluation(),
@@ -543,6 +549,7 @@ def test_trainer_warns_when_metadata_propagation_fails(
 def test_trainer_applies_checkpoint_state_on_init(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer applies checkpoint state on init."""
     checkpoint = Checkpoint(
         model={},
         optimizer={},
@@ -565,6 +572,7 @@ def test_trainer_applies_checkpoint_state_on_init(
 def test_trainer_tensorboard_logging_success(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer tensorboard logging success."""
     class CapturingWriter:
         def __init__(self) -> None:
             self.scalars: list[tuple[str, float, int | None]] = []
@@ -602,6 +610,7 @@ def test_trainer_tensorboard_logging_success(
 def test_trainer_keyboard_interrupt_skips_final_save(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer keyboard interrupt skips final save."""
     saved_calls: list[SavePayload] = []
 
     def _interrupt(
@@ -628,6 +637,7 @@ def test_trainer_keyboard_interrupt_skips_final_save(
 def test_train_step_accum_with_grad_clip_and_ema(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test train step accum with grad clip and ema."""
     def fake_vmap(
         func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
@@ -669,6 +679,7 @@ def test_train_step_accum_with_grad_clip_and_ema(
 def test_train_step_accum_fallback_without_vmap(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test train step accum fallback without vmap."""
     def raising_vmap(
         func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
@@ -706,6 +717,7 @@ def test_train_step_accum_fallback_without_vmap(
 def test_default_trainer_dependencies_returns_callables(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test default trainer dependencies returns callables."""
     captured: dict[str, object] = {}
 
     def stub_initialize_components(
@@ -750,6 +762,7 @@ def test_default_trainer_dependencies_returns_callables(
 def test_trainer_propagates_non_keyboard_exception(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer propagates non keyboard exception."""
     def _boom(
         _trainer: runner_mod.Trainer, *_args: object, **_kwargs: object
     ) -> torch.Tensor:
@@ -772,6 +785,7 @@ def test_trainer_propagates_non_keyboard_exception(
 def test_trainer_train_step_validates_grad_accum(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test trainer train step validates grad accum."""
     fixture = trainer_harness.build(
         evaluation={-1: {"train": 0.5, "val": 0.4}},
         max_iters=0,
@@ -795,6 +809,7 @@ def test_trainer_train_step_validates_grad_accum(
 def test_train_entrypoint_uses_dependencies(
     trainer_harness: TrainerHarness,
 ) -> None:
+    """Test train entrypoint uses dependencies."""
     deps, manager = _build_deps(evaluation=default_evaluation())
 
     cfg = _make_cfg(trainer_harness.tmp_path, max_iters=0)
@@ -806,6 +821,7 @@ def test_train_entrypoint_uses_dependencies(
 
 
 def test_get_lr_variants() -> None:
+    """Test get lr variants."""
     schedule = LRSchedule(decay_lr=False)
     optim = OptimConfig(learning_rate=0.1)
     assert runner_mod.get_lr(0, schedule, optim) == 0.1
@@ -819,6 +835,7 @@ def test_get_lr_variants() -> None:
 
 
 def test_checkpoint_model_args() -> None:
+    """Test checkpoint model args."""
     checkpoint_data: CheckpointPayload = {
         "model_args": {"n_layer": 1},
         "config": {"model_args": {"n_layer": 2}},

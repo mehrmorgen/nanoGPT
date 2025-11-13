@@ -8,6 +8,7 @@ from ml_playground.experiments import protocol as exp_protocol
 
 
 def test_side_effect_report_summarize_counts() -> None:
+    """Test side effect report summarize counts."""
     report = exp_protocol.PrepareReport(
         created_files=(Path("created"),),
         updated_files=(Path("updated1"), Path("updated2")),
@@ -65,6 +66,7 @@ class _ConcreteIntegration(exp_protocol.ExperimentIntegration):
 
 
 def test_protocol_placeholders_execute_without_side_effects() -> None:
+    """Test protocol placeholders execute without side effects."""
     cfg = PreparerConfig()
     assert _ConcretePreparer().prepare(cfg) == exp_protocol.PrepareReport()
     assert _ConcreteTrainer().train(object()) == exp_protocol.TrainReport()
@@ -72,12 +74,14 @@ def test_protocol_placeholders_execute_without_side_effects() -> None:
 
 
 def test_protocol_runtime_checks_accept_compliant_implementations() -> None:
+    """Test protocol runtime checks accept compliant implementations."""
     assert isinstance(_ConcretePreparer(), _RuntimePreparer)
     assert isinstance(_ConcreteTrainer(), _RuntimeTrainer)
     assert isinstance(_ConcreteSampler(), _RuntimeSampler)
 
 
 def test_experiment_integration_placeholders_execute() -> None:
+    """Test experiment integration placeholders execute."""
     integration = _ConcreteIntegration()
     assert isinstance(integration.get_preparer(), _RuntimePreparer)
     assert isinstance(integration.get_trainer(), _RuntimeTrainer)

@@ -104,6 +104,7 @@ def _with_sample_out_dir(shared: SharedConfig, sample_out_dir: Path) -> SharedCo
 
 
 def test_create_manager_respects_retention(tmp_path: Path) -> None:
+    """Test create manager respects retention."""
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
 
@@ -114,6 +115,7 @@ def test_create_manager_respects_retention(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
+    """Test save checkpoint invokes manager."""
     cfg_latest = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     shared = _make_shared(tmp_path, cfg_latest)
     model = make_minimal_gpt()
@@ -171,6 +173,7 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
+    """Test load checkpoint respects policy."""
     cfg_latest = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     shared = _make_shared(tmp_path, cfg_latest)
 
@@ -224,6 +227,7 @@ def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_override_exception(tmp_path: Path) -> None:
+    """Test load checkpoint override exception."""
     def _raise_runtime_error(**kwargs: object) -> NoReturn:
         del kwargs
         raise RuntimeError("boom")
@@ -250,6 +254,7 @@ def test_load_checkpoint_override_exception(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_missing_out_dir(tmp_path: Path) -> None:
+    """Test load checkpoint missing out dir."""
     cfg = _with_checkpoint_load_fn(_make_cfg(tmp_path), None)
     logger = LoggerStub()
 
@@ -265,6 +270,7 @@ def test_load_checkpoint_missing_out_dir(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
+    """Test load checkpoint handles checkpoint error."""
     cfg = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     logger = LoggerStub()
 
@@ -299,6 +305,7 @@ def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
 
 
 def test_load_checkpoint_override_success(tmp_path: Path) -> None:
+    """Test load checkpoint override success."""
     sentinel = object()
 
     def _return_sentinel(**kwargs: object) -> object:
@@ -319,6 +326,7 @@ def test_load_checkpoint_override_success(tmp_path: Path) -> None:
 
 
 def test_apply_checkpoint_restores_state_and_ema() -> None:
+    """Test apply checkpoint restores state and ema."""
     model = make_minimal_gpt()
     optimizer = make_optimizer(model.parameters())
     ema = make_ema(model)
@@ -364,6 +372,7 @@ def test_apply_checkpoint_restores_state_and_ema() -> None:
 
 
 def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
+    """Test propagate metadata copies file."""
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
     ds_dir = shared.dataset_dir
@@ -383,6 +392,7 @@ def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
+    """Test save checkpoint uses override."""
     calls: list[dict[str, Any]] = []
 
     def override(**kwargs: Any) -> None:
@@ -444,6 +454,7 @@ def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> None:
+    """Test save checkpoint fallbacks after override failure."""
     def override(**_kwargs: Any) -> None:
         raise RuntimeError("boom")
 
@@ -504,6 +515,7 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
 
 
 def test_propagate_metadata_ignores_meta_resolution_error(tmp_path: Path) -> None:
+    """Test propagate metadata ignores meta resolution error."""
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
     logger = LoggerStub()
@@ -521,6 +533,7 @@ def test_propagate_metadata_ignores_meta_resolution_error(tmp_path: Path) -> Non
 
 
 def test_propagate_metadata_logs_copy_failure(tmp_path: Path) -> None:
+    """Test propagate metadata logs copy failure."""
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
     shared = _with_sample_out_dir(shared, tmp_path / "sample-out")

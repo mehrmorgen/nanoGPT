@@ -16,6 +16,7 @@ def _assert_close(
 
 
 def test_warmup_phase_linear_scaling() -> None:
+    """Test warmup phase linear scaling."""
     # Warmup: linear from 0 -> base_lr over `warmup` steps
     base_lr = 1.0
     min_lr = 0.1
@@ -44,6 +45,7 @@ def test_warmup_phase_linear_scaling() -> None:
 
 
 def test_cosine_decay_midpoint() -> None:
+    """Test cosine decay midpoint."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -60,6 +62,7 @@ def test_cosine_decay_midpoint() -> None:
 
 
 def test_end_of_decay_and_beyond() -> None:
+    """Test end of decay and beyond."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -82,6 +85,7 @@ def test_end_of_decay_and_beyond() -> None:
 
 
 def test_cosine_decay_quarter_and_three_quarters() -> None:
+    """Test cosine decay quarter and three quarters."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -124,6 +128,7 @@ def test_cosine_decay_quarter_and_three_quarters() -> None:
 
 
 def test_warmup_additional_points() -> None:
+    """Test warmup additional points."""
     base_lr = 1.0
     min_lr = 0.0
     warmup = 8
@@ -143,6 +148,7 @@ def test_warmup_additional_points() -> None:
 
 
 def test_cosine_shape_properties_many_points() -> None:
+    """Test cosine shape properties many points."""
     base_lr = 1.0
     min_lr = 0.1
     warmup = 10
@@ -216,6 +222,7 @@ def test_cosine_shape_properties_many_points() -> None:
 
 
 def test_nontrivial_params_precision() -> None:
+    """Test nontrivial params precision."""
     # Use nontrivial parameters and validate a couple of points with our close helper
     base_lr = 2.5
     min_lr = 0.25

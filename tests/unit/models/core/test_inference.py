@@ -48,6 +48,7 @@ def test_estimate_model_mfu_raises_without_config() -> None:
 
 
 def test_estimate_model_mfu_raises_when_config_is_none() -> None:
+    """Test estimate model mfu raises when config is none."""
     model = _make_model()
     model.config = None  # type: ignore[assignment]
 
@@ -118,6 +119,7 @@ def test_generate_tokens_raises_without_config() -> None:
 
 
 def test_generate_tokens_checks_config_none() -> None:
+    """Test generate tokens checks config none."""
     model = _make_model()
     model.config = None  # type: ignore[assignment]
 

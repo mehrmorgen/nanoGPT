@@ -58,6 +58,7 @@ def _cfg() -> TrainerConfig:
 
 
 def test_run_evaluation_records_scalars() -> None:
+    """Test run evaluation records scalars."""
     cfg = _cfg()
     logger = LoggerStub()
 
