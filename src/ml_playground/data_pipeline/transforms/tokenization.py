@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal, Mapping, cast
+from numbers import Integral, Real
 import re
 
 import numpy as np
@@ -43,25 +44,24 @@ def prepare_with_tokenizer(
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any], Tokenizer]:
     train_text, val_text = split_train_val(text, split)
 
-    if isinstance(tokenizer, (CharTokenizer, WordTokenizer)):
-        all_text = train_text + val_text
-        if isinstance(tokenizer, CharTokenizer):
-            if all_text:
-                char_array = np.fromiter(all_text, dtype="<U1")
-                unique_chars = np.unique(char_array)
-                vocab = {ch: i for i, ch in enumerate(unique_chars)}
-            else:
-                vocab = {}
-            tokenizer = create_tokenizer("char", vocab=vocab)
-        elif isinstance(tokenizer, WordTokenizer):
-            words = re.findall(r"\w+|[^\w\s]", all_text)
-            if words:
-                words_array = np.asarray(words, dtype=object)
-                unique_words = np.unique(words_array)
-                vocab = {word: i for i, word in enumerate(unique_words.tolist())}
-            else:
-                vocab = {}
-            tokenizer = create_tokenizer("word", vocab=vocab)
+    all_text = train_text + val_text
+    if isinstance(tokenizer, CharTokenizer):
+        if all_text:
+            char_array = np.fromiter(all_text, dtype="<U1")
+            unique_chars = np.unique(char_array)
+            vocab = {ch: i for i, ch in enumerate(unique_chars)}
+        else:
+            vocab = {}
+        tokenizer = create_tokenizer("char", vocab=vocab)
+    elif isinstance(tokenizer, WordTokenizer):
+        words = re.findall(r"\w+|[^\w\s]", all_text)
+        if words:
+            words_array = np.asarray(words, dtype=object)
+            unique_words = np.unique(words_array)
+            vocab = {word: i for i, word in enumerate(unique_words.tolist())}
+        else:
+            vocab = {}
+        tokenizer = create_tokenizer("word", vocab=vocab)
 
     train_ids = tokenizer.encode(train_text)
     val_ids = tokenizer.encode(val_text)
@@ -74,7 +74,10 @@ def prepare_with_tokenizer(
 
 
 def create_standardized_metadata(
-    tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None
+    tokenizer: Tokenizer,
+    train_tokens: int,
+    val_tokens: int,
+    extras: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     meta: dict[str, Any] = {
         "meta_version": 1,
@@ -91,8 +94,9 @@ def create_standardized_metadata(
     try:
         if meta["tokenizer_type"] in ("char", "word"):
             vocab = getattr(tokenizer, "stoi", None)
-            if isinstance(vocab, dict) and vocab:
-                meta["stoi"] = vocab
+            if isinstance(vocab, Mapping) and vocab:
+                vocab_mapping = cast(Mapping[object, object], vocab)
+                meta["stoi"] = _normalize_vocab_mapping(vocab_mapping)
         elif meta["tokenizer_type"] == "tiktoken":
             encoding_name = getattr(tokenizer, "encoding_name", None)
             if isinstance(encoding_name, str):
@@ -101,6 +105,24 @@ def create_standardized_metadata(
         pass
 
     if extras:
-        meta.update(extras)
+        normalized_extras: dict[str, Any] = {str(key): value for key, value in extras.items()}
+        meta.update(normalized_extras)
 
     return meta
+
+
+def _normalize_vocab_mapping(vocab: Mapping[object, object]) -> dict[str, int]:
+    normalized: dict[str, int] = {}
+    for key_obj, val_obj in vocab.items():
+        key = str(key_obj)
+        if isinstance(val_obj, bool):
+            normalized[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Integral):
+            normalized[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Real):
+            normalized[key] = int(float(val_obj))
+            continue
+        raise TypeError("Tokenizer stoi values must be numeric or boolean")
+    return normalized
