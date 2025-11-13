@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import pickle
-from pathlib import Path
 import itertools
+import pickle
+from collections.abc import Mapping
+from pathlib import Path
 
 import torch
-from typing import cast
-from collections.abc import Mapping
 from hypothesis import HealthCheck, given, settings, strategies as st
 
 from ml_playground.configuration.models import (
@@ -69,7 +68,7 @@ class _StubModel(GPT):
         state_dict: Mapping[str, torch.Tensor],
         strict: bool = True,
         assign: bool = False,
-    ) -> torch.nn.modules.module._IncompatibleKeys:
+    ) -> object:
         return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
     def generate(  # type: ignore[override]
@@ -85,6 +84,13 @@ class _StubModel(GPT):
             torch.arange(t + max_new_tokens, dtype=torch.long).unsqueeze(0).repeat(b, 1)
         )
         return out
+
+
+class _SamplerTokenizer(CharTokenizer):
+    def decode_tensor(self, token_tensor: torch.Tensor) -> str:
+        flattened: torch.Tensor = token_tensor.detach().cpu().view(-1)
+        ids: list[int] = [int(value.item()) for value in flattened]
+        return self.decode(ids)
 
 
 def _create_shared(tmp_path: Path) -> tuple[SharedConfig, Path]:
@@ -125,7 +131,9 @@ def _build_sampler(tmp_path: Path, start: str) -> tuple[Sampler, _StubModel]:
 
     def _load_ckpt(**_: object) -> object:
         class _Ckpt:
-            model = {"weights": []}
+            model: dict[str, torch.Tensor] = {
+                "tok_emb.weight": torch.zeros(1, dtype=torch.float32)
+            }
             model_args = {
                 "block_size": 4,
                 "vocab_size": 8,
@@ -142,12 +150,12 @@ def _build_sampler(tmp_path: Path, start: str) -> tuple[Sampler, _StubModel]:
             runtime=rt,
             sample=sample_cfg,
             checkpoint_load_fn=_load_ckpt,
-            model_factory=lambda cfg, logger: cast(GPT, model),
+            model_factory=lambda cfg, logger: model,
         ),
         shared,
     )
-    sampler.tokenizer = CharTokenizer({"A": 1})
-    sampler.model = cast(GPT, model)
+    sampler.tokenizer = _SamplerTokenizer({"A": 1})
+    sampler.model = model
     return sampler, model
 
 
@@ -168,9 +176,9 @@ def test_sampler_prompt_tensor_cache(tmp_path: Path, start: str) -> None:
     sampler, stub_model = _build_sampler(tmp_path, start)
 
     sampler.run()
-    tensor_before = sampler._prompt_tensor
+    tensor_before = sampler.prompt_tensor
     assert tensor_before is not None
     sampler.run()
 
-    assert sampler._prompt_tensor is tensor_before
+    assert sampler.prompt_tensor is tensor_before
     assert stub_model.generate_calls == sampler.sample_cfg.num_samples * 2

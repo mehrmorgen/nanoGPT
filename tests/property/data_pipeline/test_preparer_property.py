@@ -14,6 +14,7 @@ from ml_playground.configuration.models import DataConfig, PreparerConfig, Share
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.data_pipeline.preparer import PreparationOutcome, create_pipeline
+from ml_playground.core.file_state import FileState
 
 _TEXT = st.text(alphabet="abcdefghijklmnopqrstuvwxyz \n", min_size=1, max_size=128)
 _SPLITS = st.floats(
@@ -137,6 +138,7 @@ def test_pipeline_run_reads_raw_text_path(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test pipeline run reads raw text path."""
     base = tmp_path
     raw_dir = base / "raw"
     raw_dir.mkdir()
@@ -159,6 +161,7 @@ def test_pipeline_run_uses_tokenizer_factory(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test pipeline run uses tokenizer factory."""
     base = tmp_path
     raw_file = base / "input.txt"
     raw_file.write_text("abc", encoding="utf-8")
@@ -189,6 +192,7 @@ def test_pipeline_run_requires_raw_text_path(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
+    """Test pipeline run requires raw text path."""
     shared = shared_config_factory(tmp_path)
     cfg = PreparerConfig(tokenizer_type="char")
     pipeline = create_pipeline(cfg, shared)
@@ -261,7 +265,7 @@ def test_pipeline_output_snapshot(
     test_file = tmp_path / "test.txt"
     test_file.write_text("data", encoding="utf-8")
 
-    snapshot = pipeline.output_snapshot([test_file])
+    snapshot: dict[Path, FileState] = pipeline.output_snapshot([test_file])
     assert test_file in snapshot
     assert snapshot[test_file] is not None
 

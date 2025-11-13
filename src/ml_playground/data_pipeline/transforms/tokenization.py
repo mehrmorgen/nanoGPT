@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal, Mapping, cast
+from numbers import Integral, Real
 import re
 
 import numpy as np
@@ -94,7 +95,8 @@ def create_standardized_metadata(
         if meta["tokenizer_type"] in ("char", "word"):
             vocab = getattr(tokenizer, "stoi", None)
             if isinstance(vocab, Mapping) and vocab:
-                meta["stoi"] = dict(vocab)
+                vocab_mapping = cast(Mapping[object, object], vocab)
+                meta["stoi"] = _normalize_vocab_mapping(vocab_mapping)
         elif meta["tokenizer_type"] == "tiktoken":
             encoding_name = getattr(tokenizer, "encoding_name", None)
             if isinstance(encoding_name, str):
@@ -103,6 +105,24 @@ def create_standardized_metadata(
         pass
 
     if extras:
-        meta.update(dict(extras))
+        normalized_extras: dict[str, Any] = {str(key): value for key, value in extras.items()}
+        meta.update(normalized_extras)
 
     return meta
+
+
+def _normalize_vocab_mapping(vocab: Mapping[object, object]) -> dict[str, int]:
+    normalized: dict[str, int] = {}
+    for key_obj, val_obj in vocab.items():
+        key = str(key_obj)
+        if isinstance(val_obj, bool):
+            normalized[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Integral):
+            normalized[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Real):
+            normalized[key] = int(float(val_obj))
+            continue
+        raise TypeError("Tokenizer stoi values must be numeric or boolean")
+    return normalized

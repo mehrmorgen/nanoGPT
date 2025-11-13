@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import pickle
 from pathlib import Path
@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import torch
+from torch import Tensor
 from numpy.lib.stride_tricks import sliding_window_view
 
 from ml_playground.configuration.models import DataConfig, DeviceKind
@@ -54,8 +55,8 @@ def sample_batch(
     x_arr: npt.NDArray[np.int64] = x_np
     y_arr: npt.NDArray[np.int64] = y_np
 
-    x: torch.Tensor = torch.from_numpy(x_arr).to(device)
-    y: torch.Tensor = torch.from_numpy(y_arr).to(device)
+    x = _from_numpy_int64(x_arr).to(device)
+    y = _from_numpy_int64(y_arr).to(device)
     return x, y
 
 
@@ -136,7 +137,21 @@ class SimpleBatches:
         self._cursor[split] = int((cur + bsz * T) % L)
 
         x_seq_arr: npt.NDArray[np.int64] = base[x_indices].astype(np.int64, copy=False)
-        x: torch.Tensor = torch.from_numpy(x_seq_arr).to(self.device)
+        x = _from_numpy_int64(x_seq_arr).to(self.device)
         y_seq_arr: npt.NDArray[np.int64] = base[y_indices].astype(np.int64, copy=False)
-        y: torch.Tensor = torch.from_numpy(y_seq_arr).to(self.device)
+        y = _from_numpy_int64(y_seq_arr).to(self.device)
         return x, y
+
+
+def _from_numpy_int64(array: npt.NDArray[np.int64]) -> Tensor:
+    """Create an int64 tensor from a numpy array with precise typing."""
+
+    return _torch_from_numpy_int64(array)
+
+
+if TYPE_CHECKING:
+    _torch_from_numpy_int64 = cast(
+        "Callable[[npt.NDArray[np.int64]], Tensor]", torch.from_numpy
+    )
+else:
+    _torch_from_numpy_int64 = torch.from_numpy
