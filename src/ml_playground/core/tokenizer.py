@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from numbers import Integral, Real
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
@@ -175,38 +176,43 @@ class TiktokenTokenizer:
         # tiktoken exposes mergeable ranks as a dict[str, int]; use it when available
         ranks_obj = getattr(self.encoder, "_mergeable_ranks", None)
         if isinstance(ranks_obj, Mapping):
-            ranks_map = cast(Mapping[str, int], ranks_obj)
-            typed_ranks: dict[str, int] = {
-                str(token): int(rank) for token, rank in ranks_map.items()
-            }
+            ranks_map = cast(Mapping[str, int | float | bool], ranks_obj)
+            typed_ranks = {str(token): int(rank) for token, rank in ranks_map.items()}
             return MappingProxyType(typed_ranks)
         # Fallback to empty mapping if ranks is not available or not a dict
         return MappingProxyType({})
 
 
+def _coerce_vocab_mapping(value: Mapping[object, object]) -> dict[str, int]:
+    typed: dict[str, int] = {}
+    for key_obj, val_obj in value.items():
+        key = str(key_obj)
+        if isinstance(val_obj, bool):
+            typed[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Integral):
+            typed[key] = int(val_obj)
+            continue
+        if isinstance(val_obj, Real):
+            typed[key] = int(float(val_obj))
+            continue
+        raise TypeError("vocab values must be numeric or boolean")
+    return typed
+
+
 def create_tokenizer(
     tokenizer_type: Literal["char", "word", "tiktoken"], **kwargs: Any
 ) -> Tokenizer:
-    """Factory for known tokenizer implementations.
+    """Factory for known tokenizer implementations."""
 
-    Args:
-        tokenizer_type: Name of the tokenizer family to instantiate.
-        **kwargs: Implementation-specific keyword arguments (e.g., vocab, encoding_name).
-
-    Returns:
-        A concrete `Tokenizer` implementation associated with the supplied name.
-
-    Raises:
-        ValueError: If an unknown tokenizer type is requested.
-    """
     tokenizer_kwargs: dict[str, Any] = dict(kwargs)
     if tokenizer_type == "char":
         vocab_obj = tokenizer_kwargs.pop("vocab", None)
         if vocab_obj is None:
             vocab_mapping: dict[str, int] | None = None
         elif isinstance(vocab_obj, Mapping):
-            vocab_map = cast(Mapping[str, int | float | bool], vocab_obj)
-            vocab_mapping = {str(k): int(v) for k, v in vocab_map.items()}
+            mapping_obj = cast(Mapping[object, object], vocab_obj)
+            vocab_mapping = _coerce_vocab_mapping(mapping_obj)
         else:
             raise TypeError("vocab must be a mapping when provided")  # pragma: no cover
 
@@ -222,7 +228,8 @@ def create_tokenizer(
         if vocab_obj is None:
             vocab_mapping = None
         elif isinstance(vocab_obj, Mapping):
-            vocab_mapping = {str(k): int(v) for k, v in vocab_obj.items()}
+            mapping_obj = cast(Mapping[object, object], vocab_obj)
+            vocab_mapping = _coerce_vocab_mapping(mapping_obj)
         else:
             raise TypeError("vocab must be a mapping when provided")
 

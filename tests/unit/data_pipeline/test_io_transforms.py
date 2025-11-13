@@ -41,6 +41,7 @@ def _arrays() -> tuple[np.ndarray, np.ndarray, Metadata]:
 
 
 def test_write_bin_and_meta_raises_on_unreadable_existing_meta(tmp_path: Path) -> None:
+    """Test write bin and meta raises on unreadable existing meta."""
     ds = tmp_path / "dataset"
     ds.mkdir()
     (ds / "train.bin").write_bytes(b"train")
@@ -56,6 +57,7 @@ def test_write_bin_and_meta_raises_on_unreadable_existing_meta(tmp_path: Path) -
 
 
 def test_write_bin_and_meta_detects_invalid_existing_meta(tmp_path: Path) -> None:
+    """Test write bin and meta detects invalid existing meta."""
     ds = tmp_path / "dataset"
     ds.mkdir()
     (ds / "train.bin").write_bytes(b"train")
@@ -72,6 +74,7 @@ def test_write_bin_and_meta_detects_invalid_existing_meta(tmp_path: Path) -> Non
 
 
 def test_write_bin_and_meta_existing_meta_swallow_logger_errors(tmp_path: Path) -> None:
+    """Test write bin and meta existing meta swallow logger errors."""
     ds = tmp_path / "dataset"
     ds.mkdir()
 
@@ -100,6 +103,7 @@ def test_write_bin_and_meta_existing_meta_swallow_logger_errors(tmp_path: Path) 
 
 
 def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
+    """Test setup tokenizer returns char tokenizer."""
     meta = {
         "tokenizer_type": "char",
         "stoi": {"a": 0},
@@ -115,6 +119,7 @@ def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
 
 
 def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
+    """Test setup tokenizer uses tiktoken encoding."""
     class DummyEncoding:
         n_vocab = 1
         _mergeable_ranks = {"a": 0}
@@ -154,6 +159,7 @@ def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
 
 
 def test_setup_tokenizer_word_branch(tmp_path: Path) -> None:
+    """Test setup tokenizer word branch."""
     meta = {
         "tokenizer_type": "word",
         "stoi": {"hello": 0},
@@ -257,3 +263,113 @@ def test_setup_tokenizer_tiktoken_without_loader(tmp_path: Path) -> None:
     tokenizer = setup_tokenizer(tmp_path, token_factory=fake_factory)
     assert tokenizer is not None
     assert tokenizer.name == "tiktoken"
+
+
+def test_write_bin_and_meta_without_data_cfg(tmp_path: Path) -> None:
+    """write_bin_and_meta should use default paths when data_cfg is None."""
+    ds = tmp_path / "dataset"
+    train, val, meta = _arrays()
+
+    write_bin_and_meta(ds, train, val, meta, logger=_NullLogger(), data_cfg=None)
+
+    assert (ds / "train.bin").exists()
+    assert (ds / "val.bin").exists()
+    assert (ds / "meta.pkl").exists()
+
+
+def test_write_bin_and_meta_new_write_swallow_logger_errors(tmp_path: Path) -> None:
+    """write_bin_and_meta should swallow logger errors during new write."""
+    ds = tmp_path / "dataset"
+    train, val, meta = _arrays()
+
+    class RaisingLogger:
+        def info(self, msg: str, *args: object, **kwargs: object) -> None:
+            raise OSError("logger unavailable")
+
+        def debug(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+        def error(self, msg: str, *args: object, **kwargs: object) -> None:
+            pass
+
+    # Should not raise despite logger failures
+    write_bin_and_meta(ds, train, val, meta, logger=RaisingLogger())
+    assert (ds / "train.bin").exists()
+
+
+def test_setup_tokenizer_no_meta_file(tmp_path: Path) -> None:
+    """setup_tokenizer should return None when meta.pkl doesn't exist."""
+    tokenizer = setup_tokenizer(tmp_path)
+    assert tokenizer is None
+
+
+def test_setup_tokenizer_missing_tokenizer_type(tmp_path: Path) -> None:
+    """setup_tokenizer should raise when tokenizer_type is missing."""
+    meta = {"meta_version": 1}
+    with (tmp_path / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    with pytest.raises(DataError) as exc:
+        setup_tokenizer(tmp_path)
+
+    assert "missing 'tokenizer_type'" in str(exc.value)
+
+
+def test_setup_tokenizer_unknown_type_fallback(tmp_path: Path) -> None:
+    """setup_tokenizer should raise DataError for unknown tokenizer types."""
+    meta = {
+        "tokenizer_type": "unknown",
+        "meta_version": 1,
+    }
+    with (tmp_path / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    # Should raise DataError via coerce_tokenizer_type
+    with pytest.raises(DataError) as exc:
+        setup_tokenizer(tmp_path)
+
+    assert "Unsupported tokenizer type" in str(exc.value)
+
+
+def test_seed_text_file_dst_exists(tmp_path: Path) -> None:
+    """seed_text_file should return early if dst already exists."""
+    from ml_playground.data_pipeline.transforms.io import seed_text_file
+
+    dst = tmp_path / "dst.txt"
+    dst.write_text("existing content")
+
+    candidate = tmp_path / "candidate.txt"
+    candidate.write_text("candidate content")
+
+    # Should not overwrite
+    seed_text_file(dst, [candidate])
+    assert dst.read_text() == "existing content"
+
+
+def test_seed_text_file_creates_parent_dirs(tmp_path: Path) -> None:
+    """seed_text_file should create parent directories if needed."""
+    from ml_playground.data_pipeline.transforms.io import seed_text_file
+
+    dst = tmp_path / "subdir" / "nested" / "dst.txt"
+    candidate = tmp_path / "candidate.txt"
+    candidate.write_text("content")
+
+    seed_text_file(dst, [candidate])
+    assert dst.exists()
+    assert dst.read_text() == "content"
+
+
+def test_seed_text_file_no_candidates_raises(tmp_path: Path) -> None:
+    """seed_text_file should raise when no candidates exist."""
+    from ml_playground.data_pipeline.transforms.io import seed_text_file
+
+    dst = tmp_path / "dst.txt"
+    candidates = [tmp_path / "missing1.txt", tmp_path / "missing2.txt"]
+
+    with pytest.raises(FileNotFoundError) as exc:
+        seed_text_file(dst, candidates)
+
+    assert "none of the candidate paths exist" in str(exc.value)

@@ -1,14 +1,45 @@
 from typing import Any, Literal, cast
 from collections.abc import Mapping
 from types import MappingProxyType
+
+import numpy as np
+import numpy.typing as npt
 import pytest
 
 from ml_playground.core.tokenizer import (
     CharTokenizer,
-    WordTokenizer,
     TiktokenTokenizer,
+    WordTokenizer,
     create_tokenizer,
 )
+
+
+class CharTokenizerTestHarness(CharTokenizer):
+    """Test harness exposing lookup array maintenance for char tokenizer."""
+
+    def invalidate_lookup_array(self) -> None:
+        if hasattr(self, "_itos_array"):
+            delattr(self, "_itos_array")
+
+    def expose_lookup_array(self) -> npt.NDArray[np.object_]:
+        return self._ensure_lookup_array()
+
+    def lookup_array_length(self) -> int:
+        return self._ensure_lookup_array().shape[0]
+
+
+class WordTokenizerTestHarness(WordTokenizer):
+    """Test harness exposing lookup array maintenance for word tokenizer."""
+
+    def invalidate_lookup_array(self) -> None:
+        if hasattr(self, "_itos_array"):
+            delattr(self, "_itos_array")
+
+    def expose_lookup_array(self) -> npt.NDArray[np.object_]:
+        return self._ensure_lookup_array()
+
+    def lookup_array_length(self) -> int:
+        return self._ensure_lookup_array().shape[0]
 
 
 def test_char_tokenizer_roundtrip_proto() -> None:
@@ -71,14 +102,16 @@ def test_word_tokenizer_roundtrip_proto() -> None:
 
 
 def test_char_tokenizer_rebuilds_missing_lookup_array() -> None:
-    tok = CharTokenizer({"a": 0})
-    tok._itos_array = None  # type: ignore[assignment]
+    """Test char tokenizer rebuilds missing lookup array."""
+    tok = CharTokenizerTestHarness({"a": 0})
+    tok.invalidate_lookup_array()
     assert tok.decode([0]) == "a"
 
 
 def test_word_tokenizer_rebuilds_missing_lookup_array() -> None:
-    tok = WordTokenizer({"hello": 0})
-    tok._itos_array = None  # type: ignore[assignment]
+    """Test word tokenizer rebuilds missing lookup array."""
+    tok = WordTokenizerTestHarness({"hello": 0})
+    tok.invalidate_lookup_array()
     assert tok.decode([0]) == "hello"
 
 
@@ -170,11 +203,13 @@ def test_tiktoken_tokenizer_import_error_is_propagated() -> None:
 
 
 def test_char_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
+    """Test char tokenizer decode empty vocab returns empty string."""
     tok = CharTokenizer()
     assert tok.decode([0, 1]) == ""
 
 
 def test_word_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
+    """Test word tokenizer decode empty vocab returns empty string."""
     tok = WordTokenizer()
     assert tok.decode([0, 1]) == ""
 
@@ -186,3 +221,121 @@ def test_create_tokenizer_lexicographic_non_matches_raise(bad: str) -> None:
     """Ensure strings that are lexicographically >= but not equal still raise, killing Eq->GtE mutants."""
     with pytest.raises(ValueError):
         create_tokenizer(cast(Any, bad))
+
+
+def test_create_tokenizer_word_with_invalid_vocab_type() -> None:
+    """create_tokenizer should raise TypeError for word tokenizer with non-mapping vocab."""
+    with pytest.raises(TypeError) as exc:
+        create_tokenizer("word", vocab=[1, 2, 3])  # List instead of dict
+
+    assert "vocab must be a mapping" in str(exc.value)
+
+
+def test_create_tokenizer_tiktoken_with_non_string_encoding_name() -> None:
+    """create_tokenizer should raise TypeError for tiktoken with non-string encoding_name."""
+    with pytest.raises(TypeError) as exc:
+        create_tokenizer("tiktoken", encoding_name=123)  # Int instead of str
+
+    assert "encoding_name must be a string" in str(exc.value)
+
+
+def test_create_tokenizer_tiktoken_with_non_callable_loader() -> None:
+    """create_tokenizer should raise TypeError for tiktoken with non-callable loader."""
+    with pytest.raises(TypeError) as exc:
+        create_tokenizer(
+            "tiktoken", loader="not_callable"
+        )  # String instead of callable
+
+    assert "loader must be callable" in str(exc.value)
+
+
+def test_char_tokenizer_lookup_array_rebuild_on_grow() -> None:
+    """CharTokenizer should rebuild lookup array when itos grows beyond current array."""
+    tok = CharTokenizerTestHarness({"a": 0})
+    assert tok.lookup_array_length() == 1
+
+    # Manually add a larger index to itos
+    tok.itos[5] = "f"
+
+    # _ensure_lookup_array should rebuild
+    lookup = tok.expose_lookup_array()
+    assert lookup.shape[0] >= 6
+
+
+def test_word_tokenizer_lookup_array_rebuild_on_grow() -> None:
+    """WordTokenizer should rebuild lookup array when itos grows beyond current array."""
+    tok = WordTokenizerTestHarness({"hello": 0})
+    assert tok.lookup_array_length() == 1
+
+    # Manually add a larger index to itos
+    tok.itos[5] = "world"
+
+    # _ensure_lookup_array should rebuild
+    lookup = tok.expose_lookup_array()
+    assert lookup.shape[0] >= 6
+
+
+def test_tiktoken_tokenizer_vocab_without_mergeable_ranks() -> None:
+    """TiktokenTokenizer should return empty mapping when _mergeable_ranks is None."""
+
+    class FakeEncoder:
+        n_vocab = 10
+        _mergeable_ranks = None  # No mergeable ranks
+
+        def encode(
+            self, text: str, allowed_special: set[str] | None = None
+        ) -> list[int]:
+            return []
+
+        def decode(self, ids: list[int]) -> str:
+            return ""
+
+    class FakeModule:
+        @staticmethod
+        def get_encoding(name: str) -> FakeEncoder:
+            return FakeEncoder()
+
+    tk = TiktokenTokenizer(loader=lambda: FakeModule)
+    assert tk.vocab == MappingProxyType({})
+
+
+def test_char_tokenizer_encode_with_missing_chars() -> None:
+    """CharTokenizer.encode should return 0 for missing characters."""
+    tok = CharTokenizer({"a": 1, "b": 2})
+    result = tok.encode("abc")
+    assert result == [1, 2, 0]  # 'c' is missing, returns 0
+
+
+def test_word_tokenizer_encode_with_missing_words() -> None:
+    """WordTokenizer.encode should return 0 for missing words."""
+    tok = WordTokenizer({"hello": 1, "world": 2})
+    result = tok.encode("hello goodbye world")
+    assert result == [1, 0, 2]  # 'goodbye' is missing, returns 0
+
+
+def test_char_tokenizer_decode_with_empty_itos() -> None:
+    """CharTokenizer.decode should return empty string when itos is empty."""
+    tok = CharTokenizer()  # Empty vocab
+    result = tok.decode([0, 1, 2])
+    assert result == ""
+
+
+def test_word_tokenizer_decode_with_empty_itos() -> None:
+    """WordTokenizer.decode should return empty string when itos is empty."""
+    tok = WordTokenizer()  # Empty vocab
+    result = tok.decode([0, 1, 2])
+    assert result == ""
+
+
+def test_char_tokenizer_decode_with_all_out_of_range() -> None:
+    """CharTokenizer.decode should return empty string when all ids are out of range."""
+    tok = CharTokenizer({"a": 0})
+    result = tok.decode([100, 200, 300])  # All out of range
+    assert result == ""
+
+
+def test_word_tokenizer_decode_with_all_out_of_range() -> None:
+    """WordTokenizer.decode should return empty string when all ids are out of range."""
+    tok = WordTokenizer({"hello": 0})
+    result = tok.decode([100, 200, 300])  # All out of range
+    assert result == ""
