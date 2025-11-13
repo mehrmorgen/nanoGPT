@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable, Mapping, cast
+from typing import Any, Mapping, cast
 import math
 
 import pytest
@@ -25,16 +26,44 @@ from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
 
+@dataclass(slots=True)
+class _ValidationInfoStub:
+    context: Mapping[str, Any] | None
+    config: Any | None = None
 
-def _validator_helper(
-    cls: type[Any], attr: str, *args: Any, **kwargs: Any
-) -> Callable[..., Any]:
-    descriptor = getattr(cls, attr)
-    bound = cast(Callable[..., Any], descriptor.__get__(None, cls))
-    return lambda: bound(*args, **kwargs)
+
+class ExperimentConfigTestHarness(config_models.ExperimentConfig):
+    """Test harness exposing ExperimentConfig protected validators."""
+
+    @classmethod
+    def resolve_paths(
+        cls, data: Any, *, context: Mapping[str, Any] | None = None
+    ) -> Any:
+        info = _ValidationInfoStub(context=context)
+        descriptor = getattr(config_models.ExperimentConfig, "_resolve_paths")
+        validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
+            None, config_models.ExperimentConfig
+        )
+        return validator(data, info)  # pyright: ignore[reportGeneralTypeIssues]
+
+
+class SharedConfigTestHarness(config_models.SharedConfig):
+    """Test harness exposing SharedConfig protected validators."""
+
+    @classmethod
+    def resolve_paths(
+        cls, data: Any, *, context: Mapping[str, Any] | None = None
+    ) -> Any:
+        info = _ValidationInfoStub(context=context)
+        descriptor = getattr(config_models.SharedConfig, "_resolve_shared_paths")
+        validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
+            None, config_models.SharedConfig
+        )
+        return validator(data, info)  # pyright: ignore[reportGeneralTypeIssues]
 
 
 def test_full_loader_roundtrip(tmp_path: Path) -> None:
+    """Test full loader roundtrip."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test_next"),
@@ -57,6 +86,7 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
 
 
 def test_read_toml_dict_missing_file_raises(tmp_path: Path) -> None:
+    """Test read toml dict missing file raises."""
     missing_path = tmp_path / "missing.toml"
     with pytest.raises(FileNotFoundError):
         config_loading.read_toml_dict(missing_path)
@@ -93,6 +123,7 @@ def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
 
 
 def test_get_cfg_path_without_override(tmp_path: Path) -> None:
+    """Test get cfg path without override."""
     expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"  # pyright: ignore[reportPrivateUsage]
     result = config_loading.get_cfg_path("demo", None)
     assert result == expected
@@ -206,6 +237,7 @@ def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
 
 
 def test_load_train_config_sets_provenance(tmp_path: Path) -> None:
+    """Test load train config sets provenance."""
     config = tmp_path / "train.toml"
     config.write_text(
         """
@@ -230,6 +262,7 @@ out_dir = "./out"
 
 
 def test_load_sample_config_sets_provenance(tmp_path: Path) -> None:
+    """Test load sample config sets provenance."""
     config = tmp_path / "sample.toml"
     config.write_text(
         """
@@ -259,6 +292,7 @@ out_dir = "./train"
 
 
 def test_load_train_config_requires_mapping(tmp_path: Path) -> None:
+    """Test load train config requires mapping."""
     config = tmp_path / "train_invalid.toml"
     config.write_text("train = 'value'\n")
 
@@ -270,6 +304,7 @@ def test_load_train_config_requires_mapping(tmp_path: Path) -> None:
 
 
 def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
+    """Test load sample config requires sample block."""
     config = tmp_path / "sample_invalid.toml"
     config.write_text("[train]\n[train.runtime]\nout_dir='.'\n")
 
@@ -281,6 +316,7 @@ def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
 
 
 def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
+    """Test read toml dict reads existing file."""
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
     data = config_loading.read_toml_dict(cfg_path)
@@ -288,6 +324,7 @@ def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
 
 
 def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
+    """Test read toml dict rejects non mapping root."""
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
 
@@ -299,6 +336,7 @@ def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
 
 
 def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
+    """Test read toml dict invalid toml raises."""
     cfg_path = tmp_path / "broken.toml"
     cfg_path.write_text("not = [", encoding="utf-8")
 
@@ -307,6 +345,7 @@ def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
+    """Test full loader empty config raises."""
     toml_text = ""
     cfg_path = tmp_path / "empty.toml"
     cfg_path.write_text(toml_text)
@@ -319,6 +358,7 @@ def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
 
 
 def test_full_loader_bad_root_type(tmp_path: Path) -> None:
+    """Test full loader bad root type."""
     bad_text = """
 arr = [1,2,3]
 """
@@ -333,6 +373,7 @@ arr = [1,2,3]
 
 
 def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
+    """Test full loader nested unknown keys in sample raise."""
     cfg_path = tmp_path / "cfg_bad_sample_nested.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -345,6 +386,7 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
 
 
 def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
+    """Test full loader incomplete train config."""
     toml_text = """
 [prepare]
 
@@ -361,6 +403,7 @@ n_layer=1
 
 
 def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
+    """Test full loader unknown top level sections raise."""
     cfg_path = tmp_path / "cfg.toml"
     base = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -374,6 +417,7 @@ def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
 
 
 def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
+    """Test full loader nested unknown keys raise."""
     cfg_path = tmp_path / "cfg_bad_nested.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -386,6 +430,7 @@ def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
 
 
 def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
+    """Test load experiment toml strict sections."""
     cfg_path = tmp_path / "exp.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -401,6 +446,7 @@ def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
 
 
 def test_experiment_config_resolves_shared_and_section_paths(tmp_path: Path) -> None:
+    """Test experiment config resolves shared and section paths."""
     config_dir = tmp_path / "configs"
     config_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = config_dir / "exp.toml"
@@ -456,6 +502,7 @@ def test_experiment_config_resolves_shared_and_section_paths(tmp_path: Path) -> 
 
 
 def test_explicit_sample_runtime_overrides(tmp_path: Path) -> None:
+    """Test explicit sample runtime overrides."""
     cfg_path = tmp_path / "exp2.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -482,12 +529,14 @@ tensorboard_enabled = false
 
 
 def test_data_config_tokenizer_choices() -> None:
+    """Test data config tokenizer choices."""
     DataConfig(tokenizer="char")
     DataConfig(tokenizer="word")
     DataConfig(tokenizer="tiktoken")
 
 
 def test_dataconfig_positive_ints() -> None:
+    """Test dataconfig positive ints."""
     with pytest.raises(ValidationError):
         DataConfig(batch_size=0)
     with pytest.raises(ValidationError):
@@ -500,7 +549,8 @@ def test_dataconfig_positive_ints() -> None:
     assert cfg.batch_size == 1
 
 
-def test_sampleconfig_ranges() -> None:
+def test_sample_config_validation_rejects_out_of_range_params() -> None:
+    """Test sample config validation rejects out-of-range parameters."""
     with pytest.raises(ValidationError):
         SampleConfig(temperature=0.0)
     with pytest.raises(ValidationError):
@@ -512,7 +562,8 @@ def test_sampleconfig_ranges() -> None:
     SampleConfig(temperature=0.1, top_k=0, top_p=0.5)
 
 
-def test_lrschedule_validations() -> None:
+def test_lr_schedule_validation_rejects_invalid_inputs() -> None:
+    """Test lr schedule validation rejects invalid inputs."""
     with pytest.raises(ValidationError):
         LRSchedule(warmup_iters=-1)
     with pytest.raises(ValidationError):
@@ -526,6 +577,7 @@ def test_lrschedule_validations() -> None:
 
 
 def test_optimconfig_non_negative() -> None:
+    """Test optimconfig non negative."""
     with pytest.raises(ValidationError):
         OptimConfig(learning_rate=-1e-3)
     with pytest.raises(ValidationError):
@@ -539,7 +591,8 @@ def test_optimconfig_non_negative() -> None:
     OptimConfig()
 
 
-def test_modelconfig_ranges() -> None:
+def test_model_config_validation_rejects_invalid_ranges() -> None:
+    """Test model config validation rejects invalid ranges."""
     with pytest.raises(ValidationError):
         ModelConfig(n_layer=0)
     with pytest.raises(ValidationError):
@@ -556,6 +609,7 @@ def test_modelconfig_ranges() -> None:
 
 
 def test_default_constants_across_configs() -> None:
+    """Test default constants across configs."""
     schedule = LRSchedule()
     assert schedule.decay_lr is True
     assert schedule.warmup_iters == 2_000
@@ -585,6 +639,7 @@ def test_default_constants_across_configs() -> None:
 
 
 def test_runtime_checkpointing_keep_non_negative(tmp_path: Path) -> None:
+    """Test runtime checkpointing keep non negative."""
     with pytest.raises(ValidationError):
         RuntimeConfig(
             out_dir=tmp_path,
@@ -603,6 +658,7 @@ def test_runtime_checkpointing_keep_non_negative(tmp_path: Path) -> None:
 
 
 def test_runtimeconfig_defaults_and_checkpointing() -> None:
+    """Test runtimeconfig defaults and checkpointing."""
     runtime = RuntimeConfig(out_dir=Path("./out"))
     assert runtime.max_iters == 600_000
     assert runtime.eval_interval == 2_000
@@ -627,6 +683,7 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
 
 
 def test_merge_mappings_nested_and_replace() -> None:
+    """Test merge mappings nested and replace."""
     base = {"a": 1, "b": {"x": 1, "y": 2}, "c": {"k": 1}, "d": 4}
     override = {"b": {"y": 20, "z": 3}, "c": 5, "e": 6}
     out = merge_mappings(base, override)
@@ -637,6 +694,7 @@ def test_merge_mappings_nested_and_replace() -> None:
 
 
 def test_merge_mappings_numeric_replacements() -> None:
+    """Test merge mappings numeric replacements."""
     base = {"a": {"x": 1, "y": -2}, "b": 10}
     override = {"a": {"x": 3}, "b": 0}
     out = merge_mappings(base, override)
@@ -646,6 +704,7 @@ def test_merge_mappings_numeric_replacements() -> None:
 
 
 def test_merge_mappings_type_replacement() -> None:
+    """Test merge mappings type replacement."""
     base = {"a": {"x": 1}, "b": {"y": 2}}
     override = {"b": 7}
     out = merge_mappings(base, override)
@@ -654,6 +713,7 @@ def test_merge_mappings_type_replacement() -> None:
 
 
 def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+    """Test trainer resolves relative runtime out dir."""
     cfg_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/rel_train"),
@@ -667,6 +727,7 @@ def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
 
 
 def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+    """Test sampler resolves relative runtime out dir."""
     cfg_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/rel_sample"),
@@ -680,6 +741,7 @@ def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
 
 
 def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
+    """Test experiment config shared path coercions."""
     ds_dir = Path("./data/shared")
     out_dir = Path("out/shared")
     cfg_text = minimal_full_experiment_toml(dataset_dir=ds_dir, out_dir=out_dir)
@@ -699,6 +761,7 @@ def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
 
 
 def test_cross_field_validations(tmp_path: Path) -> None:
+    """Test cross field validations."""
     with pytest.raises(ValueError):
         TrainerConfig(
             model=ModelConfig(block_size=4),
@@ -729,6 +792,7 @@ def test_cross_field_validations(tmp_path: Path) -> None:
 
 
 def test_dataconfig_paths_and_defaults() -> None:
+    """Test dataconfig paths and defaults."""
     config = DataConfig()
     assert config.train_bin == "train.bin"
     assert config.val_bin == "val.bin"
@@ -742,17 +806,20 @@ def test_dataconfig_paths_and_defaults() -> None:
 
 
 def test_dataconfig_meta_none_rejected() -> None:
+    """Test dataconfig meta none rejected."""
     with pytest.raises(ValidationError):
         DataConfig(meta_pkl=cast(Any, None))
 
 
 def test_preparerconfig_path_coercion_and_resolve(tmp_path: Path) -> None:
+    """Test preparerconfig path coercion and resolve."""
     config = PreparerConfig(raw_dir=tmp_path / "raw")
     assert isinstance(config.raw_dir, Path)
     _ = config.raw_dir
 
 
 def test_sampleconfig_more_ranges() -> None:
+    """Test sampleconfig more ranges."""
     with pytest.raises(ValidationError):
         SampleConfig(num_samples=0)
     with pytest.raises(ValidationError):
@@ -775,6 +842,7 @@ def test_config_canonical_exports() -> None:
 
 
 def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
+    """Test full loader incomplete sample config."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -789,6 +857,7 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
 
 
 def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
+    """Test full loader no train section raises."""
     toml_text = """
 [prepare]
 
@@ -804,6 +873,7 @@ out_dir = "out/test"
 
 
 def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
+    """Test full loader no sample section raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -816,6 +886,7 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
 
 
 def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
+    """Test full loader train missing data section."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -829,6 +900,7 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
 
 
 def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
+    """Test full loader train missing runtime section."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -842,6 +914,7 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
 
 
 def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
+    """Test full loader sample missing runtime section."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -856,6 +929,7 @@ def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
 
 
 def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
+    """Test cli adapters load and validate."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -871,6 +945,7 @@ def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
 
 
 def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
+    """Test cli adapters prerequisites."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -897,6 +972,7 @@ def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
 
 
 def test_cli_ensure_train_prerequisites_missing_meta(tmp_path: Path) -> None:
+    """Test cli ensure train prerequisites missing meta."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -917,6 +993,7 @@ def test_cli_ensure_train_prerequisites_missing_meta(tmp_path: Path) -> None:
 
 
 def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
+    """Test cli ensure sample prerequisites missing meta."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -937,6 +1014,7 @@ def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
 
 
 def test_internal_path_helpers(tmp_path: Path) -> None:
+    """Test internal path helpers."""
     bad_path = tmp_path / "bad"
 
     def fake_resolve(path: Path) -> Path:
@@ -961,11 +1039,13 @@ def test_internal_path_helpers(tmp_path: Path) -> None:
 
 
 def test_no_nan_validator_raises() -> None:
+    """Test no nan validator raises."""
     with pytest.raises(ValidationError):
         config_models.OptimConfig(learning_rate=float("nan"))
 
 
 def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
+    """Test preparer config context path resolution."""
     cfg = config_models.PreparerConfig.model_validate(
         {"raw_dir": "data", "raw_text_path": "texts/in.txt"},
         context={"config_path": tmp_path / "cfg.toml"},
@@ -983,6 +1063,7 @@ def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
 
 
 def test_peft_config_coerces_target_modules() -> None:
+    """Test peft config coerces target modules."""
     peft = config_models.TrainerConfig.PeftConfig.model_validate(
         {"target_modules": ["a", "b"], "enabled": True}
     )
@@ -991,6 +1072,7 @@ def test_peft_config_coerces_target_modules() -> None:
 
 
 def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
+    """Test experiment config resolve paths from dict."""
     base_dir = tmp_path / "project"
     base_dir.mkdir()
     cfg_path = base_dir / "cfg.toml"
@@ -1008,9 +1090,9 @@ def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
         },
     }
 
-    result = _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
+    result = cast(Mapping[str, Any], ExperimentConfigTestHarness.resolve_paths(data))
 
-    shared = result["shared"]
+    shared = cast(Mapping[str, Any], result["shared"])
     assert isinstance(shared["project_home"], Path)
     assert isinstance(shared["dataset_dir"], Path)
     assert isinstance(shared["train_out_dir"], Path)
@@ -1025,15 +1107,17 @@ def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
 
 
 def test_experiment_config_resolve_paths_with_namespace(tmp_path: Path) -> None:
+    """Test experiment config resolve paths with namespace."""
     cfg_path = tmp_path / "cfg.toml"
     shared_ns = SimpleNamespace(config_path=cfg_path)
     data = {"shared": shared_ns}
     # Should not raise or mutate namespace for non-dict shared data
-    result = _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
+    result = cast(Mapping[str, Any], ExperimentConfigTestHarness.resolve_paths(data))
     assert result["shared"] is shared_ns
 
 
 def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
+    """Test shared config resolves relative paths."""
     cfg_path = tmp_path / "cfg.toml"
     data = {
         "config_path": cfg_path,
@@ -1042,9 +1126,7 @@ def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
         "train_out_dir": "train",
         "sample_out_dir": "sample",
     }
-    resolved = _validator_helper(
-        config_models.SharedConfig, "_resolve_shared_paths", data.copy()
-    )()
+    resolved = SharedConfigTestHarness.resolve_paths(data.copy())
     assert resolved["project_home"].is_absolute()
     assert resolved["dataset_dir"].is_absolute()
 
@@ -1068,6 +1150,7 @@ def _trainer_dict(tmp_path: Path) -> dict[str, Any]:
 
 
 def test_trainer_config_resolve_paths_with_context(tmp_path: Path) -> None:
+    """Test trainer config resolve paths with context."""
     trainer_dict = _trainer_dict(tmp_path)
     cfg_path = tmp_path / "cfg.toml"
     trainer = TrainerConfig.model_validate(
@@ -1078,6 +1161,7 @@ def test_trainer_config_resolve_paths_with_context(tmp_path: Path) -> None:
 
 
 def test_trainer_config_resolve_paths_without_context(tmp_path: Path) -> None:
+    """Test trainer config resolve paths without context."""
     trainer_dict = _trainer_dict(tmp_path)
     trainer_dict["runtime"]["out_dir"] = Path("rel_out")
     trainer = TrainerConfig.model_validate(
@@ -1098,6 +1182,7 @@ def _sampler_dict(tmp_path: Path) -> dict[str, Any]:
 
 
 def test_sampler_config_resolve_paths_with_context(tmp_path: Path) -> None:
+    """Test sampler config resolve paths with context."""
     sampler_dict = _sampler_dict(tmp_path)
     cfg_path = tmp_path / "cfg.toml"
     sampler = config_models.SamplerConfig.model_validate(
@@ -1108,6 +1193,7 @@ def test_sampler_config_resolve_paths_with_context(tmp_path: Path) -> None:
 
 
 def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
+    """Test sampler config resolve paths without context."""
     sampler_dict = _sampler_dict(tmp_path)
     sampler_dict["runtime"]["out_dir"] = Path("rel_out")
     sampler = config_models.SamplerConfig.model_validate(
@@ -1119,32 +1205,30 @@ def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
 
 
 def test_experiment_config_resolve_paths_non_dict() -> None:
-    assert (
-        _validator_helper(config_models.ExperimentConfig, "_resolve_paths", 123)()
-        == 123
-    )
+    """Test experiment config resolve paths non dict."""
+    assert ExperimentConfigTestHarness.resolve_paths(123) == 123
 
 
 def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> None:
+    """Test experiment config resolve paths missing config path."""
     data = {
         "shared": {"experiment": "unit"},
         "prepare": {},
     }
-    assert (
-        _validator_helper(config_models.ExperimentConfig, "_resolve_paths", data)()
-        is data
-    )
+    assert ExperimentConfigTestHarness.resolve_paths(data) is data
 
 
 def test_shared_config_resolve_paths_invalid_config_path() -> None:
+    """Test shared config resolve paths invalid config path."""
     data = {"config_path": object(), "project_home": "rel", "dataset_dir": 123}
-    resolved = _validator_helper(
-        config_models.SharedConfig, "_resolve_shared_paths", data.copy()
-    )()
-    assert resolved == data
+    resolved = cast(
+        Mapping[str, Any], SharedConfigTestHarness.resolve_paths(data.copy())
+    )
+    assert dict(resolved) == data
 
 
 def test_runtime_config_validates_log_interval(tmp_path: Path) -> None:
+    """Test runtime config validates log interval."""
     with pytest.raises(ValidationError):
         RuntimeConfig(
             out_dir=tmp_path / "out",
@@ -1207,6 +1291,7 @@ def _base_trainer_kwargs(tmp_path: Path) -> dict[str, Any]:
 
 
 def test_trainer_config_rejects_large_data_block(tmp_path: Path) -> None:
+    """Test trainer config rejects large data block."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["data"] = DataConfig(
         batch_size=2,
@@ -1219,6 +1304,7 @@ def test_trainer_config_rejects_large_data_block(tmp_path: Path) -> None:
 
 
 def test_trainer_config_rejects_min_lr_above_learning_rate(tmp_path: Path) -> None:
+    """Test trainer config rejects min lr above learning rate."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["optim"] = OptimConfig(
         learning_rate=0.05,
@@ -1238,6 +1324,7 @@ def test_trainer_config_rejects_min_lr_above_learning_rate(tmp_path: Path) -> No
 
 
 def test_trainer_config_requires_zero_warmup_without_decay(tmp_path: Path) -> None:
+    """Test trainer config requires zero warmup without decay."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["schedule"] = LRSchedule(
         decay_lr=False,
@@ -1250,6 +1337,7 @@ def test_trainer_config_requires_zero_warmup_without_decay(tmp_path: Path) -> No
 
 
 def test_lr_schedule_requires_warmup_le_decay_iters() -> None:
+    """Test lr schedule requires warmup le decay iters."""
     with pytest.raises(ValidationError):
         LRSchedule(
             decay_lr=True,
@@ -1260,6 +1348,7 @@ def test_lr_schedule_requires_warmup_le_decay_iters() -> None:
 
 
 def test_data_config_requires_ngram_one_for_non_tiktoken() -> None:
+    """Test data config requires ngram one for non tiktoken."""
     with pytest.raises(ValidationError):
         DataConfig(
             batch_size=2,
@@ -1316,12 +1405,11 @@ def test_coerce_path_edge_cases() -> None:
 
 def test_experiment_config_path_resolution_edge_cases(tmp_path: Path) -> None:
     """Test edge cases in ExperimentConfig path resolution to cover missing lines."""
-    from ml_playground.configuration.models import ExperimentConfig
 
     cfg_path = tmp_path / "cfg.toml"
 
     # Test with shared data that has config_path but no other path fields - covers line 271
-    data = {
+    data: Mapping[str, Any] = {
         "shared": {"config_path": cfg_path, "experiment": "test"},
         "prepare": {"raw_dir": "data"},
         "train": {
@@ -1335,7 +1423,7 @@ def test_experiment_config_path_resolution_edge_cases(tmp_path: Path) -> None:
     }
 
     # This should not raise and should process the paths
-    result = ExperimentConfig._resolve_paths(data)
+    result = cast(Mapping[str, Any], ExperimentConfigTestHarness.resolve_paths(data))
     assert "shared" in result
 
 
@@ -1360,12 +1448,11 @@ def test_cross_field_validator_coverage() -> None:
 
 def test_normalize_runtime_out_dir_edge_cases(tmp_path: Path) -> None:
     """Test _normalize_runtime_out_dir function edge cases."""
-    from ml_playground.configuration.models import ExperimentConfig
 
     cfg_path = tmp_path / "cfg.toml"
 
     # Test with section that doesn't have runtime - covers lines 525-528, 530-533
-    data = {
+    data: Mapping[str, Any] = {
         "shared": {"config_path": cfg_path},
         "train": {
             "model": {},
@@ -1376,19 +1463,17 @@ def test_normalize_runtime_out_dir_edge_cases(tmp_path: Path) -> None:
         "sample": {"sample": {}},  # No runtime section
     }
 
-    result = ExperimentConfig._resolve_paths(data)
+    result = cast(Mapping[str, Any], ExperimentConfigTestHarness.resolve_paths(data))
     assert "train" in result
     assert "sample" in result
 
 
 def test_shared_config_path_coercion_edge_cases(tmp_path: Path) -> None:
     """Test SharedConfig path coercion edge cases."""
-    from ml_playground.configuration.models import SharedConfig
-
     cfg_path = tmp_path / "cfg.toml"
 
     # Test with data that has config_path but other fields are not paths - covers lines 548, 563
-    data = {
+    data: Mapping[str, Any] = {
         "config_path": cfg_path,
         "experiment": "test",
         "project_home": 123,  # Not a path-like object
@@ -1397,7 +1482,9 @@ def test_shared_config_path_coercion_edge_cases(tmp_path: Path) -> None:
         "sample_out_dir": "relative_path",  # String path
     }
 
-    result = SharedConfig._resolve_shared_paths(data)
+    result = cast(
+        Mapping[str, Any], SharedConfigTestHarness.resolve_paths(data)
+    )
     assert result["project_home"] == 123  # Should remain unchanged
     assert result["dataset_dir"] is None  # Should remain unchanged
     assert isinstance(result["train_out_dir"], Path)
@@ -1412,3 +1499,154 @@ def test_peft_config_target_modules_edge_case() -> None:
     data = {"enabled": True, "r": 8}
     peft = TrainerConfig.PeftConfig.model_validate(data)
     assert peft.target_modules == ()  # Should use default empty tuple
+
+
+def test_runtime_validator_log_interval_exceeds_eval_interval() -> None:
+    """RuntimeConfig validator should raise when log_interval > eval_interval."""
+    from ml_playground.configuration.models import RuntimeConfig
+
+    with pytest.raises(ValidationError) as exc:
+        RuntimeConfig(
+            out_dir=Path("out"),
+            log_interval=100,
+            eval_interval=50,
+        )
+
+    assert "log_interval must be <=" in str(exc.value)
+
+
+def test_trainer_validator_data_block_size_exceeds_model() -> None:
+    """TrainerConfig validator should raise when data.block_size > model.block_size."""
+    from ml_playground.configuration.models import (
+        TrainerConfig,
+        ModelConfig,
+        DataConfig,
+        OptimConfig,
+        LRSchedule,
+        RuntimeConfig,
+    )
+
+    with pytest.raises(ValidationError) as exc:
+        TrainerConfig(
+            model=ModelConfig(block_size=512),
+            data=DataConfig(block_size=1024),  # Exceeds model block_size
+            optim=OptimConfig(),
+            schedule=LRSchedule(),
+            runtime=RuntimeConfig(out_dir=Path("out")),
+        )
+
+    assert "block_size must be <=" in str(exc.value)
+
+
+def test_trainer_validator_min_lr_exceeds_learning_rate_with_decay() -> None:
+    """TrainerConfig validator should raise when min_lr > learning_rate with decay_lr=true."""
+    from ml_playground.configuration.models import (
+        TrainerConfig,
+        ModelConfig,
+        DataConfig,
+        OptimConfig,
+        LRSchedule,
+        RuntimeConfig,
+    )
+
+    with pytest.raises(ValidationError) as exc:
+        TrainerConfig(
+            model=ModelConfig(),
+            data=DataConfig(),
+            optim=OptimConfig(learning_rate=0.001),
+            schedule=LRSchedule(decay_lr=True, min_lr=0.01),  # min_lr > learning_rate
+            runtime=RuntimeConfig(out_dir=Path("out")),
+        )
+
+    assert "min_lr must be <=" in str(exc.value)
+
+
+def test_trainer_validator_warmup_iters_nonzero_without_decay() -> None:
+    """TrainerConfig validator should raise when warmup_iters != 0 but decay_lr=false."""
+    from ml_playground.configuration.models import (
+        TrainerConfig,
+        ModelConfig,
+        DataConfig,
+        OptimConfig,
+        LRSchedule,
+        RuntimeConfig,
+    )
+
+    with pytest.raises(ValidationError) as exc:
+        TrainerConfig(
+            model=ModelConfig(),
+            data=DataConfig(),
+            optim=OptimConfig(),
+            schedule=LRSchedule(
+                decay_lr=False, warmup_iters=100
+            ),  # warmup without decay
+            runtime=RuntimeConfig(out_dir=Path("out")),
+        )
+
+    assert "warmup_iters must be 0" in str(exc.value)
+
+
+def test_lr_schedule_validator_warmup_exceeds_decay() -> None:
+    """LRSchedule validator should raise when warmup_iters > lr_decay_iters."""
+    from ml_playground.configuration.models import LRSchedule
+
+    with pytest.raises(ValidationError) as exc:
+        LRSchedule(
+            warmup_iters=1000,
+            lr_decay_iters=500,  # warmup > decay
+        )
+
+    assert "warmup_iters must be <=" in str(exc.value)
+
+
+def test_data_config_validator_ngram_with_non_tiktoken() -> None:
+    """DataConfig validator should raise when ngram_size != 1 with non-tiktoken tokenizer."""
+    from ml_playground.configuration.models import DataConfig
+
+    with pytest.raises(ValidationError) as exc:
+        DataConfig(
+            tokenizer="char",
+            ngram_size=2,  # ngram_size must be 1 for non-tiktoken
+        )
+
+    assert "ngram_size must be 1" in str(exc.value)
+
+
+def test_data_config_validator_ngram_with_tiktoken_passes() -> None:
+    """DataConfig validator should allow ngram_size > 1 with tiktoken tokenizer."""
+    from ml_playground.configuration.models import DataConfig
+
+    # Should not raise
+    cfg = DataConfig(
+        tokenizer="tiktoken",
+        ngram_size=2,
+    )
+    assert cfg.ngram_size == 2
+
+
+def test_peft_config_target_modules_from_set() -> None:
+    """PeftConfig should coerce target_modules from set to tuple."""
+    from ml_playground.configuration.models import TrainerConfig
+
+    data = {
+        "enabled": True,
+        "r": 8,
+        "target_modules": {"module1", "module2"},  # Set input
+    }
+    peft = TrainerConfig.PeftConfig.model_validate(data)
+    assert isinstance(peft.target_modules, tuple)
+    assert set(peft.target_modules) == {"module1", "module2"}
+
+
+def test_peft_config_target_modules_from_sequence() -> None:
+    """PeftConfig should coerce target_modules from sequence to tuple."""
+    from ml_playground.configuration.models import TrainerConfig
+
+    data = {
+        "enabled": True,
+        "r": 8,
+        "target_modules": ["module1", "module2"],  # List input
+    }
+    peft = TrainerConfig.PeftConfig.model_validate(data)
+    assert isinstance(peft.target_modules, tuple)
+    assert peft.target_modules == ("module1", "module2")

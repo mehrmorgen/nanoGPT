@@ -150,6 +150,7 @@ def _deps(
 
 
 def test_prepare_command_invokes_injected_runner(tmp_path: Path) -> None:
+    """Test prepare command invokes injected runner."""
     shared = _build_shared(tmp_path, "prep")
     experiment = _build_experiment(shared)
     calls: list[str] = []
@@ -179,6 +180,7 @@ def test_prepare_command_invokes_injected_runner(tmp_path: Path) -> None:
 def test_prepare_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Test prepare command propagates loader error."""
     caplog.set_level(logging.ERROR, logger="ml_playground.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
@@ -193,6 +195,7 @@ def test_prepare_command_propagates_loader_error(
 
 
 def test_train_command_invokes_injected_runner(tmp_path: Path) -> None:
+    """Test train command invokes injected runner."""
     shared = _build_shared(tmp_path, "train-exp")
     experiment = _build_experiment(shared)
     calls: list[str] = []
@@ -229,6 +232,7 @@ def test_train_command_invokes_injected_runner(tmp_path: Path) -> None:
 def test_train_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Test train command propagates loader error."""
     caplog.set_level(logging.ERROR, logger="ml_playground.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
@@ -243,6 +247,7 @@ def test_train_command_propagates_loader_error(
 
 
 def test_sample_command_invokes_injected_runner(tmp_path: Path) -> None:
+    """Test sample command invokes injected runner."""
     shared = _build_shared(tmp_path, "sample-exp")
     experiment = _build_experiment(shared)
     calls: list[str] = []
@@ -283,6 +288,7 @@ def test_sample_command_invokes_injected_runner(tmp_path: Path) -> None:
 def test_sample_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Test sample command propagates loader error."""
     caplog.set_level(logging.ERROR, logger="ml_playground.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
@@ -297,11 +303,13 @@ def test_sample_command_propagates_loader_error(
 
 
 def test_analyze_command_rejects_non_bundestag() -> None:
+    """Test analyze command rejects non bundestag."""
     result = runner.invoke(app, ["analyze", "other"])
     assert result.exit_code == 1
 
 
 def test_analyze_command_logs_message(caplog: pytest.LogCaptureFixture) -> None:
+    """Test analyze command logs message."""
     caplog.set_level(logging.INFO, logger="ml_playground.runtime.cli")
     result = runner.invoke(app, ["analyze", "bundestag_char"])
     assert result.exit_code == 0
@@ -311,6 +319,7 @@ def test_analyze_command_logs_message(caplog: pytest.LogCaptureFixture) -> None:
 def test_global_option_missing_exp_config_exits(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Test global option missing exp config exits."""
     caplog.set_level(logging.ERROR, logger="ml_playground.cli")
     missing = tmp_path / "missing.toml"
 
@@ -332,6 +341,7 @@ def test_global_option_missing_exp_config_exits(
 
 
 def test_cli_help_lists_core_commands() -> None:
+    """Test cli help lists core commands."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     out = result.stdout.lower()
@@ -339,6 +349,7 @@ def test_cli_help_lists_core_commands() -> None:
 
 
 def test_config_loader_missing_sample_section(tmp_path: Path) -> None:
+    """Test config loader missing sample section."""
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("[train]\n", encoding="utf-8")
 

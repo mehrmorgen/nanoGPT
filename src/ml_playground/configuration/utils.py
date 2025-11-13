@@ -5,9 +5,9 @@ from typing import Any, Callable
 
 from .models import (
     ResolveFn,
-    _ConfigCrossFieldValidator as _InternalConfigCrossFieldValidator,
-    _coerce_path as _internal_coerce_path,
-    _resolve_if_relative as _internal_resolve_if_relative,
+    ConfigCrossFieldValidator as _ModelsConfigCrossFieldValidator,
+    coerce_path as _models_coerce_path,
+    resolve_if_relative as _models_resolve_if_relative,
 )
 
 
@@ -26,25 +26,21 @@ def resolve_if_relative(
 ) -> Any:
     """Public wrapper around the configuration path resolver."""
 
-    return _internal_resolve_if_relative(value, base_dir, resolve=resolve)
+    return _models_resolve_if_relative(value, base_dir, resolve=resolve)
 
 
 def coerce_path(value: Any) -> Path | None:
     """Convert arbitrary inputs to `Path` when possible."""
 
-    return _internal_coerce_path(value)
+    return _models_coerce_path(value)
 
 
-class ConfigCrossFieldValidator:
+class ConfigCrossFieldValidator(_ModelsConfigCrossFieldValidator):
     """Expose cross-field validation helpers for configuration models."""
 
-    runtime: Callable[[Any], None] = staticmethod(
-        _InternalConfigCrossFieldValidator.runtime
-    )
-    trainer: Callable[[Any], None] = staticmethod(
-        _InternalConfigCrossFieldValidator.trainer
-    )
+    runtime: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.runtime)
+    trainer: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.trainer)
     lr_schedule: Callable[[Any], None] = staticmethod(
-        _InternalConfigCrossFieldValidator.lr_schedule
+        _ModelsConfigCrossFieldValidator.lr_schedule
     )
-    data: Callable[[Any], None] = staticmethod(_InternalConfigCrossFieldValidator.data)
+    data: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.data)

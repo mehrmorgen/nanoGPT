@@ -119,6 +119,19 @@ def _get_resolve_fn(info: ValidationInfo | None) -> ResolveFn | None:
     return None
 
 
+def resolve_if_relative(
+    value: Any,
+    base_dir: Path,
+    *,
+    resolve: ResolveFn | None = None,
+) -> Any:
+    return _resolve_if_relative(value, base_dir, resolve=resolve)
+
+
+def coerce_path(value: Any) -> Path | None:
+    return _coerce_path(value)
+
+
 SECTION_PREPARE = "prepare"
 SECTION_TRAIN = "train"
 SECTION_SAMPLE = "sample"
@@ -171,6 +184,17 @@ class _ConfigCrossFieldValidator:
             raise ValueError(
                 "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
             )
+
+
+class ConfigCrossFieldValidator:
+    """Public façade over internal configuration validators."""
+
+    runtime: Callable[[Any], None] = staticmethod(_ConfigCrossFieldValidator.runtime)
+    trainer: Callable[[Any], None] = staticmethod(_ConfigCrossFieldValidator.trainer)
+    lr_schedule: Callable[[Any], None] = staticmethod(
+        _ConfigCrossFieldValidator.lr_schedule
+    )
+    data: Callable[[Any], None] = staticmethod(_ConfigCrossFieldValidator.data)
 
 
 class _FrozenStrictModel(BaseModel):
@@ -624,6 +648,9 @@ __all__ = [
     "CheckpointSaveFn",
     "ModelFactoryFn",
     "CompileModelFn",
+    "resolve_if_relative",
+    "coerce_path",
+    "ConfigCrossFieldValidator",
     "SECTION_PREPARE",
     "SECTION_TRAIN",
     "SECTION_SAMPLE",

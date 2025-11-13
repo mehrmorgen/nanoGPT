@@ -8,6 +8,7 @@ import pytest
 
 
 def test_shared_paths_resolve_relative_string_values(tmp_path: Path) -> None:
+    """Test shared paths resolve relative string values."""
     cfg_path = tmp_path / "exp" / "cfg.toml"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text("")
@@ -38,6 +39,7 @@ def test_shared_paths_resolve_relative_string_values(tmp_path: Path) -> None:
 
 
 def test_shared_paths_preserve_absolute_values(tmp_path: Path) -> None:
+    """Test shared paths preserve absolute values."""
     cfg_path = tmp_path / "exp" / "cfg.toml"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text("")
@@ -65,6 +67,7 @@ def test_shared_paths_preserve_absolute_values(tmp_path: Path) -> None:
 
 
 def test_shared_paths_missing_config_path_raises() -> None:
+    """Test shared paths missing config path raises."""
     # SharedConfig is strict: config_path is required
     data = {
         "experiment": "unit",
