@@ -178,6 +178,7 @@ def test_trainer_with_ema(tmp_path: Path) -> None:
     # Should not raise
     final_iter, best_loss = trainer.run()
     assert final_iter > 0
+    assert best_loss > 0.0
     assert trainer.ema is not None
 
 

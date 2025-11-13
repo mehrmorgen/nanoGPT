@@ -2,14 +2,59 @@ from __future__ import annotations
 
 from pathlib import Path
 from datetime import datetime
+from collections.abc import Mapping, Sequence
 import json
-from typing import Any
+from typing import Any, Protocol, cast
 
-from ml_playground.configuration.models import SamplerConfig
+from ml_playground.configuration.models import RuntimeConfig, SamplerConfig
 from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
 )
+from ml_playground.core.logging_protocol import LoggerLike
+
+
+TokenBatch = Mapping[str, object | None]
+
+
+class _Tokenizer(Protocol):
+    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
+        ...
+
+    def decode(
+        self,
+        token_ids: object,
+        *,
+        skip_special_tokens: bool,
+        clean_up_tokenization_spaces: bool,
+    ) -> str:
+        ...
+
+
+class _Model(Protocol):
+    def generate(
+        self,
+        *,
+        input_ids: object,
+        attention_mask: object | None = ...,
+    ) -> Sequence[object]:
+        ...
+
+
+class _TokenizerFactory(Protocol):
+    def __call__(self, model_path: Path, *, use_fast: bool) -> _Tokenizer:
+        ...
+
+
+class _BaseModelFactory(Protocol):
+    def __call__(self, model_name: str) -> _Model:
+        ...
+
+
+class _PeftFactory(Protocol):
+    def __call__(self, base_model: _Model, adapters_path: Path) -> _Model:
+        ...
+
 
 # Expose names for monkeypatching in tests (compat with previous integration)
 try:  # pragma: no cover - optional heavy deps
@@ -32,8 +77,15 @@ except ImportError:  # pragma: no cover
         ...
 
 
+__all__ = ["SpeakGerSampler", "config_path"]
+
+
 def _config_path() -> Path:
     return Path(__file__).resolve().parent / "config.toml"
+
+
+def config_path() -> Path:
+    return _config_path()
 
 
 def _load_best_stats(out_dir: Path) -> tuple[float | None, int | None]:
@@ -94,46 +146,55 @@ def _run_sampling(
     out_dir: Path,
     model_name: str,
     prompt: str,
-    logger,
+    logger: LoggerLike,
     *,
-    tokenizer_factory: Any | None = None,
-    base_model_factory: Any | None = None,
-    peft_model_factory: Any | None = None,
-):
+    tokenizer_factory: _TokenizerFactory | None = None,
+    base_model_factory: _BaseModelFactory | None = None,
+    peft_model_factory: _PeftFactory | None = None,
+) -> tuple[Path, Path]:
     samples_dir = out_dir / "samples"
     samples_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve factories with sensible defaults (heavy deps if available)
-    _tok_factory = (
+    _tok_factory = cast(
+        _TokenizerFactory,
         tokenizer_factory
         if tokenizer_factory is not None
-        else AutoTokenizer.from_pretrained  # type: ignore[attr-defined]
+        else AutoTokenizer.from_pretrained,  # type: ignore[attr-defined]
     )
-    _base_factory = (
+    _base_factory = cast(
+        _BaseModelFactory,
         base_model_factory
         if base_model_factory is not None
-        else AutoModelForCausalLM.from_pretrained  # type: ignore[attr-defined]
+        else AutoModelForCausalLM.from_pretrained,  # type: ignore[attr-defined]
     )
-    _peft_factory = (
+    _peft_factory = cast(
+        _PeftFactory,
         peft_model_factory
         if peft_model_factory is not None
-        else PeftModel.from_pretrained  # type: ignore[attr-defined]
+        else PeftModel.from_pretrained,  # type: ignore[attr-defined]
     )
 
     tok = _tok_factory(out_dir / "tokenizer", use_fast=True)
     base = _base_factory(model_name)
+    model: _Model
     try:
         # build adapters path using Path joining, not bitwise and
         model = _peft_factory(base, out_dir / "adapters" / "best")
     except (FileNotFoundError, NotADirectoryError):
-        model = base  # type: ignore[assignment]
+        model = base
 
     enc = tok(prompt, return_tensors="pt")
     input_ids = enc.get("input_ids")
     attn = enc.get("attention_mask")
+    if input_ids is None:
+        raise ValueError("Tokenizer output missing input_ids")
     out = model.generate(input_ids=input_ids, attention_mask=attn)
+    decoded_input = out[0]
     text = tok.decode(
-        out[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+        decoded_input,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
     )
 
     best_val_loss, _iter = _load_best_stats(out_dir)
@@ -167,11 +228,12 @@ def _run_sampling(
 class SpeakGerSampler(_SamplerProto):
     def sample(self, cfg: SamplerConfig) -> SampleReport:  # type: ignore[override]
         # Strict fail-fast: require concrete runtime injected by CLI (no runtime_ref resolution here)
-        if cfg.runtime is None:
+        runtime = getattr(cfg, "runtime", None)
+        if not isinstance(runtime, RuntimeConfig):
             raise ValueError(
                 "SpeakGerSampler requires cfg.runtime to be provided (injected by CLI)"
             )
-        out_dir = cfg.runtime.out_dir
+        out_dir = runtime.out_dir
         # Model name is expected to be provided via extras for this experiment
         model_name = str(cfg.extras.get("hf_model_name", "dummy"))
         prompt = cfg.sample.start

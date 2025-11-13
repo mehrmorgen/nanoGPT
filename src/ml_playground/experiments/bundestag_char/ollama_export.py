@@ -8,7 +8,9 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, NoReturn, cast, Literal
+from typing import Any, Optional, NoReturn, Literal
+
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.configuration.models import READ_POLICY_BEST
 
 
@@ -76,7 +78,7 @@ def _same_stamp(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return a == b
 
 
-def _fail(msg: str, code: int = 2, logger=None) -> NoReturn:
+def _fail(msg: str, code: int = 2, logger: LoggerLike | None = None) -> NoReturn:
     if logger is None:
         logger = logging.getLogger(__name__)
     logger.error(msg)
@@ -87,7 +89,7 @@ def convert(
     export_cfg: OllamaExportConfig,
     out_dir: Path,
     read_policy: Literal["latest", "best"],
-    logger,
+    logger: LoggerLike,
 ) -> None:
     """Convert and quantize using injected config and resolved runtime paths.
 
@@ -204,8 +206,8 @@ def convert(
             code=2,
             logger=logger,
         )
-    conv_bin: str = cast(str, convert_bin)
-    q_bin: str = cast(str, quant_bin)
+    conv_bin = convert_bin
+    q_bin = quant_bin
 
     # Run conversion to FP16 GGUF
     try:

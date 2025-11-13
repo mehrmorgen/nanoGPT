@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 # New strict API imports
+from pathlib import Path
+from typing import Mapping, Sequence
+
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
 
@@ -31,8 +34,8 @@ class _StubTokenizer:
                 self.itos[idx] = ch
         return [self.stoi[ch] for ch in text]
 
-    def decode(self, token_ids):  # type: ignore[override]
-        return "".join(self.itos.get(int(i), "") for i in token_ids)
+    def decode(self, token_ids: Sequence[int]) -> str:  # type: ignore[override]
+        return "".join(self.itos.get(i, "") for i in token_ids)
 
     def pop_calls(self) -> list[str]:
         calls = list(self._calls)
@@ -40,7 +43,25 @@ class _StubTokenizer:
         return calls
 
 
-def test_shakespeare_download_and_encode(tmp_path) -> None:
+class _Resp:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:  # no-op
+        return None
+
+
+def _noop_writer(
+    _path: Path,
+    _train_ids: Sequence[int],
+    _val_ids: Sequence[int],
+    _meta: Mapping[str, object],
+    _logger: object | None = None,
+) -> None:
+    return None
+
+
+def test_shakespeare_download_and_encode(tmp_path: Path) -> None:
     """Test shakespeare preparer downloads, splits, encodes, and writes outputs without mocks."""
     test_text = "Hello world! This is test data for Shakespeare."
 
@@ -49,16 +70,9 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
     exp_dir.mkdir(parents=True, exist_ok=True)
     ds_dir = exp_dir / "datasets"
 
-    class _Resp:
-        def __init__(self, text: str) -> None:
-            self.text = text
-
-        def raise_for_status(self) -> None:  # no-op
-            return None
-
     http_calls: list[str] = []
 
-    def _http_get(url: str, timeout: int = 30):
+    def _http_get(url: str, timeout: int = 30) -> _Resp:
         http_calls.append(url)
         return _Resp(test_text)
 
@@ -66,7 +80,13 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
 
     writer_called: dict[str, object] = {"called": False, "args": None}
 
-    def _writer(path, train_ids, val_ids, meta, logger=None):
+    def _writer(
+        path: Path,
+        train_ids: Sequence[int],
+        val_ids: Sequence[int],
+        meta: Mapping[str, object],
+        logger: object | None = None,
+    ) -> None:
         writer_called["called"] = True
         writer_called["args"] = (path, train_ids, val_ids, meta)
 
@@ -96,20 +116,26 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
     assert hasattr(report, "created_files") and hasattr(report, "messages")
 
 
-def test_shakespeare_skip_download_if_exists(tmp_path) -> None:
+def test_shakespeare_skip_download_if_exists(tmp_path: Path) -> None:
     """Test preparer skips download when input file exists without network call."""
     exp_dir = tmp_path / "experiments" / "shakespeare"
     ds_dir = exp_dir / "datasets"
     ds_dir.mkdir(parents=True, exist_ok=True)
     (ds_dir / "input.txt").write_text("Existing Shakespeare data.")
 
-    def _http_get(_url: str, timeout: int = 30):
+    def _http_get(_url: str, timeout: int = 30) -> _Resp:
         raise AssertionError("http_get should not be called when input exists")
 
     tok = _StubTokenizer()
-    writer_called = {"n": 0}
+    writer_called: dict[str, int] = {"n": 0}
 
-    def _writer(*a, **k):
+    def _writer(
+        _path: Path,
+        _train_ids: Sequence[int],
+        _val_ids: Sequence[int],
+        _meta: Mapping[str, object],
+        _logger: object | None = None,
+    ) -> None:
         writer_called["n"] += 1
 
     cfg = PreparerConfig()
@@ -128,7 +154,7 @@ def test_shakespeare_skip_download_if_exists(tmp_path) -> None:
     assert len(tok.pop_calls()) == 2
 
 
-def test_shakespeare_data_split_ratios(tmp_path) -> None:
+def test_shakespeare_data_split_ratios(tmp_path: Path) -> None:
     """Test that data is split into 90% train, 10% val before encoding without mocks."""
     exp_dir = tmp_path / "experiments" / "shakespeare"
     ds_dir = exp_dir / "datasets"
@@ -143,7 +169,7 @@ def test_shakespeare_data_split_ratios(tmp_path) -> None:
         {
             "base_dir": exp_dir,
             "tokenizer_factory": lambda: tok,
-            "writer_fn": lambda *a, **k: None,
+            "writer_fn": _noop_writer,
         }
     )
 
