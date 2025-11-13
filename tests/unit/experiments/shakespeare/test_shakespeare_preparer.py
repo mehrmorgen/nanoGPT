@@ -98,6 +98,7 @@ def _make_cfg(
 
 
 def test_shakespeare_preparer_downloads_when_missing(tmp_path: Path) -> None:
+    """Test shakespeare preparer downloads when missing."""
     base_dir = tmp_path / "shakespeare"
     base_dir.mkdir()
     ds_dir = base_dir / "datasets"
@@ -126,6 +127,7 @@ def test_shakespeare_preparer_downloads_when_missing(tmp_path: Path) -> None:
 
 
 def test_shakespeare_preparer_uses_module_directory(tmp_path: Path) -> None:
+    """Test shakespeare preparer uses module directory."""
     exp_dir = tmp_path / "shakespeare_default"
     exp_dir.mkdir()
     ds_dir = exp_dir / "datasets"
@@ -168,6 +170,7 @@ def test_shakespeare_preparer_uses_module_directory(tmp_path: Path) -> None:
 
 
 def test_shakespeare_preparer_http_failure_raises(tmp_path: Path) -> None:
+    """Test shakespeare preparer http failure raises."""
     base_dir = tmp_path / "http_failure"
     base_dir.mkdir()
     cfg = _make_cfg(
@@ -180,6 +183,7 @@ def test_shakespeare_preparer_http_failure_raises(tmp_path: Path) -> None:
 
 
 def test_shakespeare_preparer_missing_text_attribute(tmp_path: Path) -> None:
+    """Test shakespeare preparer missing text attribute."""
     base_dir = tmp_path / "missing_text"
     base_dir.mkdir()
     response = _FakeResponse(text=None)
@@ -190,6 +194,7 @@ def test_shakespeare_preparer_missing_text_attribute(tmp_path: Path) -> None:
 
 
 def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
+    """Test shakespeare preparer non callable hooks."""
     base_dir = tmp_path / "fallback"
     base_dir.mkdir()
     ds_dir = base_dir / "datasets"
@@ -230,6 +235,7 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
 
 
 def test_shakespeare_preparer_handles_config_without_extras(tmp_path: Path) -> None:
+    """Test shakespeare preparer handles config without extras."""
     exp_dir = tmp_path / "shakespeare_stub"
     exp_dir.mkdir()
     ds_dir = exp_dir / "datasets"
@@ -274,6 +280,7 @@ def test_shakespeare_preparer_handles_config_without_extras(tmp_path: Path) -> N
 
 
 def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
+    """Test shakespeare preparer default http get."""
     exp_dir = tmp_path / "shakespeare_http"
     exp_dir.mkdir()
     ds_dir = exp_dir / "datasets"

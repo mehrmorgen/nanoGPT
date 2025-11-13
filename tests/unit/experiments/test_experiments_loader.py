@@ -8,6 +8,7 @@ import ml_playground.experiments.registry as registry
 
 
 def test_load_preparers_returns_if_already_populated():
+    """Test load preparers returns if already populated."""
     # Pre-populate
     registry.PREPARERS.clear()
     registry.PREPARERS["foo"] = lambda: None
@@ -23,6 +24,7 @@ def test_load_preparers_returns_if_already_populated():
 
 
 def test_load_preparers_handles_resources_error():
+    """Test load preparers handles resources error."""
     registry.PREPARERS.clear()
 
     def raise_files(_):  # noqa: D401
@@ -65,6 +67,7 @@ class _FakeRoot:
 
 
 def test_load_preparers_registers_class():
+    """Test load preparers registers class."""
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expA", True, True)])
     resources_ns = SimpleNamespace(files=lambda _: root)
@@ -85,6 +88,7 @@ def test_load_preparers_registers_class():
 
 
 def test_load_preparers_raises_on_import_failure():
+    """Test load preparers raises on import failure."""
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("bad", True, True)])
     resources_ns = SimpleNamespace(files=lambda _: root)
@@ -98,6 +102,7 @@ def test_load_preparers_raises_on_import_failure():
 
 
 def test_load_preparers_skips_non_dir_and_missing_preparer():
+    """Test load preparers skips non dir and missing preparer."""
     registry.PREPARERS.clear()
     # One non-dir, one dir without preparer.py
     root = _FakeRoot(
@@ -111,6 +116,7 @@ def test_load_preparers_skips_non_dir_and_missing_preparer():
 
 
 def test_load_preparers_module_without_prepare_class():
+    """Test load preparers module without prepare class."""
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expNoClass", True, True)])
     resources_ns = SimpleNamespace(files=lambda _: root)
@@ -128,6 +134,7 @@ def test_load_preparers_module_without_prepare_class():
 
 
 def test_load_preparers_noarg_prepare_calls_without_args():
+    """Test load preparers noarg prepare calls without args."""
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expNoArg", True, True)])
     resources_ns = SimpleNamespace(files=lambda _: root)
@@ -148,6 +155,7 @@ def test_load_preparers_noarg_prepare_calls_without_args():
 
 
 def test_load_preparers_catches_per_entry_exception():
+    """Test load preparers catches per entry exception."""
     registry.PREPARERS.clear()
 
     class _BoomEntry:

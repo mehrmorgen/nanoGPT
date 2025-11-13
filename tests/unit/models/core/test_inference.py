@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 import torch
 import pytest
 
@@ -47,15 +48,12 @@ def test_estimate_model_mfu_raises_without_config() -> None:
 
 
 def test_estimate_model_mfu_raises_when_config_is_none() -> None:
-    class Dummy(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.layer = torch.nn.Linear(2, 2)
-            self.config = None
+    """Test estimate model mfu raises when config is none."""
+    model = _make_model()
+    model.config = None  # type: ignore[assignment]
 
-    dummy = Dummy()
     with pytest.raises(AttributeError):
-        estimate_model_mfu(dummy, 1, 0.1)
+        estimate_model_mfu(model, 1, 0.1)
 
 
 def test_generate_tokens_greedy_decoding() -> None:
@@ -121,19 +119,12 @@ def test_generate_tokens_raises_without_config() -> None:
 
 
 def test_generate_tokens_checks_config_none() -> None:
-    class Dummy(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.config = None
+    """Test generate tokens checks config none."""
+    model = _make_model()
+    model.config = None  # type: ignore[assignment]
 
-        def forward(self, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-            logits = torch.zeros(idx.size(0), idx.size(1), 10)
-            loss = torch.zeros(())
-            return logits, loss
-
-    dummy = Dummy()
     with pytest.raises(AttributeError):
-        generate_tokens(dummy, torch.tensor([[1]]), max_new_tokens=1)
+        generate_tokens(model, torch.tensor([[1]]), max_new_tokens=1)
 
 
 def test_generate_tokens_clamps_out_of_vocab_indices() -> None:
