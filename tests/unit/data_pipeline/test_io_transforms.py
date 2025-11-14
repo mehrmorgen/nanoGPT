@@ -120,6 +120,7 @@ def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
 
 def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
     """Test setup tokenizer uses tiktoken encoding."""
+
     class DummyEncoding:
         n_vocab = 1
         _mergeable_ranks = {"a": 0}

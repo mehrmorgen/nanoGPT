@@ -18,8 +18,7 @@ TokenBatch = Mapping[str, object | None]
 
 
 class _Tokenizer(Protocol):
-    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
-        ...
+    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch: ...
 
     def decode(
         self,
@@ -27,8 +26,7 @@ class _Tokenizer(Protocol):
         *,
         skip_special_tokens: bool,
         clean_up_tokenization_spaces: bool,
-    ) -> str:
-        ...
+    ) -> str: ...
 
 
 class _Model(Protocol):
@@ -37,23 +35,19 @@ class _Model(Protocol):
         *,
         input_ids: object,
         attention_mask: object | None = ...,
-    ) -> Sequence[object]:
-        ...
+    ) -> Sequence[object]: ...
 
 
 class _TokenizerFactory(Protocol):
-    def __call__(self, model_path: Path, *, use_fast: bool) -> _Tokenizer:
-        ...
+    def __call__(self, model_path: Path, *, use_fast: bool) -> _Tokenizer: ...
 
 
 class _BaseModelFactory(Protocol):
-    def __call__(self, model_name: str) -> _Model:
-        ...
+    def __call__(self, model_name: str) -> _Model: ...
 
 
 class _PeftFactory(Protocol):
-    def __call__(self, base_model: _Model, adapters_path: Path) -> _Model:
-        ...
+    def __call__(self, base_model: _Model, adapters_path: Path) -> _Model: ...
 
 
 # Expose names for monkeypatching in tests (compat with previous integration)
@@ -62,11 +56,52 @@ try:  # pragma: no cover - optional heavy deps
     from transformers import AutoModelForCausalLM as AutoModelForCausalLM  # type: ignore
 except ImportError:  # pragma: no cover
 
+    class _FallbackTokenizer:
+        def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
+            encoded = list(text.encode("utf-8"))
+            return {
+                "input_ids": encoded,
+                "attention_mask": None,
+                "return_tensors": return_tensors,
+            }
+
+        def decode(
+            self,
+            token_ids: object,
+            *,
+            skip_special_tokens: bool,
+            clean_up_tokenization_spaces: bool,
+        ) -> str:
+            del skip_special_tokens, clean_up_tokenization_spaces
+            if isinstance(token_ids, (bytes, bytearray)):
+                return bytes(token_ids).decode("utf-8", errors="ignore")
+            if isinstance(token_ids, Sequence):
+                ints: list[int] = []
+                for value in cast(Sequence[object], token_ids):
+                    if isinstance(value, int):
+                        ints.append(int(value))
+                return bytes(ints).decode("utf-8", errors="ignore")
+            return str(token_ids)
+
     class AutoTokenizer:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackTokenizer:
+            return _FallbackTokenizer()
+
+    class _FallbackModel:
+        def generate(
+            self,
+            *,
+            input_ids: object,
+            attention_mask: object | None = None,
+        ) -> Sequence[object]:
+            del attention_mask
+            return [input_ids]
 
     class AutoModelForCausalLM:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackModel:
+            return _FallbackModel()
 
 
 try:  # pragma: no cover - optional peft
@@ -74,10 +109,49 @@ try:  # pragma: no cover - optional peft
 except ImportError:  # pragma: no cover
 
     class PeftModel:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(base_model: _Model, adapters_path: Path) -> _Model:
+            del adapters_path
+            return base_model
 
 
-__all__ = ["SpeakGerSampler", "config_path"]
+def _resolve_tokenizer_factory(
+    factory: _TokenizerFactory | None,
+) -> _TokenizerFactory:
+    if factory is not None:
+        return factory
+
+    def _default(model_path: Path, *, use_fast: bool) -> _Tokenizer:
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(model_path),
+            use_fast=use_fast,  # type: ignore[arg-type]
+        )
+        return cast(_Tokenizer, tokenizer)
+
+    return _default
+
+
+def _resolve_base_model_factory(
+    factory: _BaseModelFactory | None,
+) -> _BaseModelFactory:
+    if factory is not None:
+        return factory
+
+    def _default(model_name: str) -> _Model:
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        return cast(_Model, model)
+
+    return _default
+
+
+def _resolve_peft_factory(factory: _PeftFactory | None) -> _PeftFactory:
+    if factory is not None:
+        return factory
+
+    def _default(base_model: _Model, adapters_path: Path) -> _Model:
+        return PeftModel.from_pretrained(base_model, adapters_path)  # type: ignore[arg-type]
+
+    return _default
 
 
 def _config_path() -> Path:
@@ -156,27 +230,13 @@ def _run_sampling(
     samples_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve factories with sensible defaults (heavy deps if available)
-    _tok_factory = cast(
-        _TokenizerFactory,
-        tokenizer_factory
-        if tokenizer_factory is not None
-        else AutoTokenizer.from_pretrained,  # type: ignore[attr-defined]
-    )
-    _base_factory = cast(
-        _BaseModelFactory,
-        base_model_factory
-        if base_model_factory is not None
-        else AutoModelForCausalLM.from_pretrained,  # type: ignore[attr-defined]
-    )
-    _peft_factory = cast(
-        _PeftFactory,
-        peft_model_factory
-        if peft_model_factory is not None
-        else PeftModel.from_pretrained,  # type: ignore[attr-defined]
-    )
+    _tok_factory = _resolve_tokenizer_factory(tokenizer_factory)
+    _base_factory = _resolve_base_model_factory(base_model_factory)
+    _peft_factory = _resolve_peft_factory(peft_model_factory)
 
-    tok = _tok_factory(out_dir / "tokenizer", use_fast=True)
-    base = _base_factory(model_name)
+    tokenizer_dir = out_dir / "tokenizer"
+    tok: _Tokenizer = _tok_factory(tokenizer_dir, use_fast=True)
+    base: _Model = _base_factory(model_name)
     model: _Model
     try:
         # build adapters path using Path joining, not bitwise and
@@ -184,12 +244,12 @@ def _run_sampling(
     except (FileNotFoundError, NotADirectoryError):
         model = base
 
-    enc = tok(prompt, return_tensors="pt")
+    enc: TokenBatch = tok(prompt, return_tensors="pt")
     input_ids = enc.get("input_ids")
     attn = enc.get("attention_mask")
     if input_ids is None:
         raise ValueError("Tokenizer output missing input_ids")
-    out = model.generate(input_ids=input_ids, attention_mask=attn)
+    out: Sequence[object] = model.generate(input_ids=input_ids, attention_mask=attn)
     decoded_input = out[0]
     text = tok.decode(
         decoded_input,
@@ -209,7 +269,7 @@ def _run_sampling(
     txt_path.write_text(text, encoding="utf-8")
 
     analysis = _analyze_text(text)
-    payload = {
+    payload: dict[str, Any] = {
         "dataset": "speakger",
         "best_val_loss": best_val_loss,
         "iter_num": _iter,

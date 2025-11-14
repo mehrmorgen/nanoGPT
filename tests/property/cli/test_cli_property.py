@@ -102,6 +102,7 @@ def test_run_prepare_impl_executes_pipeline(
 
 def test_log_dir_reports_states(tmp_path: Path) -> None:
     """Test log dir reports states."""
+
     class ListLogger:
         def __init__(self) -> None:
             self.infos: list[str] = []
@@ -133,6 +134,7 @@ def test_log_command_status_handles_missing_directory(
     tmp_path: Path, shared_config_factory: Callable[[Path], SharedConfig]
 ) -> None:
     """Test log command status handles missing directory."""
+
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -153,6 +155,7 @@ def test_log_command_status_handles_missing_path(
     shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
     """Test log command status handles missing path."""
+
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -170,6 +173,7 @@ def test_log_command_status_handles_missing_path(
 
 def test_log_dir_ignores_non_path() -> None:
     """Test log dir ignores non path."""
+
     class ListLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
@@ -226,7 +230,8 @@ def test_run_prepare_executes_pipeline(
             calls["ran"] = True
 
     prepare_cfg = cast(
-        PreparerConfig, SimpleNamespace(logger=logging.getLogger("ml_playground.cli"))
+        PreparerConfig,
+        SimpleNamespace(logger=logging.getLogger("ml_playground.runtime.cli")),
     )
 
     with override_attr(cli, "create_pipeline", lambda cfg, shared_cfg: FakePipeline()):
@@ -243,7 +248,9 @@ def test_run_train_impl_requires_runtime(
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         TrainerConfig,
-        SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli")),
+        SimpleNamespace(
+            runtime=None, logger=logging.getLogger("ml_playground.runtime.cli")
+        ),
     )
 
     with pytest.raises(typer.Exit):
@@ -258,7 +265,9 @@ def test_run_sample_impl_requires_runtime(
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         SamplerConfig,
-        SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli")),
+        SimpleNamespace(
+            runtime=None, logger=logging.getLogger("ml_playground.runtime.cli")
+        ),
     )
 
     with pytest.raises(typer.Exit):
@@ -273,7 +282,9 @@ def test_run_train_requires_runtime(
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         TrainerConfig,
-        SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli")),
+        SimpleNamespace(
+            runtime=None, logger=logging.getLogger("ml_playground.runtime.cli")
+        ),
     )
 
     with pytest.raises(typer.Exit) as excinfo:
@@ -303,7 +314,7 @@ def test_run_train_executes_flow(
     def fake_global(device: str, dtype: str, seed: int) -> None:
         trainer_called["global_setup"] = (device, dtype, seed)
 
-    logger = logging.getLogger("ml_playground.cli")
+    logger = logging.getLogger("ml_playground.runtime.cli")
     runtime = cast(
         RuntimeConfig, SimpleNamespace(device="cpu", dtype="float32", seed=42)
     )
@@ -382,7 +393,7 @@ def test_run_train_logs_status(
     runtime = cast(
         RuntimeConfig, SimpleNamespace(device="cpu", dtype="float32", seed=21)
     )
-    logger_name = "ml_playground.cli.run_train_logs"
+    logger_name = "ml_playground.runtime.cli.run_train_logs"
     train_cfg = cast(
         TrainerConfig,
         SimpleNamespace(runtime=runtime, logger=logging.getLogger(logger_name)),
@@ -443,7 +454,9 @@ def test_run_sample_requires_runtime(
     shared = shared_config_factory(tmp_path)
     cfg = cast(
         SamplerConfig,
-        SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli")),
+        SimpleNamespace(
+            runtime=None, logger=logging.getLogger("ml_playground.runtime.cli")
+        ),
     )
 
     with pytest.raises(typer.Exit) as excinfo:
@@ -473,7 +486,7 @@ def test_run_sample_executes_flow(
     def fake_global(device: str, dtype: str, seed: int) -> None:
         sampler_called["global"] = (device, dtype, seed)
 
-    logger = logging.getLogger("ml_playground.cli")
+    logger = logging.getLogger("ml_playground.runtime.cli")
     runtime = cast(
         RuntimeConfig, SimpleNamespace(device="cpu", dtype="float32", seed=24)
     )
@@ -534,6 +547,7 @@ def test_run_sample_executes_flow(
 
 def test_global_options_handles_ensure_object_errors() -> None:
     """Test global options handles ensure object errors."""
+
     class BadContext:
         def __init__(self) -> None:
             self.obj: dict[str, object] | None = None
@@ -549,6 +563,7 @@ def test_global_options_handles_ensure_object_errors() -> None:
 
 def test_run_or_exit_handles_runtime_error() -> None:
     """Test run or exit handles runtime error."""
+
     def _raise() -> None:
         raise RuntimeError("boom")
 
@@ -562,6 +577,7 @@ def test_global_device_setup_handles_runtime_error(
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     """Test global device setup handles runtime error."""
+
     class BadTorch:
         def manual_seed(self, seed: int) -> None:  # pragma: no cover - invoked
             raise RuntimeError("fail")
@@ -621,7 +637,7 @@ def test_run_train_impl_invokes_trainer(
     ) -> None:
         trainer_called["global_setup"] = (device, dtype, seed)
 
-    logger = logging.getLogger("ml_playground.cli")
+    logger = logging.getLogger("ml_playground.runtime.cli")
     runtime = cast(
         RuntimeConfig, SimpleNamespace(device="cpu", dtype="float32", seed=11)
     )
@@ -671,7 +687,7 @@ def test_run_sample_impl_invokes_sampler(
     ) -> None:
         sampler_called["global_setup"] = (device, dtype, seed)
 
-    logger = logging.getLogger("ml_playground.cli")
+    logger = logging.getLogger("ml_playground.runtime.cli")
     runtime = cast(
         RuntimeConfig, SimpleNamespace(device="cpu", dtype="float32", seed=5)
     )

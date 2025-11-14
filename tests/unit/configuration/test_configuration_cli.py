@@ -181,7 +181,7 @@ def test_prepare_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test prepare command propagates loader error."""
-    caplog.set_level(logging.ERROR, logger="ml_playground.cli")
+    caplog.set_level(logging.ERROR, logger="ml_playground.runtime.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
         raise FileNotFoundError("Config missing")
@@ -233,7 +233,7 @@ def test_train_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test train command propagates loader error."""
-    caplog.set_level(logging.ERROR, logger="ml_playground.cli")
+    caplog.set_level(logging.ERROR, logger="ml_playground.runtime.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
         raise ValueError("Invalid train config")
@@ -289,7 +289,7 @@ def test_sample_command_propagates_loader_error(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test sample command propagates loader error."""
-    caplog.set_level(logging.ERROR, logger="ml_playground.cli")
+    caplog.set_level(logging.ERROR, logger="ml_playground.runtime.cli")
 
     def load(_name: str, _config: Path | None) -> ExperimentConfig:
         raise ValueError("Missing sample config")
@@ -320,7 +320,7 @@ def test_global_option_missing_exp_config_exits(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test global option missing exp config exits."""
-    caplog.set_level(logging.ERROR, logger="ml_playground.cli")
+    caplog.set_level(logging.ERROR, logger="ml_playground.runtime.cli")
     missing = tmp_path / "missing.toml"
 
     shared = _build_shared(tmp_path)

@@ -56,8 +56,9 @@ def _noop_writer(
     _train_ids: Sequence[int],
     _val_ids: Sequence[int],
     _meta: Mapping[str, object],
-    _logger: object | None = None,
+    logger: object | None = None,
 ) -> None:
+    del logger
     return None
 
 
@@ -134,8 +135,9 @@ def test_shakespeare_skip_download_if_exists(tmp_path: Path) -> None:
         _train_ids: Sequence[int],
         _val_ids: Sequence[int],
         _meta: Mapping[str, object],
-        _logger: object | None = None,
+        logger: object | None = None,
     ) -> None:
+        del logger
         writer_called["n"] += 1
 
     cfg = PreparerConfig()

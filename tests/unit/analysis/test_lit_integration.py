@@ -28,7 +28,9 @@ def _make_fake_lit_modules() -> tuple[dict[str, ModuleType], dict[str, object]]:
         def __len__(self) -> int:  # pragma: no cover - overridden in subclass
             return 0
 
-        def __iter__(self) -> Iterator[Mapping[str, object]]:  # pragma: no cover - overridden
+        def __iter__(
+            self,
+        ) -> Iterator[Mapping[str, object]]:  # pragma: no cover - overridden
             return iter(())
 
     dataset_module.Dataset = DatasetBase  # type: ignore[attr-defined]
@@ -114,7 +116,9 @@ def install_fake_lit_modules() -> Iterator[dict[str, object]]:
 def test_load_lit_components_uses_fake_modules() -> None:
     """Test load lit components uses fake modules."""
     with install_fake_lit_modules():
-        dataset_mod_raw, model_mod_raw, types_mod_raw = integration._load_lit_components()
+        dataset_mod_raw, model_mod_raw, types_mod_raw = (
+            integration._load_lit_components()
+        )
 
     dataset_mod = cast(ModuleType, dataset_mod_raw)
     model_mod = cast(ModuleType, model_mod_raw)

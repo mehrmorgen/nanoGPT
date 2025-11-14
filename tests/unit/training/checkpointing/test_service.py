@@ -228,6 +228,7 @@ def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
 
 def test_load_checkpoint_override_exception(tmp_path: Path) -> None:
     """Test load checkpoint override exception."""
+
     def _raise_runtime_error(**kwargs: object) -> NoReturn:
         del kwargs
         raise RuntimeError("boom")
@@ -455,6 +456,7 @@ def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
 
 def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> None:
     """Test save checkpoint fallbacks after override failure."""
+
     def override(**_kwargs: Any) -> None:
         raise RuntimeError("boom")
 

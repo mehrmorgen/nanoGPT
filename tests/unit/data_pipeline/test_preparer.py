@@ -204,6 +204,7 @@ def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
 
 def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None:
     """Test write bin and meta logging exception is ignored."""
+
     class RaisingLogger:
         def info(self, msg: str, *args: object, **kwargs: object) -> None:
             raise ValueError("fail")

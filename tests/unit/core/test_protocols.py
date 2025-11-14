@@ -58,6 +58,7 @@ def test_logger_like_accepts_structural_loggers() -> None:
 
 def test_logger_like_rejects_missing_methods() -> None:
     """Test logger like rejects missing methods."""
+
     class MissingWarnLogger:
         def debug(self, msg: str, *args: object, **kwargs: object) -> None:
             pass
@@ -98,6 +99,7 @@ def test_tokenizer_protocol_accepts_full_implementation() -> None:
 
 def test_tokenizer_protocol_rejects_incomplete_implementation() -> None:
     """Test tokenizer protocol rejects incomplete implementation."""
+
     class MissingDecodeTokenizer:
         @property
         def name(self) -> str:

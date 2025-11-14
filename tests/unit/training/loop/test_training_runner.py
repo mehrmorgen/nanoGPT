@@ -573,6 +573,7 @@ def test_trainer_tensorboard_logging_success(
     trainer_harness: TrainerHarness,
 ) -> None:
     """Test trainer tensorboard logging success."""
+
     class CapturingWriter:
         def __init__(self) -> None:
             self.scalars: list[tuple[str, float, int | None]] = []
@@ -638,6 +639,7 @@ def test_train_step_accum_with_grad_clip_and_ema(
     trainer_harness: TrainerHarness,
 ) -> None:
     """Test train step accum with grad clip and ema."""
+
     def fake_vmap(
         func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
@@ -680,6 +682,7 @@ def test_train_step_accum_fallback_without_vmap(
     trainer_harness: TrainerHarness,
 ) -> None:
     """Test train step accum fallback without vmap."""
+
     def raising_vmap(
         func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
@@ -763,6 +766,7 @@ def test_trainer_propagates_non_keyboard_exception(
     trainer_harness: TrainerHarness,
 ) -> None:
     """Test trainer propagates non keyboard exception."""
+
     def _boom(
         _trainer: runner_mod.Trainer, *_args: object, **_kwargs: object
     ) -> torch.Tensor:

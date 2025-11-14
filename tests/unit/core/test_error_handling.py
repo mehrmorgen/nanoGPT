@@ -73,6 +73,7 @@ def test_setup_logging_idempotent_and_level() -> None:
 
 def test_safe_call_success_and_defaults() -> None:
     """Test safe call success and defaults."""
+
     def ok(x: int) -> int:
         return x + 1
 
@@ -88,6 +89,7 @@ def test_safe_call_success_and_defaults() -> None:
 
 def test_safe_file_operation_wraps_ioerror() -> None:
     """Test safe file operation wraps ioerror."""
+
     def bad_io() -> NoReturn:
         raise OSError("disk full")
 

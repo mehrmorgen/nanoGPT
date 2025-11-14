@@ -37,40 +37,25 @@ repos:
   #   stages: [pre-commit]
   - id: coverage-threshold
     name: coverage threshold (>=87.00%)
-    entry: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        COVERAGE_DIR=".cache/coverage"
-        if [ "${SKIP_COVERAGE_TESTS:-0}" != "1" ]; then
-          rm -f "${COVERAGE_DIR}"/coverage.sqlite*
-          make coverage-test
-        else
-          echo "[info] SKIP_COVERAGE_TESTS=1 -> reusing existing coverage data"
-        fi
-        if ! compgen -G "${COVERAGE_DIR}/coverage.sqlite"* > /dev/null; then
-          echo "[error] No coverage data found. Run 'make coverage-test' first." >&2
-          exit 2
-        fi
-        if compgen -G "${COVERAGE_DIR}/coverage.sqlite."* > /dev/null; then
-          COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
-        fi
-        COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m --fail-under=87.00
+    entry: uv
+    args: [run, tools, test, coverage, --verbose]
     language: system
     pass_filenames: false
-  - id: pyright
-    name: pyright
-    entry: uv run pyright ml_playground
+  - id: basedpyright
+    name: basedpyright (strict)
+    entry: uv
+    args: [run, basedpyright, src/ml_playground]
     language: system
     pass_filenames: false
   - id: mypy
     name: mypy
-    entry: uv run mypy --incremental ml_playground
+    entry: uv
+    args: [run, mypy, --incremental, src/ml_playground]
     language: system
     pass_filenames: false
   - id: vulture
     name: vulture
-    entry: uv run vulture ml_playground --min-confidence 90
+    entry: uv
+    args: [run, vulture, src/ml_playground, --min-confidence, "90"]
     language: system
     pass_filenames: false

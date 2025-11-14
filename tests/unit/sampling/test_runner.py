@@ -92,7 +92,7 @@ def _make_batches(
     return SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
 
 
-class TestSampler(Sampler):
+class _SamplerHarness(Sampler):
     """Sampler variant that exposes protected helpers for white-box tests."""
 
     def expose_get_start_ids(self) -> list[int]:
@@ -650,7 +650,7 @@ def test_decode_tokens_coerces_dtype_and_device(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
 
     captured: dict[str, Any] = {}
 
@@ -1232,7 +1232,7 @@ def test_sampler_get_start_ids_with_file_prefix(out_dir: Path, tmp_path: Path) -
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
     start_ids = sampler.expose_get_start_ids()
     assert isinstance(start_ids, list)
     assert len(start_ids) > 0
@@ -1279,7 +1279,7 @@ def test_sampler_get_start_ids_file_not_found_raises(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
     with pytest.raises(FileOperationError):
         sampler.expose_get_start_ids()
 
@@ -1325,7 +1325,7 @@ def test_sampler_prompt_caching_same_prompt(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
 
     # First run - should create prompt tensor
     assert sampler.prompt_tensor is None
@@ -1388,7 +1388,7 @@ def test_sampler_prompt_caching_device_change(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
 
     # Create initial prompt tensor on CPU
     start_ids = sampler.expose_get_start_ids()
@@ -1450,7 +1450,7 @@ def test_sampler_decode_tokens_converts_dtype(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
 
     # Create a float32 tensor (not long)
     token_tensor = torch.tensor([1, 2, 3], dtype=torch.float32)
@@ -1499,7 +1499,7 @@ def test_sampler_decode_tokens_moves_to_cpu(out_dir: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler = TestSampler(cfg, shared)
+    sampler = _SamplerHarness(cfg, shared)
 
     # Create a CPU tensor (already on CPU, so test won't actually move it)
     # But we can verify the logic works

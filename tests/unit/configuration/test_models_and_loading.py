@@ -26,6 +26,7 @@ from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
 
+
 @dataclass(slots=True)
 class _ValidationInfoStub:
     context: Mapping[str, Any] | None
@@ -39,12 +40,12 @@ class ExperimentConfigTestHarness(config_models.ExperimentConfig):
     def resolve_paths(
         cls, data: Any, *, context: Mapping[str, Any] | None = None
     ) -> Any:
-        info = _ValidationInfoStub(context=context)
+        del context
         descriptor = getattr(config_models.ExperimentConfig, "_resolve_paths")
         validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
             None, config_models.ExperimentConfig
         )
-        return validator(data, info)  # pyright: ignore[reportGeneralTypeIssues]
+        return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
 
 
 class SharedConfigTestHarness(config_models.SharedConfig):
@@ -54,12 +55,12 @@ class SharedConfigTestHarness(config_models.SharedConfig):
     def resolve_paths(
         cls, data: Any, *, context: Mapping[str, Any] | None = None
     ) -> Any:
-        info = _ValidationInfoStub(context=context)
+        del context
         descriptor = getattr(config_models.SharedConfig, "_resolve_shared_paths")
         validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
             None, config_models.SharedConfig
         )
-        return validator(data, info)  # pyright: ignore[reportGeneralTypeIssues]
+        return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
 
 
 def test_full_loader_roundtrip(tmp_path: Path) -> None:
@@ -1482,9 +1483,7 @@ def test_shared_config_path_coercion_edge_cases(tmp_path: Path) -> None:
         "sample_out_dir": "relative_path",  # String path
     }
 
-    result = cast(
-        Mapping[str, Any], SharedConfigTestHarness.resolve_paths(data)
-    )
+    result = cast(Mapping[str, Any], SharedConfigTestHarness.resolve_paths(data))
     assert result["project_home"] == 123  # Should remain unchanged
     assert result["dataset_dir"] is None  # Should remain unchanged
     assert isinstance(result["train_out_dir"], Path)

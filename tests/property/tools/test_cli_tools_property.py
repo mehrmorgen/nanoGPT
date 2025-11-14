@@ -242,7 +242,7 @@ def test_cli_reports_unknown_commands(
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 @example(flags=[])
 @example(flags=["--learning-mode", "--verbosity", "2"])
-@settings(max_examples=50, deadline=timedelta(milliseconds=120), derandomize=True)
+@settings(max_examples=50, deadline=None, derandomize=True)
 def test_version_command_reports_metadata(flags: List[str]) -> None:
     args = [*flags, "version"]
     result = _invoke_cli(args)

@@ -76,7 +76,9 @@ def toml_dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
     toml_scalars: st.SearchStrategy[object] = st.one_of(
         st.booleans(),
         st.integers(min_value=-1000, max_value=1000),
-        st.floats(min_value=-1000, max_value=1000, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=-1000, max_value=1000, allow_nan=False, allow_infinity=False
+        ),
         st.text(max_size=50),
         st.dates(),
         st.times(),
