@@ -383,26 +383,6 @@ def quality_basedpyright(
         raise typer.Exit(1)
 
 
-@quality_app.command("pyright")
-def quality_pyright(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional basedpyright arguments")
-    ] = None,
-) -> None:
-    """Run BasedPyright type checks (Pyright CLI alias)."""
-    try:
-        tools = _get_quality_tools()
-        result = tools.pyright(
-            args or [],
-            learning_mode=state.learning_mode,
-            verbosity_level=state.verbosity,
-        )
-        _handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-
 @quality_app.command("mypy")
 def quality_mypy(
     args: Annotated[

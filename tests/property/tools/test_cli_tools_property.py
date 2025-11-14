@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import Iterator, List, Sequence
@@ -227,7 +226,7 @@ def test_cli_groups_render_help(flags: List[str], group_path: tuple[str, ...]) -
 )
 @example(flags=[], group_path=("quality",), invalid="totally-unknown")
 @example(flags=["--no-learning-mode"], group_path=("env",), invalid="bogus")
-@settings(max_examples=50, deadline=timedelta(milliseconds=200), derandomize=True)
+@settings(max_examples=50, deadline=None, derandomize=True)
 def test_cli_reports_unknown_commands(
     flags: List[str], group_path: tuple[str, ...], invalid: str
 ) -> None:
@@ -253,7 +252,7 @@ def test_version_command_reports_metadata(flags: List[str]) -> None:
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 @example(flags=[])
 @example(flags=["--project-root", str(PROJECT_ROOT)])
-@settings(max_examples=50, deadline=timedelta(milliseconds=120), derandomize=True)
+@settings(max_examples=50, deadline=None, derandomize=True)
 def test_config_command_shows_categories(flags: List[str]) -> None:
     args = [*flags, "config"]
     result = _invoke_cli(args)

@@ -255,24 +255,6 @@ class QualityTools:
 
         return result
 
-    def pyright(
-        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
-    ) -> ToolResult:
-        """Run BasedPyright type checks (Pyright CLI alias).
-
-        Args:
-            args: Additional basedpyright arguments
-
-        Returns:
-            ToolResult with execution details
-        """
-        # This is an alias for basedpyright command
-        return self.basedpyright(
-            args,
-            learning_mode=learning_mode,
-            verbosity_level=verbosity_level,
-        )
-
     def mypy(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:

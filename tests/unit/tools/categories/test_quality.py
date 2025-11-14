@@ -274,21 +274,6 @@ class TestBasedPyright:
         assert result.learning_info.commands_executed
 
 
-class TestPyright:
-    def test_alias(self, quality_tools, subprocess_runner):
-        operation_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id)])
-
-        result = quality_tools.pyright(["--verbose"])
-
-        assert result.success is True
-        command = subprocess_runner.calls[0]["command"]
-        assert "basedpyright" in command
-        assert "--verbose" in command
-
-
 class TestMypy:
     def test_success(self, quality_tools, subprocess_runner):
         operation_id = OperationId(

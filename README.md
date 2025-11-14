@@ -2,17 +2,21 @@
 
 ![Line Coverage](docs/assets/coverage-lines.svg)
 
-This module provides a single, one-way interface to prepare data, train, and sample.
-It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
+This module provides a single, one-way interface to prepare data, train, and
+sample. It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
-- Developer Guidelines: see `.dev-guidelines/README.md` for setup, development workflow, and policies.
-- Development tools: use `uv run tools --help` for integrated development tooling.
+- Developer Guidelines: see `.dev-guidelines/README.md` for setup,
+  development workflow, and policies.
+- Development tools: use `uv run tools --help` for integrated development
+  tooling.
 - Coverage badges: `uv run tools ci coverage-badge` (integrated directly)
 
 AI Development Guidelines
 
-- Use `uv run tools env ai-guidelines <tool_name>` to set up AI guidelines symlinks.
-- The previous `scripts/setup_ai_guidelines.py` has been integrated and is no longer needed.
+- Use `uv run tools env ai-guidelines <tool_name>` to set up AI guidelines
+  symlinks.
+- The previous `scripts/setup_ai_guidelines.py` has been integrated and is no
+  longer needed.
 
 ## Documentation abstraction policy
 
@@ -41,39 +45,68 @@ AI Development Guidelines
 └── README.md                  # this file (top-level, high abstraction)
 ```
 
-- Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and tests must pass.
-- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
-- Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
-- Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
-- Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
-- **Review management**: `uv run tools dev review-*` (was `scripts/review.py`). For triage, use `uv run tools dev review-list <pr_number> --unreplied --unresolved`; for bulk replies, `uv run tools dev review-bulk-reply <pr_number> --replies replies.json`; to delete comments, `uv run tools dev review-delete <pr_number> --comments delete.json`.
+- Quality tooling is mandatory before commit (ruff, mypy, BasedPyright), and
+  tests must pass.
+- Linear history for own work: rebase your branches and avoid merge commits;
+  fast-forward only. See `.dev-guidelines/README.md` for developer policies.
+- Test-Driven Development (TDD) is required for functional changes: write a
+  failing test, implement minimal code to pass, then refactor.
+- Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`,
+  `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared
+  `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation
+  steps, reviewer expectations, and a shared quality checklist.
+- Granular commits are required. Each functional/behavioral change MUST pair
+  its production code with the corresponding tests in the same commit
+  (unit/integration). Exceptions: documentation-only, test-only refactors, and
+  mechanical formatting.
+- **Review management**: `uv run tools dev review-*` (was `scripts/review.py`).
+  For triage, use
+  `uv run tools dev review-list <pr_number> --unreplied --unresolved`; for
+  bulk replies,
+  `uv run tools dev review-bulk-reply <pr_number> --replies replies.json`; to
+  delete comments,
+  `uv run tools dev review-delete <pr_number> --comments delete.json`.
 
 Setup and Developer Workflow
 
-- See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
+- See `.dev-guidelines/README.md` for environment setup, development
+  practices, and testing policies (entry point to all developer guidelines).
 
 Datasets
 
-- Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
-- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at src/ml_playground/experiments/bundestag_char/datasets/input.txt)
-- Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
+- Shakespeare (GPT-2 BPE; prepared via internal
+  `ml_playground.experiments.shakespeare`).
+- Bundestag (char-level; prepared via internal
+  `ml_playground.experiments.bundestag_char`; requires a user-provided text at
+  `src/ml_playground/experiments/bundestag_char/datasets/input.txt`).
+- Bundestag (tiktoken BPE; prepared via internal
+  `ml_playground.experiments.bundestag_tiktoken`).
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `README.md` and `.dev-guidelines/README.md`.
-- Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI:
+  `uv run cli <command>`. For exact commands, refer to each experiment's
+  `README.md` and `.dev-guidelines/README.md`.
+- Universal meta policy: the data directory must contain a `meta.pkl` file used
+  by training and sampling. The `prepare` step is responsible for writing
+  `meta.pkl`.
 
 Notes
 
-- Configuration is defined via TOML dataclasses under `src/ml_playground/configuration/`.
+- Configuration is defined via TOML dataclasses under
+  `src/ml_playground/configuration/`.
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
-- Checkpoint behavior and policies are described in `.dev-guidelines/README.md`.
-- For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
-- CLI validations: train and sample commands now fail fast if `meta.pkl` is missing.
+- Checkpoint behavior and policies are described in
+  `.dev-guidelines/README.md`.
+- For framework utilities, see
+  [Framework Utilities Documentation](docs/framework_utilities.md).
+- CLI validations: train and sample commands now fail fast if `meta.pkl` is
+  missing.
 
 Mutation testing
 
-- See `.dev-guidelines/README.md` for how to run optional mutation testing (Cosmic Ray).
+- See `.dev-guidelines/README.md` for how to run optional mutation testing
+  (Cosmic Ray).
 
 TensorBoard (auto-enabled)
 
@@ -87,6 +120,3 @@ Testing
 
 - See `.dev-guidelines/README.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.
-
-```
-```
