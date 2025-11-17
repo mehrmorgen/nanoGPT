@@ -38,14 +38,40 @@ For CLI command modules that primarily delegate to underlying tools:
 - **Focus**: Core command paths, not every exception handler
 - **Value**: Integration tests provide better ROI than forcing high coverage on delegation patterns
 
+## ✅ COMPLETED: Learn Commands Removal (Technical Debt Cleanup)
+
+### Changes Made
+- **Removed empty `learn_app`**: Eliminated dead typer instance from `tools/cli/main.py`
+- **Removed 14 skipped tests**: Eliminated entire `TestLearnCommands` class and related skipped tests
+- **Cleaned up test structure**: Fixed indentation issues and removed abandoned functionality
+- **Simplified CLI**: Removed abandoned educational features that added maintenance burden
+
+### Rationale
+Educational content adds maintenance burden without clear value for a developer tools CLI where users can already use `--help` flags and the existing `--learning-mode` flag provides sufficient educational value.
+
+## ✅ COMPLETED: Error Handling Refactoring
+
+### Changes Made
+- **Replaced 27 broad `except Exception` handlers** across 6 CLI modules with specific `(ToolExecutionError, ToolConfigurationError)` patterns
+- **Implemented layered exception handling**: Specific exceptions first, fallback for truly unexpected errors
+- **Fixed import issues**: Corrected import paths in runtime/cli/__init__.py
+- **Cleaned up unused exception subtypes**: Removed redundant exception definitions
+- **All 950+ tests pass**: Confirmed production readiness
+
+### Benefits
+- **Improved error clarity**: Users see "Tool error: [specific message]" instead of generic errors
+- **Maintained robustness**: Layered handling ensures no unhandled exceptions crash the CLI
+- **Better maintainability**: Specific exceptions make debugging more predictable
+- **Consistent pattern**: Establishes clear pattern for future CLI command development
+
 ## Next Steps: Focus on High-Value Areas
 
 Instead of pursuing marginal coverage gains on CLI delegation code, focus on:
 
 1. **Integration Testing**: Better ROI for CLI workflows
-2. **Error Handler Quality**: Replace broad `except Exception` with targeted `except ToolExecutionError`
-3. **Core Logic Testing**: Maintain high coverage on business logic (tokenizer, runtime, configuration)
-4. **Documentation**: Update strategy documents to reflect realistic targets
+2. **Core Logic Testing**: Maintain high coverage on business logic (tokenizer, runtime, configuration)
+3. **Documentation**: Update strategy documents to reflect realistic targets
+4. **Property-Based Testing**: Continue PBT-first strategy for complex business logic
 
 ## Success Criteria Achieved
 

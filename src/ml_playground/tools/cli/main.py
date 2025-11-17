@@ -48,19 +48,12 @@ app = typer.Typer(
 )
 
 
-learn_app = typer.Typer(
-    name="learn",
-    help="Learning mode utilities and educational content",
-    no_args_is_help=True,
-)
-
 # Add subcommands to main app
 app.add_typer(quality_app, name="quality")
 app.add_typer(test_app, name="test")
 app.add_typer(env_app, name="env")
 app.add_typer(ci_app, name="ci")
 app.add_typer(dev_app, name="dev")
-app.add_typer(learn_app, name="learn")
 
 
 @app.callback()
