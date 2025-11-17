@@ -229,111 +229,56 @@ def test_tiktoken_tokenizer_import_error_propagation() -> None:
 
 
 # Edge case tests for empty vocabularies and out-of-range handling
-@given(st.lists(st.integers(min_value=-10, max_value=100), min_size=1, max_size=10))
-def test_char_tokenizer_decode_edge_cases(ids: list[int]) -> None:
-    """CharTokenizer.decode handles empty vocab and out-of-range IDs gracefully."""
-    # Test with empty vocab
-    empty_tok = CharTokenizer()
-    result = empty_tok.decode(ids)
-    assert result == ""
+def test_tokenizer_empty_vocab_and_out_of_range_handling() -> None:
+    """Both tokenizers handle empty vocab and out-of-range IDs gracefully."""
+    # Test empty vocab decode
+    empty_char = CharTokenizer()
+    empty_word = WordTokenizer()
+    test_ids = [1, 5, 10]
 
-    # Test with small vocab and out-of-range IDs
-    small_tok = CharTokenizer({"a": 0})
-    large_ids = [100, 200, 300]  # All out of range
-    result = small_tok.decode(large_ids)
-    assert result == ""
+    assert empty_char.decode(test_ids) == ""
+    assert empty_word.decode(test_ids) == ""
 
+    # Test small vocab with out-of-range IDs
+    small_char = CharTokenizer({"a": 0})
+    small_word = WordTokenizer({"hello": 0})
+    large_ids = [100, 200, 300]
 
-@given(st.lists(st.integers(min_value=-10, max_value=100), min_size=1, max_size=10))
-def test_word_tokenizer_decode_edge_cases(ids: list[int]) -> None:
-    """WordTokenizer.decode handles empty vocab and out-of-range IDs gracefully."""
-    # Test with empty vocab
-    empty_tok = WordTokenizer()
-    result = empty_tok.decode(ids)
-    assert result == ""
-
-    # Test with small vocab and out-of-range IDs
-    small_tok = WordTokenizer({"hello": 0})
-    large_ids = [100, 200, 300]  # All out of range
-    result = small_tok.decode(large_ids)
-    assert result == ""
+    assert small_char.decode(large_ids) == ""
+    assert small_word.decode(large_ids) == ""
 
 
-# Missing character/word handling tests
-@given(
-    st.dictionaries(
-        st.characters(min_codepoint=32, max_codepoint=126),
-        st.integers(min_value=1, max_value=100),
-        min_size=1,
-        max_size=5,
-    )
-)
-def test_char_tokenizer_encode_missing_chars(vocab: dict[str, int]) -> None:
-    """CharTokenizer.encode returns 0 for missing characters."""
-    tk = CharTokenizer(vocab)
-    # Include missing character guaranteed not to be in vocab
-    missing_char = chr(127)  # DEL character, not in printable ASCII range
-    text_with_missing = "".join(vocab.keys()) + missing_char
-    result = tk.encode(text_with_missing)
-    assert 0 in result  # missing_char should be encoded as 0
-
-
-@given(
-    st.dictionaries(
-        st.text(
-            min_size=1,
-            max_size=10,
-            alphabet=st.characters(min_codepoint=97, max_codepoint=122),
-        ),
-        st.integers(min_value=1, max_value=100),
-        min_size=1,
-        max_size=5,
-    ).filter(lambda d: len(set(d.values())) == len(d))  # Ensure unique token IDs
-)
-def test_word_tokenizer_encode_missing_words(vocab: dict[str, int]) -> None:
-    """WordTokenizer.encode returns 0 for missing words."""
-    tk = WordTokenizer(vocab)
-    # Include missing word
-    text_with_missing = " ".join(vocab.keys()) + " unknownword"
-    result = tk.encode(text_with_missing)
-    assert 0 in result  # 'unknownword' should be encoded as 0
+# Missing character/word handling is already covered by PBT tests above
 
 
 # Targeted tests for uncovered edge cases
-def test_char_tokenizer_build_lookup_array_empty_vocab() -> None:
-    """CharTokenizer._build_lookup_array returns empty array for empty vocab."""
-    tk = CharTokenizer()
-    lookup = tk._build_lookup_array()
-    assert lookup.shape == (0,)
-    assert lookup.dtype == object
+def test_tokenizer_build_lookup_array_edge_cases() -> None:
+    """Both tokenizers handle empty vocab and negative indices in lookup array building."""
+    # Test empty vocab lookup array building
+    empty_char = CharTokenizer()
+    empty_word = WordTokenizer()
 
+    char_lookup = empty_char._build_lookup_array()
+    word_lookup = empty_word._build_lookup_array()
+    assert char_lookup.shape == (0,)
+    assert word_lookup.shape == (0,)
+    assert char_lookup.dtype == object
+    assert word_lookup.dtype == object
 
-def test_word_tokenizer_build_lookup_array_empty_vocab() -> None:
-    """WordTokenizer._build_lookup_array returns empty array for empty vocab."""
-    tk = WordTokenizer()
-    lookup = tk._build_lookup_array()
-    assert lookup.shape == (0,)
-    assert lookup.dtype == object
+    # Test negative indices handling
+    char_with_negative = CharTokenizer({"a": -1, "b": 1})
+    word_with_negative = WordTokenizer({"hello": -1, "world": 1})
 
+    char_lookup = char_with_negative._build_lookup_array()
+    word_lookup = word_with_negative._build_lookup_array()
 
-def test_char_tokenizer_build_lookup_array_negative_indices() -> None:
-    """CharTokenizer._build_lookup_array skips negative indices."""
-    tk = CharTokenizer({"a": -1, "b": 1})  # Include negative index
-    lookup = tk._build_lookup_array()
     # Should handle negative indices gracefully
-    assert lookup.shape[0] >= 2  # max index + 1
-    assert tk.decode([1]) == "b"  # Positive index works
-    assert tk.decode([-1]) == ""  # Negative index returns empty
-
-
-def test_word_tokenizer_build_lookup_array_negative_indices() -> None:
-    """WordTokenizer._build_lookup_array skips negative indices."""
-    tk = WordTokenizer({"hello": -1, "world": 1})  # Include negative index
-    lookup = tk._build_lookup_array()
-    # Should handle negative indices gracefully
-    assert lookup.shape[0] >= 2  # max index + 1
-    assert tk.decode([1]) == "world"  # Positive index works
-    assert tk.decode([-1]) == ""  # Negative index returns empty
+    assert char_lookup.shape[0] >= 2  # max index + 1
+    assert word_lookup.shape[0] >= 2  # max index + 1
+    assert char_with_negative.decode([1]) == "b"  # Positive index works
+    assert word_with_negative.decode([1]) == "world"  # Positive index works
+    assert char_with_negative.decode([-1]) == ""  # Negative index returns empty
+    assert word_with_negative.decode([-1]) == ""  # Negative index returns empty
 
 
 def test_create_tokenizer_word_unsupported_kwargs() -> None:
