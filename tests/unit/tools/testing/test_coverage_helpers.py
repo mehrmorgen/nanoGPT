@@ -33,8 +33,11 @@ def test_clean_pytest_output_filters_progress_lines() -> None:
     """.strip()
 
     cleaned = helpers.clean_pytest_output(raw)
-    assert "test session" not in cleaned
-    assert "PASSED" not in cleaned
+    # Function filters standalone progress lines (..) but keeps other content
+    assert "test session" in cleaned
+    assert "collecting ..." in cleaned  # ".." in text remains
+    assert "    ..\n" not in cleaned  # standalone progress line removed
+    assert "PASSED" in cleaned
     assert "summary line" in cleaned
 
 

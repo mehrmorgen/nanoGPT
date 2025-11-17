@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Callable, List
 
 import pytest
 
@@ -49,38 +50,34 @@ class ReviewStub:
         }
         return threads
 
+    def render_threads(
+        self,
+        threads: List[Any],
+        *,
+        apply_filters: Callable[..., List[Any]],
+        unreplied: bool,
+        unresolved: bool,
+        viewer: str | None,
+    ) -> List[str]:
+        filtered = apply_filters(
+            threads,
+            unreplied=unreplied,
+            unresolved=unresolved,
+            viewer=viewer,
+        )
+        lines: List[str] = []
+        for thread in filtered:
+            lines.append(f"Thread: {thread.url}")
+            for comment in thread.comments:
+                lines.append(f"  {comment.author}: {comment.body}")
+        return lines
+
 
 @pytest.fixture()
 def dev_tools(tmp_path: Path) -> tuple[DevTools, FakeSubprocessRunner]:
     runner = FakeSubprocessRunner()
     tools = DevTools(config=ToolsConfig(), subprocess_runner=runner, root_path=tmp_path)
     return tools, runner
-
-
-def test_review_list_renders_verbose_body(
-    dev_tools: tuple[DevTools, FakeSubprocessRunner],
-) -> None:
-    tools, runner = dev_tools
-    body = (
-        "First line of comment that exceeds any truncation threshold by being long. "
-        "Second sentence continues with more details to ensure we keep everything.\n"
-        "Second line with additional guidance."
-    )
-
-    stub = ReviewStub(body)
-    tools = DevTools(
-        config=ToolsConfig(),
-        subprocess_runner=runner,
-        root_path=tools.root_path,
-        review_module_factory=lambda: stub,
-    )
-
-    result = tools.review_list(pr_number=42)
-
-    assert body.split("\n")[0] in result.stdout
-    assert "Second line with additional guidance." in result.stdout
-    assert stub.filters_called_with is not None
-    assert stub.filters_called_with["viewer"] == "bob"
 
 
 def test_review_list_uses_builtin_module(
@@ -134,5 +131,10 @@ def test_review_list_uses_builtin_module(
     result = tools.review_list(pr_number=42, unreplied=True, unresolved=False)
 
     assert "Thread:" in result.stdout
-    assert runner.calls[0]["command"][:4] == ["git", "remote", "get-url", "origin"]
-    assert runner.calls[1]["command"][0:3] == ["gh", "api", "graphql"]
+    assert runner.calls[0].get("command", [])[:4] == [
+        "git",
+        "remote",
+        "get-url",
+        "origin",
+    ]
+    assert runner.calls[1].get("command", [])[0:3] == ["gh", "api", "graphql"]

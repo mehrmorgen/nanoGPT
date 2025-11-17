@@ -124,7 +124,12 @@ def test_review_list_uses_builtin_review_module(
     result = tools.review_list(pr_number=42, unreplied=True, unresolved=False)
 
     assert "Thread:" in result.stdout
-    assert runner.calls[0].get("command", [])[:4] == ["git", "remote", "get-url", "origin"]
+    assert runner.calls[0].get("command", [])[:4] == [
+        "git",
+        "remote",
+        "get-url",
+        "origin",
+    ]
     assert runner.calls[1].get("command", [])[:3] == ["gh", "api", "graphql"]
 
 

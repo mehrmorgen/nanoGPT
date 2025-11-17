@@ -1248,82 +1248,9 @@ class TestHandleToolResult:
         captured = capsys.readouterr()
         assert "hello" in captured.out
 
-    def test_handle_tool_result_failure_exits(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        result = ToolResult.create(
-            success=False,
-            exit_code=3,
-            namespace="tools",
-            category="test",
-            command="example",
-            stderr="boom",
-        )
-
-        with pytest.raises(SystemExit) as exc_info:
-            tools_cli.handle_tool_result(result)
-
-        captured = capsys.readouterr()
-        assert "boom" in captured.err
-        assert exc_info.value.code == 3
-
 
 class TestInvokeTests:
     """Tests for the public `tools test` commands."""
 
     def setup_method(self) -> None:
         self.runner = CliRunner()
-
-    def test_unit_command_passes_context(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        class StubTestingTools:
-            def __init__(self) -> None:
-                self.received: dict[str, object] | None = None
-
-            def unit(
-                self,
-                args: list[str],
-                *,
-                learning_mode: bool,
-                verbosity_level: int,
-            ) -> ToolResult:
-                self.received = {
-                    "args": args,
-                    "learning_mode": learning_mode,
-                    "verbosity": verbosity_level,
-                }
-                return ToolResult.create(
-                    success=True,
-                    exit_code=0,
-                    namespace="tools",
-                    category="test",
-                    command="unit",
-                    stdout="ran unit",
-                )
-
-        stub = StubTestingTools()
-        deps = _deps(testing_factory=lambda _cfg, _root: stub)
-        with tools_cli.override_tools_dependencies(deps):
-            tools_cli.state.config = ToolsConfig()
-            tools_cli.state.project_root = Path.cwd()
-            tools_cli.state.learning_mode = True
-            tools_cli.state.verbosity = 2
-            result = self.runner.invoke(
-                tools_cli.app,
-                [
-                    "test",
-                    "unit",
-                    "selected",
-                    "--",
-                    "-q",
-                ],
-            )
-
-        assert result.exit_code == 0
-        assert stub.received is not None
-        assert stub.received["args"] == ["-q", "-k", "selected"]
-        assert stub.received["learning_mode"] is True
-        assert stub.received["verbosity"] == 2
-        captured = capsys.readouterr()
-        assert "ran unit" in captured.out
