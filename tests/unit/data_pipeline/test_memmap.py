@@ -27,11 +27,32 @@ def array_shape_strategy(draw: st.DrawFn) -> tuple[int, ...]:
 
 
 @st.composite
-def batch_config_strategy(draw: st.DrawFn) -> tuple[int, int]:
-    """Generate valid batch configuration parameters."""
-    batch_size = draw(st.integers(min_value=1, max_value=32))
-    block_size = draw(st.integers(min_value=1, max_value=512))
+def batch_config_strategy(draw: st.DrawFn, array_size: int) -> tuple[int, int]:
+    """Generate valid batch configuration parameters constrained by array size."""
+    batch_size = draw(st.integers(min_value=1, max_value=min(32, array_size)))
+    block_size = draw(st.integers(min_value=1, max_value=min(512, array_size)))
     return batch_size, block_size
+
+
+@st.composite
+def valid_test_parameters(draw: st.DrawFn) -> tuple[int, tuple[int, int], DeviceKind]:
+    """Generate valid test parameters where array_size >= block_size."""
+    array_size = draw(st.integers(min_value=1, max_value=512))
+    batch_config = draw(batch_config_strategy(array_size))
+    device = draw(device_strategy())
+    return array_size, batch_config, device
+
+
+@st.composite
+def valid_batch_test_parameters(
+    draw: st.DrawFn,
+) -> tuple[int, tuple[int, int], DeviceKind, str]:
+    """Generate valid test parameters for batch tests where array_size >= block_size."""
+    array_size = draw(st.integers(min_value=10, max_value=512))
+    batch_config = draw(batch_config_strategy(array_size))
+    device = draw(device_strategy())
+    sampler = draw(st.sampled_from(["random", "sequential"]))
+    return array_size, batch_config, device, sampler
 
 
 @st.composite
@@ -86,21 +107,16 @@ class TestMemmapReader:
 class TestSampleBatch:
     """Property-based tests for ``sample_batch`` function."""
 
-    @given(
-        array_size=st.integers(min_value=1, max_value=512),
-        batch_config=batch_config_strategy(),
-        device=device_strategy(),
-    )
+    @given(valid_test_parameters())
     @settings(max_examples=10, deadline=None)
     def test_sample_batch_shapes(
-        self, array_size: int, batch_config: tuple[int, int], device: DeviceKind
+        self, parameters: tuple[int, tuple[int, int], DeviceKind]
     ) -> None:
         """Test that sampled batches have correct shapes."""
+        array_size, batch_config, device = parameters
         batch_size, block_size = batch_config
 
-        # Skip if array is too small for the block size
-        if array_size < block_size:
-            pytest.skip("Array too small for block size")
+        # No longer need to skip - parameters are guaranteed valid
 
         # Create test data
         with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -135,26 +151,16 @@ class TestSampleBatch:
 class TestSimpleBatches:
     """Property-based tests for SimpleBatches class."""
 
-    @given(
-        array_size=st.integers(min_value=10, max_value=512),
-        batch_config=batch_config_strategy(),
-        device=device_strategy(),
-        sampler=st.sampled_from(["random", "sequential"]),
-    )
+    @given(valid_batch_test_parameters())
     @settings(max_examples=8, deadline=None)
     def test_simple_batches_creation(
-        self,
-        array_size: int,
-        batch_config: tuple[int, int],
-        device: DeviceKind,
-        sampler: SamplerKind,
+        self, parameters: tuple[int, tuple[int, int], DeviceKind, str]
     ) -> None:
         """Test SimpleBatches initialization and basic functionality."""
+        array_size, batch_config, device, sampler = parameters
         batch_size, block_size = batch_config
 
-        # Skip invalid configurations
-        if array_size < block_size:
-            pytest.skip("Array too small for block size")
+        # No longer need to skip - parameters are guaranteed valid
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -180,7 +186,9 @@ class TestSimpleBatches:
 
             # Create DataConfig
             data_config = DataConfig(
-                batch_size=batch_size, block_size=block_size, sampler=sampler
+                batch_size=batch_size,
+                block_size=block_size,
+                sampler=cast(Literal["random", "sequential"], sampler),
             )
 
             # Create SimpleBatches

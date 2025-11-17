@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -507,88 +506,18 @@ class TestCommandRunners:
         assert exit_code == 0
 
 
-class TestDeviceSetupFallbacks:
-    """Test _global_device_setup error handling."""
-
-    def test_device_setup_swallows_cuda_errors(self) -> None:
-        """Test that torch errors in device setup are swallowed."""
-        # Should not raise, even with cuda available but error
-        cli.global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
-
-    def test_device_setup_success_path(self) -> None:
-        """Test successful CUDA setup."""
-        # Inject fake cuda available
-        cli.global_device_setup("cuda", "float32", 42, cuda_is_available=lambda: True)
-
-    def test_device_setup_explicit_cuda_override(self) -> None:
-        """Test injecting cuda_is_available callable."""
-        called = False
-
-        def fake_cuda():
-            nonlocal called
-            called = True
-            return False
-
-        cli.global_device_setup("cpu", "float32", 42, cuda_is_available=fake_cuda)
-        assert called
+# These tests are now covered by property tests in tests/property/cli/test_cli_property.py
+# See: test_global_device_setup_handles_runtime_error, test_global_device_setup_sets_cuda_state
 
 
 class TestDirectoryLoggingResilience:
     """Test _log_dir and _log_command_status error handling."""
 
-    def test_log_dir_handles_unset_path(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Test logging when dir_path is None."""
-        import logging
+    # This test is now covered by property tests in tests/property/cli/test_cli_property.py
+    # See: test_log_directory_reports_states
 
-        logger = logging.getLogger("test")
-        with caplog.at_level("INFO"):
-            cli.log_directory("test", "test_dir", None, logger)
-        assert "<not set>" in caplog.text
-
-    def test_log_dir_handles_missing_directory(
-        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
-    ) -> None:
-        """Test logging for non-existent directory."""
-        import logging
-
-        logger = logging.getLogger("test")
-        missing_dir = tmp_path / "missing"
-        with caplog.at_level("INFO"):
-            cli.log_directory("test", "test_dir", missing_dir, logger)
-        assert "(missing)" in caplog.text
-
-    def test_log_dir_handles_existing_directory(
-        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
-    ) -> None:
-        """Test logging for existing directory."""
-        import logging
-
-        logger = logging.getLogger("test")
-        existing_dir = tmp_path / "existing"
-        existing_dir.mkdir()
-        (existing_dir / "file.txt").write_text("content")
-        with caplog.at_level("INFO"):
-            cli.log_directory("test", "test_dir", existing_dir, logger)
-        assert "(exists)" in caplog.text
-        assert "Contents:" in caplog.text
-
-    def test_log_dir_handles_unreadable_directory(
-        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
-    ) -> None:
-        """Test logging for directory without read permission."""
-        import logging
-
-        logger = logging.getLogger("test")
-        unreadable_dir = tmp_path / "unreadable"
-        unreadable_dir.mkdir()
-        os.chmod(unreadable_dir, 0o000)  # No permissions
-        try:
-            with caplog.at_level("INFO"):
-                cli.log_directory("test", "test_dir", unreadable_dir, logger)
-            assert "(exists)" in caplog.text
-            # Should not crash, even if contents not listed
-        finally:
-            os.chmod(unreadable_dir, 0o755)  # Restore for cleanup
+    # These tests are now covered by property tests in tests/property/cli/test_cli_property.py
+    # See: test_log_directory_reports_states
 
     def test_log_command_status_handles_errors_gracefully(self, tmp_path: Path) -> None:
         """Test _log_command_status handles OSError/ValueError/TypeError gracefully."""

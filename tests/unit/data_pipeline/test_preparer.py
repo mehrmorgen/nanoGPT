@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import pickle
-from typing import Dict, List, Mapping, cast
+from typing import Dict, List, Mapping
 
 import numpy as np
 import pytest
@@ -13,16 +13,10 @@ from ml_playground.data_pipeline.preparer import (
     PreparationOutcome,
     create_pipeline,
 )
-from ml_playground.data_pipeline.transforms.tokenization import (
-    create_standardized_metadata,
-    prepare_with_tokenizer,
-    split_train_val,
-)
 from ml_playground.data_pipeline.transforms.io import (
     seed_text_file,
     write_bin_and_meta,
 )
-from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer
 from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
@@ -99,107 +93,25 @@ class _FakeTiktoken(Tokenizer):
 # ---- split helpers ----
 
 
-def test_split_train_val_ratio() -> None:
-    """Test split train val ratio."""
-    train, val = split_train_val("abcdefghij", split=0.7)
-    assert train == "abcdefg"
-    assert val == "hij"
-
-
-def test_split_train_val_edges() -> None:
-    """Test split train val edges."""
-    text = "abcdef"
-    # split=0 -> all val
-    train, val = split_train_val(text, split=0.0)
-    assert train == ""
-    assert val == text
-    # split=1 -> all train
-    train, val = split_train_val(text, split=1.0)
-    assert train == text
-    assert val == ""
+# These split tests are now covered by property tests in tests/property/data_pipeline/test_preparer_property.py
+# Property tests cover split invariants with comprehensive input generation using Hypothesis strategies
+# See: test_split_train_val_properties
 
 
 # ---- metadata helpers ----
 
 
-def test_create_standardized_metadata_basic() -> None:
-    """Test create standardized metadata basic."""
-    tok = CharTokenizer(vocab={"a": 1, "b": 2})
-    meta = create_standardized_metadata(tok, train_tokens=5, val_tokens=3)
-    assert meta["meta_version"] == 1
-    assert meta["vocab_size"] == 2
-    assert meta["train_tokens"] == 5
-    assert meta["val_tokens"] == 3
-    assert meta["tokenizer"] == "char"
-    assert meta["has_encode"] is True
-    assert meta["has_decode"] is True
-
-
-def test_create_standardized_metadata_sets_flags_and_extras() -> None:
-    """Test create standardized metadata sets flags and extras."""
-    tok = DummyTok()
-    meta = create_standardized_metadata(
-        tok, train_tokens=10, val_tokens=4, extras={"x": 1}
-    )
-    assert meta["meta_version"] == 1
-    assert meta["vocab_size"] == 123
-    assert meta["tokenizer"] == "dummy"
-    assert meta["has_encode"] and meta["has_decode"]
-    assert meta["x"] == 1
-
-
-def test_create_standardized_metadata_tiktoken_enrichment() -> None:
-    """Test create standardized metadata tiktoken enrichment."""
-    tok = _FakeTiktoken()
-    meta = create_standardized_metadata(tok, train_tokens=3, val_tokens=2)
-    assert meta["tokenizer_type"] == "tiktoken"
-    assert meta["encoding_name"] == "gpt2"
-    assert meta["vocab_size"] == 1000
-    assert meta["has_encode"] is True and meta["has_decode"] is True
+# These metadata tests are now covered by property tests in tests/property/data_pipeline/test_preparer_property.py
+# Property tests cover metadata creation invariants with comprehensive tokenizer types using Hypothesis strategies
+# See: test_create_standardized_metadata_properties
 
 
 # ---- prepare_with_tokenizer ----
 
 
-def test_prepare_with_tokenizer_arrays_and_meta() -> None:
-    """Test prepare with tokenizer arrays and meta."""
-    tok = CharTokenizer(vocab={"a": 1, "b": 2})
-    train, val, meta, tokenizer = prepare_with_tokenizer("abba", tok, split=0.5)
-    assert isinstance(train, np.ndarray) and train.dtype == np.uint16
-    assert isinstance(val, np.ndarray) and val.dtype == np.uint16
-    # With split=0.5, first half "ab" then "ba"
-    # Function rebuilds vocab from text: {'a': 0, 'b': 1}
-    assert train.tolist() == [0, 1]  # "ab" -> [0, 1]
-    assert val.tolist() == [1, 0]  # "ba" -> [1, 0]
-    assert meta["tokenizer"] == "char"
-    assert tokenizer is not None
-    rebuilt_stoi = cast(dict[str, int], getattr(tokenizer, "stoi"))
-    assert rebuilt_stoi == {"a": 0, "b": 1}  # Rebuilt vocab
-
-
-def test_prepare_with_tokenizer_splits_and_encodes() -> None:
-    """Test prepare with tokenizer splits and encodes."""
-    tok = DummyTok()
-    text = "abcdefghij"  # len 10 -> split 9/1 by default
-    train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(text, tok)
-    assert isinstance(train_arr, np.ndarray) and isinstance(val_arr, np.ndarray)
-    assert train_arr.dtype == np.uint16 and val_arr.dtype == np.uint16
-    assert meta["train_tokens"] == 9 and meta["val_tokens"] == 1
-    assert tokenizer is not None
-
-    # Additional logging assertions can be added here if a logger fixture is introduced.
-
-
-def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
-    """Test prepare with tokenizer word vocab rebuild."""
-    # Include punctuation to exercise regex tokenization path
-    text = "Hello, world! Hello"
-    tok = WordTokenizer()
-    train_arr, val_arr, meta, rebuilt = prepare_with_tokenizer(text, tok, split=0.5)
-    assert meta["tokenizer_type"] == "word"
-    # Rebuilt tokenizer should produce uint16 arrays
-    assert train_arr.dtype == np.uint16 and val_arr.dtype == np.uint16
-    assert hasattr(rebuilt, "encode") and hasattr(rebuilt, "decode")
+# These prepare_with_tokenizer tests are now covered by property tests in tests/property/data_pipeline/test_preparer_property.py
+# Property tests cover tokenizer preparation invariants with comprehensive text and tokenizer types using Hypothesis strategies
+# See: test_prepare_with_tokenizer_properties
 
 
 def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None:

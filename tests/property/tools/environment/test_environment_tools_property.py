@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import hypothesis.strategies as st
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.environment.environment import EnvironmentTools
@@ -11,7 +11,12 @@ from ml_playground.tools.environment.environment import EnvironmentTools
 from tests.property.tools._helpers import DeterministicRunner
 
 
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(
+    max_examples=25,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(
     args=st.lists(st.text(min_size=1, max_size=8), max_size=3),
     groups=st.one_of(st.none(), st.lists(st.text(min_size=1, max_size=6), max_size=2)),
@@ -48,7 +53,12 @@ def test_sync_constructs_uv_arguments(
     assert call.cwd == tmp_path
 
 
-@settings(max_examples=10, deadline=None, derandomize=True)
+@settings(
+    max_examples=10,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(clear=st.booleans())
 def test_setup_creates_venv_and_syncs(clear: bool, tmp_path: Path) -> None:
     """setup should invoke uv venv and uv sync in sequence."""
@@ -67,7 +77,12 @@ def test_setup_creates_venv_and_syncs(clear: bool, tmp_path: Path) -> None:
     assert sync_call.args == ["sync", "--all-groups"]
 
 
-@settings(max_examples=10, deadline=None, derandomize=True)
+@settings(
+    max_examples=10,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(st.just(()))
 def test_verify_uses_python_import_command(_: tuple[()]) -> None:
     """verify should attempt to import the configured package via uv."""

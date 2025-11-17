@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Callable, ContextManager
 
 import hypothesis.strategies as st
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 
 import ml_playground.tools.testing.testing as testing_module
 import ml_playground.tools.testing.coverage as coverage_module
@@ -25,7 +25,12 @@ def _success(command: str, stdout: str = "ok") -> ToolResult:
     )
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(
+    max_examples=20,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(args=st.lists(st.text(min_size=0, max_size=6), max_size=3))
 def test_unit_delegates(
     args: list[str],
@@ -48,7 +53,12 @@ def test_unit_delegates(
     assert kwargs["args"] == args
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(
+    max_examples=20,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(args=st.lists(st.text(min_size=0, max_size=6), max_size=3))
 def test_all_tests_runs_pytest(args: list[str], tmp_path: Path) -> None:
     runner = DeterministicRunner()
@@ -63,7 +73,12 @@ def test_all_tests_runs_pytest(args: list[str], tmp_path: Path) -> None:
     assert result.operation_id.command == "all"
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(
+    max_examples=20,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(args=st.lists(st.text(min_size=0, max_size=4), max_size=2))
 def test_coverage_report_delegates(
     args: list[str],
@@ -72,20 +87,33 @@ def test_coverage_report_delegates(
 ) -> None:
     seen: list[tuple[Any, ...]] = []
 
+    def fake_ensure_coverage_data(
+        **kwargs: Any,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        return [], [], {}
+
     def fake_run_report(**kwargs: Any) -> ToolResult:
         seen.append((kwargs,))
         return _success("coverage-report")
 
     tools = testing_module.TestingTools(ToolsConfig(), tmp_path, DeterministicRunner())
-    with override_attr(coverage_module, "run_coverage_report", fake_run_report):
-        result = tools.coverage_report(args)
+    with override_attr(
+        coverage_module, "_ensure_coverage_data", fake_ensure_coverage_data
+    ):
+        with override_attr(testing_module, "run_coverage_report", fake_run_report):
+            result = tools.coverage_report(args)
 
     assert result.success is True
     kwargs = seen[0][0]
     assert kwargs["args"] == args
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(
+    max_examples=20,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @given(args=st.lists(st.text(min_size=0, max_size=4), max_size=2))
 def test_coverage_threshold_delegates(
     args: list[str],
@@ -110,9 +138,7 @@ def test_coverage_threshold_delegates(
     assert kwargs["branch_threshold"] == 80.0
 
 
-@settings(max_examples=15, deadline=None, derandomize=True)
-@given(st.just(None))
-def test_clean_removes_artifacts(_: None, tmp_path: Path) -> None:
+def test_clean_removes_artifacts(tmp_path: Path) -> None:
     cfg = ToolsConfig()
     tools = testing_module.TestingTools(cfg, tmp_path, DeterministicRunner())
 
@@ -133,10 +159,7 @@ def test_clean_removes_artifacts(_: None, tmp_path: Path) -> None:
     assert all(not path.exists() for path in artifacts)
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
-@given(st.just(None))
 def test_mutation_run_executes_steps(
-    _: None,
     tmp_path: Path,
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Mapping, cast
 import math
@@ -23,14 +22,7 @@ from ml_playground.configuration.models import (
 )
 from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
-from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
-
-
-@dataclass(slots=True)
-class _ValidationInfoStub:
-    context: Mapping[str, Any] | None
-    config: Any | None = None
 
 
 class ExperimentConfigTestHarness(config_models.ExperimentConfig):
@@ -63,27 +55,9 @@ class SharedConfigTestHarness(config_models.SharedConfig):
         return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
 
 
-def test_full_loader_roundtrip(tmp_path: Path) -> None:
-    """Test full loader roundtrip."""
-    toml_text = minimal_full_experiment_toml(
-        dataset_dir=Path("data/shakespeare"),
-        out_dir=Path("out/test_next"),
-        extra_optim="learning_rate = 0.001",
-        extra_train="max_iters = 1",
-        extra_sample="",
-        extra_sample_sample="",
-    )
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(toml_text)
-    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
-    experiment_name = cfg_path.parent.name
-    exp: ExperimentConfig = config_loading.load_full_experiment_config(
-        cfg_path, project_home, experiment_name
-    )
-    assert exp.train is not None
-    assert exp.sample is not None
-    assert isinstance(exp.train.runtime.out_dir, Path)
-    assert isinstance(exp.shared.dataset_dir, Path)
+# These configuration loading tests are now covered by property tests in tests/property/configuration/test_loading_property.py
+# Property tests cover loading with various input formats and edge cases using Hypothesis strategies
+# See: test_load_experiment_config_properties, test_config_loading_invariants
 
 
 def test_read_toml_dict_missing_file_raises(tmp_path: Path) -> None:
@@ -316,33 +290,9 @@ def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
         config_loading.load_sample_config(config, default_config_path=default_config)
 
 
-def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
-    """Test read toml dict reads existing file."""
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text("key = 'value'", encoding="utf-8")
-    data = config_loading.read_toml_dict(cfg_path)
-    assert data == {"key": "value"}
-
-
-def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
-    """Test read toml dict rejects non mapping root."""
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text("key = 'value'", encoding="utf-8")
-
-    def fake_loads(_: str) -> Mapping[str, Any]:
-        return cast(Mapping[str, Any], [1, 2, 3])
-
-    with pytest.raises(TypeError, match="must be a mapping"):
-        config_loading.read_toml_dict(cfg_path, toml_loader=fake_loads)
-
-
-def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
-    """Test read toml dict invalid toml raises."""
-    cfg_path = tmp_path / "broken.toml"
-    cfg_path.write_text("not = [", encoding="utf-8")
-
-    with pytest.raises(Exception, match="broken.toml"):
-        config_loading.read_toml_dict(cfg_path)
+# TOML serialization tests are now covered by property tests in tests/property/configuration/test_configuration_property.py
+# Property tests cover round-trip serialization with comprehensive edge cases using Hypothesis strategies
+# See: test_experiment_config_serialization_invariants
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
@@ -683,34 +633,9 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
     assert runtime.ckpt_time_interval_minutes == 0
 
 
-def test_merge_mappings_nested_and_replace() -> None:
-    """Test merge mappings nested and replace."""
-    base = {"a": 1, "b": {"x": 1, "y": 2}, "c": {"k": 1}, "d": 4}
-    override = {"b": {"y": 20, "z": 3}, "c": 5, "e": 6}
-    out = merge_mappings(base, override)
-    assert out["b"] == {"x": 1, "y": 20, "z": 3}
-    assert out["c"] == 5
-    assert out["a"] == 1 and out["d"] == 4
-    assert out["e"] == 6
-
-
-def test_merge_mappings_numeric_replacements() -> None:
-    """Test merge mappings numeric replacements."""
-    base = {"a": {"x": 1, "y": -2}, "b": 10}
-    override = {"a": {"x": 3}, "b": 0}
-    out = merge_mappings(base, override)
-    assert out["a"]["x"] == 3
-    assert out["a"]["y"] == -2
-    assert out["b"] == 0
-
-
-def test_merge_mappings_type_replacement() -> None:
-    """Test merge mappings type replacement."""
-    base = {"a": {"x": 1}, "b": {"y": 2}}
-    override = {"b": 7}
-    out = merge_mappings(base, override)
-    assert out["a"] == {"x": 1}
-    assert out["b"] == 7
+# These merge behavior tests are now covered by property tests in tests/property/configuration/test_configuration_property.py
+# Property tests cover merge invariants with comprehensive input generation using Hypothesis strategies
+# See: test_experiment_config_merge_invariants, test_merge_mappings_properties
 
 
 def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:

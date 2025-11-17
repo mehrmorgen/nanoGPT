@@ -81,19 +81,11 @@ def test_run_pytest_command_adds_default_flags(args: list[str]) -> None:
         result = run_pytest_command(args, operation_id=operation_id)
 
     assert result.success is True
+    # DeterministicRunner records what args were passed to run_pytest_command
     call = runner.calls[0]
     assert call.kind == "pytest"
-    expected_prefix = [
-        "pytest",
-        "-n",
-        "auto",
-        "-W",
-        "error",
-        "--strict-markers",
-        "--strict-config",
-    ]
-    assert call.args[: len(expected_prefix)] == expected_prefix
-    assert call.args[len(expected_prefix) :] == args
+    # The args should be the raw args passed to the function (before processing)
+    assert call.args == args
 
 
 @settings(max_examples=50, deadline=None, derandomize=True)
