@@ -12,6 +12,7 @@ from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
 from click import Command
 from click.testing import CliRunner, Result
+from typer.main import get_command
 
 import ml_playground.tools.cli.main as tools_cli
 from tests.property.tools._helpers import override_tools_with_deterministic_runner
@@ -46,7 +47,7 @@ def _load_preconfigured_tools_config() -> ToolsConfig:
 
 
 PRELOADED_CONFIG: ToolsConfig = _load_preconfigured_tools_config()
-CLICK_APP = cast(Command, tools_cli.app)
+CLICK_APP = cast(Command, get_command(tools_cli.app))
 
 
 def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
