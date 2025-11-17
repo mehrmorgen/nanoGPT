@@ -7,6 +7,7 @@ from typing import Iterator, Sequence, cast
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
 import pytest
+import typer
 import ml_playground.tools.core.runtime as tools_runtime
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
@@ -346,10 +347,10 @@ def test_main_entry_handles_keyboard_interrupt(_: None) -> None:
         _stack_override_attr(stack, tools_cli, "app", fake_app)
         _stack_override_attr(stack, tools_cli.typer, "echo", fake_echo)
 
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises(typer.Exit) as exc:
             tools_cli.main_entry()
 
-    assert exc.value.code == 1
+    assert exc.value.exit_code == 1
     assert echoed and echoed[-1][1] is True
     assert "Operation cancelled" in echoed[-1][0]
 
@@ -373,8 +374,8 @@ def test_main_entry_handles_generic_exception(reason: str) -> None:
         _stack_override_attr(stack, tools_cli, "app", fake_app)
         _stack_override_attr(stack, tools_cli.typer, "echo", fake_echo)
 
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises(typer.Exit) as exc:
             tools_cli.main_entry()
 
-    assert exc.value.code == 1
+    assert exc.value.exit_code == 1
     assert any(reason in msg for msg in echoed)
