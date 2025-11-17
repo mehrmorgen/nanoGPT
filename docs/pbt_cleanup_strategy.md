@@ -38,16 +38,25 @@ For CLI command modules that primarily delegate to underlying tools:
 - **Focus**: Core command paths, not every exception handler
 - **Value**: Integration tests provide better ROI than forcing high coverage on delegation patterns
 
-## ✅ COMPLETED: Learn Commands Removal (Technical Debt Cleanup)
+## ✅ COMPLETED: Learn Commands Implementation
 
 ### Changes Made
-- **Removed empty `learn_app`**: Eliminated dead typer instance from `tools/cli/main.py`
-- **Removed 14 skipped tests**: Eliminated entire `TestLearnCommands` class and related skipped tests
-- **Cleaned up test structure**: Fixed indentation issues and removed abandoned functionality
-- **Simplified CLI**: Removed abandoned educational features that added maintenance burden
+- **Implemented complete learn subsystem**: Added `learn_app` with 3 commands (commands, explain, best-practices)
+- **Dynamic content generation**: Content generated from centralized `get_command_info()` function
+- **Category-specific guidance**: Best practices and explanations for quality, test, env, ci, dev tools
+- **Rich user experience**: Formatted output with emojis, examples, and related concepts
+- **Error handling**: Proper validation for invalid categories and commands
 
-### Rationale
-Educational content adds maintenance burden without clear value for a developer tools CLI where users can already use `--help` flags and the existing `--learning-mode` flag provides sufficient educational value.
+### Features Implemented
+- `learn commands` - Overview of all tools with optional --category and --detailed flags
+- `learn explain <category.command>` - Detailed explanations with best practices
+- `learn best-practices` - General and category-specific development guidance
+
+### Technical Approach
+- Single source of truth for command metadata in `get_command_info()`
+- No static documentation duplication - content generated programmatically
+- Follows existing CLI patterns and error handling conventions
+- Maintains educational value with minimal maintenance burden
 
 ## ✅ COMPLETED: Error Handling Refactoring
 
