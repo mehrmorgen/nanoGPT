@@ -12,6 +12,7 @@ from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.dev import dev as dev_module
 from ml_playground.tools.dev.dev import DevTools
+from ml_playground.tools.dev.ai_guidelines import SetupResult
 
 from tests.property.tools._helpers import DeterministicRunner
 
@@ -73,7 +74,7 @@ def test_review_list_delegates(
             )
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["pr_number"] == pr_number
         assert kwargs["remote"] == "origin"
         assert kwargs["unreplied"] is unreplied
@@ -116,7 +117,7 @@ def test_review_bulk_reply_delegates(
             )
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["pr_number"] == pr_number
         assert kwargs["replies_file"] == replies_file
         assert kwargs["remote"] == remote
@@ -148,7 +149,7 @@ def test_cleanup_ignored_tracked_delegates(
             result = tools.cleanup_ignored_tracked()
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["subprocess_runner"] == tools.subprocess_runner
         assert kwargs["root_path"] == tmp_path
 
@@ -176,7 +177,7 @@ def test_kill_port_delegates(
             result = tools.kill_port(port)
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["port"] == port
         assert kwargs["subprocess_runner"] == tools.subprocess_runner
         assert kwargs["root_path"] == tmp_path
@@ -213,7 +214,7 @@ def test_review_delete_delegates(
             )
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["pr_number"] == pr_number
         assert kwargs["comments_file"] == comments_file
         assert kwargs["remote"] == remote
@@ -244,7 +245,7 @@ def test_batch_review_delegates(
             result = tools.batch_review(output_format=output_format)
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["config"] == config
         assert kwargs["root_path"] == tmp_path
         assert kwargs["output_format"] == output_format
@@ -274,7 +275,7 @@ def test_workflow_status_delegates(
             result = tools.workflow_status(output_format=output_format)
 
         assert result.success is True
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["config"] == config
         assert kwargs["root_path"] == tmp_path
         assert kwargs["output_format"] == output_format
@@ -294,18 +295,9 @@ def test_setup_ai_guidelines_delegates(
         tmp_path = Path(temp_dir)
         seen: list[tuple[Any, ...]] = []
 
-        def fake_setup_ai_guidelines(*args: Any, **kwargs: Any) -> ToolResult:
+        def fake_setup_ai_guidelines(*args: Any, **kwargs: Any) -> SetupResult:
             seen.append((args, kwargs))
-            # Return a mock result with logs attribute
-            from dataclasses import dataclass
-
-            @dataclass
-            class MockResult:
-                success: bool
-                error: str | None
-                logs: list[str]
-
-            return MockResult(success=True, error=None, logs=["Setup complete"])
+            return SetupResult(success=True, logs=["Setup complete"], error=None)
 
         with _override_attr(
             dev_module, "run_setup_ai_guidelines", fake_setup_ai_guidelines
@@ -320,7 +312,7 @@ def test_setup_ai_guidelines_delegates(
         assert result.success is True
         assert result.exit_code == 0
         assert "Setup complete" in result.stdout
-        args, kwargs = seen[0]
+        _, kwargs = seen[0]
         assert kwargs["tool"] == tool
         assert kwargs["project_dir"] == tmp_path
         assert kwargs["dry_run"] == dry_run
