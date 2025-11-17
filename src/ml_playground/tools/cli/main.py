@@ -4,18 +4,28 @@ This module provides the unified CLI accessible via `uv run tools`, organizing
 all development tools under logical subcommands with learning mode support.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import TypedDict, Annotated, Optional
 
 import typer
-from typing_extensions import Annotated
 
 from ml_playground.tools.core.errors import (
     ToolExecutionError,
     ToolConfigurationError,
 )
+
+
+class CategoryInfo(TypedDict):
+    """Type definition for category information in get_command_info()."""
+
+    name: str
+    description: str
+    commands: dict[str, str]
+
 
 # Main Typer app
 app = typer.Typer(
@@ -32,7 +42,7 @@ learn_app = typer.Typer(
 )
 
 
-def get_command_info() -> dict[str, dict[str, str]]:
+def get_command_info() -> dict[str, CategoryInfo]:
     """Get information about all available commands by category."""
     return {
         "quality": {
@@ -46,11 +56,11 @@ def get_command_info() -> dict[str, dict[str, str]]:
             },
         },
         "test": {
-            "name": "Testing Tools", 
+            "name": "Testing Tools",
             "description": "Testing tools (unit, integration, e2e, coverage)",
             "commands": {
                 "unit": "Run unit tests",
-                "integration": "Run integration tests", 
+                "integration": "Run integration tests",
                 "e2e": "Run end-to-end tests",
                 "coverage": "Run coverage analysis",
                 "all": "Run all tests",
@@ -107,18 +117,18 @@ def learn_commands(
     """Show overview of available commands."""
     try:
         command_info = get_command_info()
-        
+
         if category:
             if category not in command_info:
                 typer.echo(f"❌ Unknown category '{category}'", err=True)
                 typer.echo(f"Available categories: {', '.join(command_info.keys())}")
                 raise typer.Exit(1)
-            
+
             cat_info = command_info[category]
             typer.echo(f"\n📚 {cat_info['name']}")
             typer.echo(f"   {cat_info['description']}")
             typer.echo("\n🔧 Commands:")
-            
+
             for cmd, desc in cat_info["commands"].items():
                 if detailed:
                     typer.echo(f"   • {category}.{cmd:<15} - {desc}")
@@ -127,24 +137,26 @@ def learn_commands(
         else:
             typer.echo("\n📚 ML Playground Tools Overview")
             typer.echo("=" * 50)
-            
+
             for cat_name, cat_info in command_info.items():
                 typer.echo(f"\n🔧 {cat_info['name']}")
                 typer.echo(f"   {cat_info['description']}")
-                
+
                 if detailed:
                     typer.echo("\n   Commands:")
                     for cmd, desc in cat_info["commands"].items():
                         typer.echo(f"   • {cat_name}.{cmd:<15} - {desc}")
                 else:
                     commands = list(cat_info["commands"].keys())
-                    typer.echo(f"   Commands: {', '.join(commands[:4])}" + 
-                              (f", {commands[4]}..." if len(commands) > 4 else ""))
-        
+                    typer.echo(
+                        f"   Commands: {', '.join(commands[:4])}"
+                        + (f", {commands[4]}..." if len(commands) > 4 else "")
+                    )
+
         if not detailed:
             typer.echo("\n💡 Use --detailed for full command descriptions")
             typer.echo("💡 Use --category <name> to focus on specific tools")
-            
+
     except Exception as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
@@ -152,7 +164,9 @@ def learn_commands(
 
 @learn_app.command("explain")
 def learn_explain(
-    command: Annotated[str, typer.Argument(help="Command in format 'category.command'")] = None,
+    command: Annotated[
+        str, typer.Argument(help="Command in format 'category.command'")
+    ],
 ) -> None:
     """Explain a specific command with best practices."""
     try:
@@ -160,29 +174,31 @@ def learn_explain(
             typer.echo("❌ Command must be in format 'category.command'", err=True)
             typer.echo("Example: tools learn explain quality.lint")
             raise typer.Exit(1)
-            
+
         category, cmd_name = command.split(".", 1)
         command_info = get_command_info()
-        
+
         if category not in command_info:
             typer.echo(f"❌ Unknown category '{category}'", err=True)
             raise typer.Exit(1)
-            
+
         cat_commands = command_info[category]["commands"]
         if cmd_name not in cat_commands:
-            typer.echo(f"❌ Unknown command '{cmd_name}' in category '{category}'", err=True)
+            typer.echo(
+                f"❌ Unknown command '{cmd_name}' in category '{category}'", err=True
+            )
             typer.echo(f"Available commands: {', '.join(cat_commands.keys())}")
             raise typer.Exit(1)
-        
+
         description = cat_commands[cmd_name]
-        
+
         typer.echo(f"\n🔧 Command: {command}")
         typer.echo("=" * 50)
         typer.echo(f"\n📝 Description: {description}")
-        
+
         # Generate best practices based on command type
         typer.echo("\n💡 Best Practices:")
-        
+
         if category == "quality":
             if "lint" in cmd_name:
                 typer.echo("   • Run lint before committing changes")
@@ -196,7 +212,7 @@ def learn_explain(
                 typer.echo("   • Run typecheck before CI/CD")
                 typer.echo("   • Use strict type annotations for better safety")
                 typer.echo("   • Configure mypy/basedpyright settings")
-                
+
         elif category == "test":
             if "coverage" in cmd_name:
                 typer.echo("   • Aim for 80%+ line coverage")
@@ -206,25 +222,29 @@ def learn_explain(
                 typer.echo("   • Test one thing per test")
                 typer.echo("   • Use descriptive test names")
                 typer.echo("   • Mock external dependencies")
-                
+
         elif category == "env":
             if "setup" in cmd_name:
                 typer.echo("   • Use fresh environments for each project")
                 typer.echo("   • Pin dependency versions for reproducibility")
                 typer.echo("   • Use uv for fast dependency management")
-                
+
         typer.echo("\n🔗 Related Concepts:")
         if category == "quality":
-            typer.echo("   • Code quality standards • Pre-commit hooks • CI/CD integration")
+            typer.echo(
+                "   • Code quality standards • Pre-commit hooks • CI/CD integration"
+            )
         elif category == "test":
             typer.echo("   • Test-driven development • Mocking • Coverage analysis")
         elif category == "env":
-            typer.echo("   • Virtual environments • Dependency management • Reproducibility")
+            typer.echo(
+                "   • Virtual environments • Dependency management • Reproducibility"
+            )
         else:
             typer.echo("   • Development workflow • Automation • Best practices")
-            
+
         typer.echo(f"\n💡 Usage: tools {category} {cmd_name}")
-        
+
     except Exception as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
@@ -234,23 +254,25 @@ def learn_explain(
 def learn_best_practices(
     category: Annotated[
         Optional[str],
-        typer.Option("--category", "-c", help="Show best practices for specific category"),
+        typer.Option(
+            "--category", "-c", help="Show best practices for specific category"
+        ),
     ] = None,
 ) -> None:
     """Show best practices for development workflow."""
     try:
         command_info = get_command_info()
-        
+
         if category:
             if category not in command_info:
                 typer.echo(f"❌ Unknown category '{category}'", err=True)
                 typer.echo(f"Available categories: {', '.join(command_info.keys())}")
                 raise typer.Exit(1)
-            
+
             cat_name = command_info[category]["name"]
             typer.echo(f"\n📚 {cat_name} Best Practices")
             typer.echo("=" * 50)
-            
+
             # Category-specific best practices
             if category == "quality":
                 typer.echo("\n🔧 Code Quality Best Practices:")
@@ -259,7 +281,7 @@ def learn_best_practices(
                 typer.echo("   • Configure tools for project-specific needs")
                 typer.echo("   • Focus on consistency and readability")
                 typer.echo("   • Address warnings and errors promptly")
-                
+
             elif category == "test":
                 typer.echo("\n🧪 Testing Best Practices:")
                 typer.echo("   • Write tests before fixing bugs (TDD)")
@@ -267,7 +289,7 @@ def learn_best_practices(
                 typer.echo("   • Use descriptive test names and docstrings")
                 typer.echo("   • Mock external dependencies")
                 typer.echo("   • Aim for high coverage of business logic")
-                
+
             elif category == "env":
                 typer.echo("\n🌍 Environment Best Practices:")
                 typer.echo("   • Use isolated virtual environments")
@@ -275,7 +297,7 @@ def learn_best_practices(
                 typer.echo("   • Keep environments clean and minimal")
                 typer.echo("   • Use uv for fast dependency management")
                 typer.echo("   • Document environment setup steps")
-                
+
             elif category == "ci":
                 typer.echo("\n🚀 CI/CD Best Practices:")
                 typer.echo("   • Run quality gates in CI")
@@ -283,7 +305,7 @@ def learn_best_practices(
                 typer.echo("   • Use coverage thresholds")
                 typer.echo("   • Test on multiple Python versions")
                 typer.echo("   • Keep CI pipelines fast and reliable")
-                
+
             elif category == "dev":
                 typer.echo("\n👨‍💻 Development Best Practices:")
                 typer.echo("   • Review code changes thoroughly")
@@ -291,31 +313,33 @@ def learn_best_practices(
                 typer.echo("   • Keep PRs focused and small")
                 typer.echo("   • Document decisions and trade-offs")
                 typer.echo("   • Use AI tools to assist, not replace thinking")
-                
+
         else:
             typer.echo("\n📚 ML Playground Development Best Practices")
             typer.echo("=" * 55)
-            
+
             typer.echo("\n🔧 General Workflow:")
             typer.echo("   1. Set up environment: tools env setup")
             typer.echo("   2. Make changes with quality checks: tools quality lint")
             typer.echo("   3. Run tests: tools test unit")
             typer.echo("   4. Check coverage: tools test coverage")
             typer.echo("   5. Run full quality gate: tools ci quality-fast")
-            
+
             typer.echo("\n💡 Core Principles:")
             typer.echo("   • Quality first - lint, format, typecheck everything")
             typer.echo("   • Test thoroughly - unit, integration, coverage")
             typer.echo("   • Automate workflows - CI/CD, pre-commit hooks")
-            typer.echo("   • Document decisions - clear commit messages, PR descriptions")
+            typer.echo(
+                "   • Document decisions - clear commit messages, PR descriptions"
+            )
             typer.echo("   • Keep environments clean - isolated, reproducible setups")
-            
+
             typer.echo("\n🔗 Tool Categories:")
             for cat_name, cat_info in command_info.items():
                 typer.echo(f"   • {cat_name:<8} - {cat_info['description']}")
-                
-        typer.echo(f"\n💡 Use --category <name> for category-specific practices")
-        
+
+        typer.echo("\n💡 Use --category <name> for category-specific practices")
+
     except Exception as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
