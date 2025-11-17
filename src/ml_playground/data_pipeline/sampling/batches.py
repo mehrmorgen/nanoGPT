@@ -103,7 +103,7 @@ class SimpleBatches:
     def __enter__(self) -> "SimpleBatches":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         self.close()
 
     def get_batch(

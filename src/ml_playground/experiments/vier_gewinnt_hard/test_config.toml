@@ -1,0 +1,49 @@
+# Vier Gewinnt test configuration.
+
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+tokenizer_type = "char"
+
+[train.model]
+n_layer = 1
+n_head = 1
+n_embd = 32
+block_size = 42
+dropout = 0.0
+bias = false
+vocab_size = 3
+
+[train.data]
+batch_size = 2
+block_size = 42
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.001
+
+[train.schedule]
+decay_lr = false
+
+[train.runtime]
+out_dir = "./out"
+max_iters = 10
+eval_interval = 5
+eval_iters = 1
+log_interval = 1
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.runtime]
+out_dir = "./out/samples"
+seed = 1337
+device = "cpu"
+
+[sample.sample]
+num_samples = 1
+max_new_tokens = 5
+
+[shared]
+experiment = "vier_gewinnt"

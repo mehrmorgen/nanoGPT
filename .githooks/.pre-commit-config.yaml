@@ -26,7 +26,15 @@ repos:
       - -c
       - |
         set -euo pipefail
-        uv run pyright src/ml_playground
+        if command -v uv >/dev/null 2>&1; then
+          UV_BIN="uv"
+        elif command -v uv.exe >/dev/null 2>&1; then
+          UV_BIN="uv.exe"
+        else
+          echo "uv binary not found in PATH" >&2
+          exit 1
+        fi
+        "$UV_BIN" run pyright src/ml_playground
     language: system
     pass_filenames: false
 - repo: local
@@ -40,7 +48,15 @@ repos:
         set -euo pipefail
         echo "Current directory: $(pwd)"
         echo "PATH is: $PATH"
-        uv run mypy --incremental
+        if command -v uv >/dev/null 2>&1; then
+          UV_BIN="uv"
+        elif command -v uv.exe >/dev/null 2>&1; then
+          UV_BIN="uv.exe"
+        else
+          echo "uv binary not found in PATH" >&2
+          exit 1
+        fi
+        "$UV_BIN" run mypy --incremental
     language: system
     pass_filenames: false
 - repo: https://github.com/jendrikseipp/vulture

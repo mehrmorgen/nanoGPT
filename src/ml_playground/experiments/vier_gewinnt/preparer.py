@@ -1,87 +1,78 @@
-"""
-Generates a dataset of Connect Four games.
-Each game is a sequence of moves.
-The board is 7x6.
-Moves are integers from 0 to 6, representing the column.
-"""
+"""Utility to reshape Connect Four move logs into training datasets."""
 
+from __future__ import annotations
+
+import argparse
+import logging
 import os
-import random
-import numpy as np
+
+logging.basicConfig(level=logging.INFO)
 
 
 class Preparer:
-    def __init__(self, num_games=10000):
-        self.num_games = num_games
+    def __init__(self, input_file, output_dir):
+        self.input_file = input_file
+        self.output_dir = output_dir
 
-    def get_available_moves(self, board):
-        """Returns a list of available moves (columns that are not full)."""
-        return [col for col in range(7) if board[5][col] == 0]
+    def prepare(self) -> None:
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
 
-    def make_move(self, board, move, player):
-        """Makes a move on the board."""
-        for row in range(6):
-            if board[row][move] == 0:
-                board[row][move] = player
-                return True
-        return False
+        output_file_path = os.path.join(self.output_dir, "games.txt")
 
-    def check_win(self, board, player):
-        """Checks if the given player has won."""
-        # Check horizontal
-        for row in range(6):
-            for col in range(4):
-                if all(board[row][col + i] == player for i in range(4)):
-                    return True
-        # Check vertical
-        for row in range(3):
-            for col in range(7):
-                if all(board[row + i][col] == player for i in range(4)):
-                    return True
-        # Check diagonal (down-right)
-        for row in range(3):
-            for col in range(4):
-                if all(board[row + i][col + i] == player for i in range(4)):
-                    return True
-        # Check diagonal (up-right)
-        for row in range(3, 6):
-            for col in range(4):
-                if all(board[row - i][col + i] == player for i in range(4)):
-                    return True
-        return False
+        valid_games = 0
+        invalid_lines = 0
 
-    def generate_game(self):
-        """Generates a single game of Connect Four."""
-        board = np.zeros((6, 7), dtype=int)
-        moves = []
-        player = 1
-        while len(moves) < 42:
-            available_moves = self.get_available_moves(board)
-            if not available_moves:
-                break
-            move = random.choice(available_moves)
-            moves.append(move)
-            self.make_move(board, move, player)
-            if self.check_win(board, player):
-                break
-            player = 3 - player  # Switch player (1 -> 2, 2 -> 1)
-        return moves
+        with (
+            open(self.input_file, "r", encoding="utf-8") as f_in,
+            open(output_file_path, "w", encoding="utf-8") as f_out,
+        ):
+            for line_number, line in enumerate(f_in, start=1):
+                stripped = line.strip()
+                if not stripped:
+                    continue
 
-    def prepare(self):
-        dataset_dir = os.path.join(os.path.dirname(__file__), "datasets")
-        if not os.path.exists(dataset_dir):
-            os.makedirs(dataset_dir)
+                # Expected format: "winner:moves"
+                try:
+                    winner, moves = stripped.split(":", maxsplit=1)
+                except ValueError:
+                    invalid_lines += 1
+                    logging.warning(
+                        "Line %d is invalid (missing winner/moves delimiter)",
+                        line_number,
+                    )
+                    continue
 
-        file_path = os.path.join(dataset_dir, "games.txt")
+                if not winner or not moves:
+                    invalid_lines += 1
+                    logging.warning("Line %d has empty winner or moves", line_number)
+                    continue
 
-        with open(file_path, "w") as f:
-            for _ in range(self.num_games):
-                game = self.generate_game()
-                f.write(",".join(map(str, game)) + "\n")
+                f_out.write(moves + "\n")
+                valid_games += 1
+
+        logging.info(
+            "Prepared %d games from %s (skipped %d malformed lines)",
+            valid_games,
+            self.input_file,
+            invalid_lines,
+        )
 
 
-def main():
-    preparer = Preparer()
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepare Connect Four game data.")
+    parser.add_argument("input_file", help="Path to the raw game data file.")
+    parser.add_argument(
+        "--output_dir",
+        default="datasets",
+        help="Directory to save the prepared data.",
+    )
+    args = parser.parse_args()
+
+    # Construct the full path for the output directory
+    output_dir_path = os.path.join(os.path.dirname(__file__), args.output_dir)
+
+    preparer = Preparer(args.input_file, output_dir_path)
     preparer.prepare()
 
 

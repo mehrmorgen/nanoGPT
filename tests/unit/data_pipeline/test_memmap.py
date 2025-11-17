@@ -173,7 +173,6 @@ class TestSimpleBatches:
 
             # Create SimpleBatches
             with SimpleBatches(data_config, device, temp_path) as batches:
-
                 # Test batch retrieval
                 train_batch = batches.get_batch("train")
                 val_batch = batches.get_batch("val")
@@ -222,7 +221,6 @@ class TestSimpleBatches:
             )
 
             with SimpleBatches(data_config, device, temp_path) as batches:
-
                 # Get multiple batches to test sequential behavior
                 seen_positions = set()
                 for _ in range(3):

@@ -335,7 +335,9 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_incomplete_train_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_incomplete_train_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = """
 [prepare]
 
@@ -354,7 +356,9 @@ n_layer=1
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
@@ -721,7 +725,9 @@ def test_config_canonical_exports() -> None:
     assert hasattr(loading, "load_full_experiment_config")
 
 
-def test_full_loader_incomplete_sample_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_incomplete_sample_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -738,13 +744,17 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path, monkeypatch: pytes
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_train_section_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_no_train_section_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = """
 [prepare]
 
@@ -763,13 +773,17 @@ out_dir = "out/test"
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_sample_section_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_no_sample_section_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -785,13 +799,17 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path, monkeypatch: pytes
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_data_section(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_train_missing_data_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -807,13 +825,17 @@ def test_full_loader_train_missing_data_section(tmp_path: Path, monkeypatch: pyt
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_runtime_section(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_loader_train_missing_runtime_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -829,7 +851,9 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path, monkeypatch: 
     default_path.parent.mkdir(parents=True, exist_ok=True)
     default_path.write_text("")
 
-    monkeypatch.setattr(config_loading, "_default_config_path_from_root", lambda _: default_path)
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
@@ -864,7 +888,9 @@ def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
     assert exp.shared.dataset_dir.is_absolute()
 
 
-def test_cli_adapters_prerequisites(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_adapters_prerequisites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(config_loading, "_project_root", lambda: tmp_path)
     monkeypatch.setattr(config_cli, "_PROJECT_HOME", tmp_path)
 
