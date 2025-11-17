@@ -2,8 +2,6 @@ from typing import Any, Literal, cast
 from collections.abc import Mapping
 from types import MappingProxyType
 
-import numpy as np
-import numpy.typing as npt
 import pytest
 
 from ml_playground.core.tokenizer import (
@@ -12,34 +10,15 @@ from ml_playground.core.tokenizer import (
     WordTokenizer,
     create_tokenizer,
 )
+from tests.unit.helpers.tokenizer_harness import TokenizerTestHarness
 
 
-class CharTokenizerTestHarness(CharTokenizer):
+class CharTokenizerTestHarness(CharTokenizer, TokenizerTestHarness):
     """Test harness exposing lookup array maintenance for char tokenizer."""
 
-    def invalidate_lookup_array(self) -> None:
-        if hasattr(self, "_itos_array"):
-            delattr(self, "_itos_array")
 
-    def expose_lookup_array(self) -> npt.NDArray[np.object_]:
-        return self._ensure_lookup_array()
-
-    def lookup_array_length(self) -> int:
-        return self._ensure_lookup_array().shape[0]
-
-
-class WordTokenizerTestHarness(WordTokenizer):
+class WordTokenizerTestHarness(WordTokenizer, TokenizerTestHarness):
     """Test harness exposing lookup array maintenance for word tokenizer."""
-
-    def invalidate_lookup_array(self) -> None:
-        if hasattr(self, "_itos_array"):
-            delattr(self, "_itos_array")
-
-    def expose_lookup_array(self) -> npt.NDArray[np.object_]:
-        return self._ensure_lookup_array()
-
-    def lookup_array_length(self) -> int:
-        return self._ensure_lookup_array().shape[0]
 
 
 def test_char_tokenizer_roundtrip_proto() -> None:
