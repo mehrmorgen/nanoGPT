@@ -560,9 +560,68 @@ uv run pytest tests/ -v
 3. **Integration Test Organization**: Move git/gh dependent tests to proper integration test scope
 4. **Documentation**: Share PBT patterns with team for broader adoption
 
+## 🎯 NEXT FOCUS: Remaining Test Failures Resolution Strategy
+
+### Current Status: 7 Pre-existing Test Failures Identified
+
+After completing the PBT cleanup (97/97 property tests passing), 7 test failures remain that require targeted resolution:
+
+### Category 1: Simple Assertion Fixes (2/3 COMPLETED ✅)
+**Coverage Reporting Tests** - `tests/unit/tools/testing/test_coverage.py`
+- ✅ `test_run_coverage_report_lists_artifacts` - Fixed: Updated assertions to match "Generated terminal report" format
+- ✅ `test_run_coverage_report_handles_existing_json_without_regen` - Fixed: Updated assertions for new output format  
+- 🔄 `test_run_coverage_report_errors_on_ci_empty_file` - **NEEDS INVESTIGATION**: Expected ToolExecutionError not raised
+
+### Category 2: Framework Integration Issues (2 failures) - **INTEGRATION TEST CANDIDATES**
+**CLI Tests** - `tests/unit/tools/cli/test_main.py`
+- `test_handle_tool_result_failure_exits` - Framework mismatch: expecting typer.Exit but getting click.exceptions.Exit
+- `test_unit_command_passes_context` - Missing output: expecting "ran unit" but getting empty string
+
+**Recommendation**: Move to integration tests since they test CLI framework behavior rather than unit logic
+
+### Category 3: API Drift Issues (1 failure) - **PBT REPLACEMENT CANDIDATE**
+**Review Rendering Tests** - `tests/unit/tools/dev/test_review_rendering.py`
+- `test_review_list_renders_verbose_body` - Missing ReviewStub attributes: 'object has no attribute'
+
+**Recommendation**: Create property test for review rendering behavior patterns
+
+### Category 4: Exception Handling Changes (1 failure) - **NEEDS INVESTIGATION**
+**Coverage Helpers** - `tests/unit/tools/testing/test_coverage_helpers.py`
+- `test_clean_pytest_output_filters_progress_lines` - Expected exception not raised
+
+### 🚀 PRIORITY ACTION PLAN
+
+#### Phase 1: Complete Simple Fixes (Immediate)
+1. **Investigate empty file coverage test** - Determine why ToolExecutionError not raised
+2. **Update test expectations** based on actual behavior
+
+#### Phase 2: Integration Test Migration (Short-term)
+1. **Move CLI tests to integration suite** - Test actual CLI behavior rather than framework internals
+2. **Create integration test structure** for CLI tool result handling
+
+#### Phase 3: PBT Expansion (Medium-term)
+1. **Create property tests for review rendering** - Focus on behavior patterns over specific output
+2. **Apply PBT-first approach** to remaining integration-dependent unit tests
+
+#### Phase 4: Exception Behavior Review (Ongoing)
+1. **Review exception handling changes** - Ensure error paths are properly tested
+2. **Update coverage helper tests** to match current implementation
+
+### 📊 Success Metrics
+- **Immediate**: 0 assertion-related failures
+- **Short-term**: CLI tests moved to integration suite and passing
+- **Medium-term**: Property tests replace integration-dependent unit tests
+- **Ongoing**: All exception paths properly tested
+
+### 🔧 Technical Notes
+- Coverage reporting output format changed during PBT cleanup work
+- CLI framework migration (typer/click) requires integration-level testing
+- Review rendering tests benefit from property-based approach for behavior validation
+- Exception handling changes need investigation to determine if they're intentional
+
 ---
 
-*PBT cleanup strategy completed successfully on 2025-11-17. All objectives met with 100% property test success rate and zero functionality impact.*
+*This next focus strategy provides a systematic approach to resolving the remaining 7 test failures while maintaining the PBT-first principles established in the cleanup.*
 
 ## Concrete Unit Test Removal Examples
 

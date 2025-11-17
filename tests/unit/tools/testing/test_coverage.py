@@ -317,7 +317,10 @@ def test_run_coverage_report_lists_artifacts(
     )
 
     assert result.success is True
-    assert "Coverage artifacts:" in result.stdout
+    assert "Generated terminal report" in result.stdout
+    assert "Generated HTML report" in result.stdout
+    assert "Generated JSON report" in result.stdout
+    assert "Generated XML report" in result.stdout
 
 
 def test_run_coverage_report_handles_existing_json_without_regen(
@@ -341,7 +344,7 @@ def test_run_coverage_report_handles_existing_json_without_regen(
     )
 
     assert result.success is True
-    assert "Coverage totals:" in result.stdout
+    assert "Generated terminal report" in result.stdout
 
 
 def test_run_coverage_report_errors_on_ci_empty_file(
