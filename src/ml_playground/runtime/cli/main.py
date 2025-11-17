@@ -123,9 +123,6 @@ __all__ = [
     "default_run_invoker",
     "RunInvoker",
     "RuntimeRunHooks",
-    "run_prepare_impl",
-    "run_train_impl",
-    "run_sample_impl",
     "CLIDependencies",
     "configure_cli_dependencies",
     "default_cli_dependencies",
@@ -152,96 +149,6 @@ def main(argv: list[str] | None = None) -> int | None:
     registry.load_preparers()
     cmd = get_command(app)
     return cmd.main(args=argv, standalone_mode=False)
-
-
-def run_prepare_impl(
-    experiment: str,
-    prepare_cfg: Any,
-    config_path: Path,
-    shared: object,
-    learning_mode_engine: LearningModeEngine | None = None,
-    *,
-    hooks: RuntimeRunHooks | None = None,
-) -> ToolResult:
-    """Wrapper that forwards to runtime.runners with CLI-level hooks.
-
-    Exposed here so tests can patch symbols on this module (e.g., create_pipeline).
-    """
-    active_hooks = hooks or RuntimeRunHooks(
-        pipeline_factory=_resolve_cli_attr("create_pipeline", create_pipeline),
-        trainer_factory=_resolve_cli_attr("CoreTrainer", CoreTrainer),
-        sampler_factory=_resolve_cli_attr("Sampler", Sampler),
-        device_setup=_resolve_cli_attr("global_device_setup", global_device_setup),
-        log_status=_resolve_cli_attr("log_command_status", log_command_status),
-    )
-    return _rt_run_prepare_impl(
-        experiment,
-        prepare_cfg,
-        config_path,
-        shared,
-        learning_mode_engine,
-        hooks=active_hooks,
-    )
-
-
-def run_train_impl(
-    experiment: str,
-    train_cfg: Any,
-    config_path: Path,
-    shared: object,
-    learning_mode_engine: LearningModeEngine | None = None,
-    *,
-    hooks: RuntimeRunHooks | None = None,
-) -> ToolResult:
-    """Wrapper that forwards to runtime.runners with CLI-level hooks.
-
-    Exposed here so tests can patch symbols on this module (e.g., CoreTrainer).
-    """
-    active_hooks = hooks or RuntimeRunHooks(
-        pipeline_factory=_resolve_cli_attr("create_pipeline", create_pipeline),
-        trainer_factory=_resolve_cli_attr("CoreTrainer", CoreTrainer),
-        sampler_factory=_resolve_cli_attr("Sampler", Sampler),
-        device_setup=_resolve_cli_attr("global_device_setup", global_device_setup),
-        log_status=_resolve_cli_attr("log_command_status", log_command_status),
-    )
-    return _rt_run_train_impl(
-        experiment,
-        train_cfg,
-        config_path,
-        shared,
-        learning_mode_engine,
-        hooks=active_hooks,
-    )
-
-
-def run_sample_impl(
-    experiment: str,
-    sample_cfg: Any,
-    config_path: Path,
-    shared: object,
-    learning_mode_engine: LearningModeEngine | None = None,
-    *,
-    hooks: RuntimeRunHooks | None = None,
-) -> ToolResult:
-    """Wrapper that forwards to runtime.runners with CLI-level hooks.
-
-    Exposed here so tests can patch symbols on this module (e.g., Sampler).
-    """
-    active_hooks = hooks or RuntimeRunHooks(
-        pipeline_factory=_resolve_cli_attr("create_pipeline", create_pipeline),
-        trainer_factory=_resolve_cli_attr("CoreTrainer", CoreTrainer),
-        sampler_factory=_resolve_cli_attr("Sampler", Sampler),
-        device_setup=_resolve_cli_attr("global_device_setup", global_device_setup),
-        log_status=_resolve_cli_attr("log_command_status", log_command_status),
-    )
-    return _rt_run_sample_impl(
-        experiment,
-        sample_cfg,
-        config_path,
-        shared,
-        learning_mode_engine,
-        hooks=active_hooks,
-    )
 
 
 def main_entry(
