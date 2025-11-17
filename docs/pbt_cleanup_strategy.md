@@ -513,6 +513,12 @@ With all tools property tests now passing, the PBT cleanup strategy can proceed 
 
 **Note**: These failures existed before PBT cleanup and are tracked separately for future resolution.
 
+### Additional Compatibility Fix Applied
+- `tests/unit/experiments/bundestag_qwen15b_lora_mps/test_preparer.py` - **FIXED**: Removed Python 3.13+ pathlib `_flavour` dependency in TogglePath implementation
+  - **Issue**: Private pathlib internals changed in Python 3.13+ causing test skip
+  - **Solution**: Removed `_flavour` dependency; TogglePath now works across all Python versions
+  - **Status**: ✅ Test now passes without skip condition
+
 ### Key Technical Fixes Applied
 1. **API Drift Resolution**: Updated DevTools constructor calls to match new API
 2. **Health Check Suppression**: Proper Hypothesis configuration for tmp_path fixtures
