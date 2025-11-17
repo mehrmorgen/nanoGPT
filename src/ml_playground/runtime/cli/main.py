@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, TYPE_CHECKING, Any, TypeVar
-from pathlib import Path
+from typing import Callable, TYPE_CHECKING, TypeVar
 
 import typer
 from typer.main import get_command
@@ -53,17 +52,11 @@ from ml_playground.runtime.cli.typer_helpers import (
 from ml_playground.runtime.core.results import LearningModeEngine as LearningModeEngine
 from ml_playground.runtime.core.results import ToolResult as ToolResult
 from ml_playground.runtime.core.results import VerbosityLevel as VerbosityLevel
-from ml_playground.sampling.runner import Sampler as Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.data_pipeline.preparer import (
     create_pipeline as create_pipeline,
 )
 from ml_playground.runtime.runners import RuntimeRunHooks as RuntimeRunHooks
-from ml_playground.runtime.runners import run_prepare_impl as _rt_run_prepare_impl
-from ml_playground.runtime.runners import run_sample_impl as _rt_run_sample_impl
-from ml_playground.runtime.runners import run_train_impl as _rt_run_train_impl
-
-_AttrT = TypeVar("_AttrT")
 
 
 def default_cli_dependencies() -> CLIDependencies:
@@ -76,22 +69,6 @@ def default_cli_dependencies() -> CLIDependencies:
         run_train=runtime_runners.run_train_impl,
         run_sample=runtime_runners.run_sample_impl,
     )
-
-
-def _resolve_cli_attr(name: str, fallback: _AttrT) -> _AttrT:
-    """Resolve attribute overrides from the runtime CLI package."""
-
-    import ml_playground.runtime.cli as cli_pkg
-
-    # Check package-level overrides first (for test injection)
-    if hasattr(cli_pkg, name):
-        return getattr(cli_pkg, name)
-
-    # Fall back to module-level globals
-    # This avoids __init__.py side effects while maintaining the override capability
-    if name in globals():
-        return globals()[name]
-    return fallback
 
 
 if TYPE_CHECKING:  # import for typing only
@@ -136,7 +113,6 @@ __all__ = [
     "LearningModeEngine",
     "ToolResult",
     "VerbosityLevel",
-    "Sampler",
     "CoreTrainer",
     "main",
     "main_entry",
