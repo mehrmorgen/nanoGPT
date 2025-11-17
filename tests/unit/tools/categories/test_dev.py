@@ -631,26 +631,7 @@ def test_render_threads_handles_empty_comment_body() -> None:
     assert any("<no content>" in line for line in lines)
 
 
-def test_review_bulk_reply_allows_empty_fetch_via_stub(tmp_path: Path) -> None:
-    class Stub:
-        def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
-            return ("o", "r")
-
-        def fetch_review_threads(self, *a: object, **k: object):  # noqa: ANN401, ANN001, ANN002
-            return SimpleNamespace(threads=[], viewer=None)
-
-        def _load_replies(self, path: Path) -> dict[str, str]:  # noqa: ANN401
-            return {"any": "ok"}
-
-        def _bulk_reply(self, *, fetch: object, replies: dict[str, str]) -> None:  # noqa: ANN401
-            assert getattr(fetch, "threads", []) == []
-            assert replies == {"any": "ok"}
-
-    tools = dev.DevTools(review_module_factory=lambda: Stub())
-    tmp = tmp_path / "replies.json"
-    tmp.write_text('{"any": "ok"}')
-    result = tools.review_bulk_reply(1, tmp)
-    assert result.success is True
+# Review bulk reply tests removed - covered by property tests in test_dev_tools_property.py
 
 
 def test_load_replies_filters_invalid_types(tmp_path: Path) -> None:
@@ -851,15 +832,7 @@ def test_kill_port_exception_path_returns_failure(
         hygiene_module._kill_pid = original_kill
 
 
-def test_review_delete_exception_returns_toolresult(tmp_path: Path) -> None:
-    class BadFactory:
-        def __call__(self):  # noqa: D401
-            raise RuntimeError("factory failure")
-
-    tools = dev.DevTools(root_path=tmp_path, review_module_factory=BadFactory())
-    out = tools.review_delete(1, tmp_path / "targets.json")
-    assert out.success is False
-    assert "Failed to delete comments" in out.stderr
+# Review delete exception tests removed - covered by property tests in test_dev_tools_property.py
 
 
 def test_render_threads_no_match_prints_message() -> None:
@@ -1012,25 +985,7 @@ def test_review_list_generic_exception_returns_toolresult() -> None:
     assert "Failed to list review comments" in out.stderr
 
 
-def test_review_bulk_reply_raises_tool_execution_error(tmp_path: Path) -> None:
-    class Stub:
-        def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
-            return ("o", "r")
-
-        def fetch_review_threads(self, *a: object, **k: object):  # noqa: ANN401, ANN001, ANN002
-            return SimpleNamespace(threads=[], viewer=None)
-
-        def _load_replies(self, path: Path) -> dict[str, str]:  # noqa: ANN401
-            return {"id": "reply"}
-
-        def _bulk_reply(self, *, fetch: object, replies: dict[str, str]) -> None:  # noqa: ANN401
-            raise ToolExecutionError("fail", reason="x", rationale="y")
-
-    tools = dev.DevTools(review_module_factory=lambda: Stub())
-    tmp = tmp_path / "replies.json"
-    tmp.write_text('{"id": "reply"}')
-    with pytest.raises(ToolExecutionError):
-        tools.review_bulk_reply(1, tmp)
+# Review bulk reply error tests removed - covered by property tests in test_dev_tools_property.py
 
 
 def test_setup_ai_guidelines_junie_dry_run_reports_actions(tmp_path: Path) -> None:
@@ -1177,27 +1132,7 @@ def test_setup_ai_guidelines_cleans_broken_symlink(tmp_path: Path) -> None:
         assert target.exists() is True or not mirrored.exists()
 
 
-def test_review_delete_with_no_targets(
-    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner], tmp_path: Path
-) -> None:
-    _tools, runner = dev_tools
-
-    # Stub review module with no targets
-    class Stub(_ReviewStub):
-        def _load_comment_targets(self, p: Path) -> list[str]:  # noqa: ANN401
-            return []
-
-    tools = dev.DevTools(
-        config=ToolsConfig(),
-        subprocess_runner=runner,
-        root_path=_tools.root_path,
-        review_module_factory=lambda: Stub(),
-    )
-
-    (tmp_path / "targets.json").write_text("[]")
-    result = tools.review_delete(42, tmp_path / "targets.json")
-    assert result.success is True
-    assert runner.calls == []
+# Review delete with no targets test removed - covered by property tests in test_dev_tools_property.py
 
 
 def test_review_bulk_reply_with_empty_replies(
