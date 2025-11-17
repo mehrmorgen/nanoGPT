@@ -24,8 +24,7 @@ def global_device_setup(
     if torch_module is not None:
         torch_arg = torch_module
     else:
-        pkg_torch = getattr(_cli_pkg, "torch", None)
-        torch_arg = pkg_torch if pkg_torch is not None else torch
+        torch_arg = torch
     rt_global_device_setup(
         device,
         dtype,
