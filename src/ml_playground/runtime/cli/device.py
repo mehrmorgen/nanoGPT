@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 import torch
-import ml_playground.runtime.cli as _cli_pkg
 
 from ml_playground.runtime.device import global_device_setup as rt_global_device_setup
 
