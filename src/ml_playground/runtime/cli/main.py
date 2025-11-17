@@ -20,7 +20,9 @@ from ml_playground.runtime.core.bootstrap import (
 from ml_playground.runtime.core.bootstrap import (
     reset_runtime_cli_dependencies as reset_cli_dependencies,
 )
-from ml_playground.runtime.core.bootstrap import get_runtime_cli_dependencies as get_cli_dependencies
+from ml_playground.runtime.core.bootstrap import (
+    get_runtime_cli_dependencies as get_cli_dependencies,
+)
 from ml_playground.runtime.core.bootstrap import (
     override_runtime_cli_dependencies as override_cli_dependencies,
 )

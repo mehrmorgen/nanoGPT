@@ -328,9 +328,9 @@ class TestNormalizeVocabMappingEdgeCases:
         # Create tokenizer with boolean vocab values
         vocab = {"true_key": True, "false_key": False}
         tokenizer = CharTokenizer(vocab=vocab)
-        
+
         meta = build_metadata(tokenizer, 100, 20)
-        
+
         # Boolean values should be normalized to integers
         assert meta["stoi"] == {"true_key": 1, "false_key": 0}
 
@@ -338,12 +338,10 @@ class TestNormalizeVocabMappingEdgeCases:
         """Test that real number vocab values are normalized to integers in metadata."""
         # Use FakeTokenizer to avoid constructor validation issues
         fake_tokenizer = TestCreateStandardizedMetadataExceptions.FakeTokenizer(
-            name="char", 
-            vocab_size=2,
-            stoi={"float_key": 3.7, "int_float_key": 2.0}
+            name="char", vocab_size=2, stoi={"float_key": 3.7, "int_float_key": 2.0}
         )
-        
+
         meta = build_metadata(fake_tokenizer, 100, 20)
-        
+
         # Real numbers should be normalized to integers
         assert meta["stoi"] == {"float_key": 3, "int_float_key": 2}

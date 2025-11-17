@@ -526,22 +526,23 @@ def test_verify_uses_python_import_command(tmp_path: Path) -> None:
 2. **Medium risk items** - Use deprecation warnings before removal
 3. **Low risk items** - Direct implementation with test coverage verification
 
-### Quick Wins (Immediate Impact, Zero Coordination)
+### Quick Wins (COMPLETED ✅)
 
 **Can be implemented immediately without risk**:
 
-1. **Fix .tmp_env_verify test cleanup** (5 minutes)
+1. **Fix .tmp_env_verify test cleanup** (5 minutes) ✅ COMPLETED
    - Replace `Path.cwd() / ".tmp_env_verify"` with `tmp_path` fixture
    - Eliminates test pollution, zero production impact
 
-2. **Consolidate learning mode flags** ✅ FIXED (10 minutes)
+2. **Consolidate learning mode flags** ✅ COMPLETED (10 minutes)
    - Remove duplicate `_learning_mode_set` field in `tools/core/runtime.py`
    - Single source of truth, internal cleanup only
 
-3. **Replace getattr() calls** ✅ FIXED (15 minutes)
+3. **Replace getattr() calls** ✅ COMPLETED (15 minutes)
    - Convert 15+ `getattr(_cli_pkg, "...", default)` to direct imports
    - Removes theoretical flexibility, zero functional change
-   - Note: Kept log_directory getattr() for test isolation (tests actively use it)
+   - **COMPLETED**: Removed `getattr(_cli_pkg.torch)` from device.py
+   - **KEPT**: log_directory getattr() for test isolation (tests actively use it)
 
 **Why start here**: These changes provide immediate code quality benefits with zero risk of breaking dependencies or requiring coordinated test updates.
 

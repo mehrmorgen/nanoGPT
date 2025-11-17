@@ -160,7 +160,9 @@ class TestGlobalOptions:
         result = runner.invoke(app, ["prepare", "nonexistent"])
         assert result.exit_code != 0  # Some error, but not context-related crash
 
-    def test_global_options_preserves_existing_handlers_when_already_configured(self) -> None:
+    def test_global_options_preserves_existing_handlers_when_already_configured(
+        self,
+    ) -> None:
         """Ensure global_options does not reset logging when handlers already exist."""
 
         root_logger = logging.getLogger()
@@ -386,7 +388,9 @@ class TestCommandRunners:
             "Analysis for 'bundestag_char'" in message for message in caplog.messages
         )
 
-    def test_run_train_cmd_uses_default_dependencies_when_no_override(self, tmp_path: Path) -> None:
+    def test_run_train_cmd_uses_default_dependencies_when_no_override(
+        self, tmp_path: Path
+    ) -> None:
         """_run_train_cmd should request dependencies when none are provided."""
 
         calls: dict[str, list[Any]] = {"load": [], "ensure": [], "run": []}
@@ -441,7 +445,9 @@ class TestCommandRunners:
         assert isinstance(run_config_path, _Path)
         assert getattr(run_shared, "config_path", None) == run_config_path
 
-    def test_run_sample_cmd_uses_default_dependencies_when_no_override(self, tmp_path: Path) -> None:
+    def test_run_sample_cmd_uses_default_dependencies_when_no_override(
+        self, tmp_path: Path
+    ) -> None:
         """_run_sample_cmd should request dependencies when none are provided."""
 
         calls: dict[str, list[Any]] = {

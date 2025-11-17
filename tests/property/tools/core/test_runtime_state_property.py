@@ -29,10 +29,10 @@ def test_state_reset_clears_fields(
     state.verbosity = verbosity
     state.dry_run = dry_run
     state.project_root = Path("/tmp/test")
-    
+
     # Reset should clear all fields
     reset_state()
-    
+
     assert state.learning_mode is False
     assert state.verbosity == 1
     assert state.dry_run is False
