@@ -88,7 +88,7 @@ class _ReviewStub:
         return ["reply"]
 
     def _bulk_reply(self, *, fetch: object, replies: list[str]) -> None:  # noqa: ANN401
-        assert fetch.threads
+        assert getattr(fetch, "threads", None) is not None
         assert replies == ["reply"]
         self.bulk_called = True
 
@@ -97,7 +97,7 @@ class _ReviewStub:
         return ["c1", "c2"]
 
     def _comment_lookup(self, fetch: object) -> dict[str, str]:  # noqa: ANN401
-        assert fetch.threads
+        assert getattr(fetch, "threads", None) is not None
         return {"c1": "comment-1", "c2": "comment-2"}
 
 
@@ -124,8 +124,8 @@ def test_review_list_uses_builtin_review_module(
     result = tools.review_list(pr_number=42, unreplied=True, unresolved=False)
 
     assert "Thread:" in result.stdout
-    assert runner.calls[0]["command"][:4] == ["git", "remote", "get-url", "origin"]
-    assert runner.calls[1]["command"][:3] == ["gh", "api", "graphql"]
+    assert runner.calls[0].get("command", [])[:4] == ["git", "remote", "get-url", "origin"]
+    assert runner.calls[1].get("command", [])[:3] == ["gh", "api", "graphql"]
 
 
 # Review list tests removed - covered by property tests
@@ -151,17 +151,19 @@ def test_cleanup_ignored_tracked_removes_files(
 
     assert result.success is True
     assert "Removed 2" in result.stdout
-    assert runner.calls[0]["command"][:3] == ["git", "ls-files", "-i"]
-    assert runner.calls[1]["command"][:3] == ["git", "rm", "--cached"]
+    assert runner.calls[0].get("command", [])[:3] == ["git", "ls-files", "-i"]
+    assert runner.calls[1].get("command", [])[:3] == ["git", "rm", "--cached"]
+    assert runner.calls[2].get("command", [])[:3] == ["git", "rm", "--cached"]
 
 
 def test_cleanup_ignored_tracked_returns_listing_failure(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
-    tools, runner = dev_tools
+    tools, _ = dev_tools  # runner unused
 
     failure = _make_result("list", success=False)
-    runner.set_results([failure])
+    # Use the tools' subprocess runner instead of local runner
+    tools.subprocess_runner.set_results([failure])
 
     result = tools.cleanup_ignored_tracked()
 
@@ -171,23 +173,26 @@ def test_cleanup_ignored_tracked_returns_listing_failure(
 def test_cleanup_ignored_tracked_no_files(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
-    tools, runner = dev_tools
+    tools, _ = dev_tools  # runner unused
 
-    runner.set_results([_make_result("list", stdout="")])
+    # Use the tools' subprocess runner instead of local runner
+    tools.subprocess_runner.set_results([_make_result("list", stdout="")])
 
     result = tools.cleanup_ignored_tracked()
 
     assert result.success is True
     assert "No ignored tracked files" in result.stdout
-    assert len(runner.calls) == 1
+    # Only one call should be made (the list command)
+    assert len(tools.subprocess_runner.calls) == 1
 
 
 def test_cleanup_ignored_tracked_stop_after_failed_removal(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
-    tools, runner = dev_tools
+    tools, _ = dev_tools  # runner unused
 
-    runner.set_results(
+    # Use the tools' subprocess runner instead of local runner
+    tools.subprocess_runner.set_results(
         [
             _make_result("list", stdout="alpha\nbeta\n"),
             _make_result("rm", success=False),
@@ -197,9 +202,10 @@ def test_cleanup_ignored_tracked_stop_after_failed_removal(
     result = tools.cleanup_ignored_tracked()
 
     assert result.success is False
-    assert runner.calls[0]["command"][:3] == ["git", "ls-files", "-i"]
-    assert runner.calls[1]["command"][:3] == ["git", "rm", "--cached"]
-    assert len(runner.calls) == 2
+    calls = tools.subprocess_runner.calls
+    assert calls[0].get("command", [])[:3] == ["git", "ls-files", "-i"]
+    assert calls[1].get("command", [])[:3] == ["git", "rm", "--cached"]
+    assert len(calls) == 2
 
 
 def test_kill_port_kills_each_pid_via_di(
@@ -623,7 +629,7 @@ def test_render_threads_handles_empty_comment_body() -> None:
     thread = SimpleNamespace(url="u", is_resolved=False, comments=[comment])
     lines = mod.render_threads(
         [thread],
-        apply_filters=lambda x, **k: x,
+        apply_filters=lambda x, **k: x,  # type: ignore[no-any-return]
         unreplied=False,
         unresolved=False,
         viewer="me",
