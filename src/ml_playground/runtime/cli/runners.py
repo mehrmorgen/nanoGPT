@@ -80,13 +80,11 @@ def run_prepare(
 ) -> ToolResult:
     handler = result_handler or handle_tool_result
     active_hooks = hooks or runtime_runners.RuntimeRunHooks(
-        pipeline_factory=getattr(_cli_pkg, "create_pipeline", _default_create_pipeline),
-        trainer_factory=getattr(_cli_pkg, "CoreTrainer", _DefaultTrainer),
-        sampler_factory=getattr(_cli_pkg, "Sampler", _DefaultSampler),
-        device_setup=getattr(_cli_pkg, "global_device_setup", _default_device_setup),
-        log_status=getattr(
-            _cli_pkg, "log_command_status", rt_helpers.log_command_status
-        ),
+        pipeline_factory=_default_create_pipeline,
+        trainer_factory=_DefaultTrainer,
+        sampler_factory=_DefaultSampler,
+        device_setup=_default_device_setup,
+        log_status=rt_helpers.log_command_status,
     )
     result = runtime_runners.run_prepare_impl(
         experiment,
@@ -113,11 +111,11 @@ def run_train(
 ) -> ToolResult:
     handler = result_handler or handle_tool_result
     active_hooks = hooks or runtime_runners.RuntimeRunHooks(
-        pipeline_factory=getattr(_cli_pkg, "create_pipeline", _default_create_pipeline),
-        trainer_factory=getattr(_cli_pkg, "CoreTrainer", _DefaultTrainer),
-        sampler_factory=getattr(_cli_pkg, "Sampler", _DefaultSampler),
-        device_setup=getattr(_cli_pkg, "global_device_setup", _default_device_setup),
-        log_status=getattr(_cli_pkg, "log_command_status", log_command_status),
+        pipeline_factory=_default_create_pipeline,
+        trainer_factory=_DefaultTrainer,
+        sampler_factory=_DefaultSampler,
+        device_setup=_default_device_setup,
+        log_status=log_command_status,
     )
     result = runtime_runners.run_train_impl(
         experiment,
@@ -144,11 +142,11 @@ def run_sample(
 ) -> ToolResult:
     handler = result_handler or handle_tool_result
     active_hooks = hooks or runtime_runners.RuntimeRunHooks(
-        pipeline_factory=getattr(_cli_pkg, "create_pipeline", _default_create_pipeline),
-        trainer_factory=getattr(_cli_pkg, "CoreTrainer", _DefaultTrainer),
-        sampler_factory=getattr(_cli_pkg, "Sampler", _DefaultSampler),
-        device_setup=getattr(_cli_pkg, "global_device_setup", _default_device_setup),
-        log_status=getattr(_cli_pkg, "log_command_status", log_command_status),
+        pipeline_factory=_default_create_pipeline,
+        trainer_factory=_DefaultTrainer,
+        sampler_factory=_DefaultSampler,
+        device_setup=_default_device_setup,
+        log_status=log_command_status,
     )
     result = runtime_runners.run_sample_impl(
         experiment,
@@ -322,7 +320,8 @@ def log_command_status(
     This ensures tests overriding `cli.log_directory` affect behavior here.
     Swallows exceptions consistently with runtime.helpers.
     """
-    # Use package-level override if present
+    # Use package-level override if present - kept for test isolation
+    # Tests override this via monkeypatching to verify error handling
     pkg_log_directory = getattr(_cli_pkg, "log_directory", log_directory)
     try:
         pkg_log_directory(tag, "out_dir", out_dir, logger)

@@ -538,9 +538,10 @@ def test_verify_uses_python_import_command(tmp_path: Path) -> None:
    - Remove duplicate `_learning_mode_set` field in `tools/core/runtime.py`
    - Single source of truth, internal cleanup only
 
-3. **Replace getattr() calls** (15 minutes)
+3. **Replace getattr() calls** ✅ FIXED (15 minutes)
    - Convert 15+ `getattr(_cli_pkg, "...", default)` to direct imports
    - Removes theoretical flexibility, zero functional change
+   - Note: Kept log_directory getattr() for test isolation (tests actively use it)
 
 **Why start here**: These changes provide immediate code quality benefits with zero risk of breaking dependencies or requiring coordinated test updates.
 
