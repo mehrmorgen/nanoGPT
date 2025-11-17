@@ -93,18 +93,14 @@ class GlobalState:
         self.project_root: Optional[Path] = None
         self.config: Optional[ToolsConfig] = None
         self.learning_mode_set: bool = False
-        # Back-compat: tests expect a private flag
-        self._learning_mode_set: bool = False
 
     def mark_learning_mode_explicit(self, value: bool = True) -> None:
         """Record that learning mode was explicitly configured."""
         self.learning_mode_set = value
-        self._learning_mode_set = value
 
     def mark_learning_mode_default(self, value: bool = True) -> None:
         """Record that learning mode default was applied from configuration."""
         self.learning_mode_set = value
-        self._learning_mode_set = value
 
 
 # Global state instance
@@ -164,7 +160,7 @@ def default_tools_dependencies() -> ToolsDependencies:
 
 
 _dependency_factory: Callable[[], ToolsDependencies] = default_tools_dependencies
-_cached_dependencies: ToolsDependencies | None = None
+_cached_dependencies: Optional[ToolsDependencies] = None
 
 
 def configure_tools_dependencies(factory: Callable[[], ToolsDependencies]) -> None:
@@ -182,6 +178,12 @@ def get_tools_dependencies() -> ToolsDependencies:
     if _cached_dependencies is None:
         _cached_dependencies = _dependency_factory()
     return _cached_dependencies
+
+
+def _ensure_config_loaded() -> None:
+    """Common helper to ensure config is loaded, eliminating repeated None-checks."""
+    if state.config is None:
+        load_config_with_error_handling(state.project_root)
 
 
 @contextmanager
@@ -317,45 +319,40 @@ def main(
 # Helper function to get tool instances
 def get_quality_tools() -> QualityTools:
     """Get quality tools instance."""
-    if state.config is None:
-        load_config_with_error_handling(state.project_root)
-    assert state.config is not None, "Config should be loaded"
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
     deps = get_tools_dependencies()
     return deps.quality_factory(state.config, state.project_root or Path.cwd())
 
 
 def get_testing_tools() -> TestingTools:
     """Get testing tools instance."""
-    if state.config is None:
-        load_config_with_error_handling(state.project_root)
-    assert state.config is not None, "Config should be loaded"
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
     deps = get_tools_dependencies()
     return deps.testing_factory(state.config, state.project_root or Path.cwd())
 
 
 def get_environment_tools() -> EnvironmentTools:
     """Get environment tools instance."""
-    if state.config is None:
-        load_config_with_error_handling(state.project_root)
-    assert state.config is not None, "Config should be loaded"
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
     deps = get_tools_dependencies()
     return deps.environment_factory(state.config, state.project_root or Path.cwd())
 
 
 def get_ci_tools() -> CITools:
     """Get CI tools instance."""
-    if state.config is None:
-        load_config_with_error_handling(state.project_root)
-    assert state.config is not None, "Config should be loaded"
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
     deps = get_tools_dependencies()
     return deps.ci_factory(state.config, state.project_root or Path.cwd())
 
 
 def get_dev_tools() -> DevTools:
     """Get dev tools instance."""
-    if state.config is None:
-        load_config_with_error_handling(state.project_root)
-    assert state.config is not None, "Config should be loaded"
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
     deps = get_tools_dependencies()
     return deps.dev_factory(state.config)
 
@@ -1746,13 +1743,9 @@ def version() -> None:
 @app.command("config")
 def show_config() -> None:
     """Show current configuration."""
-    if state.config is None:
-        load_config_with_error_handling()
-
-    if state.config is None:
-        typer.echo("Configuration not loaded", err=True)
-        raise typer.Exit(1)
-
+    _ensure_config_loaded()
+    assert state.config is not None, "Config should be loaded after _ensure_config_loaded"
+    
     typer.echo("Current tools configuration:")
     typer.echo(f"  Learning mode default: {state.config.learning_mode_default}")
     typer.echo(f"  Default verbosity: {state.config.default_verbosity}")

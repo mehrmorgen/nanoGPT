@@ -1201,8 +1201,8 @@ class TestToolFactories:
             return FactoryStub(root_path=None)
 
         # Override dependencies with stub factories
-        original_deps = tools_cli.state.dependencies
-        tools_cli.state.dependencies = ToolsDependencies(
+        original_deps = tools_cli.get_tools_dependencies()
+        tools_cli.configure_tools_dependencies(lambda: ToolsDependencies(
             load_config=original_deps.load_config,
             quality_factory=original_deps.quality_factory,
             testing_factory=testing_factory,
@@ -1210,7 +1210,7 @@ class TestToolFactories:
             ci_factory=ci_factory,
             dev_factory=dev_factory,
             result_handler=original_deps.result_handler,
-        )
+        ))
 
         try:
             instance = factory()
@@ -1220,7 +1220,7 @@ class TestToolFactories:
             else:
                 assert captured["root_path"] is None
         finally:
-            tools_cli.state.dependencies = original_deps
+            tools_cli.reset_tools_dependencies()
 
     def test_nested_factory_methods_via_default_dependencies(self) -> None:
         """Test nested factory methods indirectly via default_dependencies to cover uncovered lines."""
