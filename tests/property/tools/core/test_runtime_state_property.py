@@ -7,10 +7,10 @@ from hypothesis import given, settings
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.runtime import (
-    ToolsCLIState,
     load_config_with_error_handling,
     reset_state,
     set_config,
+    state,
 )
 
 
@@ -24,19 +24,15 @@ def test_state_reset_clears_fields(
     learning: bool, verbosity: int, dry_run: bool
 ) -> None:
     """reset_state should return the CLI state to default values."""
-    state = ToolsCLIState()
+    # Modify the global state instance
     state.learning_mode = learning
     state.verbosity = verbosity
     state.dry_run = dry_run
-    state.project_root = None
-    state.config = ToolsConfig()
-    if learning:
-        state.mark_learning_mode_explicit(True)
-    else:
-        state.mark_learning_mode_default(True)
-
-    state.reset()
-
+    state.project_root = Path("/tmp/test")
+    
+    # Reset should clear all fields
+    reset_state()
+    
     assert state.learning_mode is False
     assert state.verbosity == 1
     assert state.dry_run is False

@@ -28,6 +28,16 @@ class GlobalState:
         """Record that learning mode default was applied from configuration."""
         self.learning_mode_set = value
 
+    def reset(self) -> None:
+        """Reset state to defaults without loading configuration."""
+        self.config = None
+        self.project_root = None
+        self.verbosity = 1
+        self.verbosity_level = VerbosityLevel.STANDARD
+        self.learning_mode = False
+        self.dry_run = False
+        self.learning_mode_set = False
+
 
 # Global state instance
 state = GlobalState()
