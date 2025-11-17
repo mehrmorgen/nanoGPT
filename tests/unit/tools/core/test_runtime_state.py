@@ -18,21 +18,7 @@ def _write_minimal_pyproject(project_root: Path) -> None:
     (project_root / "pyproject.toml").write_text(content, encoding="utf-8")
 
 
-def test_reset_state_clears_fields(tmp_path: Path) -> None:
-    """Resetting state should clear previously stored values."""
-    runtime.state.learning_mode = True
-    runtime.state.verbosity = 2
-    runtime.state.dry_run = True
-    runtime.state.project_root = tmp_path
-    runtime.state.config = ToolsConfig()
-
-    runtime.reset_state()
-
-    assert runtime.state.learning_mode is False
-    assert runtime.state.verbosity == 1
-    assert runtime.state.dry_run is False
-    assert runtime.state.project_root is None
-    assert runtime.state.config is None
+# State reset testing is covered by PBT test_state_reset_clears_fields
 
 
 def test_set_config_injects_configuration(tmp_path: Path) -> None:
