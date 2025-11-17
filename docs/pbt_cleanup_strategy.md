@@ -304,4 +304,293 @@ uv run pytest tests/unit/runtime/cli/test_cli.py tests/property/runtime/cli/test
 
 ---
 
+## Deep Indirection Analysis: Critical Technical Debt
+
+### Executive Summary
+The runtime and tools modules contain **5 layers of unnecessary indirection** creating ~200+ lines of avoidable complexity and requiring ~100+ lines of test boilerplate. These patterns follow the "over-engineered dependency injection" anti-pattern where simple global state is wrapped in multiple layers without providing additional value.
+
+### Critical Issues Identified
+
+#### 1. **Duplicate State Management Systems** (HIGH PRIORITY)
+**Files**: `runtime/core/bootstrap.py` vs `tools/core/runtime.py` vs `tools/cli/state.py`
+
+**Problem**: Three different state management systems doing the same job:
+- **bootstrap.py**: Global state with factory pattern for CLI dependencies
+- **runtime.py**: `ToolsCLIState` class with identical reset/get/set pattern  
+- **state.py**: `GlobalState` dataclass with same functionality
+
+**Impact**: 
+- **Lines removed**: ~80 lines of redundant state management
+- **Test simplification**: 88 lines of bootstrap state tests eliminated
+- **Cognitive load**: Developers must understand 3 systems for 1 job
+
+**Recommendation**: **Consolidate to single global state pattern** - eliminate bootstrap factory entirely.
+
+#### 2. **Pure Wrapper Function Chains** (HIGH PRIORITY)
+**File**: `runtime/cli/deps.py`
+
+```python
+# Problem: Pure wrappers that add zero value
+def configure_cli_dependencies(factory: Callable[[], CLIDependencies]) -> None:
+    runtime_bootstrap.configure_runtime_cli_dependencies(factory)
+
+def reset_cli_dependencies() -> None:
+    runtime_bootstrap.reset_runtime_cli_dependencies()
+
+def get_cli_dependencies() -> CLIDependencies:
+    return runtime_bootstrap.get_runtime_cli_dependencies()
+```
+
+**Impact**: 40 lines of unnecessary forwarding functions with identical signatures.
+
+**Recommendation**: **Direct calls to runtime_bootstrap functions** - eliminate wrapper layer.
+
+#### 3. **Duplicate Function Implementations** (HIGH PRIORITY)
+**File**: `runtime/cli/runners.py`
+
+**Problem**: Four different ways to run the same operations:
+- `run_prepare()` (lines 70-100) vs `run_prepare_command()` (lines 165-204)
+- `run_train()` (lines 103-131) vs `run_train_command()` (lines 207-247)  
+- `run_sample()` (lines 134-162) vs `run_sample_command()` (lines 250-290)
+- `run_train_cmd()` (lines 343-362) vs `run_sample_cmd()` (lines 365-384)
+
+**Impact**: ~200 lines of nearly identical logic with minor parameter differences.
+
+**Recommendation**: **Single `run_*` function per operation** with optional parameters.
+
+#### 4. **Dynamic Getattr Pattern** (MEDIUM PRIORITY)
+**File**: `runtime/cli/runners.py` (lines 83-151)
+
+```python
+# Problem: Theoretical flexibility that never happens
+pipeline_factory=getattr(_cli_pkg, "create_pipeline", _default_create_pipeline),
+trainer_factory=getattr(_cli_pkg, "CoreTrainer", _DefaultTrainer),
+sampler_factory=getattr(_cli_pkg, "Sampler", _DefaultSampler),
+device_setup=getattr(_cli_pkg, "global_device_setup", _default_device_setup),
+```
+
+**Problem**: 15+ getattr() calls checking for package-level overrides that may never actually happen, adding complexity for theoretical flexibility.
+
+**Recommendation**: **Direct imports** - remove dynamic lookup pattern.
+
+#### 5. **Over-Abstracted ToolResult Factory** (MEDIUM PRIORITY)
+**Usage**: 25+ calls to `ToolResult.create()` across codebase
+
+**Problem**: Factory method when direct construction would be clearer and more type-safe.
+
+**Recommendation**: **Direct ToolResult construction** - eliminate factory pattern.
+
+#### 6. **Redundant Learning Mode Tracking** (LOW PRIORITY)
+**File**: `tools/core/runtime.py`
+
+```python
+self.learning_mode_set: bool = False
+self._learning_mode_set: bool = False  # Duplicate field
+```
+
+**Problem**: Two fields tracking the same boolean state.
+
+**Recommendation**: **Single source of truth** for learning mode tracking.
+
+#### 7. **RuntimeRunHooks Over-Engineering** (MEDIUM PRIORITY)
+**Files**: `runtime/runners.py` (lines 25-44) and usage in `runtime/cli/runners.py`
+
+```python
+@dataclass(frozen=True)
+class RuntimeRunHooks:
+    """Injectable hooks for runtime execution flows."""
+    pipeline_factory: Callable[[PreparerConfig, Any], Any]
+    trainer_factory: Callable[[TrainerConfig, Any], Any]
+    sampler_factory: Callable[[SamplerConfig, Any], Any]
+    device_setup: Callable[[str, str, int], None]
+    log_status: Callable[[str, Any, Path | None, LoggerLike], None]
+```
+
+**Problem**: Complex dependency injection for hooks that are always the same defaults. Used in 6+ locations with identical default construction pattern.
+
+**Impact**: ~40 lines of unnecessary abstraction for theoretical flexibility that's never used.
+
+**Recommendation**: **Direct function calls** - eliminate hooks dataclass, use defaults directly.
+
+#### 8. **Test-Only Context Manager** (LOW PRIORITY)
+**File**: `runtime/core/bootstrap.py` - `override_runtime_cli_dependencies`
+
+**Usage**: Only used in `tests/unit/runtime/test_bootstrap.py:60`
+
+```python
+# Production code: Complex context manager for testability
+@contextmanager
+def override_runtime_cli_dependencies(deps: CLIDependencies):
+    # ... 13 lines of context management
+
+# Test code: Single usage
+with bootstrap.override_runtime_cli_dependencies(sentinel):
+```
+
+**Problem**: Over-engineering for testability when simple function assignment would suffice.
+
+**Recommendation**: **Replace with direct assignment in tests** - eliminate context manager if production usage is zero.
+
+### Test Infrastructure Issues
+
+#### .tmp_env_verify Cleanup Bug ✅ FIXED
+**File**: `tests/property/tools/environment/test_environment_tools_property.py:89`
+
+**Problem**: Test creates `.tmp_env_verify` directory but never cleans it up. Additionally, this was a misplaced property-based test using `st.just(())` which generated no actual data.
+
+**Solution Applied**: 
+```python
+# BEFORE: Test pollution with manual directory creation + meaningless property testing
+@settings(max_examples=10, deadline=None, derandomize=True, ...)
+@given(st.just(()))  # Generated no data - misuse of property-based testing
+def test_verify_uses_python_import_command(_: tuple[()]) -> None:
+    tmp_root = Path.cwd() / ".tmp_env_verify"
+    tmp_root.mkdir(exist_ok=True)
+
+# AFTER: Proper unit test with pytest tmp_path fixture
+def test_verify_uses_python_import_command(tmp_path: Path) -> None:
+    tools = EnvironmentTools(ToolsConfig(), tmp_path, subprocess_runner=runner)
+```
+
+**Benefits**:
+- ✅ **Test categorization fixed** - Converted from property-based to unit test (was never truly property-based)
+- ✅ **Eliminates test pollution** - No more .tmp_env_verify directories left behind
+- ✅ **Automatic cleanup** - pytest handles temporary directory lifecycle
+- ✅ **Thread-safe** - Each test gets isolated temporary directory
+- ✅ **Zero production impact** - Test-only change
+
+### Prioritized Cleanup Strategy
+
+#### Phase 1: High-Impact Simplification (Est. 300 lines removed)
+1. **Consolidate state management** - Eliminate bootstrap factory pattern
+2. **Remove wrapper functions** - Direct calls to underlying implementations  
+3. **Merge duplicate runners** - Single function per operation type
+
+#### Phase 2: Pattern Cleanup (Est. 100 lines removed)
+4. **Replace getattr() with direct imports** - Remove theoretical flexibility
+5. **Use direct ToolResult construction** - Eliminate factory pattern
+6. **Fix .tmp_env_verify test cleanup** - Use pytest tmp_path
+
+#### Phase 3: Final Polish (Est. 20 lines removed)
+7. **Consolidate learning mode flags** - Single source of truth
+8. **Update tests** - Remove 100+ lines of now-unnecessary test boilerplate
+
+### Migration Path & Dependency Order
+
+**Critical Sequence** - Changes must follow this order to avoid breaking dependencies:
+
+1. **Wrapper Functions First** (Phase 1.2)
+   - Remove `runtime/cli/deps.py` wrappers
+   - Update all imports to use `runtime_bootstrap` directly
+   - **Why**: Eliminates indirection layer before removing underlying bootstrap system
+
+2. **Consolidate State Management** (Phase 1.1)
+   - Choose single state system (recommend `tools/cli/state.py`)
+   - Migrate all bootstrap usage to chosen system
+   - Remove `runtime/core/bootstrap.py`
+   - **Why**: Cannot remove bootstrap while wrappers still reference it
+
+3. **Merge Duplicate Runners** (Phase 1.3)
+   - Consolidate 4 runner variants into single implementation per operation
+   - Update all call sites to use consolidated functions
+   - **Why**: Simplifies before removing RuntimeRunHooks dependency
+
+4. **Remove RuntimeRunHooks** (Phase 2 extension)
+   - Replace hooks dataclass with direct function calls
+   - Update runner functions to use defaults directly
+   - **Why**: Hooks become unnecessary after runner consolidation
+
+5. **Clean Remaining Patterns** (Phases 2-3)
+   - getattr() replacements, ToolResult construction, learning mode flags
+   - **Why**: Safe to remove once core dependencies are simplified
+
+### Risk Assessment
+
+**High Risk** (Requires coordinated test updates):
+- **State management consolidation** - All CLI tests depend on state patterns
+- **Runner function merging** - Multiple test suites test different runner variants
+- **Bootstrap removal** - Integration tests may reference bootstrap functions
+
+**Medium Risk** (Isolated but breaking):
+- **Wrapper function removal** - Import changes across multiple modules
+- **RuntimeRunHooks elimination** - Function signature changes in runner implementations
+
+**Low Risk** (Safe isolated refactors):
+- **getattr() replacement** - Direct import substitution
+- **ToolResult construction** - Factory method removal
+- **Learning mode flag consolidation** - Internal state cleanup
+- **.tmp_env_verify fix** - Test-specific change with no production impact
+
+**Risk Mitigation Strategy**:
+1. **High risk items** - Update tests first, then implement changes in single commits
+2. **Medium risk items** - Use deprecation warnings before removal
+3. **Low risk items** - Direct implementation with test coverage verification
+
+### Quick Wins (Immediate Impact, Zero Coordination)
+
+**Can be implemented immediately without risk**:
+
+1. **Fix .tmp_env_verify test cleanup** (5 minutes)
+   - Replace `Path.cwd() / ".tmp_env_verify"` with `tmp_path` fixture
+   - Eliminates test pollution, zero production impact
+
+2. **Consolidate learning mode flags** (10 minutes)
+   - Remove duplicate `_learning_mode_set` field in `tools/core/runtime.py`
+   - Single source of truth, internal cleanup only
+
+3. **Replace getattr() calls** (15 minutes)
+   - Convert 15+ `getattr(_cli_pkg, "...", default)` to direct imports
+   - Removes theoretical flexibility, zero functional change
+
+**Why start here**: These changes provide immediate code quality benefits with zero risk of breaking dependencies or requiring coordinated test updates.
+
+### Effort Estimates
+
+| Phase | Lines Removed | Estimated Time | Risk Level |
+|-------|---------------|----------------|------------|
+| **Quick Wins** | ~30 lines | 30 minutes | Low |
+| **Phase 1** (High-Impact) | ~300 lines | 2-3 hours | High |
+| **Phase 2** (Pattern Cleanup) | ~100 lines | 1-2 hours | Medium |
+| **Phase 3** (Final Polish) | ~20 lines | 30 minutes | Low |
+| **Total** | **~450 lines** | **4-6 hours** | **Mixed** |
+
+**Resource Prioritization**:
+- **Time-constrained**: Focus on Quick Wins + Phase 2 (medium risk, high impact)
+- **Quality-focused**: Full sequence following migration path
+- **Risk-averse**: Quick Wins only, evaluate impact before proceeding
+
+### Expected Benefits
+
+**Code Quality**:
+- **Lines removed**: ~420 lines of unnecessary indirection
+- **Complexity reduced**: 5 layers → 2 layers of abstraction
+- **Test simplification**: ~100 lines of boilerplate eliminated
+
+**Maintainability**:
+- **Single state system** instead of 3 competing approaches
+- **Direct function calls** instead of wrapper chains
+- **Clear responsibility boundaries** between runtime and tools
+
+**Developer Experience**:
+- **Reduced cognitive load** - fewer patterns to understand
+- **Easier debugging** - direct call stacks instead of wrapper chains
+- **Faster onboarding** - simpler architecture to learn
+
+### Validation Metrics
+
+```bash
+# Lines of code reduction
+find src/ml_playground/runtime src/ml_playground/tools -name "*.py" -exec wc -l {} + | sort -n
+
+# Indirection pattern detection  
+rg "def.*wrapper|def.*delegate" src/ml_playground/runtime src/ml_playground/tools
+rg "getattr.*_cli_pkg" src/ml_playground/runtime/cli/runners.py
+rg "ToolResult\.create" src/ml_playground --count
+
+# Test cleanup verification
+rg "\.tmp_env_verify" tests/
+```
+
+---
+
 *This comprehensive strategy addresses both test coverage optimization and code quality improvements through systematic restructuring, file splitting, indirection removal, and advanced type usage.*

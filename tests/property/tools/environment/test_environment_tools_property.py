@@ -77,19 +77,10 @@ def test_setup_creates_venv_and_syncs(clear: bool, tmp_path: Path) -> None:
     assert sync_call.args == ["sync", "--all-groups"]
 
 
-@settings(
-    max_examples=10,
-    deadline=None,
-    derandomize=True,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
-)
-@given(st.just(()))
-def test_verify_uses_python_import_command(_: tuple[()]) -> None:
+def test_verify_uses_python_import_command(tmp_path: Path) -> None:
     """verify should attempt to import the configured package via uv."""
-    tmp_root = Path.cwd() / ".tmp_env_verify"
-    tmp_root.mkdir(exist_ok=True)
     runner = DeterministicRunner()
-    tools = EnvironmentTools(ToolsConfig(), tmp_root, subprocess_runner=runner)
+    tools = EnvironmentTools(ToolsConfig(), tmp_path, subprocess_runner=runner)
 
     result = tools.verify([])
 
