@@ -17,7 +17,6 @@ class ToolsCLIState:
         self.project_root: Path | None = None
         self.config: ToolsConfig | None = None
         self.learning_mode_set: bool = False
-        self._learning_mode_set: bool = False
 
     def reset(self) -> None:
         """Reset state to defaults without loading configuration."""
@@ -27,17 +26,14 @@ class ToolsCLIState:
         self.project_root = None
         self.config = None
         self.learning_mode_set = False
-        self._learning_mode_set = False
 
     def mark_learning_mode_explicit(self, value: bool = True) -> None:
         """Record that the user explicitly configured learning mode."""
         self.learning_mode_set = value
-        self._learning_mode_set = value
 
     def mark_learning_mode_default(self, value: bool = True) -> None:
         """Record that configuration defaults supplied learning mode."""
         self.learning_mode_set = value
-        self._learning_mode_set = value
 
 
 state = ToolsCLIState()

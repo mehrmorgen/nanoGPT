@@ -534,7 +534,7 @@ def test_verify_uses_python_import_command(tmp_path: Path) -> None:
    - Replace `Path.cwd() / ".tmp_env_verify"` with `tmp_path` fixture
    - Eliminates test pollution, zero production impact
 
-2. **Consolidate learning mode flags** (10 minutes)
+2. **Consolidate learning mode flags** ✅ FIXED (10 minutes)
    - Remove duplicate `_learning_mode_set` field in `tools/core/runtime.py`
    - Single source of truth, internal cleanup only
 
