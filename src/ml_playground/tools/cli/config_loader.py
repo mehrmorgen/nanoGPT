@@ -9,7 +9,10 @@ from ml_playground.tools.core.errors import ToolConfigurationError
 
 # Import state and dependencies
 from ml_playground.tools.cli.state import state
-from ml_playground.tools.cli.dependencies import get_tools_dependencies, ToolsDependencies
+from ml_playground.tools.cli.dependencies import (
+    get_tools_dependencies,
+    ToolsDependencies,
+)
 
 
 def load_config_with_error_handling(

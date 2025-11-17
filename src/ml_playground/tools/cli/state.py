@@ -11,7 +11,7 @@ from ml_playground.tools.core.learning_mode import VerbosityLevel
 @dataclass
 class GlobalState:
     """Global state for the tools CLI system."""
-    
+
     config: Optional[ToolsConfig] = None
     project_root: Optional[Path] = None
     verbosity: int = 1  # Keep as int to match original usage

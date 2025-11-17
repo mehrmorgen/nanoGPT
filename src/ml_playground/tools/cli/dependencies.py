@@ -16,7 +16,6 @@ from ml_playground.tools.quality.quality import QualityTools
 from ml_playground.tools.testing.testing import TestingTools
 
 
-
 def default_tool_result_handler(result: ToolResult) -> None:
     """Default handler for tool results that outputs to CLI and exits on failure."""
     if result.stdout:
@@ -30,7 +29,7 @@ def default_tool_result_handler(result: ToolResult) -> None:
 @dataclass(slots=True)
 class ToolsDependencies:
     """Container for all tool dependencies with factory functions."""
-    
+
     load_config: Callable[[Path | None], ToolsConfig]
     quality_factory: Callable[[ToolsConfig, Path], QualityTools]
     testing_factory: Callable[[ToolsConfig, Path], TestingTools]
@@ -42,6 +41,7 @@ class ToolsDependencies:
 
 def default_tools_dependencies() -> ToolsDependencies:
     """Create default dependencies with standard factory functions."""
+
     def _load_config(project_root: Path | None = None) -> ToolsConfig:
         return load_tools_config(project_root)
 

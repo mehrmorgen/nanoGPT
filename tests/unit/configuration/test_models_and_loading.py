@@ -55,8 +55,6 @@ class SharedConfigTestHarness(config_models.SharedConfig):
         return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
 
 
-
-
 def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:
     """list_experiments_with_config should return sorted experiment names with config.toml."""
     # Create fake experiments directory structure
@@ -241,8 +239,6 @@ def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"must contain a \[sample\] section"):
         config_loading.load_sample_config(config, default_config_path=default_config)
-
-
 
 
 def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
@@ -553,8 +549,6 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
     assert runtime.ckpt_atomic is True
     assert runtime.ckpt_write_metadata is True
     assert runtime.ckpt_time_interval_minutes == 0
-
-
 
 
 def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:

@@ -32,7 +32,7 @@ def _invoke_tests(
         args = list(extra_args)
         if pattern:
             args.extend(["-k", pattern])
-        
+
         # Map test directories to method names
         suite_map = {
             "tests/unit": "unit",
@@ -42,9 +42,11 @@ def _invoke_tests(
         method_name = suite_map.get(test_dir)
         if method_name is None:
             raise Exception(f"Unsupported test suite: {test_dir}")
-        
+
         suite_fn = getattr(tools, method_name)
-        result = suite_fn(args, learning_mode=state.learning_mode, verbosity_level=state.verbosity)
+        result = suite_fn(
+            args, learning_mode=state.learning_mode, verbosity_level=state.verbosity
+        )
         handle_tool_result(result)
     except Exception as e:
         handle_tool_result(

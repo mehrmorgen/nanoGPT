@@ -118,7 +118,7 @@ def inject_tools_dependency() -> Callable[[str, object], ContextManager[None]]:
 
     @contextmanager
     def _inject(name: str, value: object) -> Iterator[None]:
-        from ml_playground.tools.cli.main import ToolsDependencies
+        from ml_playground.tools.cli.dependencies import ToolsDependencies
 
         if not hasattr(ToolsDependencies, name):
             raise AttributeError(f"ToolsDependencies has no attribute {name!r}")

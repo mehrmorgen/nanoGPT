@@ -511,10 +511,11 @@ def test_tools_cli_main_sets_dry_run_env(tmp_path: Path) -> None:
 
 def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
     import ml_playground.tools.cli.main as cli
+    from ml_playground.tools.cli.helpers import get_dev_tools
 
     # Initialize state using repository root config
     cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
-    tools = cli.get_dev_tools()
+    tools = get_dev_tools()
     from ml_playground.tools.dev.dev import DevTools as DevToolsClass
 
     assert isinstance(tools, DevToolsClass)

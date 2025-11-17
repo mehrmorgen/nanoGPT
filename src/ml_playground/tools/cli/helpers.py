@@ -17,6 +17,7 @@ from ml_playground.tools.cli.dependencies import get_tools_dependencies
 def get_quality_tools() -> QualityTools:
     """Get quality tools instance."""
     from ml_playground.tools.cli.config_loader import ensure_config_loaded
+
     ensure_config_loaded()
     assert state.config is not None, (
         "Config should be loaded after ensure_config_loaded"
@@ -28,6 +29,7 @@ def get_quality_tools() -> QualityTools:
 def get_testing_tools() -> TestingTools:
     """Get testing tools instance."""
     from ml_playground.tools.cli.config_loader import ensure_config_loaded
+
     ensure_config_loaded()
     assert state.config is not None, (
         "Config should be loaded after ensure_config_loaded"
@@ -39,6 +41,7 @@ def get_testing_tools() -> TestingTools:
 def get_environment_tools() -> EnvironmentTools:
     """Get environment tools instance."""
     from ml_playground.tools.cli.config_loader import ensure_config_loaded
+
     ensure_config_loaded()
     assert state.config is not None, (
         "Config should be loaded after ensure_config_loaded"
@@ -50,6 +53,7 @@ def get_environment_tools() -> EnvironmentTools:
 def get_ci_tools() -> CITools:
     """Get CI tools instance."""
     from ml_playground.tools.cli.config_loader import ensure_config_loaded
+
     ensure_config_loaded()
     assert state.config is not None, (
         "Config should be loaded after ensure_config_loaded"
@@ -61,6 +65,7 @@ def get_ci_tools() -> CITools:
 def get_dev_tools() -> DevTools:
     """Get dev tools instance."""
     from ml_playground.tools.cli.config_loader import ensure_config_loaded
+
     ensure_config_loaded()
     assert state.config is not None, (
         "Config should be loaded after ensure_config_loaded"

@@ -12,6 +12,7 @@ from ml_playground.tools.cli.helpers import (
     get_environment_tools,
     handle_tool_result,
 )
+
 # Create environment app
 env_app = typer.Typer(
     name="env",
@@ -59,7 +60,9 @@ def env_sync(
     ] = False,
     frozen: Annotated[
         bool,
-        typer.Option("--frozen", help="Sync from uv.lock without updating dependencies"),
+        typer.Option(
+            "--frozen", help="Sync from uv.lock without updating dependencies"
+        ),
     ] = False,
     args: Annotated[
         Optional[List[str]], typer.Argument(help="Additional uv sync arguments")
