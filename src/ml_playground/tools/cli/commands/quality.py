@@ -12,6 +12,10 @@ from ml_playground.tools.cli.helpers import (
     get_quality_tools,
     handle_tool_result,
 )
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 
 # Create quality app
 quality_app = typer.Typer(
@@ -35,7 +39,7 @@ def quality_lint(
             verbosity_level=state.verbosity,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -65,7 +69,7 @@ def quality_format(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -216,7 +220,7 @@ def quality_typecheck(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -245,7 +249,7 @@ def quality_all(
             verbosity_level=state.verbosity,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -253,6 +257,6 @@ def quality_all(
                 namespace="tools",
                 category="quality",
                 command="all",
-                stderr=f"Error running all quality checks: {e}",
+                stderr=f"Error running quality tools: {e}",
             )
         )

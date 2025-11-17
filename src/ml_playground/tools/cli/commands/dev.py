@@ -6,7 +6,10 @@ from typing import List, Optional
 import typer
 from typing_extensions import Annotated
 
-from ml_playground.tools.core.errors import ToolExecutionError
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 from ml_playground.tools.core.interfaces import ToolResult
 
 # Import shared utilities
@@ -46,7 +49,7 @@ def dev_review_list(
             remote=remote,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -81,7 +84,7 @@ def dev_review_bulk_reply(
             remote=remote,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -116,7 +119,7 @@ def dev_review_delete(
             remote=remote,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -170,7 +173,7 @@ def dev_batch_review(
         tools = get_dev_tools()
         result = tools.batch_review(output_format=output_format)
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -198,7 +201,7 @@ def dev_workflow_status(
         tools = get_dev_tools()
         result = tools.workflow_status(output_format=output_format)
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -225,7 +228,7 @@ def dev_setup_ai_guidelines(
         tools = get_dev_tools()
         result = tools.setup_ai_guidelines(tool=tool, dry_run=dry_run)
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,

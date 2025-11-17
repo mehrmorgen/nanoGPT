@@ -6,7 +6,10 @@ import typer
 from typing_extensions import Annotated
 
 from ml_playground.tools.core.interfaces import ToolResult
-from ml_playground.tools.core.errors import ToolExecutionError
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 from ml_playground.tools.cli.helpers import (
     get_ci_tools,
     handle_tool_result,
@@ -55,7 +58,7 @@ def ci_quality_fast(
         tools = get_ci_tools()
         result = tools.quality_fast(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -79,7 +82,7 @@ def ci_quality_ext(
         tools = get_ci_tools()
         result = tools.quality_ext(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -110,7 +113,7 @@ def ci_quality_ci_local(
         tools = get_ci_tools()
         result = tools.quality_ci_local(bind_caches=bind_caches, args=args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -134,7 +137,7 @@ def ci_coverage_badge(
         tools = get_ci_tools()
         result = tools.coverage_badge(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,

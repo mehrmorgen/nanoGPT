@@ -8,6 +8,10 @@ from typing_extensions import Annotated
 
 # Import shared utilities
 from ml_playground.tools.core.interfaces import ToolResult
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 from ml_playground.tools.cli.helpers import (
     get_environment_tools,
     handle_tool_result,
@@ -35,7 +39,7 @@ def env_setup(
         tools = get_environment_tools()
         result = tools.setup(clear=clear, args=args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -75,7 +79,7 @@ def env_sync(
             args or [], groups=groups or [], all_groups=all_groups, frozen=frozen
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -99,7 +103,7 @@ def env_verify(
         tools = get_environment_tools()
         result = tools.verify(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -123,7 +127,7 @@ def env_clean(
         tools = get_environment_tools()
         result = tools.clean(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -149,7 +153,7 @@ def env_info(
             args or [],
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -177,7 +181,7 @@ def env_ai_guidelines(
         tools = get_environment_tools()
         result = tools.ai_guidelines(args or [], tool=tool, dry_run=dry_run)
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -220,7 +224,7 @@ def env_tensorboard(
         tools = get_environment_tools()
         result = tools.tensorboard(args or [], logdir=logdir, port=port, host=host)
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -244,7 +248,7 @@ def env_gguf_help(
         tools = get_environment_tools()
         result = tools.gguf_help(args or [])
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,

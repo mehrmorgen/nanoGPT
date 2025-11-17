@@ -72,9 +72,8 @@ class InvalidArgumentError(ToolExecutionError):
 class TimeoutError(ToolExecutionError):
     """Raised when tool execution times out.
 
-    This follows the project's timeout philosophy: there is no such thing
-    as an infinite timeout. All timeouts should be short and based on the
-    specific operation and environment.
+    This occurs when a tool runs longer than the configured timeout
+    period and is terminated by the execution framework.
     """
 
     pass

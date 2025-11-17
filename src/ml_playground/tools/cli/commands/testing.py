@@ -12,6 +12,10 @@ from ml_playground.tools.cli.helpers import (
     get_testing_tools,
     handle_tool_result,
 )
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 
 # Create testing app
 test_app = typer.Typer(
@@ -48,7 +52,7 @@ def _invoke_tests(
             args, learning_mode=state.learning_mode, verbosity_level=state.verbosity
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -141,7 +145,7 @@ def test_all(
             verbosity_level=state.verbosity,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -169,7 +173,7 @@ def test_clean(
             verbosity_level=state.verbosity,
         )
         handle_tool_result(result)
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,

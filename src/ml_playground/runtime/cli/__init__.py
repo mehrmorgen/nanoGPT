@@ -5,16 +5,13 @@ This __init__.py provides minimal re-exports required for:
 2. Test imports from ml_playground.runtime.cli
 
 Exception: Re-exports are required for test compatibility per IMPORT_GUIDELINES.md.
-TODO Remove re-exports: Migrate tests to direct imports once feasible.
 """
 
 from __future__ import annotations
 
 # Initialize bootstrap system with default dependencies
-from .main import default_cli_dependencies
 from ..core.bootstrap import configure_runtime_cli_dependencies
-
-configure_runtime_cli_dependencies(default_cli_dependencies)
+from .main import default_cli_dependencies
 
 # Import from main module to provide test-accessible attributes
 from .main import (
@@ -28,6 +25,8 @@ from .main import (
     run_sample,
     run_train,
 )
+
+configure_runtime_cli_dependencies(default_cli_dependencies)
 
 __all__ = [
     "CLIDependencies",

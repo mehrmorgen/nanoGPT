@@ -12,6 +12,11 @@ from typing import Optional
 import typer
 from typing_extensions import Annotated
 
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
+
 
 # Import state and dependencies from separate modules
 from ml_playground.tools.cli.state import state
@@ -161,7 +166,11 @@ def main_entry() -> None:
     except typer.Exit:
         # Let Typer exit codes propagate properly
         raise
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        typer.echo(f"Tool error: {e}", err=True)
+        raise typer.Exit(1)
     except Exception as e:
+        # Fallback for truly unexpected errors
         typer.echo(f"Unexpected error: {e}", err=True)
         raise typer.Exit(1)
 
