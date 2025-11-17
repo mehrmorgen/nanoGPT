@@ -55,53 +55,6 @@ class SharedConfigTestHarness(config_models.SharedConfig):
         return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
 
 
-# These configuration loading tests are now covered by property tests in tests/property/configuration/test_loading_property.py
-# Property tests cover loading with various input formats and edge cases using Hypothesis strategies
-# See: test_load_experiment_config_properties, test_config_loading_invariants
-
-
-def test_read_toml_dict_missing_file_raises(tmp_path: Path) -> None:
-    """Test read toml dict missing file raises."""
-    missing_path = tmp_path / "missing.toml"
-    with pytest.raises(FileNotFoundError):
-        config_loading.read_toml_dict(missing_path)
-
-
-def test_get_default_config_path_with_none_uses_package_root() -> None:
-    """get_default_config_path with None should use package root."""
-    path = config_loading.get_default_config_path(None)
-    assert path.name == "default_config.toml"
-    assert (
-        str(path)
-        .replace("\\", "/")
-        .endswith("src/ml_playground/experiments/default_config.toml")
-    )
-
-
-def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
-    """get_default_config_path with explicit root should use that root."""
-    path = config_loading.get_default_config_path(tmp_path)
-    assert (
-        path
-        == tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
-    )
-
-
-def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
-    """_default_config_path_from_root should handle roots named 'src'."""
-    src_root = tmp_path / "src"
-    src_root.mkdir()
-    resolved = config_loading.get_default_config_path(src_root)
-    assert (
-        resolved == src_root / "ml_playground" / "experiments" / "default_config.toml"
-    )
-
-
-def test_get_cfg_path_without_override(tmp_path: Path) -> None:
-    """Test get cfg path without override."""
-    expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"  # pyright: ignore[reportPrivateUsage]
-    result = config_loading.get_cfg_path("demo", None)
-    assert result == expected
 
 
 def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:
@@ -290,37 +243,6 @@ def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
         config_loading.load_sample_config(config, default_config_path=default_config)
 
 
-# TOML serialization tests are now covered by property tests in tests/property/configuration/test_configuration_property.py
-# Property tests cover round-trip serialization with comprehensive edge cases using Hypothesis strategies
-# See: test_experiment_config_serialization_invariants
-
-
-def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
-    """Test full loader empty config raises."""
-    toml_text = ""
-    cfg_path = tmp_path / "empty.toml"
-    cfg_path.write_text(toml_text)
-    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
-    experiment_name = cfg_path.parent.name
-    with pytest.raises(Exception):
-        config_loading.load_full_experiment_config(
-            cfg_path, project_home, experiment_name
-        )
-
-
-def test_full_loader_bad_root_type(tmp_path: Path) -> None:
-    """Test full loader bad root type."""
-    bad_text = """
-arr = [1,2,3]
-"""
-    cfg_path = tmp_path / "bad.toml"
-    cfg_path.write_text(bad_text)
-    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
-    experiment_name = cfg_path.parent.name
-    with pytest.raises(Exception):
-        config_loading.load_full_experiment_config(
-            cfg_path, project_home, experiment_name
-        )
 
 
 def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
@@ -633,37 +555,6 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
     assert runtime.ckpt_time_interval_minutes == 0
 
 
-# These merge behavior tests are now covered by property tests in tests/property/configuration/test_configuration_property.py
-# Property tests cover merge invariants with comprehensive input generation using Hypothesis strategies
-# See: test_experiment_config_merge_invariants, test_merge_mappings_properties
-
-
-def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
-    """Test trainer resolves relative runtime out dir."""
-    cfg_text = minimal_full_experiment_toml(
-        dataset_dir=Path("./data"),
-        out_dir=Path("out/rel_train"),
-        include_sample=True,
-    )
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(cfg_text, encoding="utf-8")
-    exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
-    assert isinstance(exp.train.runtime.out_dir, Path)
-    assert str(exp.train.runtime.out_dir).endswith("out/rel_train")
-
-
-def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
-    """Test sampler resolves relative runtime out dir."""
-    cfg_text = minimal_full_experiment_toml(
-        dataset_dir=Path("./data"),
-        out_dir=Path("out/rel_sample"),
-        include_sample=True,
-    )
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(cfg_text, encoding="utf-8")
-    exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
-    assert isinstance(exp.sample.runtime.out_dir, Path)
-    assert str(exp.sample.runtime.out_dir).endswith("out/rel_sample")
 
 
 def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
