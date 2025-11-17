@@ -14,20 +14,19 @@ from ml_playground.runtime.cli.commands import analyze as analyze
 from ml_playground.runtime.cli.commands import prepare as prepare
 from ml_playground.runtime.cli.commands import sample as sample
 from ml_playground.runtime.cli.commands import train as train
-from ml_playground.runtime.cli.deps import CLIDependencies as CLIDependencies
-from ml_playground.runtime.cli.deps import (
-    configure_cli_dependencies as configure_cli_dependencies,
+from ml_playground.runtime.core.bootstrap import CLIDependencies as CLIDependencies
+from ml_playground.runtime.core.bootstrap import (
+    configure_runtime_cli_dependencies as configure_cli_dependencies,
 )
-from ml_playground.runtime.cli.deps import (
-    default_cli_dependencies as default_cli_dependencies,
+from ml_playground.runtime.core.bootstrap import (
+    reset_runtime_cli_dependencies as reset_cli_dependencies,
 )
-from ml_playground.runtime.cli.deps import get_cli_dependencies as get_cli_dependencies
-from ml_playground.runtime.cli.deps import (
-    override_cli_dependencies as override_cli_dependencies,
+from ml_playground.runtime.core.bootstrap import get_runtime_cli_dependencies as get_cli_dependencies
+from ml_playground.runtime.core.bootstrap import (
+    override_runtime_cli_dependencies as override_cli_dependencies,
 )
-from ml_playground.runtime.cli.deps import (
-    reset_cli_dependencies as reset_cli_dependencies,
-)
+from ml_playground.configuration import cli as config_cli
+from ml_playground.runtime import runners as runtime_runners
 from ml_playground.runtime.cli.device import global_device_setup as global_device_setup
 from ml_playground.runtime.cli.result import handle_tool_result as handle_tool_result
 from ml_playground.runtime.cli.result import run_or_exit as run_or_exit
@@ -65,6 +64,18 @@ from ml_playground.runtime.runners import run_sample_impl as _rt_run_sample_impl
 from ml_playground.runtime.runners import run_train_impl as _rt_run_train_impl
 
 _AttrT = TypeVar("_AttrT")
+
+
+def default_cli_dependencies() -> CLIDependencies:
+    """Create default CLI dependencies for the runtime CLI system."""
+    return CLIDependencies(
+        load_experiment=config_cli.load_experiment,
+        ensure_train_prerequisites=config_cli.ensure_train_prerequisites,
+        ensure_sample_prerequisites=config_cli.ensure_sample_prerequisites,
+        run_prepare=runtime_runners.run_prepare_impl,
+        run_train=runtime_runners.run_train_impl,
+        run_sample=runtime_runners.run_sample_impl,
+    )
 
 
 def _resolve_cli_attr(name: str, fallback: _AttrT) -> _AttrT:

@@ -4,7 +4,7 @@ from typing import Any, Callable, Mapping, cast
 
 import typer
 
-from ml_playground.runtime.cli.deps import get_cli_dependencies
+from ml_playground.runtime.core.bootstrap import get_runtime_cli_dependencies as get_cli_dependencies
 from ml_playground.runtime.cli.result import handle_tool_result
 from ml_playground.runtime.cli.runners import (
     run_prepare_command,

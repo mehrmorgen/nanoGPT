@@ -12,10 +12,10 @@ from hypothesis import given, settings
 import pytest
 import typer
 
-from ml_playground.runtime.cli.deps import (
+from ml_playground.runtime.core.bootstrap import (
     CLIDependencies,
-    get_cli_dependencies,
-    override_cli_dependencies,
+    get_runtime_cli_dependencies as get_cli_dependencies,
+    override_runtime_cli_dependencies as override_cli_dependencies,
 )
 from ml_playground.runtime.cli.result import run_or_exit
 from ml_playground.runtime.cli.runners import (
