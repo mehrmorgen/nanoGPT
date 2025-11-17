@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ml_playground.tools.core import errors
+import ml_playground.tools.core.errors as errors
 
 
 class TestHandleSubprocessFailure:

@@ -32,7 +32,7 @@ src/ml_playground/runtime/
 ## Usage Example
 
 ```python
-from ml_playground.runtime.cli import build_runtime_context
+from ml_playground.runtime.cli.main import build_runtime_context
 
 runtime_ctx = build_runtime_context(exp_config_path)
 trainer = runtime_ctx.create_trainer()

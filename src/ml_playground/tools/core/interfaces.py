@@ -6,7 +6,7 @@ supporting models with Pydantic validation.
 """
 
 from typing import Protocol, List, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 
 
 class LearningInfo(BaseModel):
@@ -52,7 +52,7 @@ class OperationId(BaseModel):
 
     @field_validator("category")
     @classmethod
-    def validate_category(cls, v: str, info) -> str:
+    def validate_category(cls, v: str, info: ValidationInfo) -> str:
         """Validate category based on namespace."""
         # Get namespace from the model data
         namespace = info.data.get("namespace") if info.data else None

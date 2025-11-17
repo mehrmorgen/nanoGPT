@@ -63,7 +63,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
+Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, BasedPyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
 For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `uv run tools` for coverage reports, property suites, and lint-only passes.
 
@@ -143,13 +143,13 @@ Ruff automatically applies modern Python best practices:
 
 **Single-source rule**: All tool configuration must live in `pyproject.toml` only.
 
-**Prohibited**: Standalone config files (.ruff.toml, mypy.ini, pyrightconfig.json, pytest.ini, setup.cfg, etc.)
+**Prohibited**: Standalone config files (.ruff.toml, mypy.ini, basedpyrightconfig.json, pytest.ini, setup.cfg, etc.)
 
 **Centralized sections**:
 
 - `[tool.ruff]` for lint/format settings
 - `[tool.mypy]` for type checker settings
-- `[tool.pyright]` for static analysis include/exclude
+- `[tool.basedpyright]` for static analysis include/exclude
 - `[tool.pytest.ini_options]` for pytest testpaths and options
 
 ## Timeout Philosophy

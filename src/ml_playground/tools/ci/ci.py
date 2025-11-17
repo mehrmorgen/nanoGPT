@@ -9,7 +9,13 @@ from typing import List, Tuple
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
+from ml_playground.tools.utils.subprocess_utils import (
+    SubprocessRunner,
+    RealSubprocessRunner,
+)
+
+# Module-level default runner for tests to patch if needed
+_default_runner: SubprocessRunner | None = None
 
 
 class CITools:
@@ -33,6 +39,9 @@ class CITools:
         self.cache_dir = root_path / ".cache"
         # Use the project-local githooks pre-commit configuration
         self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
+        global _default_runner  # noqa: PLW0603
+        if _default_runner is None:
+            _default_runner = RealSubprocessRunner()
         self._subprocess_runner = subprocess_runner or _default_runner
 
     @property
@@ -119,8 +128,8 @@ class CITools:
         )
 
         # Run specific pre-commit hooks for fast feedback
-        hooks = ["ruff", "ruff-format", "mdformat"]
-        results = []
+        hooks: list[str] = ["ruff", "ruff-format", "mdformat"]
+        results: list[tuple[str, ToolResult]] = []
 
         for hook in hooks:
             result = self._subprocess_runner.run_uv_command(

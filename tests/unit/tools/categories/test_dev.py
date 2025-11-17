@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import os
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from typing import Iterator
 
 import pytest
 
-from ml_playground.tools import dev
+import ml_playground.tools.dev.dev as dev
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
@@ -663,7 +664,7 @@ def test_setup_ai_guidelines_single_file_root_gemini(
 
 def test_tools_cli_main_sets_dry_run_env(tmp_path: Path) -> None:
     # Import locally to avoid circulars
-    import ml_playground.tools.cli as cli
+    import ml_playground.tools.cli.main as cli
 
     # Call main without overriding project_root to use repository pyproject
     cli.main(learning_mode=False, verbosity=1, dry_run=True, project_root=None)
@@ -672,12 +673,12 @@ def test_tools_cli_main_sets_dry_run_env(tmp_path: Path) -> None:
 
 
 def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
-    import ml_playground.tools.cli as cli
+    import ml_playground.tools.cli.main as cli
 
     # Initialize state using repository root config
     cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
     tools = cli._get_dev_tools()
-    from ml_playground.tools.dev import DevTools as DevToolsClass
+    from ml_playground.tools.dev.dev import DevTools as DevToolsClass
 
     assert isinstance(tools, DevToolsClass)
 
@@ -1483,3 +1484,109 @@ def test_setup_ai_guidelines_single_file_root_codex(
 
     assert result.success is True
     assert "configured as single-file root" in result.stdout
+
+
+def test_batch_review_json_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test batch_review method with JSON output format."""
+    tools, _ = dev_tools
+    result = tools.batch_review(output_format="json")
+
+    assert result.success is True
+    assert result.exit_code == 0
+    assert str(result.operation_id) == "tools.dev.batch-review"
+
+    # Parse JSON output
+    output_data = json.loads(result.stdout)
+    assert "timestamp" in output_data
+    assert "project_root" in output_data
+    assert "quality_checks" in output_data
+    assert "test_summary" in output_data
+    assert "overall_status" in output_data
+
+
+def test_batch_review_yaml_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test batch_review method with YAML output format."""
+    tools, _ = dev_tools
+    result = tools.batch_review(output_format="yaml")
+
+    assert result.success is True
+
+    # Parse YAML output
+    import yaml
+
+    output_data = yaml.safe_load(result.stdout)
+    assert "timestamp" in output_data
+    assert "quality_checks" in output_data
+    assert "test_summary" in output_data
+
+
+def test_batch_review_text_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test batch_review method with text output format."""
+    tools, _ = dev_tools
+    result = tools.batch_review(output_format="text")
+
+    assert result.success is True
+    assert "Batch Review Results" in result.stdout
+    assert "Quality Checks:" in result.stdout
+    assert "Test Summary:" in result.stdout
+    assert "Overall Status:" in result.stdout
+
+
+def test_workflow_status_json_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test workflow_status method with JSON output format."""
+    tools, _ = dev_tools
+    result = tools.workflow_status(output_format="json")
+
+    assert result.success is True
+    assert result.exit_code == 0
+    assert str(result.operation_id) == "tools.dev.workflow-status"
+
+    # Parse JSON output
+    output_data = json.loads(result.stdout)
+    assert "timestamp" in output_data
+    assert "project_root" in output_data
+    assert "git_status" in output_data
+    assert "quality_status" in output_data
+    assert "test_status" in output_data
+    assert "coverage_status" in output_data
+    assert "readiness" in output_data
+
+
+def test_workflow_status_yaml_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test workflow_status method with YAML output format."""
+    tools, _ = dev_tools
+    result = tools.workflow_status(output_format="yaml")
+
+    assert result.success is True
+
+    # Parse YAML output
+    import yaml
+
+    output_data = yaml.safe_load(result.stdout)
+    assert "git_status" in output_data
+    assert "readiness" in output_data
+
+
+def test_workflow_status_text_format(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    """Test workflow_status method with text output format."""
+    tools, _ = dev_tools
+    result = tools.workflow_status(output_format="text")
+
+    assert result.success is True
+    assert "Workflow Status" in result.stdout
+    assert "Git:" in result.stdout
+    assert "Quality:" in result.stdout
+    assert "Tests:" in result.stdout
+    assert "Ready for merge:" in result.stdout

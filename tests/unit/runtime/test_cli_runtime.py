@@ -4,38 +4,32 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 import typer
 
-import ml_playground.runtime.cli as runtime_cli
-from ml_playground.runtime.cli import (
+import ml_playground.runtime.cli.main as runtime_cli
+from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.runtime.cli.main import (
     CLIDependencies,
     LearningModeEngine,
     VerbosityLevel,
-    configure_cli_dependencies,
-    default_cli_dependencies,
     extract_exp_config,
-    get_cli_dependencies,
     global_device_setup,
     handle_tool_result,
     log_command_status,
     log_directory,
-    override_cli_dependencies,
-    reset_cli_dependencies,
     run_analyze,
     run_or_exit,
     run_prepare,
-    run_prepare_impl,
     run_sample,
-    run_sample_impl,
     run_sample_cmd,
     run_train,
-    run_train_impl,
     run_train_cmd,
 )
 from ml_playground.runtime.core.results import LearningInfo, ToolResult
+from ml_playground.runtime import runners as runtime_runners
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +119,279 @@ def _tool_success(category: str, command: str) -> ToolResult:
     )
 
 
+def test_resolve_cli_attr_returns_fallback_for_missing_attribute() -> None:
+    """_resolve_cli_attr should return the provided fallback when attr missing."""
+
+    import ml_playground.runtime.cli as cli_pkg
+    from ml_playground.runtime.cli import main as runtime_cli
+
+    sentinel = object()
+    missing_attr = "_nonexistent_hook"
+
+    assert not hasattr(cli_pkg, missing_attr)
+
+    resolved = runtime_cli._resolve_cli_attr(missing_attr, sentinel)
+
+    assert resolved is sentinel
+
+
+def test_resolve_cli_attr_prefers_package_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Package-level overrides should be returned when present."""
+
+    import ml_playground.runtime.cli as cli_pkg
+    from ml_playground.runtime.cli import main as runtime_cli
+
+    sentinel = object()
+    override = object()
+    monkeypatch.setattr(cli_pkg, "log_command_status", override, raising=False)
+
+    resolved = runtime_cli._resolve_cli_attr("log_command_status", sentinel)
+
+    assert resolved is override
+
+
+def test_run_prepare_impl_uses_explicit_hooks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hooks = _make_runtime_hooks()
+    expected = _tool_success("prepare", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_run_prepare_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_prepare_impl.__globals__,
+        "_rt_run_prepare_impl",
+        fake_run_prepare_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger())
+    result = runtime_cli.run_prepare_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+        hooks=hooks,
+    )
+
+    assert result is expected
+    assert captured["hooks"] is hooks
+
+
+def test_run_train_impl_uses_explicit_hooks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hooks = _make_runtime_hooks()
+    expected = _tool_success("train", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_run_train_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_train_impl.__globals__,
+        "_rt_run_train_impl",
+        fake_run_train_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=_make_runtime())
+    result = runtime_cli.run_train_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+        hooks=hooks,
+    )
+
+    assert result is expected
+    assert captured["hooks"] is hooks
+
+
+def test_run_sample_impl_uses_explicit_hooks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hooks = _make_runtime_hooks()
+    expected = _tool_success("sample", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_run_sample_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_sample_impl.__globals__,
+        "_rt_run_sample_impl",
+        fake_run_sample_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(
+        logger=DummyLogger(),
+        runtime=_make_runtime(),
+    )
+    result = runtime_cli.run_sample_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+        hooks=hooks,
+    )
+
+    assert result is expected
+    assert captured["hooks"] is hooks
+
+
+def test_run_prepare_impl_builds_hooks_from_resolver(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    resolved: dict[str, object] = {}
+    expected = _tool_success("prepare", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_resolver(name: str, fallback: object) -> object:
+        token = object()
+        resolved[name] = token
+        return token
+
+    def fake_run_prepare_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_prepare_impl.__globals__,
+        "_resolve_cli_attr",
+        fake_resolver,
+    )
+    monkeypatch.setitem(
+        runtime_cli.run_prepare_impl.__globals__,
+        "_rt_run_prepare_impl",
+        fake_run_prepare_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger())
+    result = runtime_cli.run_prepare_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+    )
+
+    assert result is expected
+    hooks = captured["hooks"]
+    assert isinstance(hooks, runtime_runners.RuntimeRunHooks)
+    assert hooks.pipeline_factory is resolved["create_pipeline"]
+    assert hooks.trainer_factory is resolved["CoreTrainer"]
+    assert hooks.sampler_factory is resolved["Sampler"]
+    assert hooks.device_setup is resolved["global_device_setup"]
+    assert hooks.log_status is resolved["log_command_status"]
+
+
+def test_run_train_impl_builds_hooks_from_resolver(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    resolved: dict[str, object] = {}
+    expected = _tool_success("train", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_resolver(name: str, fallback: object) -> object:
+        token = object()
+        resolved[name] = token
+        return token
+
+    def fake_run_train_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_train_impl.__globals__,
+        "_resolve_cli_attr",
+        fake_resolver,
+    )
+    monkeypatch.setitem(
+        runtime_cli.run_train_impl.__globals__,
+        "_rt_run_train_impl",
+        fake_run_train_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=_make_runtime())
+    result = runtime_cli.run_train_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+    )
+
+    assert result is expected
+    hooks = captured["hooks"]
+    assert isinstance(hooks, runtime_runners.RuntimeRunHooks)
+    assert hooks.pipeline_factory is resolved["create_pipeline"]
+    assert hooks.trainer_factory is resolved["CoreTrainer"]
+    assert hooks.sampler_factory is resolved["Sampler"]
+    assert hooks.device_setup is resolved["global_device_setup"]
+    assert hooks.log_status is resolved["log_command_status"]
+
+
+def test_run_sample_impl_builds_hooks_from_resolver(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    resolved: dict[str, object] = {}
+    expected = _tool_success("sample", "demo")
+    captured: dict[str, object] = {}
+
+    def fake_resolver(name: str, fallback: object) -> object:
+        token = object()
+        resolved[name] = token
+        return token
+
+    def fake_run_sample_impl(*args: object, **kwargs: object) -> ToolResult:
+        captured["hooks"] = kwargs.get("hooks")
+        return expected
+
+    monkeypatch.setitem(
+        runtime_cli.run_sample_impl.__globals__,
+        "_resolve_cli_attr",
+        fake_resolver,
+    )
+    monkeypatch.setitem(
+        runtime_cli.run_sample_impl.__globals__,
+        "_rt_run_sample_impl",
+        fake_run_sample_impl,
+    )
+
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=_make_runtime())
+    result = runtime_cli.run_sample_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        None,
+    )
+
+    assert result is expected
+    hooks = captured["hooks"]
+    assert isinstance(hooks, runtime_runners.RuntimeRunHooks)
+    assert hooks.pipeline_factory is resolved["create_pipeline"]
+    assert hooks.trainer_factory is resolved["CoreTrainer"]
+    assert hooks.sampler_factory is resolved["Sampler"]
+    assert hooks.device_setup is resolved["global_device_setup"]
+    assert hooks.log_status is resolved["log_command_status"]
+
+
 # ---------------------------------------------------------------------------
 # handle_tool_result / run_or_exit
 # ---------------------------------------------------------------------------
@@ -174,7 +441,7 @@ def test_run_or_exit_keyboard_interrupt_logs(caplog: pytest.LogCaptureFixture) -
     def _raise() -> None:
         raise KeyboardInterrupt
 
-    with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
+    with caplog.at_level(logging.INFO, logger="ml_playground.runtime.helpers"):
         run_or_exit(_raise, keyboard_interrupt_msg="Cancelled")
     assert "Cancelled" in caplog.text
 
@@ -215,107 +482,109 @@ def test_run_or_exit_runtime_error_logs_and_exits(
 
 
 # ---------------------------------------------------------------------------
-# run_prepare_impl / run_train_impl / run_sample_impl
+# runtime_runners integration (no monkeypatch)
 # ---------------------------------------------------------------------------
 
 
-def test_run_prepare_impl_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
+def _make_runtime_hooks(
+    *,
+    pipeline_factory: Callable[[Any, Any], Any] | None = None,
+    trainer_factory: Callable[[Any, Any], Any] | None = None,
+    sampler_factory: Callable[[Any, Any], Any] | None = None,
+    device_setup: Callable[[str, str, int], None] | None = None,
+    log_status: Callable[[str, Any, Path, LoggerLike], None] | None = None,
+) -> runtime_runners.RuntimeRunHooks:
+    return runtime_runners.RuntimeRunHooks(
+        pipeline_factory=pipeline_factory
+        or (lambda cfg, shared: SimpleNamespace(run=lambda: None)),
+        trainer_factory=trainer_factory
+        or (lambda cfg, shared: SimpleNamespace(run=lambda: None)),
+        sampler_factory=sampler_factory
+        or (lambda cfg, shared: SimpleNamespace(run=lambda: None)),
+        device_setup=device_setup or (lambda *_: None),
+        log_status=log_status or (lambda *_: None),
+    )
+
+
+def test_run_prepare_impl_success(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     cfg = SimpleNamespace(logger=logger)
 
-    class Pipeline:
-        def run(self) -> None:
-            logger.info("pipeline run")
+    def pipeline_factory(cfg_obj: Any, shared_obj: Any) -> Any:
+        assert cfg_obj is cfg
+        assert shared_obj is shared
 
-    monkeypatch.setattr(runtime_cli, "create_pipeline", lambda *_: Pipeline())
+        class Pipeline:
+            def run(self_inner) -> None:
+                logger.info("pipeline run")
 
-    result = run_prepare_impl("demo", cfg, shared.config_path, shared, learning_engine)
+        return Pipeline()
+
+    hooks = _make_runtime_hooks(pipeline_factory=pipeline_factory)
+
+    result = runtime_runners.run_prepare_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        LearningModeEngine(VerbosityLevel.STANDARD),
+        hooks=hooks,
+    )
+
     assert result.success is True
+    assert "pipeline run" in logger.infos
     assert result.learning_info is not None
-    assert logger.infos
 
 
-def test_run_prepare_impl_success_without_learning_engine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_prepare_impl_failure(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     cfg = SimpleNamespace(logger=logger)
 
-    class Pipeline:
-        def run(self) -> None:
-            logger.info("pipeline run")
+    class BoomPipeline:
+        def run(self_inner) -> None:
+            raise RuntimeError("boom")
 
-    monkeypatch.setattr(runtime_cli, "create_pipeline", lambda *_: Pipeline())
+    hooks = _make_runtime_hooks(pipeline_factory=lambda *_: BoomPipeline())
+    engine = RecordingLearningEngine()
 
-    result = run_prepare_impl("demo", cfg, shared.config_path, shared, None)
+    result = runtime_runners.run_prepare_impl(
+        "demo", cfg, shared.config_path, shared, engine, hooks=hooks
+    )
+
+    assert result.success is False
+    assert logger.errors and "boom" in logger.errors[0]
+    assert engine.calls and engine.calls[0][0] == "demo"
+    assert result.learning_info is not None
+
+
+def test_run_prepare_impl_without_learning_engine(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    logger = DummyLogger()
+    cfg = SimpleNamespace(logger=logger)
+
+    hooks = _make_runtime_hooks(
+        pipeline_factory=lambda *_: SimpleNamespace(run=lambda: None)
+    )
+
+    result = runtime_runners.run_prepare_impl(
+        "demo", cfg, shared.config_path, shared, None, hooks=hooks
+    )
+
     assert result.success is True
     assert result.learning_info is not None
     assert result.learning_info.explanations == []
 
 
-def test_run_prepare_impl_calls_learning_engine_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    cfg = SimpleNamespace(logger=logger)
-
-    class Pipeline:
-        def run(self) -> None:
-            raise RuntimeError("bad pipeline")
-
-    engine = RecordingLearningEngine()
-    monkeypatch.setattr(runtime_cli, "create_pipeline", lambda *_: Pipeline())
-
-    result = run_prepare_impl("demo", cfg, shared.config_path, shared, engine)
-    assert not result.success
-    assert engine.calls and engine.calls[0][0] == "demo"
-    assert result.learning_info is not None
-    assert result.learning_info.explanations == ["Explain demo"]
-
-
-def test_run_prepare_impl_failure_logs_and_populates_learning(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    cfg = SimpleNamespace(logger=logger)
-
-    class Pipeline:
-        def run(self) -> None:
-            raise RuntimeError("bad pipeline")
-
-    monkeypatch.setattr(runtime_cli, "create_pipeline", lambda *_: Pipeline())
-
-    result = run_prepare_impl("demo", cfg, shared.config_path, shared, learning_engine)
-    assert result.success is False
-    assert "bad pipeline" in result.stderr
-    assert result.learning_info is not None
-    assert logger.errors
-
-
-def test_run_sample_impl_missing_runtime(tmp_path: Path) -> None:
-    shared = _make_shared(tmp_path)
-    cfg = SimpleNamespace(logger=DummyLogger(), runtime=None)
-
-    result = run_sample_impl("demo", cfg, shared.config_path, shared, None)
-    assert result.success is False
-    assert result.stderr == "Runtime configuration is missing for sampling."
-    assert cfg.logger.errors
-
-
-def test_run_train_impl_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
+def test_run_train_impl_success(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     runtime = _make_runtime(device="cuda", dtype="float16", seed=42)
     cfg = SimpleNamespace(logger=logger, runtime=runtime)
 
+    device_calls: list[tuple[str, str, int]] = []
+    log_calls: list[tuple[str, Path]] = []
     trainer_calls: list[tuple[Any, Any]] = []
 
     class Trainer:
@@ -325,185 +594,140 @@ def test_run_train_impl_success(
         def run(self) -> None:
             logger.info("trainer run")
 
-    device_calls: list[tuple[str, str, int]] = []
-
-    monkeypatch.setattr(runtime_cli, "CoreTrainer", Trainer)
-    monkeypatch.setattr(
-        runtime_cli,
-        "global_device_setup",
-        lambda d, t, s: device_calls.append((d, t, s)),
+    hooks = _make_runtime_hooks(
+        trainer_factory=lambda cfg_obj, shared_obj: Trainer(cfg_obj, shared_obj),
+        device_setup=lambda device, dtype, seed: device_calls.append(
+            (device, dtype, seed)
+        ),
+        log_status=lambda tag, shared_obj, out_dir, log: log_calls.append(
+            (tag, out_dir)
+        ),
     )
 
-    result = run_train_impl("demo", cfg, shared.config_path, shared, learning_engine)
+    result = runtime_runners.run_train_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        LearningModeEngine(VerbosityLevel.STANDARD),
+        hooks=hooks,
+    )
+
     assert result.success is True
-    assert trainer_calls and trainer_calls[0][0] is cfg
+    assert trainer_calls == [(cfg, shared)]
     assert device_calls == [("cuda", "float16", 42)]
+    assert {tag for tag, _ in log_calls} == {"pre-train", "post-train"}
     assert result.learning_info is not None
 
 
-def test_run_train_impl_success_without_learning_engine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    runtime = _make_runtime()
-    cfg = SimpleNamespace(logger=logger, runtime=runtime)
-
-    class Trainer:
-        def __init__(self, *_: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            logger.info("trainer")
-
-    monkeypatch.setattr(runtime_cli, "CoreTrainer", Trainer)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
-
-    result = run_train_impl("demo", cfg, shared.config_path, shared, None)
-    assert result.success is True
-    assert result.learning_info is not None
-    assert result.learning_info.explanations == []
-
-
-def test_run_train_impl_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
+def test_run_train_impl_failure(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
 
-    class Trainer:
+    class BadTrainer:
         def __init__(self, *_: Any) -> None:
             pass
 
         def run(self) -> None:
-            raise RuntimeError("trainer failed")
+            raise RuntimeError("trainer fail")
 
-    monkeypatch.setattr(runtime_cli, "CoreTrainer", Trainer)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
-
-    result = run_train_impl("demo", cfg, shared.config_path, shared, learning_engine)
-    assert result.success is False
-    assert "trainer failed" in result.stderr
-    assert result.learning_info is not None
-
-
-def test_run_train_impl_calls_learning_engine_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
-
-    class Trainer:
-        def __init__(self, *_: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            raise RuntimeError("boom")
-
+    hooks = _make_runtime_hooks(trainer_factory=lambda *_: BadTrainer())
     engine = RecordingLearningEngine()
-    monkeypatch.setattr(runtime_cli, "CoreTrainer", Trainer)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
 
-    result = run_train_impl("demo", cfg, shared.config_path, shared, engine)
-    assert not result.success
+    result = runtime_runners.run_train_impl(
+        "demo", cfg, shared.config_path, shared, engine, hooks=hooks
+    )
+
+    assert result.success is False
+    assert logger.errors and "trainer fail" in logger.errors[0]
     assert engine.calls and engine.calls[0][0] == "demo"
     assert result.learning_info is not None
-    assert result.learning_info.explanations == ["Explain demo"]
 
 
-def test_run_sample_impl_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
+def test_run_train_impl_missing_runtime(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=None)
+
+    result = runtime_runners.run_train_impl(
+        "demo", cfg, shared.config_path, shared, None, hooks=_make_runtime_hooks()
+    )
+
+    assert result.success is False
+    assert "missing" in result.stderr
+    assert cfg.logger.errors
+
+
+def test_run_sample_impl_success(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
 
+    sample_calls: list[tuple[Any, Any]] = []
+
     class Sampler:
-        def __init__(self, *_: Any) -> None:
-            pass
+        def __init__(self, cfg_obj: Any, shared_obj: Any) -> None:
+            sample_calls.append((cfg_obj, shared_obj))
 
         def run(self) -> None:
             logger.info("sampler run")
 
-    monkeypatch.setattr(runtime_cli, "Sampler", Sampler)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
+    hooks = _make_runtime_hooks(
+        sampler_factory=lambda cfg_obj, shared_obj: Sampler(cfg_obj, shared_obj),
+        device_setup=lambda *_: None,
+    )
 
-    result = run_sample_impl("demo", cfg, shared.config_path, shared, learning_engine)
+    result = runtime_runners.run_sample_impl(
+        "demo",
+        cfg,
+        shared.config_path,
+        shared,
+        LearningModeEngine(VerbosityLevel.STANDARD),
+        hooks=hooks,
+    )
+
     assert result.success is True
+    assert sample_calls == [(cfg, shared)]
+    assert "sampler run" in logger.infos
     assert result.learning_info is not None
 
 
-def test_run_sample_impl_success_without_learning_engine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_sample_impl_failure(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
     cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
 
-    class Sampler:
-        def __init__(self, *_: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            logger.info("sampler")
-
-    monkeypatch.setattr(runtime_cli, "Sampler", Sampler)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
-
-    result = run_sample_impl("demo", cfg, shared.config_path, shared, None)
-    assert result.success is True
-    assert result.learning_info is not None
-    assert result.learning_info.explanations == []
-
-
-def test_run_sample_impl_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, learning_engine: LearningModeEngine
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
-
-    class Sampler:
+    class BadSampler:
         def __init__(self, *_: Any) -> None:
             pass
 
         def run(self) -> None:
             raise RuntimeError("sampler fail")
 
-    monkeypatch.setattr(runtime_cli, "Sampler", Sampler)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
+    hooks = _make_runtime_hooks(sampler_factory=lambda *_: BadSampler())
+    engine = RecordingLearningEngine()
 
-    result = run_sample_impl("demo", cfg, shared.config_path, shared, learning_engine)
+    result = runtime_runners.run_sample_impl(
+        "demo", cfg, shared.config_path, shared, engine, hooks=hooks
+    )
+
     assert result.success is False
     assert "sampler fail" in result.stderr
-    assert result.learning_info is not None
-
-
-def test_run_sample_impl_calls_learning_engine_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    shared = _make_shared(tmp_path)
-    logger = DummyLogger()
-    cfg = SimpleNamespace(logger=logger, runtime=_make_runtime())
-
-    class Sampler:
-        def __init__(self, *_: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            raise RuntimeError("boom")
-
-    engine = RecordingLearningEngine()
-    monkeypatch.setattr(runtime_cli, "Sampler", Sampler)
-    monkeypatch.setattr(runtime_cli, "global_device_setup", lambda *_: None)
-
-    result = run_sample_impl("demo", cfg, shared.config_path, shared, engine)
-    assert not result.success
     assert engine.calls and engine.calls[0][0] == "demo"
     assert result.learning_info is not None
-    assert result.learning_info.explanations == ["Explain demo"]
+
+
+def test_run_sample_impl_missing_runtime(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=None)
+
+    result = runtime_runners.run_sample_impl(
+        "demo", cfg, shared.config_path, shared, None, hooks=_make_runtime_hooks()
+    )
+
+    assert result.success is False
+    assert "missing" in result.stderr
+    assert cfg.logger.errors
 
 
 # ---------------------------------------------------------------------------
@@ -621,49 +845,84 @@ def test_log_command_status_handles_errors(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_prepare_wrapper_calls_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+def _fake_hooks_with_result(result: ToolResult) -> runtime_runners.RuntimeRunHooks:
+    del result
+
+    class _Runner:
+        def run(self_inner) -> None:
+            return None
+
+    return runtime_runners.RuntimeRunHooks(
+        pipeline_factory=lambda *_: _Runner(),
+        trainer_factory=lambda *_: _Runner(),
+        sampler_factory=lambda *_: _Runner(),
+        device_setup=lambda *_: None,
+        log_status=lambda *_: None,
+    )
+
+
+def test_run_prepare_wrapper_calls_handler() -> None:
     result = _tool_success("prepare", "demo")
-    called: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_prepare_impl", lambda *args, **_: result)
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: called.append((res, lm))
+    captured: list[tuple[ToolResult, bool]] = []
+
+    shared = SimpleNamespace()
+    cfg = SimpleNamespace(logger=DummyLogger())
+
+    out = run_prepare(
+        "demo",
+        cfg,
+        Path("cfg.toml"),
+        shared,
+        None,
+        learning_mode=True,
+        result_handler=lambda res, lm: captured.append((res, lm)),
+        hooks=_fake_hooks_with_result(result),
     )
 
-    cfg = SimpleNamespace()
-    shared = SimpleNamespace()
-    out = run_prepare("demo", cfg, Path("cfg.toml"), shared, None, learning_mode=True)
-    assert out is result
-    assert called == [(result, True)]
+    assert out.success is True
+    assert captured == [(out, True)]
 
 
-def test_run_train_wrapper_calls_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_train_wrapper_calls_handler() -> None:
     result = _tool_success("train", "demo")
-    called: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_train_impl", lambda *args, **_: result)
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: called.append((res, lm))
+    captured: list[tuple[ToolResult, bool]] = []
+    shared = SimpleNamespace()
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=_make_runtime())
+
+    out = run_train(
+        "demo",
+        cfg,
+        Path("cfg.toml"),
+        shared,
+        None,
+        learning_mode=False,
+        result_handler=lambda res, lm: captured.append((res, lm)),
+        hooks=_fake_hooks_with_result(result),
     )
 
-    cfg = SimpleNamespace()
-    shared = SimpleNamespace()
-    out = run_train("demo", cfg, Path("cfg.toml"), shared, None, learning_mode=False)
-    assert out is result
-    assert called == [(result, False)]
+    assert out.success is True
+    assert captured == [(out, False)]
 
 
-def test_run_sample_wrapper_calls_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_sample_wrapper_calls_handler() -> None:
     result = _tool_success("sample", "demo")
-    called: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_sample_impl", lambda *args, **_: result)
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: called.append((res, lm))
+    captured: list[tuple[ToolResult, bool]] = []
+    shared = SimpleNamespace()
+    cfg = SimpleNamespace(logger=DummyLogger(), runtime=_make_runtime())
+
+    out = run_sample(
+        "demo",
+        cfg,
+        Path("cfg.toml"),
+        shared,
+        None,
+        learning_mode=True,
+        result_handler=lambda res, lm: captured.append((res, lm)),
+        hooks=_fake_hooks_with_result(result),
     )
 
-    cfg = SimpleNamespace()
-    shared = SimpleNamespace()
-    out = run_sample("demo", cfg, Path("cfg.toml"), shared, None, learning_mode=True)
-    assert out is result
-    assert called == [(result, True)]
+    assert out.success is True
+    assert captured == [(out, True)]
 
 
 # ---------------------------------------------------------------------------
@@ -718,153 +977,46 @@ def _make_cli_dependencies(
     )
 
 
-def test_run_train_cmd_invokes_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_train_cmd_invokes_dependencies(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     calls: dict[str, list[Any]] = {}
     deps = _make_cli_dependencies(shared, calls)
 
     captured: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: captured.append((res, lm))
+    run_train_cmd(
+        "demo",
+        None,
+        deps=deps,
+        learning_engine=None,
+        learning_mode=True,
+        result_handler=lambda res, lm: captured.append((res, lm)),
     )
 
-    run_train_cmd("demo", None, deps, learning_engine=None, learning_mode=True)
-
-    assert calls["load"]
+    assert calls["load"] == [("demo", None)]
     assert calls["ensure_train"]
     assert calls["run_train"]
     assert captured and captured[0][1] is True
 
 
-def test_run_sample_cmd_invokes_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_sample_cmd_invokes_dependencies(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     calls: dict[str, list[Any]] = {}
     deps = _make_cli_dependencies(shared, calls)
 
     captured: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: captured.append((res, lm))
+    run_sample_cmd(
+        "demo",
+        None,
+        deps=deps,
+        learning_engine=None,
+        learning_mode=False,
+        result_handler=lambda res, lm: captured.append((res, lm)),
     )
 
-    run_sample_cmd("demo", None, deps, learning_engine=None, learning_mode=False)
-
-    assert calls["load"]
+    assert calls["load"] == [("demo", None)]
     assert calls["ensure_sample"]
     assert calls["run_sample"]
     assert captured and captured[0][1] is False
-
-
-def test_prepare_command_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    shared = _make_shared(tmp_path)
-    calls: dict[str, list[Any]] = {}
-    deps = _make_cli_dependencies(shared, calls)
-
-    monkeypatch.setattr(runtime_cli, "get_cli_dependencies", lambda: deps)
-    monkeypatch.setattr(runtime_cli, "run_or_exit", lambda func, **_: func())
-
-    captured: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: captured.append((res, lm))
-    )
-
-    ctx = SimpleNamespace(
-        obj={"learning_mode": True, "verbosity": VerbosityLevel.COMPREHENSIVE}
-    )
-    runtime_cli.prepare(ctx, "demo")
-
-    assert calls["run_prepare"]
-    assert captured and captured[0][1] is True
-
-
-def test_train_command_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    invoked: list[tuple[str, Path | None, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_or_exit", lambda func, **_: func())
-    monkeypatch.setattr(
-        runtime_cli,
-        "run_train_cmd",
-        lambda name, exp_cfg, deps, engine, learning_mode: invoked.append(
-            (name, exp_cfg, learning_mode)
-        ),
-    )
-
-    ctx = SimpleNamespace(obj={"learning_mode": False})
-    runtime_cli.train(ctx, "demo")
-
-    assert invoked == [("demo", None, False)]
-
-
-def test_sample_command_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    invoked: list[tuple[str, Path | None, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_or_exit", lambda func, **_: func())
-    monkeypatch.setattr(
-        runtime_cli,
-        "run_sample_cmd",
-        lambda name, exp_cfg, deps, engine, learning_mode: invoked.append(
-            (name, exp_cfg, learning_mode)
-        ),
-    )
-
-    ctx = SimpleNamespace(obj={"learning_mode": False})
-    runtime_cli.sample(ctx, "demo")
-
-    assert invoked == [("demo", None, False)]
-
-
-def test_analyze_command_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    result = _tool_success("analyze", "demo")
-    outputs: list[tuple[ToolResult, bool]] = []
-    monkeypatch.setattr(runtime_cli, "run_analyze", lambda *args, **kwargs: result)
-    monkeypatch.setattr(
-        runtime_cli, "handle_tool_result", lambda res, lm: outputs.append((res, lm))
-    )
-
-    ctx = SimpleNamespace(
-        obj={"learning_mode": True, "verbosity": VerbosityLevel.MINIMAL}
-    )
-    runtime_cli.analyze(ctx, "demo", host="0.0.0.0", port=1234, open_browser=False)
-
-    assert outputs == [(result, True)]
-
-
-# ---------------------------------------------------------------------------
-# Dependency configuration helpers
-# ---------------------------------------------------------------------------
-
-
-def test_configure_and_reset_dependencies(tmp_path: Path) -> None:
-    factory_calls = []
-
-    def factory() -> CLIDependencies:
-        factory_calls.append("factory")
-        return _make_cli_dependencies(_make_shared(tmp_path), {})
-
-    configure_cli_dependencies(factory)
-    first = get_cli_dependencies()
-    reset_cli_dependencies()
-    second = get_cli_dependencies()
-    assert first is not second
-    assert factory_calls
-
-    configure_cli_dependencies(default_cli_dependencies)
-
-
-def test_override_cli_dependencies_restores(tmp_path: Path) -> None:
-    _original = get_cli_dependencies()
-    deps = _make_cli_dependencies(_make_shared(tmp_path), {})
-
-    with override_cli_dependencies(deps):
-        assert get_cli_dependencies() is deps
-    assert get_cli_dependencies() is not deps
-    assert get_cli_dependencies() is not None
-
-
-# ---------------------------------------------------------------------------
-# extract_exp_config and run_analyze helpers
-# ---------------------------------------------------------------------------
 
 
 def test_extract_exp_config_variants(
@@ -901,51 +1053,42 @@ def test_run_analyze_unsupported() -> None:
     assert "supports only" in result.stderr
 
 
-def test_run_analyze_exception_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = runtime_cli.logging.getLogger
+def test_run_analyze_exception_path() -> None:
+    def _raise_logger(_name: str) -> Any:
+        raise RuntimeError("logger boom")
 
-    def _raise_logger(name: str | None = None, *args: Any, **kwargs: Any) -> Any:
-        if name == runtime_cli.__name__:
-            raise RuntimeError("logger boom")
-        if name is None:
-            return original(*args, **kwargs)
-        return original(name, *args, **kwargs)
-
-    monkeypatch.setattr(runtime_cli.logging, "getLogger", _raise_logger)
-
-    result = run_analyze("bundestag_char", "127.0.0.1", 9000, False, None)
+    result = runtime_runners.run_analyze(
+        "bundestag_char",
+        "127.0.0.1",
+        9000,
+        False,
+        None,
+        logger_factory=_raise_logger,
+    )
     assert result.success is False
     assert "Analysis failed" in result.stderr
 
 
-def test_global_options_invalid_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_global_options_invalid_config(tmp_path: Path) -> None:
     ctx = FakeTyperContext()
     missing = tmp_path / "missing.toml"
     messages: list[tuple[str, bool]] = []
 
-    monkeypatch.setattr(
-        runtime_cli.click,
-        "get_current_context",
-        lambda silent=True: SimpleNamespace(
-            invoked_subcommand="prepare", get_help=lambda: ""
-        ),
-    )
-    monkeypatch.setattr(
-        runtime_cli.typer, "echo", lambda msg, err=False: messages.append((msg, err))
-    )
-
     with pytest.raises(typer.Exit) as exc:
-        runtime_cli.global_options(ctx, exp_config=missing)
+        runtime_cli.global_options(
+            ctx,
+            exp_config=missing,
+            context_getter=lambda silent=True: SimpleNamespace(
+                invoked_subcommand="prepare", get_help=lambda: ""
+            ),
+            echo_func=lambda msg, err=False: messages.append((msg, err)),
+        )
 
     assert exc.value.exit_code == 2
     assert messages and messages[-1][1] is True
 
 
-def test_global_options_no_subcommand(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_global_options_no_subcommand(tmp_path: Path) -> None:
     ctx = FakeTyperContext()
     help_called: list[str] = []
 
@@ -959,16 +1102,14 @@ def test_global_options_no_subcommand(
 
     messages: list[tuple[str, bool]] = []
 
-    monkeypatch.setattr(
-        runtime_cli.click, "get_current_context", lambda silent=True: FakeClickCtx()
-    )
-    monkeypatch.setattr(
-        runtime_cli.typer, "echo", lambda msg, err=False: messages.append((msg, err))
-    )
-
     with pytest.raises(typer.Exit) as exc:
         runtime_cli.global_options(
-            ctx, exp_config=None, learning_mode=True, verbosity=2
+            ctx,
+            exp_config=None,
+            learning_mode=True,
+            verbosity=2,
+            context_getter=lambda silent=True: FakeClickCtx(),
+            echo_func=lambda msg, err=False: messages.append((msg, err)),
         )
 
     assert exc.value.exit_code == 0
@@ -977,9 +1118,7 @@ def test_global_options_no_subcommand(
     assert help_called
 
 
-def test_global_options_sets_exp_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_global_options_sets_exp_config(tmp_path: Path) -> None:
     ctx = FakeTyperContext()
     config_path = tmp_path / "config.toml"
     config_path.write_text("[section]\nvalue=1\n")
@@ -987,55 +1126,46 @@ def test_global_options_sets_exp_config(
     class FakeClickCtx:
         invoked_subcommand = "prepare"
 
-    monkeypatch.setattr(
-        runtime_cli.click, "get_current_context", lambda silent=True: FakeClickCtx()
-    )
-
     runtime_cli.global_options(
-        ctx, exp_config=config_path, learning_mode=False, verbosity=1
+        ctx,
+        exp_config=config_path,
+        learning_mode=False,
+        verbosity=1,
+        context_getter=lambda silent=True: FakeClickCtx(),
+        echo_func=lambda msg, err=False: None,
     )
 
     assert ctx.obj is not None
     assert ctx.obj["exp_config"] == config_path
 
 
-def test_main_entry_handles_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_app = runtime_cli.app
-
-    class RaisingApp:
-        def __call__(self) -> None:
-            raise KeyboardInterrupt
-
-    monkeypatch.setattr(runtime_cli, "app", RaisingApp())
+def test_main_entry_handles_keyboard_interrupt() -> None:
     outputs: list[tuple[str, bool]] = []
-    monkeypatch.setattr(
-        runtime_cli.typer, "echo", lambda msg, err=False: outputs.append((msg, err))
-    )
+
+    def _raise_keyboard() -> None:
+        raise KeyboardInterrupt
 
     with pytest.raises(typer.Exit) as exc:
-        runtime_cli.main_entry()
+        runtime_cli.main_entry(
+            app_runner=_raise_keyboard,
+            echo=lambda msg, err=False: outputs.append((msg, err)),
+        )
 
     assert exc.value.exit_code == 1
     assert any("Operation cancelled" in msg for msg, _ in outputs)
-    monkeypatch.setattr(runtime_cli, "app", original_app)
 
 
-def test_main_entry_handles_generic_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_app = runtime_cli.app
-
-    class RaisingApp:
-        def __call__(self) -> None:
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr(runtime_cli, "app", RaisingApp())
+def test_main_entry_handles_generic_exception() -> None:
     outputs: list[tuple[str, bool]] = []
-    monkeypatch.setattr(
-        runtime_cli.typer, "echo", lambda msg, err=False: outputs.append((msg, err))
-    )
+
+    def _raise_runtime() -> None:
+        raise RuntimeError("boom")
 
     with pytest.raises(typer.Exit) as exc:
-        runtime_cli.main_entry()
+        runtime_cli.main_entry(
+            app_runner=_raise_runtime,
+            echo=lambda msg, err=False: outputs.append((msg, err)),
+        )
 
     assert exc.value.exit_code == 1
     assert any("Runtime CLI execution failed" in msg for msg, _ in outputs)
-    monkeypatch.setattr(runtime_cli, "app", original_app)

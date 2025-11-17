@@ -10,7 +10,7 @@ import os
 from contextlib import contextmanager
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence, cast
 
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
@@ -69,24 +69,30 @@ def mutation_summary(config: ToolsConfig, root_path: Path) -> ToolResult:
         from cosmic_ray.modules import find_modules  # type: ignore
 
         config_file = Path("pyproject.toml")
-        cfg = load_config(str(config_file))
-        assert isinstance(cfg, Mapping)
+        raw_cfg = load_config(str(config_file))
+        assert isinstance(raw_cfg, Mapping)
 
-        session_cfg = cfg.get("session", {})
-        session_mapping = session_cfg if isinstance(session_cfg, Mapping) else {}
+        def _as_dict(obj: Any) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            if isinstance(obj, dict):
+                for k, v in cast(Mapping[Any, Any], obj).items():
+                    if isinstance(k, str):
+                        result[k] = v
+            return result
+
+        cfg: dict[str, Any] = _as_dict(raw_cfg)
+
+        session_mapping = _as_dict(cfg.get("session"))
         session_path = Path(
-            session_mapping.get("path", ".cache/cosmic-ray/session.sqlite")
+            str(session_mapping.get("path", ".cache/cosmic-ray/session.sqlite"))
         )
 
-        test_runner_cfg = cfg.get("test-runner", {})
-        test_runner_mapping = (
-            test_runner_cfg if isinstance(test_runner_cfg, Mapping) else {}
-        )
-        test_command = test_runner_mapping.get("command", "pytest")
+        test_runner_mapping = _as_dict(cfg.get("test-runner"))
+        test_command: str = str(test_runner_mapping.get("command", "pytest"))
 
         modules_cfg = cfg.get("modules", {})
         modules_input: Any = modules_cfg
-        modules = tuple(find_modules(modules_input))  # type: ignore[arg-type]
+        modules = tuple(str(m) for m in find_modules(modules_input))  # type: ignore[arg-type]
 
         output_lines = [
             f"[mutation] config: {config_file}",
@@ -195,13 +201,22 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
         from cosmic_ray.config import load_config  # type: ignore
 
         config_file = Path("pyproject.toml")
-        cfg = load_config(str(config_file))
-        assert isinstance(cfg, Mapping)
+        raw_cfg = load_config(str(config_file))
+        assert isinstance(raw_cfg, Mapping)
 
-        session_cfg = cfg.get("session", {})
-        session_mapping = session_cfg if isinstance(session_cfg, Mapping) else {}
+        def _as_dict(obj: Any) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            if isinstance(obj, dict):
+                for k, v in cast(Mapping[Any, Any], obj).items():
+                    if isinstance(k, str):
+                        result[k] = v
+            return result
+
+        cfg: dict[str, Any] = _as_dict(raw_cfg)
+
+        session_mapping = _as_dict(cfg.get("session"))
         session_path = Path(
-            session_mapping.get("path", ".cache/cosmic-ray/session.sqlite")
+            str(session_mapping.get("path", ".cache/cosmic-ray/session.sqlite"))
         )
 
         try:
@@ -215,29 +230,51 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
                 operation_id=operation_id,
             )
 
+        def _first_column(_cursor: Any, row: Sequence[Any]) -> Any:
+            return row[0]
+
         with conn_ctx as conn:
-            conn.row_factory = lambda _cursor, row: row[0]
+            conn.row_factory = _first_column
             # Support real sqlite cursors and simple iterator-based fakes
             total_cursor = conn.execute("SELECT COUNT(*) FROM work_results")
+
+            def _to_int(value: Any) -> int:
+                try:
+                    return int(value)
+                except Exception:
+                    return 0
+
+            total: int
+            v_any: Any
             if hasattr(total_cursor, "fetchone"):
-                row = total_cursor.fetchone()
-                total = (
-                    (row[0] if isinstance(row, (list, tuple)) else row)
-                    if row is not None
-                    else 0
-                )
+                row_any = total_cursor.fetchone()
+                if row_any is None:
+                    total = 0
+                else:
+                    if isinstance(row_any, (list, tuple)):
+                        v_any = cast(Any, row_any[0])
+                    else:
+                        v_any = row_any
+                    total = _to_int(v_any)
             else:
                 first = next(iter(total_cursor), 0)
-                total = first[0] if isinstance(first, (list, tuple)) else first
+                if isinstance(first, (list, tuple)):
+                    v_any = cast(Any, first[0])
+                else:
+                    v_any = first
+                total = _to_int(v_any)
 
             outcome_iter = conn.execute(
                 "SELECT COALESCE(test_outcome, 'UNKNOWN') FROM work_results"
             )
             values: list[str] = []
             for row in outcome_iter:
-                value = row[0] if isinstance(row, (list, tuple)) else row
-                values.append(str(value))
-            outcomes = Counter(values)
+                if isinstance(row, (list, tuple)):
+                    value_any: Any = cast(Any, row[0])
+                else:
+                    value_any = row
+                values.append(str(value_any))
+            outcomes: Counter[str] = Counter(values)
 
         output_lines = [f"[mutation] mutants processed: {total}"]
         if outcomes:

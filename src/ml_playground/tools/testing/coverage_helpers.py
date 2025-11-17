@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 from pathlib import Path
 from typing import Any, List
 
@@ -180,7 +181,23 @@ def format_tool_invocation(
 
 
 def format_command(command: list[str], *, prefix: str | None = "uv run") -> str:
-    cmd = " ".join(command)
-    if prefix:
-        return f"Executed: {prefix} {cmd}"
-    return f"Executed: {cmd}"
+    """Format a command for display purposes."""
+    return " ".join(shlex.quote(arg) for arg in command)
+
+
+def format_coverage_status(
+    *,
+    metric: str,
+    percentage: float,
+    threshold: float,
+    passed: bool,
+) -> str:
+    """Format a consistent coverage status line for reporting."""
+
+    icon = "✅" if passed else "❌"
+    label = "SUCCESS" if passed else "FAILURE"
+    comparator = ">=" if passed else "<"
+    return (
+        f"[coverage] {icon} {label}: {metric} coverage "
+        f"{percentage:.2f}% {comparator} {threshold:.2f}%."
+    )

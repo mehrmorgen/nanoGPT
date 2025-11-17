@@ -118,7 +118,7 @@ Notes:
 ## Quality Gates
 
 ```bash
-# Full gate: ruff (lint+format), pyright, mypy, pytest
+# Full gate: ruff (lint+format), basedpyright, mypy, pytest
 uv run tools ci quality-gate
 
 # Extended: optional mutation testing (Cosmic Ray)

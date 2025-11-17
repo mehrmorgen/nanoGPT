@@ -66,8 +66,8 @@ class QualityToolsConfig(ToolConfig):
         default="tool.mypy", description="TOML section for mypy configuration"
     )
     basedpyright_config_section: str = Field(
-        default="tool.pyright",
-        description="TOML section for basedpyright configuration",
+        default="tool.basedpyright",
+        description="TOML section for BasedPyright configuration",
     )
     strict_mode: bool = Field(
         default=True, description="Enable strict mode for type checking (BasedPyright)"
@@ -135,30 +135,6 @@ class CIToolsConfig(ToolConfig):
     )
 
 
-class AgenticToolsConfig(ToolConfig):
-    """Configuration for AI-assisted development tools."""
-
-    timeout: int = Field(
-        default=180,  # 3 minutes - agentic operations should be fast
-        description="Timeout for agentic tool operations",
-    )
-    batch_size: int = Field(
-        default=10, description="Default batch size for batch operations"
-    )
-    output_format: str = Field(
-        default="json",
-        description="Default output format for structured data (json, yaml)",
-    )
-
-    @field_validator("output_format")
-    @classmethod
-    def validate_output_format(cls, v: str) -> str:
-        """Validate output format is supported."""
-        if v not in {"json", "yaml"}:
-            raise ValueError("Output format must be 'json' or 'yaml'")
-        return v
-
-
 class ToolsConfig(BaseModel):
     """Main configuration for the tool integration system."""
 
@@ -176,10 +152,6 @@ class ToolsConfig(BaseModel):
     ci: CIToolsConfig = Field(
         default_factory=CIToolsConfig, description="Configuration for CI tools"
     )
-    agentic: AgenticToolsConfig = Field(
-        default_factory=AgenticToolsConfig,
-        description="Configuration for agentic tools",
-    )
 
     learning_mode_default: bool = Field(
         default=False, description="Whether learning mode is enabled by default"
@@ -187,7 +159,7 @@ class ToolsConfig(BaseModel):
     default_verbosity: int = Field(
         default=1, description="Default verbosity level for learning mode (0-2)"
     )
-    display_command_prefix: str = Field(
+    display_command_prefix: str | None = Field(
         default="uv run",
         description="Prefix used when displaying executed commands (e.g., 'uv run')",
     )
@@ -286,7 +258,7 @@ def get_tool_config(category: str, project_root: Path | None = None) -> ToolConf
     """Get configuration for a specific tool category.
 
     Args:
-        category: Tool category name (quality, testing, environment, ci, agentic)
+        category: Tool category name (quality, testing, environment, ci)
         project_root: Path to project root. If None, will search for pyproject.toml
 
     Returns:
@@ -334,11 +306,5 @@ DEFAULT_TOOLS_CONFIG = {
         "timeout": 900,
         "mutation_timeout": 60,
         "badge_output_dir": "docs/assets",
-    },
-    "agentic": {
-        "enabled": True,
-        "timeout": 180,
-        "batch_size": 10,
-        "output_format": "json",
     },
 }

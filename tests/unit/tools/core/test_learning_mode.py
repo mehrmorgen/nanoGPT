@@ -248,12 +248,12 @@ class TestLearningModeEngine:
         engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
 
         # Test quality category
-        quality_practices = engine._get_category_best_practices("quality")
+        quality_practices = engine.get_category_best_practices("quality")
         assert len(quality_practices) > 0
         assert any("linting" in practice.lower() for practice in quality_practices)
 
         # Test testing category
-        test_practices = engine._get_category_best_practices("test")
+        test_practices = engine.get_category_best_practices("test")
         assert len(test_practices) > 0
         assert any(
             "tdd" in practice.lower() or "test-driven" in practice.lower()
@@ -261,7 +261,7 @@ class TestLearningModeEngine:
         )
 
         # Test unknown category
-        unknown_practices = engine._get_category_best_practices("unknown")
+        unknown_practices = engine.get_category_best_practices("unknown")
         assert unknown_practices == []
 
     def test_educational_content_coverage(self):
@@ -277,8 +277,8 @@ class TestLearningModeEngine:
         ]
         for command in test_commands:
             content_key = f"test.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
+            assert content_key in engine.educational_content
+            content = engine.educational_content[content_key]
             assert "minimal_explanation" in content
             assert "standard_explanation" in content
             assert "comprehensive_explanation" in content

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import typer
 
-from ml_playground.tools.core import runtime
+import ml_playground.tools.core.runtime as runtime
 from ml_playground.tools.core.config import ToolsConfig
 
 

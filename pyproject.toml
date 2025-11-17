@@ -40,14 +40,14 @@ dependencies = [
 ]
 
 [project.scripts]
-ci-tasks = "ml_playground.tools.cli:main_entry"
-cli = "ml_playground.runtime.cli:main_entry"
-env-tasks = "ml_playground.tools.cli:main_entry"
-lint-tasks = "ml_playground.tools.cli:main_entry"
-lit-tasks = "ml_playground.tools.cli:main_entry"
-ml-playground = "ml_playground.runtime.cli:main_entry"
-test-tasks = "ml_playground.tools.cli:main_entry"
-tools = "ml_playground.tools.cli:main_entry"
+ci-tasks = "ml_playground.tools.cli.main:main_entry"
+cli = "ml_playground.runtime.cli.main:main_entry"
+env-tasks = "ml_playground.tools.cli.main:main_entry"
+lint-tasks = "ml_playground.tools.cli.main:main_entry"
+lit-tasks = "ml_playground.tools.cli.main:main_entry"
+ml-playground = "ml_playground.runtime.cli.main:main_entry"
+test-tasks = "ml_playground.tools.cli.main:main_entry"
+tools = "ml_playground.tools.cli.main:main_entry"
 
 [project.optional-dependencies]
 
@@ -168,24 +168,8 @@ cache_dir = ".cache/mypy"
 [tool.basedpyright]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
-include = [
-    "src/ml_playground",
-    "tests",
-]
-exclude = [
-    "src/ml_playground/tools",
-    "tests/unit/tools",
-    "tests/property/tools",
-    "tests/acceptance/tools",
-     "src/ml_playground/runtime",
-    "tests/unit/runtime",
-    "tests/property/runtime",
-    "tests/acceptance/runtime",
-    "tests/unit/cli",
-    "tests/property/cli",
-    "tests/acceptance/cli",
-]
-stubPath = "typings"
+
+
 
 [[tool.basedpyright.executionEnvironments]]
 root = "."

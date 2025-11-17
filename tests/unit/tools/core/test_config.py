@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.tools.core import config as config_module
+import ml_playground.tools.core.config as config_module
 from ml_playground.tools.core.config import (
     DEFAULT_TOOLS_CONFIG,
     ToolsConfig,
@@ -22,7 +22,6 @@ def test_tools_config_defaults() -> None:
     assert cfg.testing.timeout == 600
     assert cfg.testing.coverage_threshold == 87.0
     assert cfg.quality.enabled is True
-    assert cfg.agentic.output_format == "json"
     assert cfg.learning_mode_default is False
     assert cfg.default_verbosity == 1
 
@@ -57,13 +56,6 @@ def test_tool_config_timeout_upper_bound_validation() -> None:
         config_module.ToolConfig(timeout=4000)
 
     assert "Timeout too large" in str(excinfo.value)
-
-
-def test_agentic_tools_config_invalid_output_format_raises() -> None:
-    with pytest.raises(ValueError) as excinfo:
-        config_module.AgenticToolsConfig(output_format="xml")
-
-    assert "Output format must be 'json' or 'yaml'" in str(excinfo.value)
 
 
 def test_tools_config_default_verbosity_validation() -> None:

@@ -99,6 +99,9 @@ def override_attr() -> Callable[[object, str, object], ContextManager[None]]:
 
     @contextmanager
     def _override(target: object, attr: str, value: object) -> Iterator[None]:
+        if not hasattr(target, attr):
+            raise AttributeError(f"{target!r} has no attribute {attr!r}")
+
         original = getattr(target, attr)
         setattr(target, attr, value)
         try:
@@ -107,6 +110,27 @@ def override_attr() -> Callable[[object, str, object], ContextManager[None]]:
             setattr(target, attr, original)
 
     return _override
+
+
+@pytest.fixture()
+def inject_tools_dependency() -> Callable[[str, object], ContextManager[None]]:
+    """Provide a helper for temporarily overriding entries on ToolsDependencies."""
+
+    @contextmanager
+    def _inject(name: str, value: object) -> Iterator[None]:
+        from ml_playground.tools.cli.main import ToolsDependencies
+
+        if not hasattr(ToolsDependencies, name):
+            raise AttributeError(f"ToolsDependencies has no attribute {name!r}")
+
+        original = getattr(ToolsDependencies, name)
+        setattr(ToolsDependencies, name, value)
+        try:
+            yield
+        finally:
+            setattr(ToolsDependencies, name, original)
+
+    return _inject
 
 
 # ----------------------------------------------------------------------------

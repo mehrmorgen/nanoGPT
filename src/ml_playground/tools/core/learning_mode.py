@@ -6,7 +6,7 @@ and related concepts at different verbosity levels.
 """
 
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Mapping
 from .interfaces import LearningInfo
 
 
@@ -41,6 +41,15 @@ class LearningModeEngine:
         """
         self.verbosity = verbosity
         self._educational_content = self._initialize_educational_content()
+
+    @property
+    def educational_content(self) -> Mapping[str, Dict[str, Any]]:
+        """Public view of the educational content catalog."""
+        return self._educational_content
+
+    def get_category_best_practices(self, category: str) -> List[str]:
+        """Return best practices for a given category without exposing internals."""
+        return list(self._get_category_best_practices(category))
 
     def explain_command(
         self,

@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Union
+from typing import Dict, Iterator, List, Optional, Protocol, Union
 
 from ml_playground.tools.core.errors import ToolExecutionError, TimeoutError
 from ml_playground.tools.core.interfaces import ToolResult, OperationId
@@ -259,6 +260,19 @@ def format_command(command: List[str]) -> str:
 
 # Default global instance for tools that don't inject their own runner
 _default_runner = RealSubprocessRunner()
+
+
+@contextmanager
+def override_subprocess_runner(runner: SubprocessRunner) -> Iterator[None]:
+    """Temporarily override the global subprocess runner used by helper functions."""
+
+    global _default_runner  # noqa: PLW0603
+    previous = _default_runner
+    _default_runner = runner
+    try:
+        yield
+    finally:
+        _default_runner = previous
 
 
 def run_subprocess(

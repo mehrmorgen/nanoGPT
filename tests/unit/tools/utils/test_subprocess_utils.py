@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import sys
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
@@ -16,6 +15,7 @@ import ml_playground.tools.utils.subprocess_utils as subprocess_utils
 from ml_playground.tools.utils.subprocess_utils import (
     RealSubprocessRunner,
     format_command,
+    override_subprocess_runner,
     run_pytest_command,
     run_subprocess,
     run_uv_command,
@@ -26,16 +26,6 @@ from tests.unit.tools.fakes import (
     create_success_result,
     create_failure_result,
 )
-
-
-@contextmanager
-def install_default_runner(runner: FakeSubprocessRunner) -> Iterator[None]:
-    original_runner = subprocess_utils._default_runner
-    subprocess_utils._default_runner = runner
-    try:
-        yield
-    finally:
-        subprocess_utils._default_runner = original_runner
 
 
 @pytest.fixture(autouse=True)
@@ -233,7 +223,7 @@ class TestRealSubprocessRunner:
             runner.run_subprocess(
                 [sys.executable, "-c", "import time; time.sleep(1)"],
                 operation_id=operation_id,
-                timeout=0.05,
+                timeout=0,
             )
 
     def test_run_subprocess_os_error_raises(self) -> None:
@@ -253,14 +243,23 @@ class TestRealSubprocessRunner:
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
 
-            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+            def run_subprocess(
+                self,
+                command: list[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                capture_output: bool = True,
+            ) -> ToolResult:
                 self.commands.append(command)
                 return ToolResult(
                     success=True,
                     exit_code=0,
                     stdout="",
                     stderr="",
-                    operation_id=kwargs["operation_id"],
+                    operation_id=operation_id,
                 )
 
         runner = RecordingRunner()
@@ -280,14 +279,23 @@ class TestRealSubprocessRunner:
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
 
-            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+            def run_subprocess(
+                self,
+                command: list[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                capture_output: bool = True,
+            ) -> ToolResult:
                 self.commands.append(command)
                 return ToolResult(
                     success=True,
                     exit_code=0,
                     stdout="",
                     stderr="",
-                    operation_id=kwargs["operation_id"],
+                    operation_id=operation_id,
                 )
 
         runner = RecordingRunner()
@@ -308,14 +316,23 @@ class TestRealSubprocessRunner:
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
 
-            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+            def run_subprocess(
+                self,
+                command: list[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                capture_output: bool = True,
+            ) -> ToolResult:
                 self.commands.append(command)
                 return ToolResult(
                     success=True,
                     exit_code=0,
                     stdout="",
                     stderr="",
-                    operation_id=kwargs["operation_id"],
+                    operation_id=operation_id,
                 )
 
         runner = RecordingRunner()
@@ -334,14 +351,23 @@ class TestRealSubprocessRunner:
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
 
-            def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
+            def run_subprocess(
+                self,
+                command: list[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                capture_output: bool = True,
+            ) -> ToolResult:
                 self.commands.append(command)
                 return ToolResult(
                     success=True,
                     exit_code=0,
                     stdout="",
                     stderr="",
-                    operation_id=kwargs["operation_id"],
+                    operation_id=operation_id,
                 )
 
         runner = RecordingRunner()
@@ -381,7 +407,7 @@ class TestModuleLevelWrappers:
         )
         fake_runner.set_results([create_success_result(operation_id, "ok")])
 
-        with install_default_runner(fake_runner):
+        with override_subprocess_runner(fake_runner):
             result = run_subprocess(["echo", "hi"], operation_id=operation_id)
 
         assert result.success is True
@@ -394,7 +420,7 @@ class TestModuleLevelWrappers:
         )
         fake_runner.set_results([create_success_result(operation_id, "uv ok")])
 
-        with install_default_runner(fake_runner):
+        with override_subprocess_runner(fake_runner):
             result = run_uv_command(["pytest", "--version"], operation_id=operation_id)
 
         assert result.success is True
@@ -407,7 +433,7 @@ class TestModuleLevelWrappers:
         )
         fake_runner.set_results([create_success_result(operation_id, "pytest ok")])
 
-        with install_default_runner(fake_runner):
+        with override_subprocess_runner(fake_runner):
             result = run_pytest_command(["tests/unit"], operation_id=operation_id)
 
         assert result.success is True

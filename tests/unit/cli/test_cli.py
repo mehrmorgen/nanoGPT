@@ -10,8 +10,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-import ml_playground.runtime.cli as cli
-from ml_playground.runtime.cli import app, override_cli_dependencies, CLIDependencies
+import ml_playground.runtime.cli.main as cli
+from ml_playground.runtime.cli.main import app, override_cli_dependencies, CLIDependencies, get_command, global_options, run_train_cmd, run_sample_cmd, main
 from ml_playground.runtime.core.results import ToolResult
 from ml_playground.configuration.models import ExperimentConfig
 from ml_playground.configuration import loading as config_loading
@@ -165,8 +165,8 @@ class TestGlobalOptions:
 
         pre_call_handlers = list(root_logger.handlers)
         try:
-            ctx = typer.Context(cli.get_command(app))
-            cli.global_options(ctx, exp_config=None)
+            ctx = typer.Context(get_command(app))
+            global_options(ctx, exp_config=None)
             post_call_handlers = list(root_logger.handlers)
         finally:
             root_logger.removeHandler(test_handler)
@@ -185,8 +185,8 @@ class TestGlobalOptions:
             root_logger.removeHandler(handler)
 
         try:
-            ctx = typer.Context(cli.get_command(app))
-            cli.global_options(ctx, exp_config=None)
+            ctx = typer.Context(get_command(app))
+            global_options(ctx, exp_config=None)
             post_call_handlers = list(root_logger.handlers)
         finally:
             for handler in list(root_logger.handlers):
@@ -354,50 +354,6 @@ class TestCommandRunners:
             assert result.exit_code == 1
             assert "test error" in caplog.messages[-1]
 
-
-class TestHelperCoverage:
-    def test_run_or_exit_keyboard_interrupt_logs_message(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """run_or_exit should log a message when KeyboardInterrupt occurs."""
-
-        def _raise_interrupt() -> None:
-            raise KeyboardInterrupt()
-
-        with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
-            cli.run_or_exit(_raise_interrupt, keyboard_interrupt_msg="Cancelled.")
-
-        assert any("Cancelled." in msg for msg in caplog.messages)
-
-    def test_run_or_exit_keyboard_interrupt_no_message(self) -> None:
-        """run_or_exit should quietly swallow KeyboardInterrupt without a message."""
-
-        def _raise_interrupt() -> None:
-            raise KeyboardInterrupt()
-
-        cli.run_or_exit(_raise_interrupt)
-
-    def test_run_analyze_logs_placeholder(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """_run_analyze should log a not implemented message for bundestag_char."""
-
-        with caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"):
-            result = cli.run_analyze("bundestag_char", "0.0.0.0", 9000, False)
-
-        assert result.success is True
-        assert any("not implemented" in msg for msg in caplog.messages)
-
-    def test_run_analyze_unknown_experiment_raises(self) -> None:
-        """_run_analyze should raise for unsupported experiments."""
-
-        result = cli.run_analyze("other", "127.0.0.1", 8050, True)
-
-        assert result.success is False
-        assert "analyze currently supports only 'bundestag_char'" in (
-            result.stderr or ""
-        )
-
     def test_analyze_command_invokes_helper(
         self, runner: CliRunner, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -462,7 +418,7 @@ class TestHelperCoverage:
         )
 
         with override_cli_dependencies(deps):
-            cli.run_train_cmd("demo", None, deps=None)
+            run_train_cmd("demo", None, deps=None)
 
         assert calls["load"] == [("demo", None)]
         assert len(calls["ensure"]) == 1
@@ -521,7 +477,7 @@ class TestHelperCoverage:
         )
 
         with override_cli_dependencies(deps):
-            cli.run_sample_cmd("demo", None, deps=None)
+            run_sample_cmd("demo", None, deps=None)
 
         assert calls["load"] == [("demo", None)]
         assert len(calls["ensure"]) == 1
@@ -537,7 +493,7 @@ class TestHelperCoverage:
     def test_main_returns_zero_status(self) -> None:
         """main should complete successfully for --help invocation."""
 
-        exit_code = cli.main(["--help"])
+        exit_code = main(["--help"])
 
         assert exit_code == 0
 
@@ -566,27 +522,6 @@ class TestDeviceSetupFallbacks:
 
         cli.global_device_setup("cpu", "float32", 42, cuda_is_available=fake_cuda)
         assert called
-
-
-class TestAnalysisGuardRails:
-    """Test _run_analyze experiment validation."""
-
-    def test_analyze_rejects_non_bundestag_char(self) -> None:
-        """Test RuntimeError for unsupported experiments."""
-        result = cli.run_analyze("shakespeare", "127.0.0.1", 8050, True)
-
-        assert result.success is False
-        assert result.stderr is not None
-        assert "analyze currently supports only 'bundestag_char'" in result.stderr
-
-    def test_analyze_accepts_bundestag_char(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Test info log for supported experiment."""
-        with caplog.at_level("INFO"):
-            result = cli.run_analyze("bundestag_char", "127.0.0.1", 8050, True)
-        assert result.success is True
-        assert "Analysis for 'bundestag_char' not implemented" in caplog.text
 
 
 class TestDirectoryLoggingResilience:

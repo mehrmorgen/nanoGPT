@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import ContextManager, Any, Callable, cast
+from typing import ContextManager, Any, Callable
 
 import torch
 from torch import autocast
@@ -31,13 +31,11 @@ _PT_DTYPES: dict[str, torch.dtype] = {
 
 
 def _manual_seed(seed: int, torch_module: Any = torch) -> None:
-    manual_seed_func = cast(Callable[[int], None], torch_module.manual_seed)
-    manual_seed_func(seed)
+    torch_module.manual_seed(seed)
 
 
 def _cuda_manual_seed(seed: int, torch_module: Any = torch) -> None:
-    manual_seed_func = cast(Callable[[int], None], torch_module.cuda.manual_seed)
-    manual_seed_func(seed)
+    torch_module.cuda.manual_seed(seed)
 
 
 def setup_runtime(
@@ -70,7 +68,7 @@ def setup_runtime(
             cuda_matmul = cuda_backends.matmul
             if hasattr(cuda_matmul, "fp32_precision"):
                 cuda_matmul.fp32_precision = "tf32"
-            cudnn_backends = cast(Any, torch_mod.backends.cudnn)
+            cudnn_backends: Any = torch_mod.backends.cudnn
             if hasattr(cudnn_backends, "fp32_precision"):
                 cudnn_backends.fp32_precision = "tf32"
     except (RuntimeError, AssertionError, AttributeError):

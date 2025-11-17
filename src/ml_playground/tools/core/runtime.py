@@ -1,10 +1,8 @@
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Optional
 
 import typer
-
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
 
@@ -18,6 +16,7 @@ class ToolsCLIState:
         self.dry_run: bool = False
         self.project_root: Path | None = None
         self.config: ToolsConfig | None = None
+        self.learning_mode_set: bool = False
         self._learning_mode_set: bool = False
 
     def reset(self) -> None:
@@ -27,7 +26,18 @@ class ToolsCLIState:
         self.dry_run = False
         self.project_root = None
         self.config = None
+        self.learning_mode_set = False
         self._learning_mode_set = False
+
+    def mark_learning_mode_explicit(self, value: bool = True) -> None:
+        """Record that the user explicitly configured learning mode."""
+        self.learning_mode_set = value
+        self._learning_mode_set = value
+
+    def mark_learning_mode_default(self, value: bool = True) -> None:
+        """Record that configuration defaults supplied learning mode."""
+        self.learning_mode_set = value
+        self._learning_mode_set = value
 
 
 state = ToolsCLIState()
@@ -50,9 +60,10 @@ def load_config_with_error_handling(project_root: Path | None = None) -> None:
         state.config = load_tools_config(project_root)
         state.project_root = project_root
 
-        if not state._learning_mode_set and state.config is not None:
+        if not state.learning_mode:
             state.learning_mode = state.config.learning_mode_default
-            state.verbosity = state.config.default_verbosity
+            state.mark_learning_mode_default(True)
+        state.verbosity = state.config.default_verbosity
 
     except ToolConfigurationError as exc:  # pragma: no cover - exercised via CLI
         typer.echo(f"Configuration error: {exc}", err=True)

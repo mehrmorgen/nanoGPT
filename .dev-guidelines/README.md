@@ -33,7 +33,7 @@ Get up and running immediately:
 ```bash
 uv run tools env setup
 uv run tools env verify
-uv run tools ci quality-gate   # ruff + format + pyright + mypy + pytest
+uv run tools ci quality-gate   # ruff + format + basedpyright + mypy + pytest
 ```
 
 ## Documentation Structure

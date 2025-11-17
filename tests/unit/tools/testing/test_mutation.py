@@ -7,21 +7,27 @@ error paths, and happy paths with faked cosmic_ray and sqlite.
 from __future__ import annotations
 
 import builtins
+import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
+from typing import Any, Callable, Iterator
 
 import pytest
 
-from ml_playground.tools.core import config as config_module
+import ml_playground.tools.core.config as config_module
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.testing import mutation as mutation_mod
+import ml_playground.tools.testing.mutation as mutation_mod
 from tests.unit.tools.fakes import FakeSubprocessRunner, create_failure_result
 
 
-# ---------- Shared config ----------
+# ---------- Shared config and helpers ----------
+
+
+_MISSING = object()
 
 
 def _config() -> ToolsConfig:
@@ -32,15 +38,71 @@ def _config() -> ToolsConfig:
     )
 
 
+@contextmanager
+def override_cwd(path: Path) -> Iterator[None]:
+    previous = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
+
+
+@contextmanager
+def override_attr(obj: Any, name: str, value: Any) -> Iterator[None]:
+    original = getattr(obj, name, _MISSING)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        if original is _MISSING:
+            delattr(obj, name)
+        else:
+            setattr(obj, name, original)
+
+
+@contextmanager
+def install_modules(modules: dict[str, ModuleType]) -> Iterator[None]:
+    originals = {name: sys.modules.get(name) for name in modules}
+    for name, module in modules.items():
+        sys.modules[name] = module
+    try:
+        yield
+    finally:
+        for name, original in originals.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+
+class CosmicRayConfigModule(ModuleType):
+    def __init__(self, loader: Callable[[str], dict[str, Any]]) -> None:
+        super().__init__("cosmic_ray.config")
+        self._loader = loader
+
+    def load_config(self, path: str) -> dict[str, Any]:
+        return self._loader(path)
+
+
+class CosmicRayModulesModule(ModuleType):
+    def __init__(self, finder: Callable[[dict[str, Any]], list[str]]) -> None:
+        super().__init__("cosmic_ray.modules")
+        self._finder = finder
+
+    def find_modules(self, cfg: dict[str, Any]) -> list[str]:
+        return self._finder(cfg)
+
+
 # ---------- Init fallback path ----------
 
 
 class InitFailRunner(FakeSubprocessRunner):
-    def run_uv_command(  # type: ignore[override]
+    def run_uv_command(
         self,
         args: list[str],
         *,
-        cwd: Path | None = None,
+        cwd: str | Path | None = None,
         env: dict[str, str] | None = None,
         timeout: int | None = None,
         operation_id: OperationId,
@@ -76,13 +138,13 @@ def test_mutation_exec_raises_without_session(tmp_path: Path) -> None:
 # ---------- Reset behavior ----------
 
 
-def test_mutation_reset_handles_existing_session(tmp_path: Path, monkeypatch) -> None:
+def test_mutation_reset_handles_existing_session(tmp_path: Path) -> None:
     cfg = _config()
     session = tmp_path / ".cache" / "cosmic-ray" / "session.sqlite"
     session.parent.mkdir(parents=True, exist_ok=True)
     session.write_text("data", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
-    result = mutation_mod.mutation_reset(cfg, tmp_path)
+    with override_cwd(tmp_path):
+        result = mutation_mod.mutation_reset(cfg, tmp_path)
     assert result.success is True
     assert "Removed Cosmic Ray session" in result.stdout
 
@@ -90,53 +152,46 @@ def test_mutation_reset_handles_existing_session(tmp_path: Path, monkeypatch) ->
 # ---------- Summary/report error paths ----------
 
 
-def test_mutation_report_when_session_missing_with_cosmic_ray(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mutation_report_when_session_missing_with_cosmic_ray(tmp_path: Path) -> None:
     """When cosmic_ray is present but session is missing, we return a friendly success message."""
     cfg = _config()
 
     # Install minimal cosmic_ray modules
     base = ModuleType("cosmic_ray")
-    mod_config = ModuleType("cosmic_ray.config")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {"session": {"path": ".cache/cosmic-ray/session.sqlite"}}
+    )
 
-    def load_config(_path: str):
-        return {"session": {"path": ".cache/cosmic-ray/session.sqlite"}}
-
-    mod_config.load_config = load_config  # type: ignore[attr-defined]
-
-    originals = {
-        "cosmic_ray": sys.modules.get("cosmic_ray"),
-        "cosmic_ray.config": sys.modules.get("cosmic_ray.config"),
-    }
-    sys.modules["cosmic_ray"] = base
-    sys.modules["cosmic_ray.config"] = mod_config
-
-    try:
-        monkeypatch.chdir(tmp_path)
-        result = mutation_mod.mutation_report(cfg, tmp_path)
-        assert result.success is True
-        assert "session file not found" in (result.stdout or "").lower()
-    finally:
-        for k, v in originals.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+    assert result.success is True
+    assert "session file not found" in (result.stdout or "").lower()
 
 
-def test_mutation_summary_import_error(tmp_path: Path, monkeypatch) -> None:
+def test_mutation_summary_import_error(tmp_path: Path) -> None:
     cfg = _config()
-    monkeypatch.chdir(tmp_path)
 
     # Force ImportError for cosmic_ray*
-    def raising_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-redef]
+    def raising_import(
+        name: str,
+        globals: Any = None,
+        locals: Any = None,
+        fromlist: tuple[Any, ...] = (),
+        level: int = 0,
+    ) -> Any:
         if str(name).startswith("cosmic_ray"):
             raise ImportError("no cosmic_ray")
         return __import__(name, globals, locals, fromlist, level)
 
-    monkeypatch.setattr(builtins, "__import__", raising_import)
-    result = mutation_mod.mutation_summary(cfg, tmp_path)
+    with override_cwd(tmp_path):
+        with override_attr(builtins, "__import__", raising_import):
+            result = mutation_mod.mutation_summary(cfg, tmp_path)
     assert result.success is False
     err = result.stderr or ""
     assert (
@@ -152,10 +207,15 @@ class _FakeConn:
     def __init__(self) -> None:
         self._rows = [(2,), ("KILLED",), ("SURVIVED",)]
 
-    def __enter__(self):
+    def __enter__(self) -> _FakeConn:
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> bool:
         return False
 
     def execute(self, sql: str):
@@ -172,118 +232,89 @@ class _FakeSqliteMod(ModuleType):
         return _FakeConn()
 
 
-def test_mutation_summary_and_report_success(tmp_path: Path, monkeypatch) -> None:
+def test_mutation_summary_and_report_success(tmp_path: Path) -> None:
     cfg = _config()
 
     # Prepare a fake cosmic_ray API and sqlite
     base = ModuleType("cosmic_ray")
-    mod_config = ModuleType("cosmic_ray.config")
-    mod_modules = ModuleType("cosmic_ray.modules")
-
     session = tmp_path / ".cache" / "cosmic-ray" / "session.sqlite"
     session.parent.mkdir(parents=True, exist_ok=True)
 
-    def load_config(_path: str):
-        return {
+    config_module = CosmicRayConfigModule(
+        lambda _path: {
             "session": {"path": str(session)},
             "test-runner": {"command": "pytest"},
             "modules": {"include": ["src"]},
         }
+    )
+    modules_module = CosmicRayModulesModule(lambda _cfg: ["pkg.alpha", "pkg.beta"])
 
-    def find_modules(_cfg):
-        return ["pkg.alpha", "pkg.beta"]
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "cosmic_ray.modules": modules_module,
+            "sqlite3": _FakeSqliteMod(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            summary = mutation_mod.mutation_summary(cfg, tmp_path)
+            assert summary.success is True
+            assert "modules to mutate: 2" in summary.stdout
 
-    mod_config.load_config = load_config  # type: ignore[attr-defined]
-    mod_modules.find_modules = find_modules  # type: ignore[attr-defined]
-
-    originals = {
-        "cosmic_ray": sys.modules.get("cosmic_ray"),
-        "cosmic_ray.config": sys.modules.get("cosmic_ray.config"),
-        "cosmic_ray.modules": sys.modules.get("cosmic_ray.modules"),
-        "sqlite3": sys.modules.get("sqlite3"),
-    }
-    sys.modules["cosmic_ray"] = base
-    sys.modules["cosmic_ray.config"] = mod_config
-    sys.modules["cosmic_ray.modules"] = mod_modules
-    sys.modules["sqlite3"] = _FakeSqliteMod()
-
-    try:
-        # Summary should succeed and list modules
-        monkeypatch.chdir(tmp_path)
-        summary = mutation_mod.mutation_summary(cfg, tmp_path)
-        assert summary.success is True
-        assert "modules to mutate: 2" in summary.stdout
-
-        # Create a trivial session (our fake sqlite ignores real file)
-        session.write_text("data", encoding="utf-8")
-
-        # Report should succeed and summarize outcomes
-        report = mutation_mod.mutation_report(cfg, tmp_path)
-        assert report.success is True
-        assert "mutants processed: 2" in report.stdout
-        assert "killed" in report.stdout.lower() or "survived" in report.stdout.lower()
-    finally:
-        # Restore modules
-        for k, v in originals.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+            session.write_text("data", encoding="utf-8")
+            report = mutation_mod.mutation_report(cfg, tmp_path)
+            assert report.success is True
+            assert "mutants processed: 2" in report.stdout
+            assert (
+                "killed" in report.stdout.lower() or "survived" in report.stdout.lower()
+            )
 
 
 # ---------- Pipeline tests ----------
 
 
-def test_mutation_run_reports_failure_when_summary_fails(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mutation_run_reports_failure_when_summary_fails(tmp_path: Path) -> None:
     cfg = _config()
 
-    def raising_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-redef]
+    def raising_import(
+        name: str,
+        globals: Any = None,
+        locals: Any = None,
+        fromlist: tuple[Any, ...] = (),
+        level: int = 0,
+    ) -> Any:
         if str(name).startswith("cosmic_ray"):
             raise ImportError("no cosmic_ray")
         return __import__(name, globals, locals, fromlist, level)
 
-    monkeypatch.setattr(builtins, "__import__", raising_import)
-    result = mutation_mod.mutation_run(cfg, tmp_path, FakeSubprocessRunner())
+    with override_attr(builtins, "__import__", raising_import):
+        result = mutation_mod.mutation_run(cfg, tmp_path, FakeSubprocessRunner())
     assert result.success is False
     combined = (result.stdout or "") + (result.stderr or "")
     assert "Mutation summary" in combined
 
 
-def test_mutation_run_success_with_existing_session(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mutation_run_success_with_existing_session(tmp_path: Path) -> None:
     cfg = _config()
 
     # Minimal cosmic_ray + sqlite so summary and report pass
     base = ModuleType("cosmic_ray")
-    mod_config = ModuleType("cosmic_ray.config")
-    mod_modules = ModuleType("cosmic_ray.modules")
-    mod_config.load_config = lambda _p: {
-        "session": {"path": ".cache/cosmic-ray/session.sqlite"},
-        "test-runner": {"command": "pytest"},
-        "modules": {"include": ["src"]},
-    }  # type: ignore[attr-defined]
-    mod_modules.find_modules = lambda _c: ["pkg.alpha"]  # type: ignore[attr-defined]
-
-    originals = {
-        "cosmic_ray": sys.modules.get("cosmic_ray"),
-        "cosmic_ray.config": sys.modules.get("cosmic_ray.config"),
-        "cosmic_ray.modules": sys.modules.get("cosmic_ray.modules"),
-        "sqlite3": sys.modules.get("sqlite3"),
-    }
-    sys.modules["cosmic_ray"] = base
-    sys.modules["cosmic_ray.config"] = mod_config
-    sys.modules["cosmic_ray.modules"] = mod_modules
-    sys.modules["sqlite3"] = _FakeSqliteMod()
+    config_module = CosmicRayConfigModule(
+        lambda _path: {
+            "session": {"path": ".cache/cosmic-ray/session.sqlite"},
+            "test-runner": {"command": "pytest"},
+            "modules": {"include": ["src"]},
+        }
+    )
+    modules_module = CosmicRayModulesModule(lambda _cfg: ["pkg.alpha"])
 
     class SuccessRunner(FakeSubprocessRunner):
-        def run_uv_command(  # type: ignore[override]
+        def run_uv_command(
             self,
             args: list[str],
             *,
-            cwd: Path | None = None,
+            cwd: str | Path | None = None,
             env: dict[str, str] | None = None,
             timeout: int | None = None,
             operation_id: OperationId,
@@ -309,14 +340,15 @@ def test_mutation_run_success_with_existing_session(
                 operation_id=operation_id,
             )
 
-    try:
-        monkeypatch.chdir(tmp_path)
-        result = mutation_mod.mutation_run(cfg, tmp_path, SuccessRunner())
-        assert result.success is True
-        assert "Mutation report:" in (result.stdout or "")
-    finally:
-        for k, v in originals.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "cosmic_ray.modules": modules_module,
+            "sqlite3": _FakeSqliteMod(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_run(cfg, tmp_path, SuccessRunner())
+    assert result.success is True
+    assert "Mutation report:" in (result.stdout or "")

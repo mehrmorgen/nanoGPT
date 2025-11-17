@@ -162,7 +162,7 @@ def compute_metrics():
 ## Tooling Enforcement
 
 - Run `uv run tools ci quality-gate` (ruff + formatter) before every commit to enforce import style automatically.
-- Keep type checkers (`pyright`, `mypy`) green; use `TYPE_CHECKING` guards to avoid runtime imports.
+- Keep type checkers (`basedpyright`, `mypy`) green; use `TYPE_CHECKING` guards to avoid runtime imports.
 - Pair import-structure changes with relevant tests/documentation updates.
 
 ## Review Checklist

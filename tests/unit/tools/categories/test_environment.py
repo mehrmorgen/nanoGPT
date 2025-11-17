@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.tools import environment as environment_module
-from ml_playground.tools.core import config as config_module
+import ml_playground.tools.environment.environment as environment_module
+import ml_playground.tools.core.config as config_module
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId

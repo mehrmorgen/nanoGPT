@@ -7,7 +7,11 @@ from typing import Any, Callable
 import pytest
 from typer.testing import CliRunner
 
-from ml_playground.runtime.cli import CLIDependencies, app, override_cli_dependencies
+from ml_playground.runtime.cli.main import (
+    CLIDependencies,
+    app,
+    override_cli_dependencies,
+)
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.models import (

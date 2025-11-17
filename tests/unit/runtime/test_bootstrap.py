@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import ml_playground.runtime.cli as runtime_cli
+import ml_playground.runtime.cli.main as runtime_cli
 from ml_playground.runtime.core import bootstrap
 
 BASE_TAG = "base"

@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union, TypedDict
 
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
+
+
+class _SubprocessCall(TypedDict, total=False):
+    command: list[str]
+    cwd: str | Path | None
+    env: dict[str, str] | None
+    timeout: int | None
+    operation_id: OperationId
+    capture_output: bool
 
 
 class FakeSubprocessRunner:
@@ -14,18 +23,34 @@ class FakeSubprocessRunner:
 
     def __init__(self) -> None:
         """Initialize fake subprocess runner."""
-        self.calls: List[Dict[str, Any]] = []
-        self.results: List[ToolResult] = []
-        self.current_result_index = 0
+        self.calls: list[_SubprocessCall] = []
+        self._result_queue: list[Callable[[OperationId], ToolResult]] = []
 
     def set_results(self, results: List[ToolResult]) -> None:
         """Set the results to return for subsequent calls."""
-        self.results = results
-        self.current_result_index = 0
+        self._result_queue = [lambda op_id, res=result: res for result in results]  # type: ignore[arg-type]
 
     def add_result(self, result: ToolResult) -> None:
         """Add a single result to return."""
-        self.results.append(result)
+        self._result_queue.append(lambda _op_id, res=result: res)
+
+    def queue_result_factory(
+        self, factory: Callable[[OperationId], ToolResult]
+    ) -> None:
+        """Append a callable factory that can produce dynamic results."""
+        self._result_queue.append(factory)
+
+    def _next_result(self, operation_id: OperationId) -> ToolResult:
+        if self._result_queue:
+            factory = self._result_queue.pop(0)
+            return factory(operation_id)
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="",
+            stderr="",
+            operation_id=operation_id,
+        )
 
     def run_subprocess(
         self,
@@ -50,20 +75,7 @@ class FakeSubprocessRunner:
             }
         )
 
-        # Return pre-configured result
-        if self.current_result_index < len(self.results):
-            result = self.results[self.current_result_index]
-            self.current_result_index += 1
-            return result
-
-        # Default success result if no results configured
-        return ToolResult(
-            success=True,
-            exit_code=0,
-            stdout="",
-            stderr="",
-            operation_id=operation_id,
-        )
+        return self._next_result(operation_id)
 
     def run_uv_command(
         self,
@@ -82,7 +94,7 @@ class FakeSubprocessRunner:
         if no_project:
             command.append("--no-project")
         else:
-            project_root = cwd or Path.cwd()
+            project_root = Path(cwd) if isinstance(cwd, str) else cwd or Path.cwd()
             command.extend(["--project", str(project_root)])
         if python:
             command.extend(["--python", python])
