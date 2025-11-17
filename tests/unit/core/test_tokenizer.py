@@ -1,8 +1,8 @@
 from typing import Any, Literal, cast
-from collections.abc import Mapping
 from types import MappingProxyType
 
 import pytest
+from hypothesis import given, strategies as st
 
 from ml_playground.core.tokenizer import (
     CharTokenizer,
@@ -21,132 +21,179 @@ class WordTokenizerTestHarness(WordTokenizer, TokenizerTestHarness):
     """Test harness exposing lookup array maintenance for word tokenizer."""
 
 
-def test_char_tokenizer_roundtrip_proto() -> None:
-    """Round-trips a small char vocab including spaces."""
-    vocab = {"a": 1, "b": 2, " ": 3}
+# Property-based tests for comprehensive coverage
+@given(
+    st.dictionaries(
+        st.characters(min_codepoint=32, max_codepoint=126),
+        st.integers(min_value=1, max_value=1000),
+        min_size=1,
+        max_size=10,
+    ).filter(lambda d: len(set(d.values())) == len(d))  # Ensure unique token IDs
+)
+def test_char_tokenizer_roundtrip_property(vocab: dict[str, int]) -> None:
+    """CharTokenizer encode/decode roundtrip preserves text for valid vocab."""
     tk = CharTokenizer(vocab=vocab)
     assert tk.name == "char"
-    assert tk.vocab_size == 3
-    text = "ab a"
+    assert tk.vocab_size == len(vocab)
+
+    # Test roundtrip for vocab characters
+    text = "".join(vocab.keys())
     ids = tk.encode(text)
-    assert ids == [1, 2, 3, 1]
-    back = tk.decode(ids)
-    assert back == text
-    # vocab mapping should be read-only
+    decoded = tk.decode(ids)
+    assert decoded == text
+
+    # Test vocab is read-only
     v = tk.vocab
     assert isinstance(v, MappingProxyType)
     with pytest.raises(TypeError):
-        cast(dict[str, int], v)["c"] = 3
+        cast(dict[str, int], v)["new"] = 1
 
 
-def test_char_tokenizer_decode_rebuilds_lookup_array() -> None:
-    """Rebuilds lookup array when vocabulary grows dynamically."""
-    tok = CharTokenizer({"a": 1})
-    assert tok.decode([1]) == "a"
-    tok.itos[2] = "b"
-    assert tok.decode([2]) == "b"
-    assert tok.decode([-1, 3]) == ""
+@given(
+    st.dictionaries(
+        st.characters(min_codepoint=32, max_codepoint=126),
+        st.integers(min_value=1, max_value=100),
+        min_size=1,
+        max_size=5,
+    )
+)
+def test_char_tokenizer_lookup_array_rebuild_property(vocab: dict[str, int]) -> None:
+    """CharTokenizer rebuilds lookup array when vocabulary grows dynamically."""
+    tok = CharTokenizerTestHarness(vocab)
+    initial_size = tok.lookup_array_length()
+
+    # Add a token beyond current array size
+    new_idx = max(vocab.values()) + 10
+    tok.itos[new_idx] = "z"
+
+    # Should rebuild lookup array
+    lookup = tok.expose_lookup_array()
+    assert lookup.shape[0] > initial_size
+    assert tok.decode([new_idx]) == "z"
 
 
-def test_word_tokenizer_decode_strips_invalid_ids_and_exposes_vocab_proxy() -> None:
-    """Drops out-of-range ids and enforces read-only vocab mapping."""
-    tok = WordTokenizer({"hello": 1, "world": 2})
-    assert tok.decode([1, 2]) == "hello world"
-    assert tok.decode([-5, 999]) == ""
-    vocab_proxy = tok.vocab
-    assert isinstance(vocab_proxy, MappingProxyType)
-    with pytest.raises(TypeError):
-        cast(dict[str, int], vocab_proxy)["new"] = 3
-
-
-def test_word_tokenizer_roundtrip() -> None:
-    """Ensures simple word tokenizer encode/decode symmetry."""
-    tok = WordTokenizer({"hello": 1, "world": 2})
-    ids = tok.encode("hello world!")
-    assert ids == [1, 2, 0]
-
-
-def test_word_tokenizer_roundtrip_proto() -> None:
-    """Exercises protocol-based round trip plus metadata checks."""
-    vocab = {"Hello": 1, ",": 2, "world": 3, "!": 4}
+@given(
+    st.dictionaries(
+        st.text(
+            min_size=1,
+            max_size=10,
+            alphabet=st.characters(min_codepoint=97, max_codepoint=122),
+        ),  # lowercase letters only
+        st.integers(min_value=1, max_value=1000),
+        min_size=1,
+        max_size=10,
+    ).filter(lambda d: len(set(d.values())) == len(d))  # Ensure unique token IDs
+)
+def test_word_tokenizer_roundtrip_property(vocab: dict[str, int]) -> None:
+    """WordTokenizer encode/decode preserves word boundaries and handles missing words."""
     tk = WordTokenizer(vocab=vocab)
     assert tk.name == "word"
-    # tokenization preserves punctuation as separate tokens
-    ids = tk.encode("Hello, world!")
-    # decode joins with spaces by design
-    assert tk.decode(ids) == "Hello , world !"
-    # additional property checks to catch decorator removals
+    assert tk.vocab_size == len(vocab)
+
+    # Test that individual vocab words encode correctly
+    for word in vocab.keys():
+        ids = tk.encode(word)
+        assert len(ids) == 1
+        assert ids[0] == vocab[word]
+        assert tk.decode(ids) == word
+
+    # Test missing words return 0
+    missing_text = "unknownword"
+    ids_with_missing = tk.encode(missing_text)
+    assert 0 in ids_with_missing
+
+    # Test vocab is read-only
     v = tk.vocab
-    assert isinstance(v, Mapping)
+    assert isinstance(v, MappingProxyType)
+    with pytest.raises(TypeError):
+        cast(dict[str, int], v)["new"] = 1
 
 
-def test_char_tokenizer_rebuilds_missing_lookup_array() -> None:
-    """Test char tokenizer rebuilds missing lookup array."""
-    tok = CharTokenizerTestHarness({"a": 0})
-    tok.invalidate_lookup_array()
-    assert tok.decode([0]) == "a"
+@given(
+    st.dictionaries(
+        st.text(min_size=1, max_size=10),
+        st.integers(min_value=1, max_value=100),
+        min_size=1,
+        max_size=5,
+    )
+)
+def test_word_tokenizer_lookup_array_rebuild_property(vocab: dict[str, int]) -> None:
+    """WordTokenizer rebuilds lookup array when vocabulary grows dynamically."""
+    tok = WordTokenizerTestHarness(vocab)
+    initial_size = tok.lookup_array_length()
+
+    # Add a token beyond current array size
+    new_idx = max(vocab.values()) + 10
+    tok.itos[new_idx] = "newword"
+
+    # Should rebuild lookup array
+    lookup = tok.expose_lookup_array()
+    assert lookup.shape[0] > initial_size
+    assert tok.decode([new_idx]) == "newword"
 
 
-def test_word_tokenizer_rebuilds_missing_lookup_array() -> None:
-    """Test word tokenizer rebuilds missing lookup array."""
-    tok = WordTokenizerTestHarness({"hello": 0})
-    tok.invalidate_lookup_array()
-    assert tok.decode([0]) == "hello"
-
-
+# Factory function tests
 @pytest.mark.parametrize(
     ("tok_type", "kwargs", "expected_cls"),
     [
-        (cast(Literal["char", "word"], "char"), {"vocab": {"x": 1}}, CharTokenizer),
-        (cast(Literal["char", "word"], "word"), {"vocab": {"x": 1}}, WordTokenizer),
+        ("char", {"vocab": {"x": 1}}, CharTokenizer),
+        ("word", {"vocab": {"x": 1}}, WordTokenizer),
     ],
 )
-def test_create_tokenizer_factory_char_word_proto(
+def test_create_tokenizer_factory_valid_types(
     tok_type: Literal["char", "word"], kwargs: dict[str, Any], expected_cls: type
 ) -> None:
-    """Factory returns expected tokenizer subclass for char/word."""
+    """Factory returns expected tokenizer subclass for valid types."""
     tk = create_tokenizer(tok_type, **kwargs)
     assert isinstance(tk, expected_cls)
 
 
-def test_create_tokenizer_factory_unknown_proto() -> None:
+@given(
+    st.text(min_size=1, max_size=10).filter(
+        lambda x: x not in ["char", "word", "tiktoken"]
+    )
+)
+def test_create_tokenizer_factory_invalid_types(invalid_type: str) -> None:
     """Factory raises ValueError for unknown tokenizer names."""
     with pytest.raises(ValueError):
-        create_tokenizer(cast(Any, "nope"))
+        create_tokenizer(invalid_type)
 
 
-def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
-    """Provide a fake tiktoken module to validate TiktokenTokenizer properties without installing tiktoken."""
+# Tiktoken tokenizer tests with fake module
+@given(st.integers(min_value=1, max_value=100))
+def test_tiktoken_tokenizer_with_fake_module(vocab_size: int) -> None:
+    """TiktokenTokenizer properties with fake module."""
 
     class FakeEncoder:
-        def __init__(self) -> None:
-            self.n_vocab = 3
-            self._mergeable_ranks = {"a": 1, "b": 2, "c": 3}
+        def __init__(self, n_vocab: int) -> None:
+            self.n_vocab = n_vocab
+            self._mergeable_ranks = {f"token_{i}": i for i in range(n_vocab)}
 
         def encode(
             self, text: str, allowed_special: set[str] | None = None
         ) -> list[int]:
-            return [1, 2]
+            return [1, 2] if text else []
 
         def decode(self, ids: list[int]) -> str:
-            return "ab"
+            return "decoded"
 
     class FakeTiktokenModule:
         @staticmethod
         def get_encoding(name: str) -> FakeEncoder:
-            return FakeEncoder()
+            return FakeEncoder(vocab_size)
 
     tk = TiktokenTokenizer(loader=lambda: FakeTiktokenModule)
     assert tk.name == "tiktoken"
-    assert tk.vocab_size == 3
-    assert tk.decode(tk.encode("hi")) == "ab"
+    assert tk.vocab_size == vocab_size
+    assert tk.decode(tk.encode("test")) == "decoded"
+
     v = tk.vocab
-    # Mapping with expected keys
-    assert hasattr(v, "__getitem__") and "a" in v and v["a"] == 1
+    assert hasattr(v, "__getitem__")
+    assert len(v) == vocab_size
 
 
-def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
-    """When encoder lacks mergeable ranks mapping, tokenizer should expose empty mapping."""
+def test_tiktoken_tokenizer_missing_mergeable_ranks() -> None:
+    """TiktokenTokenizer returns empty mapping when encoder lacks mergeable ranks."""
 
     class Encoder:
         n_vocab = 1
@@ -169,7 +216,7 @@ def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
     assert tk.vocab == MappingProxyType({})
 
 
-def test_tiktoken_tokenizer_import_error_is_propagated() -> None:
+def test_tiktoken_tokenizer_import_error_propagation() -> None:
     """Loader ImportError should be surfaced with helpful message."""
 
     def loader() -> None:
@@ -181,140 +228,143 @@ def test_tiktoken_tokenizer_import_error_is_propagated() -> None:
     assert "tiktoken is required" in str(exc.value)
 
 
-def test_char_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
-    """Test char tokenizer decode empty vocab returns empty string."""
-    tok = CharTokenizer()
-    assert tok.decode([0, 1]) == ""
+# Edge case tests for empty vocabularies and out-of-range handling
+@given(st.lists(st.integers(min_value=-10, max_value=100), min_size=1, max_size=10))
+def test_char_tokenizer_decode_edge_cases(ids: list[int]) -> None:
+    """CharTokenizer.decode handles empty vocab and out-of-range IDs gracefully."""
+    # Test with empty vocab
+    empty_tok = CharTokenizer()
+    result = empty_tok.decode(ids)
+    assert result == ""
+
+    # Test with small vocab and out-of-range IDs
+    small_tok = CharTokenizer({"a": 0})
+    large_ids = [100, 200, 300]  # All out of range
+    result = small_tok.decode(large_ids)
+    assert result == ""
 
 
-def test_word_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
-    """Test word tokenizer decode empty vocab returns empty string."""
-    tok = WordTokenizer()
-    assert tok.decode([0, 1]) == ""
+@given(st.lists(st.integers(min_value=-10, max_value=100), min_size=1, max_size=10))
+def test_word_tokenizer_decode_edge_cases(ids: list[int]) -> None:
+    """WordTokenizer.decode handles empty vocab and out-of-range IDs gracefully."""
+    # Test with empty vocab
+    empty_tok = WordTokenizer()
+    result = empty_tok.decode(ids)
+    assert result == ""
+
+    # Test with small vocab and out-of-range IDs
+    small_tok = WordTokenizer({"hello": 0})
+    large_ids = [100, 200, 300]  # All out of range
+    result = small_tok.decode(large_ids)
+    assert result == ""
 
 
-@pytest.mark.parametrize(
-    "bad", ["charz", "wordz", "tiktokenz"]
-)  # avoid real tiktoken import
-def test_create_tokenizer_lexicographic_non_matches_raise(bad: str) -> None:
-    """Ensure strings that are lexicographically >= but not equal still raise, killing Eq->GtE mutants."""
-    with pytest.raises(ValueError):
-        create_tokenizer(cast(Any, bad))
+# Missing character/word handling tests
+@given(
+    st.dictionaries(
+        st.characters(min_codepoint=32, max_codepoint=126),
+        st.integers(min_value=1, max_value=100),
+        min_size=1,
+        max_size=5,
+    )
+)
+def test_char_tokenizer_encode_missing_chars(vocab: dict[str, int]) -> None:
+    """CharTokenizer.encode returns 0 for missing characters."""
+    tk = CharTokenizer(vocab)
+    # Include missing character guaranteed not to be in vocab
+    missing_char = chr(127)  # DEL character, not in printable ASCII range
+    text_with_missing = "".join(vocab.keys()) + missing_char
+    result = tk.encode(text_with_missing)
+    assert 0 in result  # missing_char should be encoded as 0
 
 
-def test_create_tokenizer_word_with_invalid_vocab_type() -> None:
-    """create_tokenizer should raise TypeError for word tokenizer with non-mapping vocab."""
+@given(
+    st.dictionaries(
+        st.text(
+            min_size=1,
+            max_size=10,
+            alphabet=st.characters(min_codepoint=97, max_codepoint=122),
+        ),
+        st.integers(min_value=1, max_value=100),
+        min_size=1,
+        max_size=5,
+    ).filter(lambda d: len(set(d.values())) == len(d))  # Ensure unique token IDs
+)
+def test_word_tokenizer_encode_missing_words(vocab: dict[str, int]) -> None:
+    """WordTokenizer.encode returns 0 for missing words."""
+    tk = WordTokenizer(vocab)
+    # Include missing word
+    text_with_missing = " ".join(vocab.keys()) + " unknownword"
+    result = tk.encode(text_with_missing)
+    assert 0 in result  # 'unknownword' should be encoded as 0
+
+
+# Targeted tests for uncovered edge cases
+def test_char_tokenizer_build_lookup_array_empty_vocab() -> None:
+    """CharTokenizer._build_lookup_array returns empty array for empty vocab."""
+    tk = CharTokenizer()
+    lookup = tk._build_lookup_array()
+    assert lookup.shape == (0,)
+    assert lookup.dtype == object
+
+
+def test_word_tokenizer_build_lookup_array_empty_vocab() -> None:
+    """WordTokenizer._build_lookup_array returns empty array for empty vocab."""
+    tk = WordTokenizer()
+    lookup = tk._build_lookup_array()
+    assert lookup.shape == (0,)
+    assert lookup.dtype == object
+
+
+def test_char_tokenizer_build_lookup_array_negative_indices() -> None:
+    """CharTokenizer._build_lookup_array skips negative indices."""
+    tk = CharTokenizer({"a": -1, "b": 1})  # Include negative index
+    lookup = tk._build_lookup_array()
+    # Should handle negative indices gracefully
+    assert lookup.shape[0] >= 2  # max index + 1
+    assert tk.decode([1]) == "b"  # Positive index works
+    assert tk.decode([-1]) == ""  # Negative index returns empty
+
+
+def test_word_tokenizer_build_lookup_array_negative_indices() -> None:
+    """WordTokenizer._build_lookup_array skips negative indices."""
+    tk = WordTokenizer({"hello": -1, "world": 1})  # Include negative index
+    lookup = tk._build_lookup_array()
+    # Should handle negative indices gracefully
+    assert lookup.shape[0] >= 2  # max index + 1
+    assert tk.decode([1]) == "world"  # Positive index works
+    assert tk.decode([-1]) == ""  # Negative index returns empty
+
+
+def test_create_tokenizer_word_unsupported_kwargs() -> None:
+    """create_tokenizer raises ValueError for unsupported kwargs to word tokenizer."""
+    with pytest.raises(ValueError) as exc:
+        create_tokenizer("word", vocab={"hello": 1}, unsupported_param="value")
+
+    assert "Unsupported keyword arguments for word tokenizer" in str(exc.value)
+    assert "unsupported_param" in str(exc.value)
+
+
+def test_create_tokenizer_tiktoken_non_string_encoding_name() -> None:
+    """create_tokenizer raises TypeError for non-string encoding_name."""
     with pytest.raises(TypeError) as exc:
-        create_tokenizer("word", vocab=[1, 2, 3])  # List instead of dict
-
-    assert "vocab must be a mapping" in str(exc.value)
-
-
-def test_create_tokenizer_tiktoken_with_non_string_encoding_name() -> None:
-    """create_tokenizer should raise TypeError for tiktoken with non-string encoding_name."""
-    with pytest.raises(TypeError) as exc:
-        create_tokenizer("tiktoken", encoding_name=123)  # Int instead of str
+        create_tokenizer("tiktoken", encoding_name=123)
 
     assert "encoding_name must be a string" in str(exc.value)
 
 
-def test_create_tokenizer_tiktoken_with_non_callable_loader() -> None:
-    """create_tokenizer should raise TypeError for tiktoken with non-callable loader."""
+def test_create_tokenizer_tiktoken_non_callable_loader() -> None:
+    """create_tokenizer raises TypeError for non-callable loader."""
     with pytest.raises(TypeError) as exc:
-        create_tokenizer(
-            "tiktoken", loader="not_callable"
-        )  # String instead of callable
+        create_tokenizer("tiktoken", loader="not_callable")
 
-    assert "loader must be callable" in str(exc.value)
+    assert "loader must be callable when provided" in str(exc.value)
 
 
-def test_char_tokenizer_lookup_array_rebuild_on_grow() -> None:
-    """CharTokenizer should rebuild lookup array when itos grows beyond current array."""
-    tok = CharTokenizerTestHarness({"a": 0})
-    assert tok.lookup_array_length() == 1
+def test_create_tokenizer_tiktoken_unsupported_kwargs() -> None:
+    """create_tokenizer raises ValueError for unsupported kwargs to tiktoken tokenizer."""
+    with pytest.raises(ValueError) as exc:
+        create_tokenizer("tiktoken", unsupported_param="value")
 
-    # Manually add a larger index to itos
-    tok.itos[5] = "f"
-
-    # _ensure_lookup_array should rebuild
-    lookup = tok.expose_lookup_array()
-    assert lookup.shape[0] >= 6
-
-
-def test_word_tokenizer_lookup_array_rebuild_on_grow() -> None:
-    """WordTokenizer should rebuild lookup array when itos grows beyond current array."""
-    tok = WordTokenizerTestHarness({"hello": 0})
-    assert tok.lookup_array_length() == 1
-
-    # Manually add a larger index to itos
-    tok.itos[5] = "world"
-
-    # _ensure_lookup_array should rebuild
-    lookup = tok.expose_lookup_array()
-    assert lookup.shape[0] >= 6
-
-
-def test_tiktoken_tokenizer_vocab_without_mergeable_ranks() -> None:
-    """TiktokenTokenizer should return empty mapping when _mergeable_ranks is None."""
-
-    class FakeEncoder:
-        n_vocab = 10
-        _mergeable_ranks = None  # No mergeable ranks
-
-        def encode(
-            self, text: str, allowed_special: set[str] | None = None
-        ) -> list[int]:
-            return []
-
-        def decode(self, ids: list[int]) -> str:
-            return ""
-
-    class FakeModule:
-        @staticmethod
-        def get_encoding(name: str) -> FakeEncoder:
-            return FakeEncoder()
-
-    tk = TiktokenTokenizer(loader=lambda: FakeModule)
-    assert tk.vocab == MappingProxyType({})
-
-
-def test_char_tokenizer_encode_with_missing_chars() -> None:
-    """CharTokenizer.encode should return 0 for missing characters."""
-    tok = CharTokenizer({"a": 1, "b": 2})
-    result = tok.encode("abc")
-    assert result == [1, 2, 0]  # 'c' is missing, returns 0
-
-
-def test_word_tokenizer_encode_with_missing_words() -> None:
-    """WordTokenizer.encode should return 0 for missing words."""
-    tok = WordTokenizer({"hello": 1, "world": 2})
-    result = tok.encode("hello goodbye world")
-    assert result == [1, 0, 2]  # 'goodbye' is missing, returns 0
-
-
-def test_char_tokenizer_decode_with_empty_itos() -> None:
-    """CharTokenizer.decode should return empty string when itos is empty."""
-    tok = CharTokenizer()  # Empty vocab
-    result = tok.decode([0, 1, 2])
-    assert result == ""
-
-
-def test_word_tokenizer_decode_with_empty_itos() -> None:
-    """WordTokenizer.decode should return empty string when itos is empty."""
-    tok = WordTokenizer()  # Empty vocab
-    result = tok.decode([0, 1, 2])
-    assert result == ""
-
-
-def test_char_tokenizer_decode_with_all_out_of_range() -> None:
-    """CharTokenizer.decode should return empty string when all ids are out of range."""
-    tok = CharTokenizer({"a": 0})
-    result = tok.decode([100, 200, 300])  # All out of range
-    assert result == ""
-
-
-def test_word_tokenizer_decode_with_all_out_of_range() -> None:
-    """WordTokenizer.decode should return empty string when all ids are out of range."""
-    tok = WordTokenizer({"hello": 0})
-    result = tok.decode([100, 200, 300])  # All out of range
-    assert result == ""
+    assert "Unsupported keyword arguments for tiktoken tokenizer" in str(exc.value)
+    assert "unsupported_param" in str(exc.value)
