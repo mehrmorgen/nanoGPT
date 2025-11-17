@@ -104,9 +104,7 @@ class DeterministicRunner:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def queue_result(
-        self, factory: Callable[[OperationId], ToolResult]
-    ) -> None:
+    def queue_result(self, factory: Callable[[OperationId], ToolResult]) -> None:
         """Queue a custom result factory for the next invocation."""
 
         self._result_queue.append(factory)
@@ -205,4 +203,3 @@ def override_tools_with_deterministic_runner() -> Iterator[DeterministicRunner]:
 
     with tools_cli.override_tools_dependencies(overridden):
         yield runner
-

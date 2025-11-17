@@ -114,19 +114,22 @@ def _clean_pytest_output(output: str) -> str:
 
     for line in lines:
         # Skip progress indicators and xdist status
-        if any(skip in line for skip in [
-            "test session starts",
-            "[gw",
-            "workers [",
-            "scheduling",
-            ".",
-            "=",
-            "PASSED",
-            "FAILED",
-            "ERROR",
-            "warnings summary",
-            "short test summary",
-        ]):
+        if any(
+            skip in line
+            for skip in [
+                "test session starts",
+                "[gw",
+                "workers [",
+                "scheduling",
+                ".",
+                "=",
+                "PASSED",
+                "FAILED",
+                "ERROR",
+                "warnings summary",
+                "short test summary",
+            ]
+        ):
             continue
         cleaned_lines.append(line)
 

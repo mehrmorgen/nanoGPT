@@ -9,7 +9,11 @@ from ml_playground.tools.ci.ci import CITools
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from tests.unit.tools.fakes import FakeSubprocessRunner, create_failure_result, create_success_result
+from tests.unit.tools.fakes import (
+    FakeSubprocessRunner,
+    create_failure_result,
+    create_success_result,
+)
 
 
 @pytest.fixture()
@@ -20,11 +24,15 @@ def ci_tools(tmp_path: Path) -> tuple[CITools, FakeSubprocessRunner]:
     return tools, runner
 
 
-def test_coverage_badge_with_existing_json(ci_tools: tuple[CITools, FakeSubprocessRunner]) -> None:
+def test_coverage_badge_with_existing_json(
+    ci_tools: tuple[CITools, FakeSubprocessRunner],
+) -> None:
     tools, runner = ci_tools
     coverage_dir = tools.cache_dir / "coverage"
     coverage_dir.mkdir(parents=True)
-    (coverage_dir / "coverage.json").write_text('{"totals": {"percent_covered": 85.5}}', encoding="utf-8")
+    (coverage_dir / "coverage.json").write_text(
+        '{"totals": {"percent_covered": 85.5}}', encoding="utf-8"
+    )
 
     result = tools.coverage_badge([])
 
@@ -33,9 +41,13 @@ def test_coverage_badge_with_existing_json(ci_tools: tuple[CITools, FakeSubproce
     assert runner.calls == []
 
 
-def test_coverage_badge_generates_json_when_missing(ci_tools: tuple[CITools, FakeSubprocessRunner]) -> None:
+def test_coverage_badge_generates_json_when_missing(
+    ci_tools: tuple[CITools, FakeSubprocessRunner],
+) -> None:
     tools, runner = ci_tools
-    operation_id = OperationId(namespace="tools", category="ci", command="coverage-badge")
+    operation_id = OperationId(
+        namespace="tools", category="ci", command="coverage-badge"
+    )
     runner.set_results([create_success_result(operation_id, "Coverage generated")])
     coverage_dir = tools.cache_dir / "coverage"
     coverage_dir.mkdir(parents=True)
@@ -58,7 +70,9 @@ def test_coverage_badge_generates_json_when_missing(ci_tools: tuple[CITools, Fak
             no_project: bool = False,
         ) -> ToolResult:
             if args[:2] == ["coverage", "json"]:
-                self._json_target.write_text('{"totals": {"percent_covered": 75.0}}', encoding="utf-8")
+                self._json_target.write_text(
+                    '{"totals": {"percent_covered": 75.0}}', encoding="utf-8"
+                )
             return super().run_uv_command(
                 args,
                 cwd=cwd,
@@ -80,7 +94,9 @@ def test_coverage_badge_generates_json_when_missing(ci_tools: tuple[CITools, Fak
     assert "75.0% coverage" in (result.stdout or "")
 
 
-def test_coverage_badge_generation_failure(ci_tools: tuple[CITools, FakeSubprocessRunner]) -> None:
+def test_coverage_badge_generation_failure(
+    ci_tools: tuple[CITools, FakeSubprocessRunner],
+) -> None:
     tools, _ = ci_tools
     coverage_dir = tools.cache_dir / "coverage"
     coverage_dir.mkdir(parents=True)
@@ -92,10 +108,16 @@ def test_coverage_badge_generation_failure(ci_tools: tuple[CITools, FakeSubproce
     assert "Failed to generate coverage badge" in (result.stderr or "")
 
 
-def test_coverage_badge_raises_when_coverage_json_fails(ci_tools: tuple[CITools, FakeSubprocessRunner]) -> None:
+def test_coverage_badge_raises_when_coverage_json_fails(
+    ci_tools: tuple[CITools, FakeSubprocessRunner],
+) -> None:
     tools, runner = ci_tools
-    operation_id = OperationId(namespace="tools", category="ci", command="coverage-badge")
-    runner.set_results([create_failure_result(operation_id, 1, stderr="coverage json failed")])
+    operation_id = OperationId(
+        namespace="tools", category="ci", command="coverage-badge"
+    )
+    runner.set_results(
+        [create_failure_result(operation_id, 1, stderr="coverage json failed")]
+    )
 
     with pytest.raises(ToolExecutionError) as exc_info:
         tools.coverage_badge([])
@@ -113,7 +135,9 @@ def test_coverage_badge_respects_output_dir(tmp_path: Path) -> None:
 
     coverage_dir = tools.cache_dir / "coverage"
     coverage_dir.mkdir(parents=True)
-    (coverage_dir / "coverage.json").write_text('{"totals": {"percent_covered": 88.2}}', encoding="utf-8")
+    (coverage_dir / "coverage.json").write_text(
+        '{"totals": {"percent_covered": 88.2}}', encoding="utf-8"
+    )
 
     result = tools.coverage_badge([])
 

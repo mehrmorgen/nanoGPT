@@ -70,7 +70,13 @@ _AttrT = TypeVar("_AttrT")
 def _resolve_cli_attr(name: str, fallback: _AttrT) -> _AttrT:
     """Resolve attribute overrides from the runtime CLI package."""
 
-    # Use globals() to check if the attribute is defined in this module
+    import ml_playground.runtime.cli as cli_pkg
+
+    # Check package-level overrides first (for test injection)
+    if hasattr(cli_pkg, name):
+        return getattr(cli_pkg, name)
+
+    # Fall back to module-level globals
     # This avoids __init__.py side effects while maintaining the override capability
     if name in globals():
         return globals()[name]

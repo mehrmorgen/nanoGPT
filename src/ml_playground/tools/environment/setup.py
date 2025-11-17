@@ -78,7 +78,9 @@ def run_setup(
     results.append("Synchronized all dependency groups")
 
     # Setup git hooks
-    hooks_result = _setup_git_hooks(config, root_path, pkg_name, operation_id, subprocess_runner)
+    hooks_result = _setup_git_hooks(
+        config, root_path, pkg_name, operation_id, subprocess_runner
+    )
     if hooks_result.success:
         results.append("Configured git hooks")
     else:
@@ -193,7 +195,7 @@ def _setup_git_hooks(
 
         # Create pre-commit hook
         pre_commit_hook = git_hooks_dir / "pre-commit"
-        hook_content = f'''#!/usr/bin/env bash
+        hook_content = """#!/usr/bin/env bash
 # Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail
@@ -212,31 +214,31 @@ if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
       'patch('
     )
     while IFS= read -r f; do
-      for t in "${{tokens[@]}}"; do
+      for t in "${tokens[@]}"; do
         lines=$(grep -n "$t" "$f" || true)
         # Drop matches where the actual file content (after the colon) is a comment
         # or where the token only appears inside string literals (e.g., "patch(")
         lines=$(echo "$lines" | awk -F: -v tok="$t" '
-          function has_token_outside(line, tok,    i, c, in_single, in_double, tok_len) {{
+          function has_token_outside(line, tok,    i, c, in_single, in_double, tok_len) {
             in_single = 0; in_double = 0; tok_len = length(tok);
-            for (i = 1; i <= length(line) - tok_len + 1; i++) {{
+            for (i = 1; i <= length(line) - tok_len + 1; i++) {
               c = substr(line, i, 1);
-              if (c == "\"" && substr(line, i - 1, 1) != "\\\\") {{
+              if (c == "\"" && substr(line, i - 1, 1) != "\\\\") {
                 in_double = !in_double;
-              }} else if (c == "'"'"'" && substr(line, i - 1, 1) != "\\\\") {{
+              } else if (c == "'"'"'" && substr(line, i - 1, 1) != "\\\\") {
                 in_single = !in_single;
-              }}
-              if (!in_single && !in_double && substr(line, i, tok_len) == tok) {{
+              }
+              if (!in_single && !in_double && substr(line, i, tok_len) == tok) {
                 return 1;
-              }}
-            }}
+              }
+            }
             return 0;
-          }}
-          {{
+          }
+          {
             line = $0; sub(/^[^:]*:/, "", line);
             if (line ~ /^[[:space:]]*#/) next;
             if (has_token_outside(line, tok)) print $0;
-          }}
+          }
         ' || true)
         if [ -n "$lines" ]; then
           echo "$lines"
@@ -257,7 +259,7 @@ echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, coverage via
 uv run pre-commit run
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.
-'''
+"""
 
         pre_commit_hook.write_text(hook_content)
         pre_commit_hook.chmod(0o755)

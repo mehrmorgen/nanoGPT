@@ -25,8 +25,12 @@ class ReviewStub:
 
     def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> object:
         assert pr_number == 42
-        comment = SimpleNamespace(author="mentor", viewer_did_author=False, body=self._body)
-        thread = SimpleNamespace(url="https://example/review/verbose", is_resolved=False, comments=[comment])
+        comment = SimpleNamespace(
+            author="mentor", viewer_did_author=False, body=self._body
+        )
+        thread = SimpleNamespace(
+            url="https://example/review/verbose", is_resolved=False, comments=[comment]
+        )
         return SimpleNamespace(threads=[thread], viewer=self.viewer)
 
     def apply_filters(
@@ -53,7 +57,9 @@ def dev_tools(tmp_path: Path) -> tuple[DevTools, FakeSubprocessRunner]:
     return tools, runner
 
 
-def test_review_list_renders_verbose_body(dev_tools: tuple[DevTools, FakeSubprocessRunner]) -> None:
+def test_review_list_renders_verbose_body(
+    dev_tools: tuple[DevTools, FakeSubprocessRunner],
+) -> None:
     tools, runner = dev_tools
     body = (
         "First line of comment that exceeds any truncation threshold by being long. "
@@ -77,7 +83,9 @@ def test_review_list_renders_verbose_body(dev_tools: tuple[DevTools, FakeSubproc
     assert stub.filters_called_with["viewer"] == "bob"
 
 
-def test_review_list_uses_builtin_module(dev_tools: tuple[DevTools, FakeSubprocessRunner], tmp_path: Path) -> None:
+def test_review_list_uses_builtin_module(
+    dev_tools: tuple[DevTools, FakeSubprocessRunner], tmp_path: Path
+) -> None:
     tools, runner = dev_tools
     payload = {
         "data": {
@@ -104,14 +112,16 @@ def test_review_list_uses_builtin_module(dev_tools: tuple[DevTools, FakeSubproce
                         ]
                     }
                 }
-            }
+            },
         }
     }
     payload_json = json.dumps(payload)
     runner.set_results(
         [
             create_success_result(
-                OperationId(namespace="tools", category="dev", command="review-infer-repo"),
+                OperationId(
+                    namespace="tools", category="dev", command="review-infer-repo"
+                ),
                 stdout="git@github.com:owner/repo.git\n",
             ),
             create_success_result(

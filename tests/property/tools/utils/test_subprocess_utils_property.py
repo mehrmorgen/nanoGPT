@@ -17,6 +17,7 @@ from ml_playground.tools.utils.subprocess_utils import (
 
 from tests.property.tools._helpers import DeterministicRunner
 
+
 @settings(max_examples=40, deadline=None, derandomize=True)
 @given(
     command=st.lists(st.text(min_size=0, max_size=5), min_size=1, max_size=5),
@@ -82,9 +83,17 @@ def test_run_pytest_command_adds_default_flags(args: list[str]) -> None:
     assert result.success is True
     call = runner.calls[0]
     assert call.kind == "pytest"
-    expected_prefix = ["pytest", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
+    expected_prefix = [
+        "pytest",
+        "-n",
+        "auto",
+        "-W",
+        "error",
+        "--strict-markers",
+        "--strict-config",
+    ]
     assert call.args[: len(expected_prefix)] == expected_prefix
-    assert call.args[len(expected_prefix):] == args
+    assert call.args[len(expected_prefix) :] == args
 
 
 @settings(max_examples=50, deadline=None, derandomize=True)

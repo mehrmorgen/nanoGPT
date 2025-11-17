@@ -6,7 +6,12 @@ import hypothesis.strategies as st
 from hypothesis import given, settings
 
 from ml_playground.tools.core.config import ToolsConfig
-from ml_playground.tools.core.runtime import ToolsCLIState, load_config_with_error_handling, reset_state, set_config
+from ml_playground.tools.core.runtime import (
+    ToolsCLIState,
+    load_config_with_error_handling,
+    reset_state,
+    set_config,
+)
 
 
 @settings(max_examples=50, deadline=None, derandomize=True)
@@ -15,7 +20,9 @@ from ml_playground.tools.core.runtime import ToolsCLIState, load_config_with_err
     verbosity=st.integers(min_value=0, max_value=5),
     dry_run=st.booleans(),
 )
-def test_state_reset_clears_fields(learning: bool, verbosity: int, dry_run: bool) -> None:
+def test_state_reset_clears_fields(
+    learning: bool, verbosity: int, dry_run: bool
+) -> None:
     """reset_state should return the CLI state to default values."""
     state = ToolsCLIState()
     state.learning_mode = learning

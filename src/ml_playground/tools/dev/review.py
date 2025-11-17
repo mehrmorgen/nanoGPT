@@ -12,11 +12,9 @@ from ..utils.subprocess_utils import SubprocessRunner
 
 
 class _ReviewModuleProtocol(Protocol):
-    def infer_repo(self, remote: str) -> tuple[str, str]:
-        ...
+    def infer_repo(self, remote: str) -> tuple[str, str]: ...
 
-    def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> Any:
-        ...
+    def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> Any: ...
 
     def apply_filters(
         self,
@@ -25,8 +23,7 @@ class _ReviewModuleProtocol(Protocol):
         unreplied: bool,
         unresolved: bool,
         viewer: str | None,
-    ) -> list[Any]:
-        ...
+    ) -> list[Any]: ...
 
     def render_threads(
         self,
@@ -36,20 +33,15 @@ class _ReviewModuleProtocol(Protocol):
         unreplied: bool,
         unresolved: bool,
         viewer: str | None,
-    ) -> list[str]:
-        ...
+    ) -> list[str]: ...
 
-    def load_replies(self, replies_file: Path) -> dict[str, str]:
-        ...
+    def load_replies(self, replies_file: Path) -> dict[str, str]: ...
 
-    def bulk_reply(self, *, fetch: Any, replies: dict[str, str]) -> None:
-        ...
+    def bulk_reply(self, *, fetch: Any, replies: dict[str, str]) -> None: ...
 
-    def load_comment_targets(self, path: Path) -> list[str]:
-        ...
+    def load_comment_targets(self, path: Path) -> list[str]: ...
 
-    def comment_lookup(self, fetch: Any) -> dict[str, str]:
-        ...
+    def comment_lookup(self, fetch: Any) -> dict[str, str]: ...
 
 
 def run_review_list(
@@ -62,9 +54,7 @@ def run_review_list(
     review_module_factory: Callable[[], object] | None = None,
 ) -> ToolResult:
     """List GitHub PR review comments with optional filtering."""
-    operation_id = OperationId(
-        namespace="tools", category="dev", command="review-list"
-    )
+    operation_id = OperationId(namespace="tools", category="dev", command="review-list")
     try:
         review = _resolve_review_module(
             subprocess_runner=subprocess_runner,
@@ -157,7 +147,7 @@ def run_review_delete(
         namespace="tools", category="dev", command="review-delete"
     )
     try:
-        review = _ReviewModule(subprocess_runner, root_path)
+        review = ReviewModule(subprocess_runner, root_path)
         owner, repo = review.infer_repo(remote)
         fetch_result = review.fetch_review_threads(owner, repo, pr_number)
         targets = review.load_comment_targets(comments_file)
@@ -204,8 +194,8 @@ def run_review_delete(
         )
 
 
-class _ReviewModule:
-    """Internal review module for GitHub PR operations."""
+class ReviewModule:
+    """Review module for GitHub PR operations."""
 
     def __init__(self, subprocess_runner: SubprocessRunner, root_path: Path):
         self.subprocess_runner = subprocess_runner
@@ -237,9 +227,7 @@ class _ReviewModule:
             self.created_at = created_at
 
     class _Thread:
-        def __init__(
-            self, url: str, is_resolved: bool, comments: list[Any]
-        ) -> None:
+        def __init__(self, url: str, is_resolved: bool, comments: list[Any]) -> None:
             self.url = url
             self.is_resolved = is_resolved
             self.comments = comments
@@ -324,9 +312,7 @@ class _ReviewModule:
             "-F",
             f"pr={pr_number}",
         ]
-        op_id = OperationId(
-            namespace="tools", category="dev", command="review-fetch"
-        )
+        op_id = OperationId(namespace="tools", category="dev", command="review-fetch")
         res = self._exec(args, operation_id=op_id)
         if not res.success:
             raise ToolExecutionError(
@@ -362,12 +348,12 @@ class _ReviewModule:
             tdict = _as_dict(t)
             is_resolved = bool(tdict.get("isResolved", False))
             comments_nodes = _as_list(_as_dict(tdict.get("comments")).get("nodes"))
-            comments: list[_ReviewModule._Comment] = []
+            comments: list[ReviewModule._Comment] = []
             for c in comments_nodes:
                 cdict = _as_dict(c)
                 author_login = _as_dict(cdict.get("author")).get("login") or ""
                 comments.append(
-                    _ReviewModule._Comment(
+                    ReviewModule._Comment(
                         author=str(author_login)
                         if isinstance(author_login, str)
                         else "",
@@ -391,10 +377,12 @@ class _ReviewModule:
                 )
             thread_url = comments[0].url if comments else ""
             threads.append(
-                _ReviewModule._Thread(url=thread_url, is_resolved=is_resolved, comments=comments)
+                ReviewModule._Thread(
+                    url=thread_url, is_resolved=is_resolved, comments=comments
+                )
             )
 
-        return _ReviewModule._FetchResult(threads=threads, viewer=viewer)
+        return ReviewModule._FetchResult(threads=threads, viewer=viewer)
 
     def apply_filters(
         self,
@@ -520,9 +508,7 @@ class _ReviewModule:
             if not result.success:
                 raise ToolExecutionError(
                     "Failed to send reply via GitHub CLI",
-                    reason=result.stderr
-                    or result.stdout
-                    or "gh api graphql failed",
+                    reason=result.stderr or result.stdout or "gh api graphql failed",
                     rationale=(
                         "Ensure your GitHub token has permission to comment on the PR "
                         "and that the comment identifier matches an existing thread."
@@ -565,4 +551,4 @@ def _resolve_review_module(
 ) -> _ReviewModuleProtocol:
     if review_module_factory is not None:
         return cast(_ReviewModuleProtocol, review_module_factory())
-    return _ReviewModule(subprocess_runner, root_path)
+    return ReviewModule(subprocess_runner, root_path)

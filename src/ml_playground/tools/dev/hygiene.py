@@ -7,7 +7,9 @@ from ..core.interfaces import OperationId, ToolResult
 from ..utils.subprocess_utils import SubprocessRunner
 
 
-def run_cleanup_ignored_tracked(subprocess_runner: SubprocessRunner, root_path: Path) -> ToolResult:
+def run_cleanup_ignored_tracked(
+    subprocess_runner: SubprocessRunner, root_path: Path
+) -> ToolResult:
     """Clean up Git-ignored files that are still tracked."""
     operation_id = OperationId(
         namespace="tools", category="dev", command="cleanup-ignored-tracked"
@@ -62,15 +64,13 @@ def run_cleanup_ignored_tracked(subprocess_runner: SubprocessRunner, root_path: 
         )
 
 
-def run_kill_port(port: int, subprocess_runner: SubprocessRunner, root_path: Path) -> ToolResult:
+def run_kill_port(
+    port: int, subprocess_runner: SubprocessRunner, root_path: Path
+) -> ToolResult:
     """Kill processes running on a specific port."""
-    operation_id = OperationId(
-        namespace="tools", category="dev", command="kill-port"
-    )
+    operation_id = OperationId(namespace="tools", category="dev", command="kill-port")
     try:
-        pids = list(
-            dict.fromkeys(_pids_by_port(port))
-        )  # dedupe, preserve order
+        pids = list(dict.fromkeys(_pids_by_port(port)))  # dedupe, preserve order
         if not pids:
             return ToolResult.create(
                 success=True,

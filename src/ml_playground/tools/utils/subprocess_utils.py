@@ -259,7 +259,7 @@ def format_command(command: List[str]) -> str:
 
 
 # Default global instance for tools that don't inject their own runner
-_default_runner = RealSubprocessRunner()
+_default_runner: SubprocessRunner = RealSubprocessRunner()
 
 
 @contextmanager

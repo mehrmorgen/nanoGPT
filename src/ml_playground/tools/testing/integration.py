@@ -33,7 +33,9 @@ def run_integration(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="test", command="integration")
+    operation_id = OperationId(
+        namespace="tools", category="test", command="integration"
+    )
 
     result = subprocess_runner.run_pytest_command(
         ["-m", "integration", "--no-cov", *args],
@@ -68,19 +70,22 @@ def _clean_pytest_output(output: str) -> str:
 
     for line in lines:
         # Skip progress indicators and xdist status
-        if any(skip in line for skip in [
-            "test session starts",
-            "[gw",
-            "workers [",
-            "scheduling",
-            ".",
-            "=",
-            "PASSED",
-            "FAILED",
-            "ERROR",
-            "warnings summary",
-            "short test summary",
-        ]):
+        if any(
+            skip in line
+            for skip in [
+                "test session starts",
+                "[gw",
+                "workers [",
+                "scheduling",
+                ".",
+                "=",
+                "PASSED",
+                "FAILED",
+                "ERROR",
+                "warnings summary",
+                "short test summary",
+            ]
+        ):
             continue
         cleaned_lines.append(line)
 

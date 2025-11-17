@@ -100,7 +100,9 @@ def test_coverage_threshold_delegates(
 
     tools = testing_module.TestingTools(ToolsConfig(), tmp_path, DeterministicRunner())
     with override_attr(coverage_module, "run_coverage_threshold", fake_run_threshold):
-        result = tools.coverage_threshold(args, line_threshold=90.0, branch_threshold=80.0)
+        result = tools.coverage_threshold(
+            args, line_threshold=90.0, branch_threshold=80.0
+        )
 
     assert result.success is True
     kwargs = seen[0][0]
@@ -154,7 +156,9 @@ def test_mutation_run_executes_steps(
         with override_attr(mutation_module, "mutation_summary", summary_stub):
             with override_attr(mutation_module, "mutation_init", recorder("init")):
                 with override_attr(mutation_module, "mutation_exec", recorder("exec")):
-                    with override_attr(mutation_module, "mutation_report", recorder("report")):
+                    with override_attr(
+                        mutation_module, "mutation_report", recorder("report")
+                    ):
                         result = tools.mutation_run([])
 
     assert result.success is True

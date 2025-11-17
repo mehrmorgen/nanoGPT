@@ -35,7 +35,9 @@ def run_deadcode(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="quality", command="deadcode")
+    operation_id = OperationId(
+        namespace="tools", category="quality", command="deadcode"
+    )
 
     vulture_args = ["vulture", str(pkg_path), "--min-confidence", "90"]
     if args:

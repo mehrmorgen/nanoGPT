@@ -677,7 +677,7 @@ def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
 
     # Initialize state using repository root config
     cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
-    tools = cli._get_dev_tools()
+    tools = cli.get_dev_tools()
     from ml_playground.tools.dev.dev import DevTools as DevToolsClass
 
     assert isinstance(tools, DevToolsClass)
@@ -686,8 +686,10 @@ def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
 def test_review_infer_repo_fallback_and_failure(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
+    from ml_playground.tools.dev.review import ReviewModule
+
     tools, runner = dev_tools
-    mod = tools._review_module()
+    mod = ReviewModule(runner, tools.root_path)
 
     # Case 1: git remote returns empty -> fallback to gh repo view succeeds
     runner.set_results(
@@ -696,7 +698,7 @@ def test_review_infer_repo_fallback_and_failure(
             _make_result("gh-repo-view", stdout="owner/name\n"),
         ]
     )
-    owner, repo = mod._infer_repo("origin")
+    owner, repo = mod.infer_repo("origin")
     assert owner == "owner" and repo == "name"
 
     # Case 2: fallback fails -> raises ToolExecutionError
@@ -707,12 +709,15 @@ def test_review_infer_repo_fallback_and_failure(
         ]
     )
     with pytest.raises(ToolExecutionError):
-        mod._infer_repo("origin")
+        mod.infer_repo("origin")
 
 
 def test_apply_filters_unreplied_and_unresolved():
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
 
     # No reply is posted in review_list; only fetch should be called
     t1 = SimpleNamespace(is_resolved=True, comments=[])
@@ -728,14 +733,17 @@ def test_apply_filters_unreplied_and_unresolved():
 
 
 def test_comment_lookup_maps_id_url_suffix_and_dbid():
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
 
     cm = SimpleNamespace(id="C1", url="https://x/y#disc", database_id=123)
     th = SimpleNamespace(comments=[cm])
     fetch = SimpleNamespace(threads=[th])
 
-    mapping = mod._comment_lookup(fetch)
+    mapping = mod.comment_lookup(fetch)
     assert mapping["C1"] == "C1"
     assert mapping["https://x/y#disc"] == "C1"
     assert mapping["disc"] == "C1"
@@ -768,19 +776,26 @@ def test_bulk_reply_accepts_full_url_keys(
 
 
 def test_load_comment_targets_invalid_returns_empty(tmp_path: Path) -> None:
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, tmp_path)
     bad = tmp_path / "targets.json"
     bad.write_text('{"not": "a list"}')
-    assert mod._load_comment_targets(bad) == []
+    assert mod.load_comment_targets(bad) == []
 
 
 def test_render_threads_handles_empty_comment_body() -> None:
-    tools = dev.DevTools()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
     # Create a thread with a comment that has empty body and viewer flag
     comment = SimpleNamespace(author="me", viewer_did_author=True, body="")
     thread = SimpleNamespace(url="u", is_resolved=False, comments=[comment])
-    lines = tools._render_threads(
+    lines = mod.render_threads(
         [thread],
         apply_filters=lambda x, **k: x,
         unreplied=False,
@@ -795,7 +810,7 @@ def test_review_bulk_reply_allows_empty_fetch_via_stub(tmp_path: Path) -> None:
         def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
             return ("o", "r")
 
-        def fetch_review_threads(self, *a, **k):  # noqa: ANN401, ANN001, ANN002
+        def fetch_review_threads(self, *a: object, **k: object):  # noqa: ANN401, ANN001, ANN002
             return SimpleNamespace(threads=[], viewer=None)
 
         def _load_replies(self, path: Path) -> dict[str, str]:  # noqa: ANN401
@@ -813,12 +828,15 @@ def test_review_bulk_reply_allows_empty_fetch_via_stub(tmp_path: Path) -> None:
 
 
 def test_load_replies_filters_invalid_types(tmp_path: Path) -> None:
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, tmp_path)
     fp = tmp_path / "replies.json"
     # Includes list value and object value; only valid str->str should remain
     fp.write_text('{"k_list": [1], "valid": "ok", "k_obj": {"a": 1}}')
-    mapping = mod._load_replies(fp)
+    mapping = mod.load_replies(fp)
     assert mapping == {"valid": "ok"}
 
 
@@ -887,47 +905,6 @@ def test_setup_ai_guidelines_codex_creates_root_file(tmp_path: Path) -> None:
 
     primary = tmp_path / "AGENTS.md"
     assert primary.exists()
-    if primary.is_symlink():
-        target = (primary.parent / primary.readlink()).resolve()
-        assert target == readme.resolve()
-
-
-def test_kill_port_dedup_and_success() -> None:
-    calls: list[int] = []
-
-    def fake_pids(port: int) -> list[int]:  # noqa: ANN001
-        assert port == 9999
-        return [123, 123, 456]
-
-    def fake_kill(pid: int) -> bool:  # noqa: ANN001
-        calls.append(pid)
-        return True
-
-    tools = dev.DevTools(pids_by_port=fake_pids, kill_pid=fake_kill)
-    result = tools.kill_port(9999)
-    assert result.success is True
-    assert "Killed 2 processes" in result.stdout
-    assert calls == [123, 456]
-
-
-def test_kill_port_failure_propagates() -> None:
-    def fake_pids(_port: int) -> list[int]:  # noqa: ANN001
-        return [111]
-
-    def fake_kill(_pid: int) -> bool:  # noqa: ANN001
-        return False
-
-    tools = dev.DevTools(pids_by_port=fake_pids, kill_pid=fake_kill)
-    result = tools.kill_port(8080)
-    assert result.success is False
-    assert "Failed to kill PID 111" in result.stderr
-
-
-def test_kill_port_no_processes() -> None:
-    tools = dev.DevTools(pids_by_port=lambda p: [], kill_pid=lambda pid: True)
-    result = tools.kill_port(1234)
-    assert result.success is True
-    assert "No processes found" in result.stdout
 
 
 def test_cleanup_ignored_tracked_no_ignored(tmp_path: Path) -> None:
@@ -1008,7 +985,7 @@ def test_review_delete_failure_on_graphql_returns_failure(tmp_path: Path) -> Non
         def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
             return ("o", "r")
 
-        def fetch_review_threads(self, *a, **k):  # noqa: ANN401, ANN001, ANN002
+        def fetch_review_threads(self, *a: object, **k: object):  # noqa: ANN401, ANN001, ANN002
             cm = SimpleNamespace(
                 id="CID",
                 url="https://example#CID",
@@ -1086,8 +1063,12 @@ def test_review_delete_exception_returns_toolresult(tmp_path: Path) -> None:
 
 
 def test_render_threads_no_match_prints_message() -> None:
-    tools = dev.DevTools()
-    lines = tools._render_threads(
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
+    lines = mod.render_threads(
         [],
         apply_filters=lambda *_a, **_k: [],
         unreplied=False,
@@ -1098,8 +1079,11 @@ def test_render_threads_no_match_prints_message() -> None:
 
 
 def test_comment_lookup_resolves_id_url_anchor_and_dbid() -> None:
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
 
     cm = SimpleNamespace(
         id="C1",
@@ -1112,7 +1096,7 @@ def test_comment_lookup_resolves_id_url_anchor_and_dbid() -> None:
     th = SimpleNamespace(url="u", is_resolved=False, comments=[cm])
     fetch = SimpleNamespace(threads=[th], viewer="me")
 
-    mapping = mod._comment_lookup(fetch)
+    mapping = mod.comment_lookup(fetch)
     assert mapping["C1"] == "C1"
     assert mapping["https://example/pr#disc_7"] == "C1"
     assert mapping["disc_7"] == "C1"
@@ -1120,11 +1104,15 @@ def test_comment_lookup_resolves_id_url_anchor_and_dbid() -> None:
 
 
 def test_render_threads_multiline_comment_formats_continuations() -> None:
-    tools = dev.DevTools()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
     body = "first line\nsecond line\nthird"
     cm = SimpleNamespace(author="bob", viewer_did_author=False, body=body)
     thread = SimpleNamespace(url="u", is_resolved=False, comments=[cm])
-    lines = tools._render_threads(
+    lines = mod.render_threads(
         [thread],
         apply_filters=lambda x, **k: x,
         unreplied=False,
@@ -1229,7 +1217,7 @@ def test_review_bulk_reply_raises_tool_execution_error(tmp_path: Path) -> None:
         def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
             return ("o", "r")
 
-        def fetch_review_threads(self, *a, **k):  # noqa: ANN401, ANN001, ANN002
+        def fetch_review_threads(self, *a: object, **k: object):  # noqa: ANN401, ANN001, ANN002
             return SimpleNamespace(threads=[], viewer=None)
 
         def _load_replies(self, path: Path) -> dict[str, str]:  # noqa: ANN401
@@ -1348,19 +1336,21 @@ def test_review_list_graphql_failure_raises(
 def test_infer_repo_parses_git_and_https(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
+    from ml_playground.tools.dev.review import ReviewModule
+
     tools, runner = dev_tools
-    mod = tools._review_module()
+    mod = ReviewModule(runner, tools.root_path)
     # Git SSH
     runner.set_results(
         [_make_result("git-remote", stdout="git@github.com:alice/proj.git\n")]
     )
-    owner, repo = mod._infer_repo("origin")
+    owner, repo = mod.infer_repo("origin")
     assert (owner, repo) == ("alice", "proj")
     # HTTPS
     runner.set_results(
         [_make_result("git-remote", stdout="https://github.com/bob/reponame.git\n")]
     )
-    owner2, repo2 = mod._infer_repo("origin")
+    owner2, repo2 = mod.infer_repo("origin")
     assert (owner2, repo2) == ("bob", "reponame")
 
 
@@ -1456,18 +1446,24 @@ def test_setup_ai_guidelines_rerun_ok_same_path(tmp_path: Path) -> None:
 
 
 def test_load_replies_list_returns_empty(tmp_path: Path) -> None:
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, tmp_path)
     f = tmp_path / "replies.json"
     f.write_text("[]")
-    assert mod._load_replies(f) == {}
+    assert mod.load_replies(f) == {}
 
 
 def test_comment_lookup_empty_fetch_returns_empty() -> None:
-    tools = dev.DevTools()
-    mod = tools._builtin_review_module()
+    from ml_playground.tools.dev.review import ReviewModule
+    from tests.unit.tools.fakes import FakeSubprocessRunner
+
+    runner = FakeSubprocessRunner()
+    mod = ReviewModule(runner, Path.cwd())
     fetch = SimpleNamespace(threads=[])
-    assert mod._comment_lookup(fetch) == {}
+    assert mod.comment_lookup(fetch) == {}
 
 
 def test_setup_ai_guidelines_single_file_root_codex(

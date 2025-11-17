@@ -35,7 +35,9 @@ def run_basedpyright(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="quality", command="basedpyright")
+    operation_id = OperationId(
+        namespace="tools", category="quality", command="basedpyright"
+    )
 
     basedpyright_args = ["basedpyright", str(pkg_path)]
     if args:
@@ -143,7 +145,9 @@ def run_typecheck(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="quality", command="typecheck")
+    operation_id = OperationId(
+        namespace="tools", category="quality", command="typecheck"
+    )
 
     # Run BasedPyright first
     basedpyright_result = run_basedpyright(

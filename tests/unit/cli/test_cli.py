@@ -11,7 +11,16 @@ import typer
 from typer.testing import CliRunner
 
 import ml_playground.runtime.cli.main as cli
-from ml_playground.runtime.cli.main import app, override_cli_dependencies, CLIDependencies, get_command, global_options, run_train_cmd, run_sample_cmd, main
+from ml_playground.runtime.cli.main import (
+    app,
+    override_cli_dependencies,
+    CLIDependencies,
+    get_command,
+    global_options,
+    run_train_cmd,
+    run_sample_cmd,
+    main,
+)
 from ml_playground.runtime.core.results import ToolResult
 from ml_playground.configuration.models import ExperimentConfig
 from ml_playground.configuration import loading as config_loading

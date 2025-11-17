@@ -47,13 +47,17 @@ def run_workflow_status(
         "timestamp": _get_timestamp(),
         "project_root": str(project_root_path),
         "git_status": _get_git_status(project_root_path, subprocess_runner),
-        "quality_status": _get_quality_status(config, project_root_path, subprocess_runner),
+        "quality_status": _get_quality_status(
+            config, project_root_path, subprocess_runner
+        ),
         "test_status": _get_test_status(config, project_root_path, subprocess_runner),
-        "coverage_status": _get_coverage_status(config, project_root_path, subprocess_runner),
+        "coverage_status": _get_coverage_status(
+            config, project_root_path, subprocess_runner
+        ),
         "readiness": _assess_readiness(
             _get_quality_status(config, project_root_path, subprocess_runner),
             _get_test_status(config, project_root_path, subprocess_runner),
-            _get_git_status(project_root_path, subprocess_runner)
+            _get_git_status(project_root_path, subprocess_runner),
         ),
     }
 
@@ -62,6 +66,7 @@ def run_workflow_status(
         formatted_output = json.dumps(status_data, indent=2)
     elif output_format.lower() == "yaml":
         import yaml
+
         formatted_output = yaml.dump(status_data, default_flow_style=False)
     else:
         formatted_output = _format_status_text_output(status_data)
@@ -75,7 +80,9 @@ def run_workflow_status(
     )
 
 
-def _get_git_status(project_root_path: Path, subprocess_runner: SubprocessRunner) -> Dict[str, Any]:
+def _get_git_status(
+    project_root_path: Path, subprocess_runner: SubprocessRunner
+) -> Dict[str, Any]:
     """Get git status information."""
     try:
         # Get current branch
@@ -111,10 +118,14 @@ def _get_git_status(project_root_path: Path, subprocess_runner: SubprocessRunner
         return {"status": "unknown", "error": "Could not determine git status"}
 
 
-def _get_quality_status(config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner) -> Dict[str, Any]:
+def _get_quality_status(
+    config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner
+) -> Dict[str, Any]:
     """Get quick quality status."""
     try:
-        quality_results = _run_quality_batch(config, project_root_path, subprocess_runner)
+        quality_results = _run_quality_batch(
+            config, project_root_path, subprocess_runner
+        )
         return {
             "overall_status": quality_results["overall"]["status"],
             "issues_count": quality_results["overall"]["total_issues"],
@@ -128,10 +139,14 @@ def _get_quality_status(config: ToolsConfig, project_root_path: Path, subprocess
         return {"status": "unknown", "error": "Could not determine quality status"}
 
 
-def _get_test_status(config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner) -> Dict[str, Any]:
+def _get_test_status(
+    config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner
+) -> Dict[str, Any]:
     """Get quick test status."""
     try:
-        test_results = _run_test_batch_simple(config, project_root_path, subprocess_runner)
+        test_results = _run_test_batch_simple(
+            config, project_root_path, subprocess_runner
+        )
         return {
             "overall_status": test_results["overall"]["status"],
             "total_tests": test_results["overall"]["total_tests"],
@@ -144,7 +159,9 @@ def _get_test_status(config: ToolsConfig, project_root_path: Path, subprocess_ru
         return {"status": "unknown", "error": "Could not determine test status"}
 
 
-def _get_coverage_status(config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner) -> Dict[str, Any]:
+def _get_coverage_status(
+    config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner
+) -> Dict[str, Any]:
     """Get coverage status."""
     try:
         testing_tools = TestingTools(config, project_root_path, subprocess_runner)
@@ -233,9 +250,7 @@ def _run_quality_batch(
         results["lint"] = {
             "status": "passed" if lint_result.success else "failed",
             "exit_code": lint_result.exit_code,
-            "issues": len(lint_result.stderr.splitlines())
-            if lint_result.stderr
-            else 0,
+            "issues": len(lint_result.stderr.splitlines()) if lint_result.stderr else 0,
             "output": lint_result.stdout[:500]
             if lint_result.stdout
             else "",  # Truncate for batch
@@ -260,9 +275,7 @@ def _run_quality_batch(
             "errors": len(typecheck_result.stderr.splitlines())
             if typecheck_result.stderr
             else 0,
-            "output": typecheck_result.stdout[:500]
-            if typecheck_result.stdout
-            else "",
+            "output": typecheck_result.stdout[:500] if typecheck_result.stdout else "",
         }
         if not typecheck_result.success:
             overall_success = False
@@ -284,9 +297,7 @@ def _run_quality_batch(
             "unused_items": len(deadcode_result.stdout.splitlines())
             if deadcode_result.stdout
             else 0,
-            "output": deadcode_result.stdout[:500]
-            if deadcode_result.stdout
-            else "",
+            "output": deadcode_result.stdout[:500] if deadcode_result.stdout else "",
         }
         if not deadcode_result.success:
             overall_success = False
@@ -308,7 +319,9 @@ def _run_quality_batch(
     return results
 
 
-def _run_test_batch_simple(config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner) -> Dict[str, Any]:
+def _run_test_batch_simple(
+    config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner
+) -> Dict[str, Any]:
     """Run simple batch test summary and return structured results."""
     testing_tools = TestingTools(config, project_root_path, subprocess_runner)
 
@@ -408,9 +421,7 @@ def _format_status_text_output(status_data: Dict[str, Any]) -> str:
     # Quality status
     quality = status_data.get("quality_status", {})
     quality_icon = "✓" if quality.get("overall_status") == "passed" else "✗"
-    output += (
-        f"Quality: {quality_icon} {quality.get('overall_status', 'unknown')}\n"
-    )
+    output += f"Quality: {quality_icon} {quality.get('overall_status', 'unknown')}\n"
 
     # Test status
     test = status_data.get("test_status", {})

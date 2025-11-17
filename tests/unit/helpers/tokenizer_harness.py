@@ -6,8 +6,6 @@ import numpy as np
 import numpy.typing as npt
 from abc import ABC, abstractmethod
 
-from ml_playground.core.tokenizer_protocol import Tokenizer
-
 
 class TokenizerTestHarness(ABC):
     """Base test harness exposing lookup array maintenance for tokenizers."""

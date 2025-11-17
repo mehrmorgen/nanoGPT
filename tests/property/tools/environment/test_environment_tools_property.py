@@ -19,7 +19,11 @@ from tests.property.tools._helpers import DeterministicRunner
     frozen=st.booleans(),
 )
 def test_sync_constructs_uv_arguments(
-    args: list[str], groups: list[str] | None, all_groups: bool, frozen: bool, tmp_path: Path
+    args: list[str],
+    groups: list[str] | None,
+    all_groups: bool,
+    frozen: bool,
+    tmp_path: Path,
 ) -> None:
     """sync should translate flags into the underlying uv command."""
     runner = DeterministicRunner()

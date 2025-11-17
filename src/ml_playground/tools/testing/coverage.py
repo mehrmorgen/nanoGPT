@@ -37,7 +37,9 @@ def run_coverage_test(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="test", command="coverage-test")
+    operation_id = OperationId(
+        namespace="tools", category="test", command="coverage-test"
+    )
 
     # Clean up existing coverage data
     coverage_file = cache_dir / "coverage" / "coverage.sqlite"
@@ -88,11 +90,7 @@ def run_coverage_test(
             ],
         )
 
-    if (
-        result.success
-        and coverage_file.exists()
-        and coverage_file.stat().st_size > 0
-    ):
+    if result.success and coverage_file.exists() and coverage_file.stat().st_size > 0:
         fingerprint = _compute_coverage_fingerprint(root_path)
         manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
         _write_coverage_manifest(manifest_path, fingerprint=fingerprint)
@@ -128,7 +126,9 @@ def run_coverage_report(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="test", command="coverage-report")
+    operation_id = OperationId(
+        namespace="tools", category="test", command="coverage-report"
+    )
 
     executed, notes, env = _ensure_coverage_data(
         config=config,
@@ -148,6 +148,7 @@ def run_coverage_report(
     ci_strict = os.environ.get("CI", "").lower() == "true"
     if ci_strict and coverage_file.stat().st_size == 0:
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Coverage data file is empty",
             reason="Coverage file exists but contains no data",
@@ -189,6 +190,7 @@ def run_coverage_report(
                 )
             except Exception:  # pragma: no cover - defensive guard
                 from ..core.errors import ToolExecutionError
+
                 raise ToolExecutionError(
                     f"Failed to generate {description}",
                     reason="Coverage report generation failed",
@@ -337,6 +339,7 @@ def run_coverage(
 
     if learning_mode:
         from ..core.interfaces import LearningInfo
+
         learning = LearningInfo()
         if report_result.learning_info:
             learning.commands_executed.extend(
@@ -395,7 +398,9 @@ def run_coverage_threshold(
     Returns:
         ToolResult with execution details and learning information
     """
-    operation_id = OperationId(namespace="tools", category="test", command="coverage-threshold")
+    operation_id = OperationId(
+        namespace="tools", category="test", command="coverage-threshold"
+    )
 
     executed, notes, env = _ensure_coverage_data(
         config=config,
@@ -421,6 +426,7 @@ def run_coverage_threshold(
     coverage_file = cache_dir / "coverage" / "coverage.sqlite"
     if not coverage_file.exists():
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Coverage data file not found",
             reason=f"Missing coverage file: {coverage_file}",
@@ -442,6 +448,7 @@ def run_coverage_threshold(
 
     if not json_path.exists():
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Failed to generate coverage JSON report",
             reason="Coverage JSON file was not created",
@@ -455,6 +462,7 @@ def run_coverage_threshold(
         totals = coverage_data["totals"]
     except (json.JSONDecodeError, KeyError) as exc:
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Failed to parse coverage data",
             reason=f"Invalid coverage JSON: {exc}",
@@ -521,6 +529,7 @@ def run_coverage_threshold(
 
     all_passed = line_pass and branch_pass
     from .coverage_helpers import collect_undercovered_files, format_undercovered_tree
+
     coverage_files = collect_undercovered_files(coverage_data)
     # Always report under-covered files if any exist, regardless of threshold pass/fail
     if coverage_files:
@@ -576,6 +585,7 @@ def run_coverage_threshold(
 
 # Helper functions (extracted from original TestingTools methods)
 
+
 def _clean_pytest_output(output: str) -> str:
     """Remove pytest progress lines and xdist status messages."""
     lines = output.splitlines()
@@ -583,19 +593,22 @@ def _clean_pytest_output(output: str) -> str:
 
     for line in lines:
         # Skip progress indicators and xdist status
-        if any(skip in line for skip in [
-            "test session starts",
-            "[gw",
-            "workers [",
-            "scheduling",
-            ".",
-            "=",
-            "PASSED",
-            "FAILED",
-            "ERROR",
-            "warnings summary",
-            "short test summary",
-        ]):
+        if any(
+            skip in line
+            for skip in [
+                "test session starts",
+                "[gw",
+                "workers [",
+                "scheduling",
+                ".",
+                "=",
+                "PASSED",
+                "FAILED",
+                "ERROR",
+                "warnings summary",
+                "short test summary",
+            ]
+        ):
             continue
         cleaned_lines.append(line)
 
@@ -620,18 +633,21 @@ def _coverage_env(coverage_file: Path, cache_dir: Path) -> dict[str, str]:
 def _compute_coverage_fingerprint(root_path: Path) -> str:
     """Compute a fingerprint representing the current coverage-relevant sources."""
     from .coverage_helpers import compute_coverage_fingerprint
+
     return compute_coverage_fingerprint(root_path)
 
 
 def _read_coverage_manifest(manifest_path: Path) -> dict[str, str] | None:
     """Load the stored coverage fingerprint manifest if it exists."""
     from .coverage_helpers import read_coverage_manifest
+
     return read_coverage_manifest(manifest_path)
 
 
 def _write_coverage_manifest(manifest_path: Path, *, fingerprint: str) -> None:
     """Persist the current coverage fingerprint."""
     from .coverage_helpers import write_coverage_manifest
+
     write_coverage_manifest(manifest_path, fingerprint=fingerprint)
 
 
@@ -654,6 +670,7 @@ def _format_coverage_status(
 def _format_command(command: list[str]) -> str:
     """Format a command for display."""
     from .coverage_helpers import format_command
+
     return format_command(command)
 
 
@@ -699,6 +716,7 @@ def _ensure_coverage_data(
     )
     if isinstance(combine_result, ToolResult):
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Coverage fragment combination failed",
             reason=combine_result.stderr or "Unknown error during coverage combination",
@@ -728,9 +746,11 @@ def _ensure_coverage_data(
     )
     if isinstance(generation_result, ToolResult):
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Coverage data generation failed",
-            reason=generation_result.stderr or "Unknown error during coverage generation",
+            reason=generation_result.stderr
+            or "Unknown error during coverage generation",
             rationale="Coverage data must be generated for threshold analysis",
         )
     notes.extend(generation_notes)
@@ -745,6 +765,7 @@ def _ensure_coverage_data(
     )
     if isinstance(combine_result, ToolResult):
         from ..core.errors import ToolExecutionError
+
         raise ToolExecutionError(
             "Coverage fragment combination failed",
             reason=combine_result.stderr or "Unknown error during coverage combination",
@@ -769,6 +790,7 @@ def _ensure_coverage_data(
         operation_id=operation_id,
     )
     from ..core.errors import ToolExecutionError
+
     raise ToolExecutionError(
         "Coverage data generation failed",
         reason=failure.stderr,
@@ -831,6 +853,7 @@ def _run_coverage_test_for_data(
 
     # Record that we invoked the unified coverage tool to generate data
     from .coverage_helpers import format_tool_invocation
+
     coverage_tool_cmd = format_tool_invocation("coverage", args)
     if coverage_tool_cmd not in executed_commands:
         executed_commands.append(coverage_tool_cmd)

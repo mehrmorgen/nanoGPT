@@ -94,7 +94,9 @@ def run_setup_ai_guidelines(
                     f" {link_path} -> {target_path}: {result.stderr.strip()}"
                 )
 
-        def create_or_update_link(link_path: Path, target_path: Path, dry: bool) -> None:
+        def create_or_update_link(
+            link_path: Path, target_path: Path, dry: bool
+        ) -> None:
             link_exists = False
             link_is_symlink = False
             try:
@@ -113,7 +115,9 @@ def run_setup_ai_guidelines(
             desired_link_repr: str | None = None
             if not is_windows:
                 try:
-                    desired_link_repr = os.path.relpath(target_path, start=link_path.parent)
+                    desired_link_repr = os.path.relpath(
+                        target_path, start=link_path.parent
+                    )
                 except ValueError:
                     desired_link_repr = str(target_path)
             elif target_is_dir:
@@ -136,7 +140,12 @@ def run_setup_ai_guidelines(
                     except OSError:
                         same = False
 
-            if same and link_is_symlink and desired_link_repr is not None and current_link_repr:
+            if (
+                same
+                and link_is_symlink
+                and desired_link_repr is not None
+                and current_link_repr
+            ):
                 if current_link_repr.replace("\\", "/") != desired_link_repr.replace(
                     "\\", "/"
                 ):
@@ -202,7 +211,9 @@ def run_setup_ai_guidelines(
                 except OSError as exc:
                     err(f"failed to create symlink {link_path} -> {target_path}: {exc}")
 
-        def mirror_tree(src_dir: Path, dest_dir: Path, exclude: set[Path] | None, dry: bool) -> None:
+        def mirror_tree(
+            src_dir: Path, dest_dir: Path, exclude: set[Path] | None, dry: bool
+        ) -> None:
             if not src_dir.exists():
                 return
             for entry in src_dir.iterdir():
@@ -231,7 +242,9 @@ def run_setup_ai_guidelines(
                 return project_dir
             return project_dir / path
 
-        def _gitignore_match(relative_path: str, *, directory: bool) -> tuple[bool, str | None]:
+        def _gitignore_match(
+            relative_path: str, *, directory: bool
+        ) -> tuple[bool, str | None]:
             gitignore = project_dir / ".gitignore"
             if not gitignore.exists():
                 return False, None
@@ -264,7 +277,9 @@ def run_setup_ai_guidelines(
             display_path = relative_path.rstrip("/")
             if directory:
                 display_path = (display_path + "/") if display_path else "/"
-            ignored, matched_pattern = _gitignore_match(relative_path, directory=directory)
+            ignored, matched_pattern = _gitignore_match(
+                relative_path, directory=directory
+            )
             if ignored:
                 info(
                     "git    '"
@@ -301,8 +316,7 @@ def run_setup_ai_guidelines(
             spec = PathSpec.from_lines("gitwildmatch", patterns)
             relative_path = _relative_tool_path(tool_dir).rstrip("/")
             return bool(
-                spec.match_file(relative_path)
-                or spec.match_file(relative_path + "/")
+                spec.match_file(relative_path) or spec.match_file(relative_path + "/")
             )
 
         def log_aiignore_status(tool_dir: Path) -> None:

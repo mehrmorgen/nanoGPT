@@ -15,7 +15,6 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-import ml_playground.runtime.cli.main as cli_main
 from ml_playground.runtime.cli.main import (
     app,
     CLIDependencies,
@@ -151,7 +150,7 @@ def test_log_command_status_swallows_log_directory_errors(
         raise OSError("boom")
 
     import ml_playground.runtime.cli as cli_pkg
-    
+
     with override_attr(cli_pkg, "log_directory", boom):
         log_command_status("tag", shared, shared.dataset_dir, logger)
 
@@ -190,7 +189,9 @@ def test_global_device_setup_sets_cuda_state() -> None:
         ),
     )
 
-    global_device_setup("cuda", "float16", 7, torch_module=fake_torch, cuda_is_available=_cuda_available)
+    global_device_setup(
+        "cuda", "float16", 7, torch_module=fake_torch, cuda_is_available=_cuda_available
+    )
 
     assert ("cpu", 7) in seed_calls
     assert ("cuda", 7) in seed_calls

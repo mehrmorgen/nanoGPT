@@ -49,9 +49,7 @@ def run_batch_review(
         "project_root": str(project_root_path),
         "quality_checks": quality_results,
         "test_summary": test_results,
-        "overall_status": _determine_overall_status(
-            quality_results, test_results
-        ),
+        "overall_status": _determine_overall_status(quality_results, test_results),
     }
 
     # Format output
@@ -59,6 +57,7 @@ def run_batch_review(
         formatted_output = json.dumps(batch_results, indent=2)
     elif output_format.lower() == "yaml":
         import yaml
+
         formatted_output = yaml.dump(batch_results, default_flow_style=False)
     else:
         formatted_output = _format_text_output(batch_results)
@@ -73,7 +72,9 @@ def run_batch_review(
 
 
 def _run_quality_batch(
-    config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner | None
+    config: ToolsConfig,
+    project_root_path: Path,
+    subprocess_runner: SubprocessRunner | None,
 ) -> Dict[str, Any]:
     """Run batch quality checks and return structured results."""
     quality_tools = QualityTools(config, project_root_path, subprocess_runner)
@@ -88,9 +89,7 @@ def _run_quality_batch(
         results["lint"] = {
             "status": "passed" if lint_result.success else "failed",
             "exit_code": lint_result.exit_code,
-            "issues": len(lint_result.stderr.splitlines())
-            if lint_result.stderr
-            else 0,
+            "issues": len(lint_result.stderr.splitlines()) if lint_result.stderr else 0,
             "output": lint_result.stdout[:500]
             if lint_result.stdout
             else "",  # Truncate for batch
@@ -115,9 +114,7 @@ def _run_quality_batch(
             "errors": len(typecheck_result.stderr.splitlines())
             if typecheck_result.stderr
             else 0,
-            "output": typecheck_result.stdout[:500]
-            if typecheck_result.stdout
-            else "",
+            "output": typecheck_result.stdout[:500] if typecheck_result.stdout else "",
         }
         if not typecheck_result.success:
             overall_success = False
@@ -139,9 +136,7 @@ def _run_quality_batch(
             "unused_items": len(deadcode_result.stdout.splitlines())
             if deadcode_result.stdout
             else 0,
-            "output": deadcode_result.stdout[:500]
-            if deadcode_result.stdout
-            else "",
+            "output": deadcode_result.stdout[:500] if deadcode_result.stdout else "",
         }
         if not deadcode_result.success:
             overall_success = False
@@ -163,7 +158,11 @@ def _run_quality_batch(
     return results
 
 
-def _run_test_batch(config: ToolsConfig, project_root_path: Path, subprocess_runner: SubprocessRunner | None) -> Dict[str, Any]:
+def _run_test_batch(
+    config: ToolsConfig,
+    project_root_path: Path,
+    subprocess_runner: SubprocessRunner | None,
+) -> Dict[str, Any]:
     """Run batch test summary and return structured results."""
     testing_tools = TestingTools(config, project_root_path, subprocess_runner)
 
@@ -218,14 +217,10 @@ def _run_test_batch(config: ToolsConfig, project_root_path: Path, subprocess_run
             results["coverage"] = {
                 "status": "available",
                 "line_pct": int(
-                    _extract_coverage_percentage(
-                        coverage_result.stdout, "line"
-                    )
+                    _extract_coverage_percentage(coverage_result.stdout, "line")
                 ),
                 "branch_pct": int(
-                    _extract_coverage_percentage(
-                        coverage_result.stdout, "branch"
-                    )
+                    _extract_coverage_percentage(coverage_result.stdout, "branch")
                 ),
             }
         else:
@@ -280,9 +275,7 @@ def _format_text_output(batch_results: Dict[str, Any]) -> str:
             output += f"  {status_icon} {test_type}: {result['status']}\n"
 
     overall = batch_results["overall_status"]
-    output += (
-        f"\nOverall Status: {'✓ PASSED' if overall['success'] else '✗ FAILED'}\n"
-    )
+    output += f"\nOverall Status: {'✓ PASSED' if overall['success'] else '✗ FAILED'}\n"
     output += f"Ready for merge: {'Yes' if overall['ready_for_merge'] else 'No'}\n"
 
     return output

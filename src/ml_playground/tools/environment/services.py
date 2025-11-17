@@ -32,7 +32,9 @@ def run_ai_guidelines(
     Returns:
         ToolResult with execution details
     """
-    operation_id = OperationId(namespace="tools", category="env", command="ai-guidelines")
+    operation_id = OperationId(
+        namespace="tools", category="env", command="ai-guidelines"
+    )
 
     if not tool.strip():
         raise ToolExecutionError(
@@ -45,6 +47,7 @@ def run_ai_guidelines(
     try:
         # Import here to avoid circular import
         from ml_playground.tools.dev.dev import DevTools  # type: ignore[import]
+
         dev = DevTools(
             config=config,
             root_path=root_path,
