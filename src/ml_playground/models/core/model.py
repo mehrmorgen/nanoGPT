@@ -108,7 +108,7 @@ class GPT(nn.Module):
         cls,
         *args: Any,
         **kwargs: Any,
-    ) -> "GPT":  # pragma: no cover - legacy API parity
+    ) -> "GPT":
         raise NotImplementedError("from_pretrained is not supported in this port")
 
     def configure_optimizers(

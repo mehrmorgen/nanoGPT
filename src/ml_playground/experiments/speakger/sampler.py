@@ -51,10 +51,10 @@ class _PeftFactory(Protocol):
 
 
 # Expose names for monkeypatching in tests (compat with previous integration)
-try:  # pragma: no cover - optional heavy deps
+try:
     from transformers import AutoTokenizer as AutoTokenizer  # type: ignore
     from transformers import AutoModelForCausalLM as AutoModelForCausalLM  # type: ignore
-except ImportError:  # pragma: no cover
+except ImportError:
 
     class _FallbackTokenizer:
         def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
@@ -104,9 +104,9 @@ except ImportError:  # pragma: no cover
             return _FallbackModel()
 
 
-try:  # pragma: no cover - optional peft
+try:
     from peft import PeftModel as PeftModel  # type: ignore
-except ImportError:  # pragma: no cover
+except ImportError:
 
     class PeftModel:  # type: ignore[no-redef]
         @staticmethod
