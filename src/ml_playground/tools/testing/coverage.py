@@ -717,9 +717,11 @@ def _ensure_coverage_data(
     if isinstance(combine_result, ToolResult):
         from ..core.errors import ToolExecutionError
 
+        stderr = (combine_result.stderr or "").strip()
+        stdout = (combine_result.stdout or "").strip()
         raise ToolExecutionError(
             "Coverage fragment combination failed",
-            reason=combine_result.stderr or "Unknown error during coverage combination",
+            reason=stderr or stdout or "Unknown error during coverage combination",
             rationale="Coverage data must be properly combined for threshold analysis",
         )
 
@@ -747,10 +749,11 @@ def _ensure_coverage_data(
     if isinstance(generation_result, ToolResult):
         from ..core.errors import ToolExecutionError
 
+        stderr = (generation_result.stderr or "").strip()
+        stdout = (generation_result.stdout or "").strip()
         raise ToolExecutionError(
             "Coverage data generation failed",
-            reason=generation_result.stderr
-            or "Unknown error during coverage generation",
+            reason=stderr or stdout or "Unknown error during coverage generation",
             rationale="Coverage data must be generated for threshold analysis",
         )
     notes.extend(generation_notes)

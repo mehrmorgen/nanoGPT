@@ -390,6 +390,98 @@ def test_run_coverage_report_raises_in_ci_when_file_empty(
                 )
 
 
+def test_ensure_coverage_data_uses_stdout_for_generation_error(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """_ensure_coverage_data should surface stdout when stderr is empty.
+
+    We simulate a failure in _run_coverage_test_for_data that only
+    populates stdout. The resulting ToolExecutionError.reason should
+    contain that stdout text instead of a generic message.
+    """
+
+    def fake_run_for_data(**_: Any) -> tuple[ToolResult, list[str]]:  # type: ignore[override]
+        return (
+            ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="generation via stdout",
+                stderr="",
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="coverage-test"
+                ),
+            ),
+            [],
+        )
+
+    runner = CoverageRunner()
+
+    with override_attr(
+        coverage_module, "_run_coverage_test_for_data", fake_run_for_data
+    ):
+        with pytest.raises(ToolExecutionError) as exc:
+            coverage_module.run_coverage_threshold(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                line_threshold=0.0,
+                branch_threshold=0.0,
+                verbose=False,
+                learning_mode=False,
+                verbosity_level=1,
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+                force_regen=True,
+            )
+
+    assert "generation via stdout" in exc.value.reason
+
+
+def test_ensure_coverage_data_uses_stdout_for_combine_error(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """_ensure_coverage_data should surface stdout for combine failures.
+
+    We simulate a failure in _combine_coverage_fragments that only
+    populates stdout. The resulting ToolExecutionError.reason should
+    contain that stdout text instead of a generic message.
+    """
+
+    def fake_combine(**_: Any) -> tuple[ToolResult, bool]:  # type: ignore[override]
+        return (
+            ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="combine via stdout",
+                stderr="",
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="coverage-combine"
+                ),
+            ),
+            True,
+        )
+
+    runner = CoverageRunner()
+
+    with override_attr(coverage_module, "_combine_coverage_fragments", fake_combine):
+        with pytest.raises(ToolExecutionError) as exc:
+            coverage_module.run_coverage_threshold(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                line_threshold=0.0,
+                branch_threshold=0.0,
+                verbose=False,
+                learning_mode=False,
+                verbosity_level=1,
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+                force_regen=True,
+            )
+
+    assert "combine via stdout" in exc.value.reason
+
+
 def test_run_coverage_threshold_enforces_limits(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
