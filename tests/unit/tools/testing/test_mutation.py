@@ -149,6 +149,29 @@ def test_mutation_reset_handles_existing_session(tmp_path: Path) -> None:
     assert "Removed Cosmic Ray session" in result.stdout
 
 
+def test_mutation_reset_raises_tool_execution_error_on_unlink_failure(
+    tmp_path: Path,
+) -> None:
+    """mutation_reset should wrap unexpected unlink failures in ToolExecutionError."""
+
+    cfg = _config()
+    session = tmp_path / ".cache" / "cosmic-ray" / "session.sqlite"
+    session.parent.mkdir(parents=True, exist_ok=True)
+    session.write_text("data", encoding="utf-8")
+
+    def failing_unlink(path: Path) -> None:
+        if path == session:
+            raise OSError("boom")
+        path.unlink()
+
+    with override_cwd(tmp_path):
+        with override_attr(Path, "unlink", failing_unlink):  # type: ignore[arg-type]
+            with pytest.raises(
+                ToolExecutionError, match="Failed to remove Cosmic Ray session file"
+            ):
+                mutation_mod.mutation_reset(cfg, tmp_path)
+
+
 # ---------- Summary/report error paths ----------
 
 
@@ -198,6 +221,56 @@ def test_mutation_summary_import_error(tmp_path: Path) -> None:
         "cosmic_ray must be installed" in err
         or "Failed to generate mutation summary" in err
     )
+
+
+def test_mutation_summary_handles_unexpected_exceptions(tmp_path: Path) -> None:
+    """mutation_summary should catch non-ImportError exceptions and fail gracefully."""
+
+    cfg = _config()
+
+    base = ModuleType("cosmic_ray")
+
+    def _loader(_path: str) -> dict[str, Any]:
+        # Ensure we exercise the generic exception handler in mutation_summary.
+        raise RuntimeError("loader boom")
+
+    # Provide a stub modules implementation so imports succeed and we reach
+    # the failing loader call instead of hitting the ImportError path.
+    modules_module = CosmicRayModulesModule(lambda _cfg: ["pkg.alpha"])
+    config_module = CosmicRayConfigModule(_loader)
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "cosmic_ray.modules": modules_module,
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_summary(cfg, tmp_path)
+
+    assert result.success is False
+    assert "Failed to generate mutation summary" in (result.stderr or "")
+
+
+def test_mutation_report_handles_unexpected_exceptions(tmp_path: Path) -> None:
+    """mutation_report should catch unexpected exceptions and return failure ToolResult."""
+
+    cfg = _config()
+
+    base = ModuleType("cosmic_ray")
+
+    def _loader(_path: str) -> dict[str, Any]:
+        raise RuntimeError("broken config")
+
+    config_module = CosmicRayConfigModule(_loader)
+
+    with install_modules({"cosmic_ray": base, "cosmic_ray.config": config_module}):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+
+    assert result.success is False
+    assert "Failed to generate mutation report" in (result.stderr or "")
 
 
 # ---------- Happy path with fakes ----------
@@ -352,3 +425,73 @@ def test_mutation_run_success_with_existing_session(tmp_path: Path) -> None:
             result = mutation_mod.mutation_run(cfg, tmp_path, SuccessRunner())
     assert result.success is True
     assert "Mutation report:" in (result.stdout or "")
+
+
+def test_mutation_run_handles_unexpected_step_exception(tmp_path: Path) -> None:
+    """mutation_run should wrap unexpected step exceptions in a failure ToolResult."""
+
+    cfg = _config()
+
+    # Provide a minimal cosmic_ray + sqlite environment so that summary,
+    # init, and report can succeed and we specifically exercise the exec
+    # step's defensive exception handling.
+    base = ModuleType("cosmic_ray")
+    session = tmp_path / ".cache" / "cosmic-ray" / "session.sqlite"
+
+    config_module = CosmicRayConfigModule(
+        lambda _path: {
+            "session": {"path": str(session)},
+            "test-runner": {"command": "pytest"},
+            "modules": {"include": ["src"]},
+        }
+    )
+    modules_module = CosmicRayModulesModule(lambda _cfg: ["pkg.alpha"])
+
+    class BoomRunner(FakeSubprocessRunner):
+        def run_uv_command(
+            self,
+            args: list[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            # Allow init to succeed so the session file is created,
+            # but raise during exec to trigger the defensive path.
+            if args[:2] == ["cosmic-ray", "init"]:
+                sess = Path(".cache/cosmic-ray/session.sqlite")
+                sess.parent.mkdir(parents=True, exist_ok=True)
+                sess.write_text("ok", encoding="utf-8")
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="init ok",
+                    stderr="",
+                    operation_id=operation_id,
+                )
+            if args[:2] == ["cosmic-ray", "exec"]:
+                raise RuntimeError("exec boom")
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="ok",
+                stderr="",
+                operation_id=operation_id,
+            )
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "cosmic_ray.modules": modules_module,
+            "sqlite3": _FakeSqliteMod(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_run(cfg, tmp_path, BoomRunner())
+
+    assert result.success is False
+    assert "Mutation exec failed" in (result.stderr or "")

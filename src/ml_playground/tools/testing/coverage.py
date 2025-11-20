@@ -188,7 +188,7 @@ def run_coverage_report(
                     timeout=config.testing.timeout,
                     operation_id=operation_id,
                 )
-            except Exception:  # pragma: no cover - defensive guard
+            except Exception:
                 from ..core.errors import ToolExecutionError
 
                 raise ToolExecutionError(

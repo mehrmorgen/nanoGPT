@@ -719,6 +719,74 @@ def test_run_train_impl_learning_mode_success(experiment: str) -> None:
 
 
 @given(experiment=valid_strings())
+@settings(max_examples=3, deadline=None, derandomize=True)
+def test_run_train_impl_log_status_failure_propagates(experiment: str) -> None:
+    """run_train_impl fails when log_status hook raises.
+
+    The inner try/except around log_status has been removed so that
+    hook failures are handled by the outer exception wrapper.
+    """
+    train_cfg = _make_trainer_cfg()
+
+    shared = SimpleNamespace()
+
+    def failing_log_status(
+        tag: str, shared_cfg: Any, out_dir: Any, logger: LoggerLike
+    ) -> None:  # noqa: ARG001
+        raise RuntimeError(f"log-status-{tag}-boom")
+
+    hooks = runtime_runners.RuntimeRunHooks(
+        pipeline_factory=lambda cfg, shared_: None,  # type: ignore[unused-argument]
+        trainer_factory=_noop_trainer_factory,
+        sampler_factory=_noop_sampler_factory,
+        device_setup=lambda d, t, s: None,  # type: ignore[unused-argument]
+        log_status=failing_log_status,
+    )
+
+    result = runtime_runners.run_train_impl(
+        experiment, train_cfg, Path("config.toml"), shared, hooks=hooks
+    )
+
+    assert result.success is False
+    assert result.exit_code == 1
+    assert result.operation_id.category == "train"
+
+
+@given(experiment=valid_strings())
+@settings(max_examples=3, deadline=None, derandomize=True)
+def test_run_sample_impl_log_status_failure_propagates(experiment: str) -> None:
+    """run_sample_impl fails when log_status hook raises.
+
+    The inner try/except around log_status has been removed so that
+    hook failures are handled by the outer exception wrapper.
+    """
+    sample_cfg = _make_sampler_cfg()
+
+    shared = SimpleNamespace()
+
+    def failing_log_status(
+        tag: str, shared_cfg: Any, out_dir: Any, logger: LoggerLike
+    ) -> None:  # noqa: ARG001
+        raise RuntimeError(f"log-status-{tag}-boom")
+
+    hooks = runtime_runners.RuntimeRunHooks(
+        pipeline_factory=lambda cfg, shared_: None,  # type: ignore[unused-argument]
+        trainer_factory=_noop_trainer_factory,
+        sampler_factory=_noop_sampler_factory,
+        device_setup=lambda d, t, s: None,  # type: ignore[unused-argument]
+        log_status=failing_log_status,
+    )
+
+    result = runtime_runners.run_sample_impl(
+        experiment, sample_cfg, Path("config.toml"), shared, hooks=hooks
+    )
+
+    assert result.success is False
+    assert result.exit_code == 1
+    assert result.operation_id.category == "sample"
+
+
+@given(experiment=valid_strings())
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_sample_impl_learning_mode_success(experiment: str) -> None:
     """run_sample_impl attaches learning_info when learning_mode_engine is provided."""

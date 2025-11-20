@@ -90,7 +90,7 @@ def _apply_global_options(
 
     try:
         context = context_fetcher(silent=True)
-    except TypeError:  # pragma: no cover - defensive for custom fetchers
+    except TypeError:
         context = context_fetcher()
 
     if context is not None and getattr(context, "invoked_subcommand", None) is None:

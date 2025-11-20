@@ -111,6 +111,7 @@ These tranches extend the same protocol-driven, strictly-typed testing approach 
 - Maintain `docs/plan.md` with per-file branch % after each significant change.
 - Do not close a workstream until **every targeted runtime or tools file** hits ≥85% branch coverage and tests are type-clean under the strict tooling.
 - When the active runtime/tools workstreams meet the threshold and the global gate is green, update this plan with the next scope (e.g. analysis stack, training hooks).
+- Within each runtime/tools scope, **always pick the next targets by ascending branch coverage**. This keeps feedback tight and makes it obvious which files to harden next.
 
 ### Pragma removal & strict coverage
 
@@ -206,19 +207,84 @@ We will only keep pragmas that guard truly untestable branches (e.g. CPython/ver
   - `tools/cli/commands/quality.py` — line 84.52% (branch n/a)
   - `tools/testing/coverage.py` — 70.77%
   - `tools/testing/mutation.py` — 71.74%
-  - `tools/testing/testing.py` — 51.89%
+  - `tools/testing/testing.py` — 69.81%
   - `tools/testing/unit.py` — 83.33%
   - `tools/utils/subprocess_utils.py` — 70.00%
-  - `tools/environment/environment.py` — 33.33%
+  - `tools/environment/environment.py` — 100.00%
   - `tools/environment/setup.py` — 73.08%
   - `tools/environment/verify.py` — 66.67%
   - `tools/environment/clean.py` — 76.47%
   - `tools/ci/ci.py` — 81.25%
   - `tools/dev/batch_review.py` — 65.79%
-  - `tools/dev/ai_guidelines.py` — 69.00%
-  - `tools/dev/hygiene.py` — 53.85%
+  - `tools/dev/ai_guidelines.py` — 72.00%
+  - `tools/dev/hygiene.py` — 96.15%
   - `tools/dev/review.py` — 69.15%
-  - `tools/dev/workflow_status.py` — 50.00%
+  - `tools/dev/workflow_status.py` — 56.82%
+
+**Next concrete targets (lowest branch coverage first, within runtime/tools):**
+- `runtime/core/bootstrap.py` — 33.33%
+- `runtime/cli/main.py` — 50.00%
+- `tools/core/runtime.py` — 50.00%
+- `tools/dev/batch_review.py` — 65.79%
+- `tools/cli/config_loader.py` — 70.00%
+- `tools/testing/coverage.py` — 70.77%
+
+### Defensive branch simplification targets (runtime/tools)
+
+We also track **defensive branches** (especially broad `except Exception` handlers and silent fallbacks) we want to either remove or narrow now that coverage is high and tests are explicit. The goal is to keep behavior predictable and observable while avoiding unnecessary safety nets.
+
+- **runtime/runners.py**
+  - Branches:
+    - Inner `try/except Exception: pass` wrappers around `active_hooks.log_status` in `run_train_impl` and `run_sample_impl` (`pre-*` / `post-*` hooks).
+    - Outer `try/except Exception as e` around `run_prepare_impl`, `run_train_impl`, `run_sample_impl`, and `run_analyze` that convert unexpected failures into `ToolResult`.
+  - Plan:
+    - [ ] **Batch 1 – hooks only**: Remove the inner `try/except` around `log_status` so hook failures become visible (and are still wrapped by the outer handler), then update property tests in `tests/property/runtime/test_runners_simple_property.py` / `test_runners_property.py` to assert failure semantics.
+    - [ ] **Later – review outer handlers**: Revisit whether the outer generic `except Exception` blocks should be narrowed to domain-specific errors once E2E/CLI behavior expectations are fully documented.
+
+- **tools/dev/workflow_status.py**
+  - Branches:
+    - Generic `except Exception` in `_get_git_status`, `_get_quality_status`, `_get_test_status`, `_get_coverage_status`, returning `{ "status": "unknown", ... }`.
+    - Per-check `except Exception as e` in `_run_quality_batch` and `_run_test_batch_simple`, which downgrade failures to `"status": "error"` instead of crashing.
+  - Plan:
+    - [ ] **Keep contract, tighten scope**: Maintain the top-level contract that `run_workflow_status` always returns a `ToolResult(success=True)` but incrementally narrow the caught exception types (e.g. `ToolExecutionError`) where feasible.
+    - [ ] Extend `tests/unit/tools/dev/test_workflow_status.py` to assert behavior when underlying tools return structured failures vs. when they raise typed exceptions.
+
+- **tools/dev/batch_review.py**
+  - Branches:
+    - Generic `except Exception as e` in `_run_quality_batch` and `_run_test_batch` for lint/typecheck/deadcode/unit/integration/coverage, mapping unexpected failures to `"status": "error"`.
+  - Plan:
+    - [ ] Preserve the batch-review summary contract but consider narrowing the caught exceptions to tools-layer error types.
+    - [ ] Ensure `tests/unit/tools/dev/test_batch_review.py` covers both normal failure (`success=False`) and `"status": "error"` downgrade behavior so we can safely adjust the handlers.
+
+- **tools/dev/hygiene.py**
+  - Branches:
+    - Generic `except Exception` in `run_cleanup_ignored_tracked` and `run_kill_port`, turning subprocess/psutil issues into failing `ToolResult`s.
+    - Nested `try/except Exception` fallbacks in `_pids_by_port` to cope with restricted `psutil.net_connections` or `process_iter` behavior across platforms.
+  - Plan:
+    - [ ] Keep the platform-compatibility fallbacks in `_pids_by_port`, but add tests in `tests/unit/tools/dev/test_hygiene.py` that cover both the primary and fallback paths.
+    - [ ] Revisit the outer generic handlers only if we can introduce more precise error types without degrading cross-platform robustness.
+
+- **tools/testing/coverage.py**
+  - Branches:
+    - Defensive `ToolExecutionError` construction in `_ensure_coverage_data` when automatic coverage generation/combination fails, with a generic "Unknown error during coverage generation/combination" reason when stderr is empty.
+    - Broad `except Exception` in `run_coverage_report` when coverage report generation fails for any command.
+  - Plan:
+    - [ ] Now that coverage generation is stable and fully tested, incrementally tighten the error messages by threading through concrete stderr/stdout where available, avoiding truly opaque "Unknown" reasons.
+    - [ ] Consider narrowing the `except Exception` in `run_coverage_report` to the subprocess layer once we have stronger invariants for the runner.
+
+- **tools/testing/mutation.py**
+  - Branches:
+    - Defensive `except Exception` blocks around mutation-reset/session unlinking and Cosmic Ray invocation, now covered by unit tests.
+  - Plan:
+    - [ ] Keep the current behavior (convert unexpected runner/filesystem failures into `ToolExecutionError` or failing `ToolResult`) but avoid adding new generic fallbacks.
+    - [ ] Use the existing tests in `tests/unit/tools/testing/test_mutation.py` as a safety net while we gradually tighten exception types where possible.
+
+- **tools/testing/testing.py**
+  - Branches:
+    - Defensive coverage-data generation and fallback paths (`_ensure_coverage_data`, `_run_coverage_test_for_data`, `_generate_coverage_via_pytest`) that were originally mirrored in the facade and are now centralized in `tools/testing/coverage.py`.
+  - Plan:
+    - [ ] Prefer the consolidated coverage helpers in `tools/testing/coverage.py` for new behavior; avoid reintroducing ad-hoc fallbacks in the facade.
+    - [ ] Ensure property tests in `tests/property/tools/testing/test_testing_tools_property.py` keep the public API stable while we avoid expanding generic error handlers.
 
 ## Future Test-Suite Typing Workstreams
 

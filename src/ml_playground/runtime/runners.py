@@ -142,23 +142,13 @@ def run_train_impl(
 
         train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
         train_out_dir = getattr(shared, "train_out_dir", None)
-        try:
-            active_hooks.log_status(
-                "pre-train", shared, train_out_dir, train_cfg.logger
-            )
-        except Exception:
-            pass
+        active_hooks.log_status("pre-train", shared, train_out_dir, train_cfg.logger)
 
         trainer = active_hooks.trainer_factory(train_cfg, shared)
         trainer.run()
 
         train_cfg.logger.info(f"Trainer for {experiment} finished.")
-        try:
-            active_hooks.log_status(
-                "post-train", shared, train_out_dir, train_cfg.logger
-            )
-        except Exception:
-            pass
+        active_hooks.log_status("post-train", shared, train_out_dir, train_cfg.logger)
 
         learning_info = None
         if learning_mode_engine:
@@ -238,21 +228,13 @@ def run_sample_impl(
 
         sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
         sample_out_dir = getattr(shared, "sample_out_dir", None)
-        try:
-            active_hooks.log_status(
-                "pre-sample", shared, sample_out_dir, sample_cfg.logger
-            )
-        except Exception:
-            pass
+        active_hooks.log_status("pre-sample", shared, sample_out_dir, sample_cfg.logger)
         sampler = active_hooks.sampler_factory(sample_cfg, shared)
         sampler.run()
         sample_cfg.logger.info(f"Sampler for {experiment} finished.")
-        try:
-            active_hooks.log_status(
-                "post-sample", shared, sample_out_dir, sample_cfg.logger
-            )
-        except Exception:
-            pass
+        active_hooks.log_status(
+            "post-sample", shared, sample_out_dir, sample_cfg.logger
+        )
 
         learning_info = None
         if learning_mode_engine:

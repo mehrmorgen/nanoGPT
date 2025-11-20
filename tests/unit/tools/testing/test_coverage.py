@@ -531,3 +531,46 @@ def test_run_coverage_combines_results_and_propagates_failure(
     assert result.success is False
     stderr = result.stderr or ""
     assert "FAILURE" in stderr
+
+
+def test_run_coverage_report_raises_on_runner_exception(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """run_coverage_report should wrap unexpected runner exceptions in ToolExecutionError."""
+
+    class RaisingRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:3] == ["coverage", "report", "-m"]:
+                raise RuntimeError("runner boom")
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+    runner = RaisingRunner()
+    _prepare_cached_coverage(tmp_path)
+
+    with pytest.raises(ToolExecutionError, match="Failed to generate terminal report"):
+        coverage_module.run_coverage_report(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            verbose=False,
+            subprocess_runner=runner,
+            cache_dir=_cache_dir(tmp_path),
+        )

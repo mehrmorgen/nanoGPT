@@ -144,6 +144,6 @@ def main_entry(
     except KeyboardInterrupt:
         echo_func("\nOperation cancelled by user", err=True)
         raise typer.Exit(1)
-    except Exception as exc:  # pragma: no cover - defensive guard
+    except Exception as exc:
         echo_func(f"Runtime CLI execution failed: {exc}", err=True)
         raise typer.Exit(1) from exc

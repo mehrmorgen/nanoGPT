@@ -267,6 +267,51 @@ def test_context_object_handling_edge_cases(
     assert isinstance(ctx2.obj, dict)
 
 
+def test_apply_global_options_context_getter_type_error_fallback() -> None:
+    """_apply_global_options should retry context_getter without silent kwarg.
+
+    This exercises the defensive except TypeError branch around context_getter
+    to ensure we remain robust to custom implementations that do not accept
+    the silent keyword argument.
+    """
+
+    ctx = _fake_context(obj={})
+    click_ctx = _fake_click_context(has_subcommand=False, help_text="help")
+    calls: list[tuple[bool]] = []
+
+    def context_getter(*, silent: bool) -> SimpleNamespace:  # type: ignore[override]
+        calls.append((silent,))
+        raise TypeError("unexpected kwarg")
+
+    def context_getter_no_args() -> SimpleNamespace:
+        return click_ctx
+
+    # Wrap a getter that first raises on kwarg usage, then succeeds without args.
+    def flaky_getter(*args: object, **kwargs: object) -> SimpleNamespace:  # type: ignore[override]
+        if "silent" in kwargs:
+            return context_getter(silent=bool(kwargs["silent"]))
+        return context_getter_no_args()
+
+    messages, echo_func = _fake_echo()
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _apply_global_options(
+            ctx,
+            None,
+            False,
+            VerbosityLevel.STANDARD,
+            context_getter=flaky_getter,
+            echo_func=echo_func,
+        )
+
+    assert exc_info.value.exit_code == 0
+    # We should have attempted the silent=True call once.
+    assert calls == [(True,)]
+    # And then produced the welcome/help messages from the fallback context.
+    combined = "\n".join(messages)
+    assert "Welcome to ML Playground runtime CLI!" in combined
+
+
 @given(
     learning_mode=st.booleans(),
     verbosity_int=st.integers(min_value=0, max_value=2),

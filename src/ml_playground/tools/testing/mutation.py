@@ -41,7 +41,7 @@ def mutation_reset(config: ToolsConfig, root_path: Path) -> ToolResult:
         try:
             session_file.unlink()
             output = f"Removed Cosmic Ray session: {session_file}"
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             raise ToolExecutionError(
                 f"Failed to remove Cosmic Ray session file: {session_file}",
                 reason=f"File deletion failed: {exc}",
@@ -121,7 +121,7 @@ def mutation_summary(config: ToolsConfig, root_path: Path) -> ToolResult:
             stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
             operation_id=operation_id,
         )
-    except Exception as e:  # pragma: no cover - defensive
+    except Exception as e:
         return ToolResult(
             success=False,
             exit_code=1,
@@ -298,7 +298,7 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
             stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
             operation_id=operation_id,
         )
-    except Exception as e:  # pragma: no cover - defensive
+    except Exception as e:
         return ToolResult(
             success=False,
             exit_code=1,
@@ -344,7 +344,7 @@ def mutation_run(
                         stderr=combined_stderr or result.stderr,
                         operation_id=operation_id,
                     )
-            except Exception as e:  # pragma: no cover - defensive
+            except Exception as e:
                 return ToolResult(
                     success=False,
                     exit_code=1,
