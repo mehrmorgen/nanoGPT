@@ -77,7 +77,7 @@ def run_server_bundestag_char(
         dataset_base = cast(type[Any], lit_dataset.Dataset)
         model_base = cast(type[Any], lit_model.Model)
         types_module = cast(LitTypesModule, lit_types)
-    except ImportError as e:  # pragma: no cover - import-guard path
+    except ImportError as e:
         raise RuntimeError(
             f"LIT dependencies not available: {e}. Install lit-nlp with: uv add lit-nlp"
         ) from e
@@ -159,7 +159,7 @@ def run_server_bundestag_char(
 
     try:
         app = lit_server.Server(models, datasets)
-    except Exception as e:  # pragma: no cover - defensive barrier
+    except Exception as e:
         raise RuntimeError(f"Failed to build LIT app: {e}") from e
 
     url = f"http://{host}:{port if port else '<auto>'}"
@@ -170,7 +170,7 @@ def run_server_bundestag_char(
 
     try:
         app.serve(port=port, host=host, open_browser=open_browser)
-    except AttributeError as exc:  # pragma: no cover - defensive
+    except AttributeError as exc:
         raise RuntimeError(
             "Installed LIT server does not expose a serve(...) method. "
             "Update lit-nlp to a compatible version."
