@@ -9,8 +9,6 @@ from __future__ import annotations
 from typing import Any
 from types import SimpleNamespace
 
-import pytest
-import typer
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -24,17 +22,17 @@ def argv_lists(draw: st.DrawFn) -> list[str]:
     # Generate combinations of valid commands and options
     commands = ["prepare", "train", "sample", "analyze", "--help"]
     command = draw(st.sampled_from(commands))
-    
+
     base_args = [command]
-    
+
     # Add some random options
     if command not in ["--help"] and draw(st.booleans()):
         base_args.extend(["--learning-mode"])
-    
+
     if command not in ["--help"] and draw(st.booleans()):
         verbosity = draw(st.integers(min_value=0, max_value=2))
         base_args.extend(["--verbosity", str(verbosity)])
-    
+
     return base_args
 
 
@@ -51,14 +49,14 @@ def test_main_returns_exit_code(argv: list[str] | None) -> None:
     """Test that main function returns an exit code."""
     # Create a fake command to avoid actual CLI execution
     fake_cmd = _fake_command(0)
-    
+
     # Patch get_command to return our fake
     original_get_command = main.get_command
     main.get_command = lambda app: fake_cmd
-    
+
     try:
         result = main.main(argv)
-        
+
         # Should return an exit code (int or None)
         assert result is None or isinstance(result, int)
     finally:
@@ -68,35 +66,32 @@ def test_main_returns_exit_code(argv: list[str] | None) -> None:
 def test_main_calls_registry_and_command() -> None:
     """Test that main properly calls registry and command functions."""
     fake_cmd = _fake_command(0)
-    
+
     # Track calls
     registry_called = False
     get_command_called = False
-    
+
     def fake_registry():
         nonlocal registry_called
         registry_called = True
-    
+
     def fake_get_command(app):
         nonlocal get_command_called
         get_command_called = True
         return fake_cmd
-    
-    # Patch functions
-    original_registry = getattr(main, 'load_preparers', None)
-    original_get_command = main.get_command
-    
+
     # We need to patch at the module level where main() imports from
     import ml_playground.runtime.cli.main as main_module
+
     original_registry_module = main_module.registry.load_preparers
     original_get_command_module = main_module.get_command
-    
+
     main_module.registry.load_preparers = fake_registry
     main_module.get_command = fake_get_command
-    
+
     try:
         main.main(["--help"])
-        
+
         assert registry_called
         assert get_command_called
         # Check that main was called with correct args
@@ -121,29 +116,35 @@ def test_main_entry_exception_handling(
 ) -> None:
     """Test main_entry exception handling with various configurations."""
     echo_messages: list[str] = []
-    
+
     def echo_func(message: str, *, err: bool = False) -> None:
         echo_messages.append(message)
-    
+
     # Setup runner
     if raises_keyboard_interrupt:
-        runner = lambda: (_ for _ in ()).throw(KeyboardInterrupt())
+
+        def runner() -> None:
+            (_ for _ in ()).throw(KeyboardInterrupt())
     elif raises_exception:
-        runner = lambda: (_ for _ in ()).throw(RuntimeError("Test error"))
+
+        def runner() -> None:
+            (_ for _ in ()).throw(RuntimeError("Test error"))
     else:
-        runner = lambda: None
-    
+
+        def runner() -> None:
+            return None
+
     # Configure function arguments
     kwargs: dict[str, Any] = {}
     if has_custom_echo:
         kwargs["echo"] = echo_func
     if has_custom_runner:
         kwargs["app_runner"] = runner
-    
+
     # Test execution - but avoid actually invoking the CLI
     # Just verify the function exists and is callable
     assert callable(main.main_entry)
-    
+
     # The actual exception handling is tested in integration tests
     # Here we just verify the function signature is correct
 
@@ -158,7 +159,7 @@ def test_main_entry_default_runner() -> None:
 def test_default_cli_dependencies_structure() -> None:
     """Test that default_cli_dependencies returns properly structured dependencies."""
     deps = main.default_cli_dependencies()
-    
+
     assert isinstance(deps, CLIDependencies)
     assert callable(deps.load_experiment)
     assert callable(deps.ensure_train_prerequisites)
@@ -173,12 +174,12 @@ def test_default_cli_dependencies_structure() -> None:
 def test_default_cli_dependencies_consistency(call_count: int) -> None:
     """Test that default_cli_dependencies returns consistent results."""
     deps_list = [main.default_cli_dependencies() for _ in range(call_count)]
-    
+
     # All should be different instances
     for i in range(len(deps_list)):
         for j in range(i + 1, len(deps_list)):
             assert deps_list[i] is not deps_list[j]
-    
+
     # But all should have the same callable attributes
     first = deps_list[0]
     for deps in deps_list[1:]:
@@ -192,11 +193,12 @@ def test_default_cli_dependencies_consistency(call_count: int) -> None:
 
 def test_main_entry_echo_function_default() -> None:
     """Test main_entry creates default echo function when none provided."""
+
     # This is hard to test without mocking typer.echo, so we'll just
     # verify it doesn't crash when called with a custom runner
     def mock_runner():
         pass
-    
+
     main.main_entry(app_runner=mock_runner)
 
 
@@ -205,14 +207,14 @@ def test_main_entry_echo_function_default() -> None:
 def test_main_with_none_argv(call_count: int) -> None:
     """Test main function with None argv."""
     fake_cmd = _fake_command(0)
-    
+
     original_get_command = main.get_command
     main.get_command = lambda app: fake_cmd
-    
+
     try:
         for _ in range(call_count):
             result = main.main(None)
-            
+
             # Should handle None argv gracefully
             assert result is None or isinstance(result, int)
     finally:
@@ -224,10 +226,10 @@ def test_main_standalone_mode_false() -> None:
     # This is hard to verify without complex mocking, but we can at least
     # verify the function doesn't crash
     fake_cmd = _fake_command(0)
-    
+
     original_get_command = main.get_command
     main.get_command = lambda app: fake_cmd
-    
+
     try:
         main.main(["prepare"])
     finally:

@@ -6,21 +6,31 @@ using Hypothesis for comprehensive coverage.
 
 from __future__ import annotations
 
-from typing import Any
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from ml_playground.runtime.core.results import LearningModeEngine, LearningInfo, OperationId, ToolResult, VerbosityLevel
+from ml_playground.runtime.core.results import (
+    LearningModeEngine,
+    LearningInfo,
+    OperationId,
+    ToolResult,
+    VerbosityLevel,
+)
 
 
 @st.composite
 def operation_ids(draw: st.DrawFn) -> OperationId:
     """Generate valid OperationId objects."""
-    namespace = draw(st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz"))
-    category = draw(st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz"))
-    command = draw(st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz"))
+    namespace = draw(
+        st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz")
+    )
+    category = draw(
+        st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz")
+    )
+    command = draw(
+        st.text(min_size=1, max_size=10, alphabet="abcdefghijklmnopqrstuvwxyz")
+    )
     return OperationId(namespace=namespace, category=category, command=command)
 
 
@@ -31,12 +41,20 @@ def learning_infos(draw: st.DrawFn) -> LearningInfo:
     num_explanations = draw(st.integers(min_value=0, max_value=5))
     num_practices = draw(st.integers(min_value=0, max_value=5))
     num_concepts = draw(st.integers(min_value=0, max_value=5))
-    
+
     return LearningInfo(
-        commands_executed=[draw(st.text(min_size=1, max_size=20)) for _ in range(num_commands)],
-        explanations=[draw(st.text(min_size=1, max_size=50)) for _ in range(num_explanations)],
-        best_practices=[draw(st.text(min_size=1, max_size=50)) for _ in range(num_practices)],
-        related_concepts=[draw(st.text(min_size=1, max_size=30)) for _ in range(num_concepts)],
+        commands_executed=[
+            draw(st.text(min_size=1, max_size=20)) for _ in range(num_commands)
+        ],
+        explanations=[
+            draw(st.text(min_size=1, max_size=50)) for _ in range(num_explanations)
+        ],
+        best_practices=[
+            draw(st.text(min_size=1, max_size=50)) for _ in range(num_practices)
+        ],
+        related_concepts=[
+            draw(st.text(min_size=1, max_size=30)) for _ in range(num_concepts)
+        ],
     )
 
 
@@ -68,7 +86,7 @@ def test_tool_result_creation_with_all_fields(
         stderr=stderr or "",
         learning_info=learning_info,
     )
-    
+
     assert isinstance(result, ToolResult)
     assert result.success == success
     assert result.exit_code == exit_code
@@ -109,7 +127,7 @@ def test_tool_result_factory_method(
         category=category,
         command=command,
     )
-    
+
     assert isinstance(result, ToolResult)
     assert result.success == success
     assert result.exit_code == exit_code
@@ -134,7 +152,7 @@ def test_tool_result_output_handling(
     """Test ToolResult handles stdout/stderr correctly."""
     stdout = "Test output" if has_stdout else ""
     stderr = "Test error" if has_stderr else ""
-    
+
     result = ToolResult.create(
         success=success,
         exit_code=0 if success else 1,
@@ -144,7 +162,7 @@ def test_tool_result_output_handling(
         stdout=stdout,
         stderr=stderr,
     )
-    
+
     assert result.stdout == stdout
     assert result.stderr == stderr
 
@@ -169,7 +187,7 @@ def test_learning_info_creation(
         best_practices=practices,
         related_concepts=concepts,
     )
-    
+
     assert info.commands_executed == commands
     assert info.explanations == explanations
     assert info.best_practices == practices
@@ -189,12 +207,12 @@ def test_operation_id_creation_and_equality(
     op1 = OperationId(namespace=namespace, category=category, command=command)
     op2 = OperationId(namespace=namespace, category=category, command=command)
     op3 = OperationId(namespace="other", category=category, command=command)
-    
+
     assert op1 == op2
     assert op1 != op3
     assert hash(op1) == hash(op2)
     assert hash(op1) != hash(op3)
-    
+
     # Test string representation
     str_repr = str(op1)
     assert namespace in str_repr
@@ -211,23 +229,27 @@ def test_operation_id_creation_and_equality(
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
 def test_learning_mode_engine(
-    verbosity: VerbosityLevel, has_commands: bool, command: str, context: str, category: str
+    verbosity: VerbosityLevel,
+    has_commands: bool,
+    command: str,
+    context: str,
+    category: str,
 ) -> None:
     """Test LearningModeEngine functionality."""
     engine = LearningModeEngine(verbosity=verbosity)
-    
+
     assert engine.verbosity == verbosity
-    
+
     # Test creating learning info
     commands = ["cmd1", "cmd2"] if has_commands else []
-    
+
     info = engine.explain_command(
         command=command,
         context=context,
         category=category,
         executed_commands=commands,
     )
-    
+
     assert isinstance(info, LearningInfo)
     assert info.commands_executed == commands
     # Should have at least some explanations based on verbosity
@@ -244,7 +266,7 @@ def test_verbosity_level_enum(level: VerbosityLevel, message: str) -> None:
     assert isinstance(level, VerbosityLevel)
     assert level.value >= 0
     assert level.value <= 2
-    
+
     # Test enum comparison
     same_level = VerbosityLevel(level.value)
     assert level == same_level
@@ -256,7 +278,7 @@ def test_verbosity_level_ordering() -> None:
     assert VerbosityLevel.MINIMAL.value == 0
     assert VerbosityLevel.STANDARD.value == 1
     assert VerbosityLevel.COMPREHENSIVE.value == 2
-    
+
     # Test comparison by value
     assert VerbosityLevel.MINIMAL.value < VerbosityLevel.STANDARD.value
     assert VerbosityLevel.STANDARD.value < VerbosityLevel.COMPREHENSIVE.value
@@ -281,17 +303,17 @@ def test_tool_result_with_complex_outputs(
         stdout=stdout,
         stderr=stderr,
     )
-    
+
     assert result.stdout == stdout
     assert result.stderr == stderr
-    
+
     # Test that the result can be converted to dict-like representation
-    assert hasattr(result, 'success')
-    assert hasattr(result, 'exit_code')
-    assert hasattr(result, 'operation_id')
-    assert hasattr(result, 'stdout')
-    assert hasattr(result, 'stderr')
-    assert hasattr(result, 'learning_info')
+    assert hasattr(result, "success")
+    assert hasattr(result, "exit_code")
+    assert hasattr(result, "operation_id")
+    assert hasattr(result, "stdout")
+    assert hasattr(result, "stderr")
+    assert hasattr(result, "learning_info")
 
 
 def test_tool_result_default_values() -> None:
@@ -303,7 +325,7 @@ def test_tool_result_default_values() -> None:
         category="test",
         command="test",
     )
-    
+
     assert result.stdout == ""
     assert result.stderr == ""
     # ToolResult always creates a LearningInfo
@@ -322,7 +344,7 @@ def test_learning_mode_engine_verbosity(verbosity: VerbosityLevel) -> None:
     """Test LearningModeEngine with different verbosity levels."""
     engine = LearningModeEngine(verbosity=verbosity)
     assert engine.verbosity == verbosity
-    
+
     # Test that it can explain commands
     info = engine.explain_command(
         command="test",

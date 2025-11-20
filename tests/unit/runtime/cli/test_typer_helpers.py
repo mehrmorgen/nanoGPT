@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import typer
 
 import ml_playground.runtime.cli.typer_helpers as typer_helpers
 from ml_playground.runtime.core.results import VerbosityLevel

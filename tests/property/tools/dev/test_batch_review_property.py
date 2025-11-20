@@ -52,11 +52,19 @@ def test_run_batch_review_overall_success_matches_components(
     quality_summary = _build_summary(quality_success)
     test_summary = _build_summary(test_success)
 
-    with override_attr(
-        batch_review_module, "_run_quality_batch", lambda *_args, **_kwargs: quality_summary
-    ), override_attr(
-        batch_review_module, "_run_test_batch", lambda *_args, **_kwargs: test_summary
-    ), override_attr(batch_review_module, "_get_timestamp", lambda: "ts"):
+    with (
+        override_attr(
+            batch_review_module,
+            "_run_quality_batch",
+            lambda *_args, **_kwargs: quality_summary,
+        ),
+        override_attr(
+            batch_review_module,
+            "_run_test_batch",
+            lambda *_args, **_kwargs: test_summary,
+        ),
+        override_attr(batch_review_module, "_get_timestamp", lambda: "ts"),
+    ):
         result = batch_review_module.run_batch_review(
             ToolsConfig(), tmp_path, output_format=output_format
         )

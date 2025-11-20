@@ -10,7 +10,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -56,7 +55,7 @@ def test_all_runtime_functions_exist() -> None:
         "run_sample_impl",
         "run_train_impl",
     ]
-    
+
     for func_name in expected_functions:
         assert hasattr(runtime_runners, func_name)
         assert callable(getattr(runtime_runners, func_name))
@@ -72,8 +71,6 @@ def test_load_experiment_handles_various_inputs(
     experiment_name: str, config_path: Path | None, has_deps: bool
 ) -> None:
     """Test load_experiment with different input combinations."""
-    deps = _fake_dependencies() if has_deps else None
-    
     # Just verify the function exists and is callable
     assert callable(runtime_runners.run_prepare_impl)
     assert callable(runtime_runners.run_train_impl)
@@ -114,7 +111,7 @@ def test_model_creation_parameters(
     weight_decay=st.floats(min_value=0.0, max_value=0.1, allow_nan=False),
     betas=st.tuples(
         st.floats(min_value=0.8, max_value=0.99, allow_nan=False),
-        st.floats(min_value=0.98, max_value=0.9999, allow_nan=False)
+        st.floats(min_value=0.98, max_value=0.9999, allow_nan=False),
     ),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
@@ -188,9 +185,7 @@ def test_logging_configuration(
     use_deterministic=st.booleans(),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
-def test_randomness_control(
-    seed: int, use_cuda: bool, use_deterministic: bool
-) -> None:
+def test_randomness_control(seed: int, use_cuda: bool, use_deterministic: bool) -> None:
     """Test randomness control with various seed values."""
     # Verify seed setting function exists
     assert callable(runtime_runners.global_device_setup)
@@ -209,7 +204,7 @@ def test_runtime_state_combinations(
     """Test various runtime state combinations."""
     # Create a mock runtime state
     state = SimpleNamespace()
-    
+
     if has_config:
         state.config = {"vocab_size": 1000, "n_layer": 6}
     if has_device:
@@ -218,7 +213,7 @@ def test_runtime_state_combinations(
         state.model = SimpleNamespace()
     if has_optimizer:
         state.optimizer = SimpleNamespace()
-    
+
     # Verify state is properly constructed
     assert isinstance(state, SimpleNamespace)
     if has_config:

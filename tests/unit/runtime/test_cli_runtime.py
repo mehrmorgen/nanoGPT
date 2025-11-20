@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -31,7 +30,6 @@ from ml_playground.runtime.cli.main import (
 )
 from ml_playground.runtime.core.results import LearningInfo, ToolResult
 from ml_playground.runtime import runners as runtime_runners
-from ml_playground.configuration.models import SharedConfig
 
 
 # ---------------------------------------------------------------------------

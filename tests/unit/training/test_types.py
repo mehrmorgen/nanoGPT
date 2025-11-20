@@ -7,7 +7,6 @@ import torch
 from ml_playground.training.types import (
     BatchProvider,
     OptimizerLike,
-    ScaledLoss,
     TensorboardWriter,
     VectorizeFn,
 )

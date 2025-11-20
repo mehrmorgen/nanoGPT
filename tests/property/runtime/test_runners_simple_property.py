@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -191,13 +191,11 @@ def _make_sampler_cfg() -> _StubSamplerCfg:
     seed=st.integers(min_value=0, max_value=2**31 - 1),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
-def test_global_device_setup_signature(
-    device: str, dtype: str, seed: int
-) -> None:
+def test_global_device_setup_signature(device: str, dtype: str, seed: int) -> None:
     """Test global_device_setup accepts different parameters."""
     # Just verify the function exists and is callable
     assert callable(runtime_runners.global_device_setup)
-    
+
     # Test with minimal parameters - will set global device state
     runtime_runners.global_device_setup(device, dtype, seed)
 
@@ -213,19 +211,20 @@ def test_run_prepare_impl_signature(
 ) -> None:
     """Test run_prepare_impl function signature."""
     assert callable(runtime_runners.run_prepare_impl)
-    
+
     # Create minimal fake config
     prepare_cfg = _make_preparer_cfg()
-    
+
     shared = SimpleNamespace()
     shared.project_home = Path("/tmp")
     shared.data_dir = Path("/tmp/data")
     shared.out_dir = Path("/tmp/out")
-    
+
     # Patch external dependencies to avoid actual execution
     import ml_playground.runtime.runners as runners_module
-    original_prepare = getattr(runners_module, 'prepare_data', None)
-    
+
+    original_prepare = getattr(runners_module, "prepare_data", None)
+
     def fake_prepare_data(*args: Any, **kwargs: Any) -> Any:
         result = SimpleNamespace()
         result.train_data = SimpleNamespace()
@@ -234,18 +233,18 @@ def test_run_prepare_impl_signature(
         result.meta.train_tokens = 1000
         result.meta.val_tokens = 100
         return result
-    
+
     runners_module.prepare_data = fake_prepare_data
-    
+
     try:
         # This should return a ToolResult
         result = runtime_runners.run_prepare_impl(
             experiment, prepare_cfg, Path(config_path), shared
         )
-        
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'exit_code')
-        assert hasattr(result, 'operation_id')
+
+        assert hasattr(result, "success")
+        assert hasattr(result, "exit_code")
+        assert hasattr(result, "operation_id")
     finally:
         if original_prepare is not None:
             runners_module.prepare_data = original_prepare
@@ -257,54 +256,53 @@ def test_run_prepare_impl_signature(
     config_path=valid_strings(),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
-def test_run_train_impl_signature(
-    tag: str, experiment: str, config_path: str
-) -> None:
+def test_run_train_impl_signature(tag: str, experiment: str, config_path: str) -> None:
     """Test run_train_impl function signature."""
     assert callable(runtime_runners.run_train_impl)
-    
+
     # Create minimal fake config
     train_cfg = _make_trainer_cfg()
-    
+
     shared = SimpleNamespace()
     shared.project_home = Path("/tmp")
     shared.data_dir = Path("/tmp/data")
     shared.out_dir = Path("/tmp/out")
-    
+
     # Patch external dependencies
     import ml_playground.runtime.runners as runners_module
-    original_trainer = getattr(runners_module, 'CoreTrainer', None)
-    original_optimizer = getattr(runners_module, 'create_optimizer', None)
-    original_gpt = getattr(runners_module, 'GPT', None)
-    
+
+    original_trainer = getattr(runners_module, "CoreTrainer", None)
+    original_optimizer = getattr(runners_module, "create_optimizer", None)
+    original_gpt = getattr(runners_module, "GPT", None)
+
     class FakeTrainer:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.step = 0
-        
+
         def run(self) -> None:
             return SimpleNamespace(best_val_loss=0.5)
-    
+
     class FakeGPT:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.train = lambda: None
             self.eval = lambda: None
             self.parameters = lambda: []
-    
+
     def fake_create_optimizer(*args: Any, **kwargs: Any) -> Any:
         return SimpleNamespace(step=lambda: None, param_groups=[])
-    
+
     runners_module.CoreTrainer = FakeTrainer
     runners_module.create_optimizer = fake_create_optimizer
     runners_module.GPT = FakeGPT
-    
+
     try:
         result = runtime_runners.run_train_impl(
             experiment, train_cfg, Path(config_path), shared
         )
-        
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'exit_code')
-        assert hasattr(result, 'operation_id')
+
+        assert hasattr(result, "success")
+        assert hasattr(result, "exit_code")
+        assert hasattr(result, "operation_id")
     finally:
         if original_trainer is not None:
             runners_module.CoreTrainer = original_trainer
@@ -320,54 +318,53 @@ def test_run_train_impl_signature(
     config_path=valid_strings(),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
-def test_run_sample_impl_signature(
-    tag: str, experiment: str, config_path: str
-) -> None:
+def test_run_sample_impl_signature(tag: str, experiment: str, config_path: str) -> None:
     """Test run_sample_impl function signature."""
     assert callable(runtime_runners.run_sample_impl)
-    
+
     # Create minimal fake config
     sample_cfg = _make_sampler_cfg()
-    
+
     shared = SimpleNamespace()
     shared.project_home = Path("/tmp")
     shared.data_dir = Path("/tmp/data")
     shared.out_dir = Path("/tmp/out")
-    
+
     # Patch external dependencies
     import ml_playground.runtime.runners as runners_module
-    original_sampler = getattr(runners_module, 'Sampler', None)
-    original_load = getattr(runners_module, 'load_checkpoint', None)
-    original_gpt = getattr(runners_module, 'GPT', None)
-    
+
+    original_sampler = getattr(runners_module, "Sampler", None)
+    original_load = getattr(runners_module, "load_checkpoint", None)
+    original_gpt = getattr(runners_module, "GPT", None)
+
     class FakeSampler:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.samples = ["sample"] * 5
-        
+
         def run(self) -> None:
             return self.samples
-    
+
     class FakeGPT:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.train = lambda: None
             self.eval = lambda: None
             self.parameters = lambda: []
-    
+
     def fake_load_checkpoint(*args: Any, **kwargs: Any) -> Any:
         return SimpleNamespace(model=FakeGPT())
-    
+
     runners_module.Sampler = FakeSampler
     runners_module.load_checkpoint = fake_load_checkpoint
     runners_module.GPT = FakeGPT
-    
+
     try:
         result = runtime_runners.run_sample_impl(
             experiment, sample_cfg, Path(config_path), shared
         )
-        
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'exit_code')
-        assert hasattr(result, 'operation_id')
+
+        assert hasattr(result, "success")
+        assert hasattr(result, "exit_code")
+        assert hasattr(result, "operation_id")
     finally:
         if original_sampler is not None:
             runners_module.Sampler = original_sampler
@@ -389,24 +386,23 @@ def test_run_analyze_signature(
 ) -> None:
     """Test run_analyze function signature."""
     assert callable(runtime_runners.run_analyze)
-    
+
     # Patch external dependencies
     import ml_playground.runtime.runners as runners_module
-    original_analyze = getattr(runners_module, 'analyze_checkpoint', None)
-    
+
+    original_analyze = getattr(runners_module, "analyze_checkpoint", None)
+
     def fake_analyze_checkpoint(*args: Any, **kwargs: Any) -> Any:
         return SimpleNamespace(report="Analysis report")
-    
+
     runners_module.analyze_checkpoint = fake_analyze_checkpoint
-    
+
     try:
-        result = runtime_runners.run_analyze(
-            experiment, host, port, open_browser
-        )
-        
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'exit_code')
-        assert hasattr(result, 'operation_id')
+        result = runtime_runners.run_analyze(experiment, host, port, open_browser)
+
+        assert hasattr(result, "success")
+        assert hasattr(result, "exit_code")
+        assert hasattr(result, "operation_id")
     finally:
         if original_analyze is not None:
             runners_module.analyze_checkpoint = original_analyze
@@ -423,7 +419,7 @@ def test_all_runtime_functions_exist() -> None:
         "run_sample_impl",
         "run_train_impl",
     ]
-    
+
     for func_name in expected_functions:
         assert hasattr(runtime_runners, func_name)
         assert callable(getattr(runtime_runners, func_name))
@@ -435,16 +431,14 @@ def test_all_runtime_functions_exist() -> None:
     message=valid_strings(),
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
-def test_log_command_status_signature(
-    tag: str, out_dir: str, message: str
-) -> None:
+def test_log_command_status_signature(tag: str, out_dir: str, message: str) -> None:
     """Test log_command_status function signature."""
     assert callable(runtime_runners.log_command_status)
-    
+
     shared = _StubSharedConfig(dataset_dir=Path("/tmp/dataset"))
 
     logger: LoggerLike = _StubLogger()
-    
+
     # Should not raise an exception
     runtime_runners.log_command_status(tag, shared, Path(out_dir), logger)
 
@@ -453,7 +447,13 @@ def test_log_command_status_signature(
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_train_impl_missing_runtime_returns_failure(experiment: str) -> None:
     """run_train_impl returns failure ToolResult when runtime config is missing."""
-    train_cfg = _StubTrainerCfg(runtime=_StubRuntimeCfg("cpu", "float32", 42), model=None, optimizer=None, trainer=None, logger=_StubLogger())
+    train_cfg = _StubTrainerCfg(
+        runtime=_StubRuntimeCfg("cpu", "float32", 42),
+        model=None,
+        optimizer=None,
+        trainer=None,
+        logger=_StubLogger(),
+    )
     train_cfg.runtime = None
 
     shared = SimpleNamespace()
@@ -470,7 +470,12 @@ def test_run_train_impl_missing_runtime_returns_failure(experiment: str) -> None
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_sample_impl_missing_runtime_returns_failure(experiment: str) -> None:
     """run_sample_impl returns failure ToolResult when runtime config is missing."""
-    sample_cfg = _StubSamplerCfg(runtime=_StubRuntimeCfg("cpu", "float32", 42), model=None, sampler=None, logger=_StubLogger())
+    sample_cfg = _StubSamplerCfg(
+        runtime=_StubRuntimeCfg("cpu", "float32", 42),
+        model=None,
+        sampler=None,
+        logger=_StubLogger(),
+    )
     sample_cfg.runtime = None
 
     shared = SimpleNamespace()
@@ -515,7 +520,7 @@ def test_run_prepare_impl_error_returns_failure(experiment: str) -> None:
 @given(experiment=valid_strings())
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_train_impl_error_returns_failure(experiment: str) -> None:
-    """run_train_impl returns failure ToolResult when trainer.run raises."""  
+    """run_train_impl returns failure ToolResult when trainer.run raises."""
     train_cfg = _make_trainer_cfg()
 
     shared = SimpleNamespace()
@@ -628,7 +633,7 @@ def test_run_train_impl_seed_resolver_overrides_seed(experiment: str) -> None:
 @given(experiment=valid_strings())
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_sample_impl_seed_resolver_overrides_seed(experiment: str) -> None:
-    """run_sample_impl uses resolve_seed hook when provided and int is returned."""  
+    """run_sample_impl uses resolve_seed hook when provided and int is returned."""
     sample_cfg = _make_sampler_cfg()
 
     shared = SimpleNamespace()
@@ -673,7 +678,7 @@ def test_run_sample_impl_seed_resolver_overrides_seed(experiment: str) -> None:
 @given(experiment=valid_strings())
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_train_impl_learning_mode_success(experiment: str) -> None:
-    """run_train_impl attaches learning_info when learning_mode_engine is provided."""  
+    """run_train_impl attaches learning_info when learning_mode_engine is provided."""
     train_cfg = _make_trainer_cfg()
 
     shared = SimpleNamespace()
@@ -716,7 +721,7 @@ def test_run_train_impl_learning_mode_success(experiment: str) -> None:
 @given(experiment=valid_strings())
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_sample_impl_learning_mode_success(experiment: str) -> None:
-    """run_sample_impl attaches learning_info when learning_mode_engine is provided."""  
+    """run_sample_impl attaches learning_info when learning_mode_engine is provided."""
     sample_cfg = _make_sampler_cfg()
 
     shared = SimpleNamespace()
@@ -758,7 +763,7 @@ def test_run_sample_impl_learning_mode_success(experiment: str) -> None:
 @given(host=valid_strings(), port=st.integers(min_value=1024, max_value=65535))
 @settings(max_examples=5, deadline=None, derandomize=True)
 def test_run_analyze_success_with_learning_mode(host: str, port: int) -> None:
-    """run_analyze succeeds for bundestag_char and attaches learning_info when enabled."""  
+    """run_analyze succeeds for bundestag_char and attaches learning_info when enabled."""
     from ml_playground.runtime.core.results import LearningModeEngine
 
     learning_engine = LearningModeEngine()

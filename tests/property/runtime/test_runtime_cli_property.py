@@ -165,7 +165,9 @@ class StubDependencies:
                     context_size=128,
                 ),
                 optimizer=_FakeOptimizer(learning_rate=0.001),
-                trainer=_FakeTrainerState(max_steps=100, eval_interval=10, save_interval=20),
+                trainer=_FakeTrainerState(
+                    max_steps=100, eval_interval=10, save_interval=20
+                ),
                 logger=logger,
             )
             sample_cfg = _FakeSampleCfg(

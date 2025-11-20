@@ -64,7 +64,9 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
     class _FakeTorch:
         def __init__(self, cuda_available: bool, mps_available: bool) -> None:
             self.cuda = _FakeCuda(is_available_fn=lambda: cuda_available)
-            self.backends = _FakeBackends(mps=_FakeMps(is_available_fn=lambda: mps_available))
+            self.backends = _FakeBackends(
+                mps=_FakeMps(is_available_fn=lambda: mps_available)
+            )
             self._last_device: Any | None = None
 
         def device(self, name: str) -> SimpleNamespace:
@@ -81,7 +83,7 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
         cuda_available=device_type == "cuda",
         mps_available=device_type == "mps",
     )
-    
+
     try:
         # Should not raise an exception
         rt_device.global_device_setup(device_type, dtype, seed)
@@ -92,5 +94,5 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
 
 def test_device_function_exists() -> None:
     """Test that global_device_setup function is available."""
-    assert hasattr(rt_device, 'global_device_setup')
+    assert hasattr(rt_device, "global_device_setup")
     assert callable(rt_device.global_device_setup)

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ml_playground.tools.dev.ai_guidelines import TOOL_MAP, SetupResult, ToolSpec, run_setup_ai_guidelines
+from ml_playground.tools.dev.ai_guidelines import (
+    TOOL_MAP,
+    SetupResult,
+    ToolSpec,
+    run_setup_ai_guidelines,
+)
 
 
 def test_run_setup_ai_guidelines_wraps_unexpected_exceptions(tmp_path: Path) -> None:

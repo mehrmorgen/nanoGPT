@@ -49,9 +49,11 @@ def _result(
 
 
 def test_run_cleanup_no_files_returns_message(tmp_path) -> None:
-    runner = StubRunner([
-        _result(success=True, stdout=""),
-    ])
+    runner = StubRunner(
+        [
+            _result(success=True, stdout=""),
+        ]
+    )
 
     result = hygiene.run_cleanup_ignored_tracked(runner, tmp_path)
 
@@ -113,8 +115,9 @@ def test_run_kill_port_dedupes_and_reports_success(tmp_path) -> None:
         seen.append(pid)
         return True
 
-    with override_attr(hygiene, "_pids_by_port", fake_pids), override_attr(
-        hygiene, "_kill_pid", fake_kill
+    with (
+        override_attr(hygiene, "_pids_by_port", fake_pids),
+        override_attr(hygiene, "_kill_pid", fake_kill),
     ):
         result = hygiene.run_kill_port(8080, StubRunner([]), tmp_path)
 
@@ -130,8 +133,9 @@ def test_run_kill_port_propagates_kill_failure(tmp_path) -> None:
     def fake_kill(_: int) -> bool:
         return False
 
-    with override_attr(hygiene, "_pids_by_port", fake_pids), override_attr(
-        hygiene, "_kill_pid", fake_kill
+    with (
+        override_attr(hygiene, "_pids_by_port", fake_pids),
+        override_attr(hygiene, "_kill_pid", fake_kill),
     ):
         result = hygiene.run_kill_port(42, StubRunner([]), tmp_path)
 
@@ -143,8 +147,9 @@ def test_run_kill_port_handles_lookup_exception(tmp_path) -> None:
     def raising(_: int) -> list[int]:
         raise RuntimeError("psutil error")
 
-    with override_attr(hygiene, "_pids_by_port", raising), override_attr(
-        hygiene, "_kill_pid", lambda _: True
+    with (
+        override_attr(hygiene, "_pids_by_port", raising),
+        override_attr(hygiene, "_kill_pid", lambda _: True),
     ):
         result = hygiene.run_kill_port(9000, StubRunner([]), tmp_path)
 

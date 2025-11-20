@@ -81,7 +81,9 @@ class TestCoverageCommand:
         stub = StubTestingTools()
         with override_state(learning_mode=True, verbosity=2):
             with override_attr(testing_commands, "get_testing_tools", lambda: stub):
-                with override_attr(testing_commands, "handle_tool_result", captured.append):
+                with override_attr(
+                    testing_commands, "handle_tool_result", captured.append
+                ):
                     testing_commands.test_coverage(
                         line_threshold=75.0,
                         branch_threshold=60.0,
@@ -110,7 +112,9 @@ class TestCoverageCommand:
                     stderr="coverage failed",
                 )
 
-        with override_attr(testing_commands, "get_testing_tools", lambda: FailureTools()):
+        with override_attr(
+            testing_commands, "get_testing_tools", lambda: FailureTools()
+        ):
             with override_attr(testing_commands, "handle_tool_result", captured.append):
                 testing_commands.test_coverage()
 
@@ -172,7 +176,9 @@ class TestInvokeTests:
         stub = StubTestingTools()
         with override_state(learning_mode=True, verbosity=2):
             with override_attr(testing_commands, "get_testing_tools", lambda: stub):
-                with override_attr(testing_commands, "handle_tool_result", captured.append):
+                with override_attr(
+                    testing_commands, "handle_tool_result", captured.append
+                ):
                     ctx = _make_context()
                     testing_commands._invoke_tests(
                         ctx,
@@ -191,10 +197,14 @@ class TestInvokeTests:
             def unit(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("boom", reason="r", rationale="x")
 
-        with override_attr(testing_commands, "get_testing_tools", lambda: FailingTools()):
+        with override_attr(
+            testing_commands, "get_testing_tools", lambda: FailingTools()
+        ):
             with override_attr(testing_commands, "handle_tool_result", captured.append):
                 ctx = _make_context()
-                testing_commands._invoke_tests(ctx, "tests/unit", pattern=None, extra_args=[])
+                testing_commands._invoke_tests(
+                    ctx, "tests/unit", pattern=None, extra_args=[]
+                )
 
         assert captured and captured[0].success is False
         assert captured[0].operation_id.command == "run_tests"
@@ -226,7 +236,9 @@ class TestAllAndCleanCommands:
         stub = StubTestingTools()
         with override_state(learning_mode=False, verbosity=1):
             with override_attr(testing_commands, "get_testing_tools", lambda: stub):
-                with override_attr(testing_commands, "handle_tool_result", captured.append):
+                with override_attr(
+                    testing_commands, "handle_tool_result", captured.append
+                ):
                     testing_commands.test_all(args=["-n", "auto"])
 
         assert stub.args == ["-n", "auto"]
@@ -241,7 +253,9 @@ class TestAllAndCleanCommands:
             def all_tests(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolConfigurationError("bad config", reason="a", rationale="b")
 
-        with override_attr(testing_commands, "get_testing_tools", lambda: FailingTools()):
+        with override_attr(
+            testing_commands, "get_testing_tools", lambda: FailingTools()
+        ):
             with override_attr(testing_commands, "handle_tool_result", captured.append):
                 testing_commands.test_all(args=[])
 
@@ -267,7 +281,9 @@ class TestAllAndCleanCommands:
         stub = StubTestingTools()
         with override_state(learning_mode=True, verbosity=0):
             with override_attr(testing_commands, "get_testing_tools", lambda: stub):
-                with override_attr(testing_commands, "handle_tool_result", captured.append):
+                with override_attr(
+                    testing_commands, "handle_tool_result", captured.append
+                ):
                     testing_commands.test_clean(args=["--purge"])
 
         assert stub.args == ["--purge"]
@@ -282,7 +298,9 @@ class TestAllAndCleanCommands:
             def clean(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("clean failed", reason="c", rationale="d")
 
-        with override_attr(testing_commands, "get_testing_tools", lambda: FailingTools()):
+        with override_attr(
+            testing_commands, "get_testing_tools", lambda: FailingTools()
+        ):
             with override_attr(testing_commands, "handle_tool_result", captured.append):
                 testing_commands.test_clean()
 

@@ -66,7 +66,9 @@ class TestQualityLint:
             def lint(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("lint failed", reason="x", rationale="y")
 
-        with override_attr(quality_commands, "get_quality_tools", lambda: FailingTools()):
+        with override_attr(
+            quality_commands, "get_quality_tools", lambda: FailingTools()
+        ):
             with override_attr(quality_commands, "handle_tool_result", captured.append):
                 quality_commands.quality_lint()
 
@@ -92,7 +94,9 @@ class TestQualityFormat:
             def format(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolConfigurationError("bad format", reason="r", rationale="z")
 
-        with override_attr(quality_commands, "get_quality_tools", lambda: FailingTools()):
+        with override_attr(
+            quality_commands, "get_quality_tools", lambda: FailingTools()
+        ):
             with override_attr(quality_commands, "handle_tool_result", captured.append):
                 quality_commands.quality_format()
 
@@ -108,7 +112,9 @@ class TestQualityLintCheckAndDeadcode:
             def lint_check(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise RuntimeError("boom")
 
-        with override_attr(quality_commands, "get_quality_tools", lambda: FailingTools()):
+        with override_attr(
+            quality_commands, "get_quality_tools", lambda: FailingTools()
+        ):
             with override_attr(quality_commands, "handle_tool_result", captured.append):
                 quality_commands.quality_lint_check()
 
@@ -159,13 +165,18 @@ class TestQualityTypecheckers:
 
             def __getattr__(self, name: str) -> Any:
                 if name == self.method:
+
                     def _fail(*_: object, **__: object) -> ToolResult:  # noqa: ANN401
-                        raise ToolExecutionError(f"{name} failed", reason="a", rationale="b")
+                        raise ToolExecutionError(
+                            f"{name} failed", reason="a", rationale="b"
+                        )
 
                     return _fail
                 raise AttributeError(name)
 
-        with override_attr(quality_commands, "get_quality_tools", lambda: FailingTools()):
+        with override_attr(
+            quality_commands, "get_quality_tools", lambda: FailingTools()
+        ):
             with override_attr(quality_commands, "handle_tool_result", captured.append):
                 command(args=None)
 

@@ -21,7 +21,9 @@ def override_attr(obj: object, name: str, value: Any) -> Iterator[None]:
         setattr(obj, name, original)
 
 
-def _tool_result(command: str, *, success: bool = True, stdout: str = "ok") -> ToolResult:
+def _tool_result(
+    command: str, *, success: bool = True, stdout: str = "ok"
+) -> ToolResult:
     return ToolResult.create(
         success=success,
         exit_code=0 if success else 1,
@@ -62,10 +64,17 @@ class TestReviewListCommand:
         stub = StubTools()
         with override_attr(dev_commands, "get_dev_tools", lambda: stub):
             with override_attr(dev_commands, "handle_tool_result", captured.append):
-                dev_commands.dev_review_list(123, unreplied=True, unresolved=False, remote="upstream")
+                dev_commands.dev_review_list(
+                    123, unreplied=True, unresolved=False, remote="upstream"
+                )
 
         assert stub.calls == [
-            {"pr_number": 123, "unreplied": True, "unresolved": False, "remote": "upstream"}
+            {
+                "pr_number": 123,
+                "unreplied": True,
+                "unresolved": False,
+                "remote": "upstream",
+            }
         ]
         assert captured and captured[0].operation_id.command == "review-list"
 

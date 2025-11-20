@@ -29,6 +29,7 @@ def default_tool_result_handler(result: ToolResult) -> None:
 @dataclass(slots=True)
 class ToolsDependencies:
     """Container for all tool dependencies with factory functions."""
+
     load_config: Callable[[Path | None], ToolsConfig]
     quality_factory: Callable[[ToolsConfig, Path], QualityTools]
     testing_factory: Callable[[ToolsConfig, Path], TestingTools]

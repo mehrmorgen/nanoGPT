@@ -37,6 +37,7 @@ def test_global_device_setup_passes_overrides() -> None:
 
     def fake_cuda() -> bool:
         return True
+
     fake_torch = object()
 
     with override_attr(device_module, "rt_global_device_setup", fake_setup):

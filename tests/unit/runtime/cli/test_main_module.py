@@ -35,7 +35,9 @@ def test_main_invokes_registry_and_command() -> None:
         calls["app"] = app
         return DummyCommand()
 
-    with override_attr(runtime_cli_main.registry, "load_preparers", fake_load_preparers):
+    with override_attr(
+        runtime_cli_main.registry, "load_preparers", fake_load_preparers
+    ):
         with override_attr(runtime_cli_main, "get_command", fake_get_command):
             result = runtime_cli_main.main(["--foo"])
 
@@ -63,7 +65,9 @@ def test_main_entry_uses_custom_echo_on_exception() -> None:
     assert messages and "Runtime CLI execution failed: boom|True" in messages[-1]
 
 
-def test_main_entry_handles_keyboard_interrupt(capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_entry_handles_keyboard_interrupt(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     def interrupting_runner() -> None:
         raise KeyboardInterrupt
 

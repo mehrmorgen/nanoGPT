@@ -10,7 +10,9 @@ from ml_playground.tools.utils.subprocess_utils import SubprocessRunner
 
 
 class _StubRunner(SubprocessRunner):
-    def __init__(self, branch: str = "main", dirty: bool = False, fail: bool = False) -> None:
+    def __init__(
+        self, branch: str = "main", dirty: bool = False, fail: bool = False
+    ) -> None:
         self.branch = branch
         self.dirty = dirty
         self.fail = fail
@@ -56,7 +58,9 @@ class _StubRunner(SubprocessRunner):
     ) -> ToolResult:
         del cwd, timeout, env, capture_output
         self.uv_commands.append(command)
-        return ToolResult(success=True, exit_code=0, stdout="", stderr="", operation_id=operation_id)
+        return ToolResult(
+            success=True, exit_code=0, stdout="", stderr="", operation_id=operation_id
+        )
 
     def run_pytest_command(  # type: ignore[override]
         self,
@@ -70,7 +74,13 @@ class _StubRunner(SubprocessRunner):
         del cwd, timeout, env
         self.pytest_commands.append(args)
         # Minimal successful run to satisfy callers; output is not inspected here.
-        return ToolResult(success=True, exit_code=0, stdout="1 passed in 0.01s", stderr="", operation_id=operation_id)
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="1 passed in 0.01s",
+            stderr="",
+            operation_id=operation_id,
+        )
 
 
 def _minimal_tools_config() -> ToolsConfig:
@@ -89,7 +99,11 @@ def test_run_workflow_status_json_happy_path(tmp_path: Path) -> None:
         return {"overall_status": "passed", "total_tests": 5}
 
     def fake_coverage_status(*_: Any, **__: Any) -> dict[str, Any]:
-        return {"status": "available", "line_percentage": 91.0, "branch_percentage": 83.0}
+        return {
+            "status": "available",
+            "line_percentage": 91.0,
+            "branch_percentage": 83.0,
+        }
 
     orig_quality = ws._get_quality_status
     orig_test = ws._get_test_status
@@ -102,17 +116,25 @@ def test_run_workflow_status_json_happy_path(tmp_path: Path) -> None:
             ["git", "branch", "--show-current"],
             cwd=root,
             timeout=10,
-            operation_id=OperationId(namespace="tools", category="dev", command="git-status"),
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="git-status"
+            ),
         )
         status_result = runner.run_subprocess(
             ["git", "status", "--porcelain"],
             cwd=root,
             timeout=10,
-            operation_id=OperationId(namespace="tools", category="dev", command="git-status"),
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="git-status"
+            ),
         )
         return {
-            "current_branch": branch_result.stdout.strip() if branch_result.success else "unknown",
-            "has_changes": bool(status_result.stdout.strip()) if status_result.success else False,
+            "current_branch": branch_result.stdout.strip()
+            if branch_result.success
+            else "unknown",
+            "has_changes": bool(status_result.stdout.strip())
+            if status_result.success
+            else False,
             "status": "clean" if not status_result.stdout.strip() else "dirty",
         }
 
@@ -136,12 +158,12 @@ def test_run_workflow_status_json_happy_path(tmp_path: Path) -> None:
 
     assert result.success is True
     assert result.exit_code == 0
-    assert "\"project_root\"" in result.stdout
-    assert "\"git_status\"" in result.stdout
-    assert "\"quality_status\"" in result.stdout
-    assert "\"test_status\"" in result.stdout
-    assert "\"coverage_status\"" in result.stdout
-    assert "\"readiness\"" in result.stdout
+    assert '"project_root"' in result.stdout
+    assert '"git_status"' in result.stdout
+    assert '"quality_status"' in result.stdout
+    assert '"test_status"' in result.stdout
+    assert '"coverage_status"' in result.stdout
+    assert '"readiness"' in result.stdout
 
 
 def test_get_git_status_falls_back_on_error(tmp_path: Path) -> None:

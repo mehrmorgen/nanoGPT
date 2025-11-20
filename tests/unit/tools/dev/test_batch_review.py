@@ -4,9 +4,6 @@ import json
 import sys
 import types
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 import ml_playground.tools.dev.batch_review as batch_review_module
 from ml_playground.tools.core.config import ToolsConfig
@@ -26,13 +23,11 @@ def _tool_result(
         exit_code=0 if success else 1,
         stdout=stdout,
         stderr=stderr,
-        operation_id=OperationId(
-            namespace="tools", category=category, command=command
-        ),
+        operation_id=OperationId(namespace="tools", category=category, command=command),
     )
 
 
-def test_run_quality_batch_aggregates_results(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_quality_batch_aggregates_results(tmp_path: Path) -> None:
     """`_run_quality_batch` should compile tool outputs and total failure counts."""
 
     class StubQualityTools:
@@ -66,9 +61,12 @@ def test_run_quality_batch_aggregates_results(monkeypatch: pytest.MonkeyPatch, t
                 stdout="unused\nthing",
             )
 
-    monkeypatch.setattr(batch_review_module, "QualityTools", StubQualityTools)
-
-    result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+    original = batch_review_module.QualityTools
+    batch_review_module.QualityTools = StubQualityTools
+    try:
+        result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+    finally:
+        batch_review_module.QualityTools = original
 
     assert result["lint"]["status"] == "failed"
     assert result["lint"]["issues"] == 2
@@ -81,7 +79,7 @@ def test_run_quality_batch_aggregates_results(monkeypatch: pytest.MonkeyPatch, t
     }
 
 
-def test_run_quality_batch_records_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_quality_batch_records_errors(tmp_path: Path) -> None:
     """Exceptions raised by quality tools should surface as error entries."""
 
     class RaisingQualityTools:
@@ -102,18 +100,19 @@ def test_run_quality_batch_records_errors(monkeypatch: pytest.MonkeyPatch, tmp_p
         def deadcode(self, _: list[str]) -> ToolResult:  # noqa: ANN001
             raise ValueError("deadcode fail")
 
-    monkeypatch.setattr(batch_review_module, "QualityTools", RaisingQualityTools)
-
-    result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+    original = batch_review_module.QualityTools
+    batch_review_module.QualityTools = RaisingQualityTools
+    try:
+        result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+    finally:
+        batch_review_module.QualityTools = original
 
     assert result["lint"]["status"] == "error"
     assert result["deadcode"]["status"] == "error"
     assert result["overall"]["success"] is False
 
 
-def test_run_test_batch_collects_counts_and_coverage(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_run_test_batch_collects_counts_and_coverage(tmp_path: Path) -> None:
     """`_run_test_batch` should summarize test counts, durations, and coverage."""
 
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
@@ -151,9 +150,12 @@ def test_run_test_batch_collects_counts_and_coverage(
                 stdout="TOTAL 90% 75%",
             )
 
-    monkeypatch.setattr(batch_review_module, "TestingTools", HappyTestingTools)
-
-    result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
+    original = batch_review_module.TestingTools
+    batch_review_module.TestingTools = HappyTestingTools
+    try:
+        result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
+    finally:
+        batch_review_module.TestingTools = original
 
     assert result["unit"]["count"] == 2
     assert result["integration"]["duration"] == "1.01s"
@@ -166,7 +168,7 @@ def test_run_test_batch_collects_counts_and_coverage(
     assert result["overall"]["success"] is True
 
 
-def test_run_test_batch_handles_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_test_batch_handles_failures(tmp_path: Path) -> None:
     """Failures and exceptions should mark test summary entries appropriately."""
 
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
@@ -192,9 +194,12 @@ def test_run_test_batch_handles_failures(monkeypatch: pytest.MonkeyPatch, tmp_pa
         def coverage_report(self, *_: object, **__: object) -> ToolResult:  # noqa: ANN401
             raise ValueError("coverage failure")
 
-    monkeypatch.setattr(batch_review_module, "TestingTools", FailingTestingTools)
-
-    result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
+    original = batch_review_module.TestingTools
+    batch_review_module.TestingTools = FailingTestingTools
+    try:
+        result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
+    finally:
+        batch_review_module.TestingTools = original
 
     assert result["unit"]["status"] == "failed"
     assert result["integration"]["status"] == "error"
@@ -202,7 +207,7 @@ def test_run_test_batch_handles_failures(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert result["overall"]["success"] is False
 
 
-def test_run_batch_review_formats_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_batch_review_formats_json(tmp_path: Path) -> None:
     """`run_batch_review` should combine sub-results and emit JSON output."""
 
     quality = {
@@ -214,11 +219,26 @@ def test_run_batch_review_formats_json(monkeypatch: pytest.MonkeyPatch, tmp_path
         "unit": {"status": "passed"},
     }
 
-    monkeypatch.setattr(batch_review_module, "_run_quality_batch", lambda *args, **kwargs: quality)
-    monkeypatch.setattr(batch_review_module, "_run_test_batch", lambda *args, **kwargs: tests)
-    monkeypatch.setattr(batch_review_module, "_get_timestamp", lambda: "ts")
+    original_quality = batch_review_module._run_quality_batch
+    original_test_batch = batch_review_module._run_test_batch
+    original_ts = batch_review_module._get_timestamp
 
-    result = batch_review_module.run_batch_review(ToolsConfig(), tmp_path, output_format="json")
+    batch_review_module._run_quality_batch = (  # type: ignore[assignment]
+        lambda *args, **kwargs: quality
+    )
+    batch_review_module._run_test_batch = (  # type: ignore[assignment]
+        lambda *args, **kwargs: tests
+    )
+    batch_review_module._get_timestamp = lambda: "ts"  # type: ignore[assignment]
+
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+    finally:
+        batch_review_module._run_quality_batch = original_quality  # type: ignore[assignment]
+        batch_review_module._run_test_batch = original_test_batch  # type: ignore[assignment]
+        batch_review_module._get_timestamp = original_ts  # type: ignore[assignment]
 
     payload = json.loads(result.stdout)
     assert payload["quality_checks"] == quality
@@ -227,7 +247,7 @@ def test_run_batch_review_formats_json(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert result.success is True and result.exit_code == 0
 
 
-def test_run_batch_review_supports_yaml_and_text(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_batch_review_supports_yaml_and_text(tmp_path: Path) -> None:
     """YAML and text formats should be supported with deterministic output."""
 
     quality = {
@@ -239,22 +259,42 @@ def test_run_batch_review_supports_yaml_and_text(monkeypatch: pytest.MonkeyPatch
         "unit": {"status": "passed"},
     }
 
-    monkeypatch.setattr(batch_review_module, "_run_quality_batch", lambda *args, **kwargs: quality)
-    monkeypatch.setattr(batch_review_module, "_run_test_batch", lambda *args, **kwargs: tests)
-    monkeypatch.setattr(batch_review_module, "_get_timestamp", lambda: "fixed-ts")
+    original_quality = batch_review_module._run_quality_batch
+    original_test_batch = batch_review_module._run_test_batch
+    original_ts = batch_review_module._get_timestamp
+    original_yaml = sys.modules.get("yaml")
 
-    yaml_stub = types.SimpleNamespace(dump=lambda data, default_flow_style=False: "yaml-output")
-    monkeypatch.setitem(sys.modules, "yaml", yaml_stub)
-
-    yaml_result = batch_review_module.run_batch_review(
-        ToolsConfig(), tmp_path, output_format="yaml"
+    batch_review_module._run_quality_batch = (  # type: ignore[assignment]
+        lambda *args, **kwargs: quality
     )
-    assert yaml_result.stdout == "yaml-output"
-    assert yaml_result.success is False
-
-    text_result = batch_review_module.run_batch_review(
-        ToolsConfig(), tmp_path, output_format="text"
+    batch_review_module._run_test_batch = (  # type: ignore[assignment]
+        lambda *args, **kwargs: tests
     )
+    batch_review_module._get_timestamp = lambda: "fixed-ts"  # type: ignore[assignment]
+
+    yaml_stub = types.SimpleNamespace(
+        dump=lambda data, default_flow_style=False: "yaml-output"
+    )
+    sys.modules["yaml"] = yaml_stub
+
+    try:
+        yaml_result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="yaml"
+        )
+        assert yaml_result.stdout == "yaml-output"
+        assert yaml_result.success is False
+
+        text_result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="text"
+        )
+    finally:
+        batch_review_module._run_quality_batch = original_quality  # type: ignore[assignment]
+        batch_review_module._run_test_batch = original_test_batch  # type: ignore[assignment]
+        batch_review_module._get_timestamp = original_ts  # type: ignore[assignment]
+        if original_yaml is not None:
+            sys.modules["yaml"] = original_yaml
+        else:
+            del sys.modules["yaml"]
     assert "Quality Checks" in text_result.stdout
     assert "Overall Status" in text_result.stdout
     assert text_result.success is False and text_result.exit_code == 1

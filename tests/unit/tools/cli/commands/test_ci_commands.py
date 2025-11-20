@@ -101,7 +101,9 @@ class TestQualityCiLocal:
         captured: list[ToolResult] = []
 
         class StubCiTools:
-            def quality_ci_local(self, *, bind_caches: bool, args: List[str]) -> ToolResult:
+            def quality_ci_local(
+                self, *, bind_caches: bool, args: List[str]
+            ) -> ToolResult:
                 self.bind_caches = bind_caches
                 self.args = args
                 return _tool_result("quality-ci-local", stdout="ci local ok")

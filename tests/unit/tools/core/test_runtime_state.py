@@ -77,8 +77,11 @@ def test_load_config_with_error_handling_preserves_explicit_learning_mode(
     assert runtime.state.learning_mode is True
     # learning_mode_set should reflect explicit configuration, not defaulting
     assert runtime.state.learning_mode_set is True
+
+
 def test_load_config_with_error_handling_reports_configuration_error(
-    tmp_path: Path, capsys: Any,
+    tmp_path: Path,
+    capsys: Any,
 ) -> None:
     """Configuration errors should be echoed and cause typer.Exit(1).
 
@@ -111,7 +114,8 @@ def test_load_config_with_error_handling_reports_configuration_error(
 
 
 def test_load_config_with_error_handling_reports_unexpected_error(
-    tmp_path: Path, capsys: Any,
+    tmp_path: Path,
+    capsys: Any,
 ) -> None:
     """Unexpected exceptions should be reported and cause typer.Exit(1).
 

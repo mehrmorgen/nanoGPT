@@ -169,7 +169,9 @@ def test_clean_executes_without_error(cfg: ToolsConfig, tmp_path: Path) -> None:
     assert result.stdout.strip() != ""
 
 
-def test_coverage_env_creates_directories_and_env(cfg: ToolsConfig, tmp_path: Path) -> None:
+def test_coverage_env_creates_directories_and_env(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
     tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
 
     env = tools._coverage_env()  # type: ignore[attr-defined]
@@ -206,7 +208,9 @@ branch_threshold = 83.0
     assert thresholds["branch_threshold"] == 83.0
 
 
-def test_collect_coverage_metrics_uses_existing_json(cfg: ToolsConfig, tmp_path: Path) -> None:
+def test_collect_coverage_metrics_uses_existing_json(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
     tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
 
     # Prepare coverage JSON with totals including branches
@@ -223,7 +227,9 @@ def test_collect_coverage_metrics_uses_existing_json(cfg: ToolsConfig, tmp_path:
     executed: list[str] = []
     result, metrics = tools._collect_coverage_metrics(  # type: ignore[attr-defined]
         env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
-        operation_id=OperationId(namespace="tools", category="test", command="coverage"),
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage"
+        ),
         executed_commands=executed,
     )
 
@@ -232,7 +238,9 @@ def test_collect_coverage_metrics_uses_existing_json(cfg: ToolsConfig, tmp_path:
     assert any("Branch totals:" in line for line in metrics)
 
 
-def test_mutation_run_stops_on_first_failing_step(cfg: ToolsConfig, tmp_path: Path) -> None:
+def test_mutation_run_stops_on_first_failing_step(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
     tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
 
     # Patch mutation_reset to simulate an early failure while other steps succeed.
@@ -242,7 +250,9 @@ def test_mutation_run_stops_on_first_failing_step(cfg: ToolsConfig, tmp_path: Pa
             exit_code=42,
             stdout="reset failed",
             stderr="reset error",
-            operation_id=OperationId(namespace="tools", category="test", command="mutation-reset"),
+            operation_id=OperationId(
+                namespace="tools", category="test", command="mutation-reset"
+            ),
         )
 
     with override_attr(tools, "mutation_reset", failing_reset):
@@ -253,7 +263,9 @@ def test_mutation_run_stops_on_first_failing_step(cfg: ToolsConfig, tmp_path: Pa
     assert "reset failed" in result.stdout
 
 
-def test_mutation_run_wraps_unexpected_exceptions(cfg: ToolsConfig, tmp_path: Path) -> None:
+def test_mutation_run_wraps_unexpected_exceptions(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
     """mutation_run should wrap unexpected exceptions into a failing ToolResult.
 
     This exercises the defensive catch-all branch in the mutation pipeline.
@@ -281,8 +293,9 @@ def test_ensure_coverage_data_uses_cached_manifest_when_coverage_present(
     coverage_file.parent.mkdir(parents=True, exist_ok=True)
     coverage_file.write_bytes(b"data")
 
-    with override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"), override_attr(
-        tools, "_read_coverage_manifest", lambda: {"fingerprint": "fp"}
+    with (
+        override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"),
+        override_attr(tools, "_read_coverage_manifest", lambda: {"fingerprint": "fp"}),
     ):
         executed: list[str] = []
         result, notes, env = tools._ensure_coverage_data(  # type: ignore[attr-defined]
@@ -323,10 +336,11 @@ def test_ensure_coverage_data_combines_existing_fragments_without_regen(
     def fail_run_for_data(**_: object) -> tuple[ToolResult | None, list[str]]:
         raise AssertionError("_run_coverage_test_for_data should not be called")
 
-    with override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"), (
-        override_attr(tools, "_read_coverage_manifest", lambda: {"fingerprint": "fp"})
-    ), override_attr(tools, "_combine_coverage_fragments", fake_combine), override_attr(
-        tools, "_run_coverage_test_for_data", fail_run_for_data
+    with (
+        override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"),
+        override_attr(tools, "_read_coverage_manifest", lambda: {"fingerprint": "fp"}),
+        override_attr(tools, "_combine_coverage_fragments", fake_combine),
+        override_attr(tools, "_run_coverage_test_for_data", fail_run_for_data),
     ):
         executed: list[str] = []
         result, notes, _ = tools._ensure_coverage_data(  # type: ignore[attr-defined]

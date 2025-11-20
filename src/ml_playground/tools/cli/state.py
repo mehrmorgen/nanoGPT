@@ -11,6 +11,7 @@ from ml_playground.tools.protocols import ToolsConfigLike
 @dataclass
 class GlobalState:
     """Global state for the tools CLI system."""
+
     config: Optional[ToolsConfigLike] = None
     project_root: Optional[Path] = None
     verbosity: int = 1  # Keep as int to match original usage

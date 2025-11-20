@@ -59,7 +59,9 @@ class TestEnvSetupCommand:
             def setup(self, args: List[str], clear: bool = False) -> ToolResult:
                 raise ToolExecutionError("setup failed", reason="x", rationale="y")
 
-        with override_attr(env_commands, "get_environment_tools", lambda: FailingEnvTools()):
+        with override_attr(
+            env_commands, "get_environment_tools", lambda: FailingEnvTools()
+        ):
             with override_attr(env_commands, "handle_tool_result", captured.append):
                 env_commands.env_setup(args=[])
 
@@ -142,7 +144,9 @@ class TestEnvCleanCommand:
             def clean(self, args: List[str]) -> ToolResult:
                 raise ToolConfigurationError("bad config", reason="r", rationale="z")
 
-        with override_attr(env_commands, "get_environment_tools", lambda: FailingEnvTools()):
+        with override_attr(
+            env_commands, "get_environment_tools", lambda: FailingEnvTools()
+        ):
             with override_attr(env_commands, "handle_tool_result", captured.append):
                 env_commands.env_clean()
 
@@ -155,7 +159,9 @@ class TestEnvAiGuidelinesCommand:
         captured: list[ToolResult] = []
 
         class StubEnvTools:
-            def ai_guidelines(self, args: List[str], *, tool: str, dry_run: bool) -> ToolResult:
+            def ai_guidelines(
+                self, args: List[str], *, tool: str, dry_run: bool
+            ) -> ToolResult:
                 self.args = args
                 self.tool = tool
                 self.dry_run = dry_run
@@ -164,7 +170,9 @@ class TestEnvAiGuidelinesCommand:
         stub = StubEnvTools()
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
             with override_attr(env_commands, "handle_tool_result", captured.append):
-                env_commands.env_ai_guidelines("cursor", dry_run=True, args=["--verbose"])
+                env_commands.env_ai_guidelines(
+                    "cursor", dry_run=True, args=["--verbose"]
+                )
 
         assert stub.args == ["--verbose"]
         assert stub.tool == "cursor"
@@ -209,9 +217,15 @@ class TestEnvTensorboardCommand:
 
     def test_env_tensorboard_handles_tool_error(self) -> None:
         class FailingEnvTools:
-            def tensorboard(self, args: List[str], *, logdir: Path, port: int, host: str) -> ToolResult:
-                raise ToolExecutionError("tensorboard failed", reason="x", rationale="y")
+            def tensorboard(
+                self, args: List[str], *, logdir: Path, port: int, host: str
+            ) -> ToolResult:
+                raise ToolExecutionError(
+                    "tensorboard failed", reason="x", rationale="y"
+                )
 
-        with override_attr(env_commands, "get_environment_tools", lambda: FailingEnvTools()):
+        with override_attr(
+            env_commands, "get_environment_tools", lambda: FailingEnvTools()
+        ):
             with pytest.raises(typer.Exit):
                 env_commands.env_tensorboard(logdir=Path("logs"))
