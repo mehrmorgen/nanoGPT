@@ -60,7 +60,7 @@ def load_checkpoint(
         except (
             CheckpointError,
             RuntimeError,
-        ) as exc:  # pragma: no cover - DI override path is user-supplied
+        ) as exc:
             logger.warning(f"checkpoint_load_fn failed: {exc}")
             return None
 
@@ -133,7 +133,7 @@ def save_checkpoint(
         except (
             CheckpointError,
             RuntimeError,
-        ) as exc:  # pragma: no cover - DI override path is user-supplied
+        ) as exc:
             logger.warning(
                 f"checkpoint_save_fn failed, falling back to default save: {exc}"
             )
@@ -164,7 +164,7 @@ def propagate_metadata(
         ValueError,
         TypeError,
         RuntimeError,
-    ) as exc:  # pragma: no cover - defensive
+    ) as exc:
         if logger:
             logger.warning(f"Failed to resolve meta source path: {exc}")
         return

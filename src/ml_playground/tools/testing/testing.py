@@ -811,7 +811,7 @@ class TestingTools:
                         stderr=combined_stderr or result.stderr,
                         operation_id=operation_id,
                     )
-            except Exception as e:  # pragma: no cover - defensive
+            except Exception as e:
                 return ToolResult(
                     success=False,
                     exit_code=1,

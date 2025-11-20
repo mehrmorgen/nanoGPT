@@ -214,10 +214,10 @@ def create_tokenizer(
             mapping_obj = cast(Mapping[object, object], vocab_obj)
             vocab_mapping = _coerce_vocab_mapping(mapping_obj)
         else:
-            raise TypeError("vocab must be a mapping when provided")  # pragma: no cover
+            raise TypeError("vocab must be a mapping when provided")
 
         if tokenizer_kwargs:
-            raise ValueError(  # pragma: no cover
+            raise ValueError(
                 "Unsupported keyword arguments for char tokenizer: "
                 f"{sorted(tokenizer_kwargs.keys())}"
             )
@@ -234,7 +234,7 @@ def create_tokenizer(
             raise TypeError("vocab must be a mapping when provided")
 
         if tokenizer_kwargs:
-            raise ValueError(  # pragma: no cover
+            raise ValueError(
                 "Unsupported keyword arguments for word tokenizer: "
                 f"{sorted(tokenizer_kwargs.keys())}"
             )
@@ -243,17 +243,17 @@ def create_tokenizer(
     if tokenizer_type == "tiktoken":
         encoding_name_obj = tokenizer_kwargs.pop("encoding_name", "cl100k_base")
         if not isinstance(encoding_name_obj, str):
-            raise TypeError("encoding_name must be a string")  # pragma: no cover
+            raise TypeError("encoding_name must be a string")
         loader_obj = tokenizer_kwargs.pop("loader", None)
         if loader_obj is None:
             loader: Callable[[], Any] | None = None
         elif callable(loader_obj):
             loader = cast(Callable[[], Any], loader_obj)
         else:
-            raise TypeError("loader must be callable when provided")  # pragma: no cover
+            raise TypeError("loader must be callable when provided")
 
         if tokenizer_kwargs:
-            raise ValueError(  # pragma: no cover
+            raise ValueError(
                 "Unsupported keyword arguments for tiktoken tokenizer: "
                 f"{sorted(tokenizer_kwargs.keys())}"
             )

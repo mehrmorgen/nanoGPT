@@ -10,6 +10,7 @@ import typer
 from typer.testing import CliRunner
 
 import ml_playground.runtime.cli.main as cli
+import ml_playground.runtime.cli.runners as cli_runners
 from ml_playground.runtime.cli.main import (
     app,
     override_cli_dependencies,
@@ -540,3 +541,76 @@ class TestDirectoryLoggingResilience:
 
         # Should not raise
         cli.log_command_status("tag", shared, tmp_path, logging.getLogger(__name__))
+
+
+class TestFinalizeCommandResult:
+    """Focused tests for the _finalize_command_result helper in cli.runners."""
+
+    def test_finalize_returns_captured_result_when_present(self) -> None:
+        captured = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command="demo",
+        )
+
+        calls: list[tuple[ToolResult, bool]] = []
+
+        def handler(result: ToolResult, learning_mode: bool) -> None:
+            calls.append((result, learning_mode))
+
+        result = cli_runners._finalize_command_result(  # type: ignore[attr-defined]
+            captured,
+            category="prepare",
+            command="demo",
+            handler=handler,
+            learning_mode=False,
+            call_handler_on_cancel=True,
+            cancel_message="Cancelled.",
+        )
+
+        assert result is captured
+        assert calls == []
+
+    def test_finalize_creates_fallback_and_calls_handler_on_cancel(self) -> None:
+        calls: list[tuple[ToolResult, bool]] = []
+
+        def handler(result: ToolResult, learning_mode: bool) -> None:
+            calls.append((result, learning_mode))
+
+        result = cli_runners._finalize_command_result(  # type: ignore[attr-defined]
+            None,
+            category="train",
+            command="demo",
+            handler=handler,
+            learning_mode=True,
+            call_handler_on_cancel=True,
+            cancel_message="Training cancelled.",
+        )
+
+        assert not result.success
+        assert result.stderr == "Training cancelled."
+        assert calls and calls[0][0] is result and calls[0][1] is True
+
+    def test_finalize_creates_fallback_without_calling_handler_when_disabled(
+        self,
+    ) -> None:
+        calls: list[tuple[ToolResult, bool]] = []
+
+        def handler(result: ToolResult, learning_mode: bool) -> None:
+            calls.append((result, learning_mode))
+
+        result = cli_runners._finalize_command_result(  # type: ignore[attr-defined]
+            None,
+            category="sample",
+            command="demo",
+            handler=handler,
+            learning_mode=False,
+            call_handler_on_cancel=False,
+            cancel_message=None,
+        )
+
+        assert not result.success
+        assert result.stderr == ""
+        assert calls == []

@@ -44,7 +44,7 @@ class LitTypesModule(Protocol):
 def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
     try:
         importlib.import_module("lit_nlp.api")
-    except ImportError as exc:  # pragma: no cover - optional dependency
+    except ImportError as exc:
         message = (
             "LIT dependencies are unavailable. Install lit-nlp in an isolated environment "
             + "or add it as an extra before using this integration. Try `uv sync --extra lit` "
@@ -77,7 +77,7 @@ def _import_lit_server() -> ModuleType:
     for candidate in paths:
         try:
             return importlib.import_module(candidate)
-        except (ImportError, ModuleNotFoundError) as err:  # pragma: no cover
+        except (ImportError, ModuleNotFoundError) as err:
             last_err = err
 
     try:
@@ -109,7 +109,7 @@ def run_server_bundestag_char(
     try:
         dataset_mod, model_mod, types_mod = _load_lit_components()
         server_module = _import_lit_server()
-    except RuntimeError as exc:  # pragma: no cover - optional dependency
+    except RuntimeError as exc:
         message = (
             "LIT is not available or incompatible. Install an appropriate version before "
             + "using this integration. Try `uv sync --extra lit` or `uv add lit-nlp`."
@@ -210,7 +210,7 @@ def run_server_bundestag_char(
         AttributeError,
         RuntimeError,
         ValueError,
-    ) as exc:  # pragma: no cover
+    ) as exc:
         raise RuntimeError(f"Failed to build LIT app: {exc}") from exc
 
     url = f"http://{host}:{port if port else '<auto>'}"
@@ -237,7 +237,7 @@ def run_server_bundestag_char(
                 try:
                     _ = serve_method(port, host)
                     started = True
-                except Exception as err:  # pragma: no cover - defensive
+                except Exception as err:
                     logger.debug("Failed legacy serve(%s, %s): %s", port, host, err)
 
     if started:
@@ -262,7 +262,7 @@ def run_server_bundestag_char(
                 try:
                     _ = module_serve(app, port, host)
                     started = True
-                except Exception as err:  # pragma: no cover - defensive
+                except Exception as err:
                     logger.debug(
                         "Failed module-level serve(%s, %s): %s", port, host, err
                     )
@@ -294,7 +294,7 @@ def run_server_bundestag_char(
                 tried_calls.append("werkzeug.run_simple(app.app)")
                 _ = run_simple(hostname=host, port=port or 5432, application=wsgi_app)
                 started = True
-    except (ImportError, RuntimeError, TypeError, ValueError):  # pragma: no cover
+    except (ImportError, RuntimeError, TypeError, ValueError):
         tried_calls.append("werkzeug.run_simple import failed")
 
     if not started:

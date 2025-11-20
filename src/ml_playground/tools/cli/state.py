@@ -4,15 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.learning_mode import VerbosityLevel
+from ml_playground.tools.protocols import ToolsConfigLike
 
 
 @dataclass
 class GlobalState:
     """Global state for the tools CLI system."""
-
-    config: Optional[ToolsConfig] = None
+    config: Optional[ToolsConfigLike] = None
     project_root: Optional[Path] = None
     verbosity: int = 1  # Keep as int to match original usage
     verbosity_level: VerbosityLevel = VerbosityLevel.STANDARD

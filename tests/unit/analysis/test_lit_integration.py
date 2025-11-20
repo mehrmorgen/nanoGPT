@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
 from contextlib import contextmanager
 from types import ModuleType, SimpleNamespace
@@ -193,3 +194,91 @@ def test_parse_cli_args_type_validation() -> None:
             integration._parse_cli_args([])
     finally:
         argparse.ArgumentParser.parse_args = original  # type: ignore[assignment]
+
+
+def test_load_lit_components_raises_when_lit_unavailable() -> None:
+    """_load_lit_components should wrap ImportError from lit_nlp.api.
+
+    This exercises the optional-dependency guard path.
+    """
+
+    original_import_module = importlib.import_module
+
+    def fake_import_module(name: str, *args: object, **kwargs: object) -> ModuleType:
+        if name == "lit_nlp.api":
+            raise ImportError("lit_nlp.api not installed")
+        # Forward arbitrary args/kwargs to the real import function; ignore
+        # type narrowing on the "package" kwarg here since this is a test stub.
+        return original_import_module(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    try:
+        importlib.import_module = fake_import_module  # type: ignore[assignment]
+        with pytest.raises(
+            RuntimeError, match="LIT dependencies are unavailable.*Install lit-nlp"
+        ):
+            integration._load_lit_components()
+    finally:
+        importlib.import_module = original_import_module  # type: ignore[assignment]
+
+
+def test_import_lit_server_raises_when_no_server_module() -> None:
+    """_import_lit_server should fail cleanly when no server module is importable.
+
+    This covers the path where all candidate modules fail and we build a detailed
+    RuntimeError including the last import error and detected version.
+    """
+
+    original_import_module = importlib.import_module
+
+    lit_pkg = ModuleType("lit_nlp")
+    lit_pkg.__dict__["__version__"] = "1.2.3"
+
+    def fake_import_module(name: str, *args: object, **kwargs: object) -> ModuleType:
+        if name in {
+            "lit_nlp.server",
+            "lit_nlp.dev_server",
+            "lit_nlp.runtime.server",
+            "lit_nlp.lib.server",
+        }:
+            raise ModuleNotFoundError(f"no module named {name}")
+        if name == "lit_nlp":
+            return lit_pkg
+        # Forward arbitrary args/kwargs to the real import function; ignore
+        # type narrowing on the "package" kwarg here since this is a test stub.
+        return original_import_module(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    try:
+        importlib.import_module = fake_import_module  # type: ignore[assignment]
+        with pytest.raises(RuntimeError) as excinfo:
+            integration._import_lit_server()
+    finally:
+        importlib.import_module = original_import_module  # type: ignore[assignment]
+
+    assert isinstance(excinfo.value, RuntimeError)
+    message = str(excinfo.value)
+    assert "Unable to import LIT server module" in message
+    assert "detected lit-nlp version: 1.2.3" in message
+    assert "Last error:" in message
+
+
+def test_run_server_bundestag_char_wraps_app_construction_errors() -> None:
+    """run_server_bundestag_char should wrap app construction failures.
+
+    By forcing the server factory to raise a ValueError we exercise the
+    defensive error wrapping around app creation.
+    """
+
+    with install_fake_lit_modules():
+        server_module = sys.modules["lit_nlp.server"]
+
+        def bad_server(*_args: object, **_kwargs: object) -> object:  # type: ignore[override]
+            raise ValueError("broken server factory")
+
+        server_module.Server = bad_server  # type: ignore[attr-defined]
+
+        with pytest.raises(RuntimeError, match="Failed to build LIT app"):
+            integration.run_server_bundestag_char(
+                host="127.0.0.1",
+                port=0,
+                open_browser=False,
+            )

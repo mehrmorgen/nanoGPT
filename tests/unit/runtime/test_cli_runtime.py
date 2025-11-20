@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -30,6 +31,7 @@ from ml_playground.runtime.cli.main import (
 )
 from ml_playground.runtime.core.results import LearningInfo, ToolResult
 from ml_playground.runtime import runners as runtime_runners
+from ml_playground.configuration.models import SharedConfig
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +108,15 @@ def _make_shared(tmp_path: Path) -> SimpleNamespace:
     shared.train_out_dir.mkdir(exist_ok=True)
     shared.sample_out_dir.mkdir(exist_ok=True)
     return shared
+
+
+class _EchoRecorder:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, bool]] = []
+
+    def __call__(self, message: str, *, err: bool = False) -> object:
+        self.messages.append((message, err))
+        return message
 
 
 def _tool_success(category: str, command: str) -> ToolResult:

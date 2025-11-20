@@ -148,8 +148,8 @@ extend-select = [
 
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
-# When invoked without explicit targets, analyze only the project code.
-files = ["src/ml_playground"]
+# When invoked without explicit targets, analyze the full project code, including tests.
+files = ["src/ml_playground", "tests"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 # Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
 # that slow down type checking and are not part of core runtime.

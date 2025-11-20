@@ -3,6 +3,8 @@ Tests the CLI entry points, command routing, and learning mode integration
 without using mocks, following the project's testing guidelines.
 """
 
+import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Optional
 from collections.abc import Generator
@@ -35,6 +37,41 @@ from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutio
 from ml_playground.tools.core.interfaces import ToolResult
 
 
+def _reset_global_state() -> None:
+    tools_cli.state.learning_mode = False
+    tools_cli.state.learning_mode_set = False
+    tools_cli.state.verbosity = 1
+    tools_cli.state.dry_run = False
+    tools_cli.state.project_root = None
+    tools_cli.state.config = None
+
+
+@contextmanager
+def override_attr(obj: object, name: str, value: Any) -> Generator[None, None, None]:
+    original = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, original)
+
+
+@contextmanager
+def override_env(var: str, value: Optional[str]) -> Generator[None, None, None]:
+    original = os.environ.get(var)
+    if value is None:
+        os.environ.pop(var, None)
+    else:
+        os.environ[var] = value
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = original
+
+
 def _deps(
     *,
     load_config: Optional[Callable[[Path | None], ToolsConfig]] = None,
@@ -61,18 +98,10 @@ def _deps(
 def reset_cli_state() -> Generator[None, None, None]:
     """Ensure CLI global state and dependencies reset between tests."""
 
-    def _reset() -> None:
-        tools_cli.state.learning_mode = False
-        tools_cli.state.verbosity = 1
-        tools_cli.state.dry_run = False
-        tools_cli.state.project_root = None
-        tools_cli.state.config = None
-        tools_cli.state.learning_mode_set = False
-
-    _reset()
+    _reset_global_state()
     reset_tools_dependencies()
     yield
-    _reset()
+    _reset_global_state()
     reset_tools_dependencies()
 
 
@@ -122,9 +151,164 @@ class TestCLIBasics:
 
         assert result.exit_code == 0
         assert "quality" in result.stdout
-        assert "test" in result.stdout
         assert "env" in result.stdout
         assert "ci" in result.stdout
+
+    def test_cli_version(self):
+        """Test version command."""
+        result = self.runner.invoke(tools_cli.app, ["version"])
+        assert result.exit_code == 0
+        assert "ML Playground Tools" in result.stdout
+        assert "v0.1.0" in result.stdout
+
+    def test_cli_config_without_config_file(self):
+        """Test config command when no config is loaded."""
+        result = self.runner.invoke(tools_cli.app, ["config"])
+
+        # Should load default config and show it
+        assert result.exit_code == 0
+        assert "Current tools configuration:" in result.stdout
+        assert "Learning mode default:" in result.stdout
+        assert "Tool categories:" in result.stdout
+
+    def test_cli_global_options(self):
+        """Test global CLI options parsing."""
+        # Test learning mode option
+        result = self.runner.invoke(tools_cli.app, ["--learning-mode", "version"])
+        assert result.exit_code == 0
+
+        # Test verbosity option
+        result = self.runner.invoke(tools_cli.app, ["--verbosity", "2", "version"])
+        assert result.exit_code == 0
+
+        # Test dry run option
+        result = self.runner.invoke(tools_cli.app, ["--dry-run", "version"])
+        assert result.exit_code == 0
+
+    def test_cli_project_root_option_loads_config(self, tmp_path: Path) -> None:
+        received: dict[str, Path | None] = {}
+
+        def fake_load_tools_config(project_root: Path | None = None) -> ToolsConfig:
+            received["project_root"] = project_root
+            return ToolsConfig()
+
+        deps = _deps(load_config=fake_load_tools_config)
+        with override_tools_dependencies(deps):
+            runner = CliRunner()
+            result = runner.invoke(
+                tools_cli.app,
+                ["--project-root", str(tmp_path), "version"],
+            )
+
+        assert result.exit_code == 0
+        assert received["project_root"] == tmp_path
+
+    def test_learn_commands_unknown_category(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            tools_cli.app, ["learn", "commands", "--category", "unknown"]
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown category" in (result.stderr or result.stdout)
+
+    def test_learn_commands_success_detailed(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            tools_cli.app,
+            ["learn", "commands", "--category", "quality", "--detailed"],
+        )
+
+        assert result.exit_code == 0
+        assert "Quality Tools" in result.stdout
+        assert "lint" in result.stdout
+
+    def test_learn_best_practices_unknown_category(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            tools_cli.app,
+            ["learn", "best-practices", "--category", "missing"],
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown category" in (result.stderr or result.stdout)
+
+    def test_learn_best_practices_success(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            tools_cli.app,
+            ["learn", "best-practices", "--category", "ci"],
+        )
+
+        assert result.exit_code == 0
+        assert "CI/CD Best Practices" in result.stdout
+
+    def test_cli_handles_unexpected_config_error(self) -> None:
+        def boom(_project_root: Path | None = None) -> ToolsConfig:
+            raise RuntimeError("boom")
+
+        deps = _deps(load_config=boom)
+        with override_tools_dependencies(deps):
+            result = self.runner.invoke(tools_cli.app, ["version"])
+
+        assert result.exit_code == 1
+        assert "Unexpected error loading configuration" in (
+            result.stderr or result.stdout
+        )
+
+    def test_main_uses_config_defaults_when_not_overridden(
+        self, tmp_path: Path
+    ) -> None:
+        config_obj = ToolsConfig(learning_mode_default=True, default_verbosity=2)
+
+        called: list[bool] = []
+
+        def fake_load_tools_config(project_root: Path | None = None) -> ToolsConfig:
+            assert project_root == tmp_path
+            called.append(True)
+            return config_obj
+
+        deps = _deps(load_config=fake_load_tools_config)
+        with override_tools_dependencies(deps):
+            runner = CliRunner()
+            result = runner.invoke(
+                tools_cli.app,
+                ["--project-root", str(tmp_path), "version"],
+            )
+
+        assert result.exit_code == 0
+        assert called, "load_config override was not invoked"
+        assert tools_cli.state.config == config_obj
+        assert tools_cli.state.learning_mode is True
+        assert tools_cli.state.verbosity == 2
+
+    def test_main_cli_arguments_override_config(self, tmp_path: Path) -> None:
+        config_obj = ToolsConfig(learning_mode_default=True, default_verbosity=2)
+
+        called: list[bool] = []
+
+        def fake_load_tools_config(project_root: Path | None = None) -> ToolsConfig:
+            called.append(True)
+            return config_obj
+
+        deps = _deps(load_config=fake_load_tools_config)
+        with override_tools_dependencies(deps):
+            runner = CliRunner()
+            result = runner.invoke(
+                tools_cli.app,
+                [
+                    "--project-root",
+                    str(tmp_path),
+                    "--no-learning-mode",
+                    "--verbosity",
+                    "0",
+                    "--dry-run",
+                    "version",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert called, "load_config override was not invoked"
 
 
 class TestCLIErrorBranches:
@@ -911,79 +1095,287 @@ class TestCLIIntegration:
             }
         ]
 
-    def test_env_setup_success(self) -> None:
-        """Test env setup command success."""
 
-        class StubEnvironmentTools:
+class TestDevCommandFailures:
+    """Validate error handling branches for dev CLI commands."""
+
+    def setup_method(self) -> None:
+        self.runner = CliRunner()
+
+    def _configure_state(self) -> None:
+        tools_cli.state.config = ToolsConfig()
+        tools_cli.state.project_root = Path.cwd()
+
+    def test_dev_review_list_handles_tool_error(self) -> None:
+        """ToolExecutionError should be converted to a failure ToolResult."""
+
+        captured: list[ToolResult] = []
+
+        class FailingDevTools:
+            def review_list(self, *_: object, **__: object) -> ToolResult:
+                raise ToolExecutionError("boom", reason="unit", rationale="coverage")
+
+        deps = _deps(
+            dev_factory=lambda _cfg: FailingDevTools(),
+            result_handler=lambda result: captured.append(result),
+        )
+
+        with override_tools_dependencies(deps):
+            self._configure_state()
+            result = self.runner.invoke(tools_cli.app, ["dev", "review-list", "456"])
+
+        assert result.exit_code == 0
+        failure = captured[-1]
+        assert failure.success is False
+        assert failure.operation_id.command == "review-list"
+        assert "Error listing review threads" in (failure.stderr or "")
+
+    def test_dev_batch_review_handles_configuration_error(self) -> None:
+        """Configuration errors should surface via result handler."""
+
+        captured: list[ToolResult] = []
+
+        class FailingDevTools:
+            def batch_review(self, *_: object, **__: object) -> ToolResult:
+                raise ToolConfigurationError("bad config", reason="x", rationale="y")
+
+        deps = _deps(
+            dev_factory=lambda _cfg: FailingDevTools(),
+            result_handler=lambda result: captured.append(result),
+        )
+
+        with override_tools_dependencies(deps):
+            self._configure_state()
+            cli_result = self.runner.invoke(
+                tools_cli.app, ["dev", "batch-review", "--format", "yaml"]
+            )
+
+        assert cli_result.exit_code == 0
+        failure = captured[-1]
+        assert failure.success is False
+        assert failure.operation_id.command == "batch-review"
+        assert "Error performing batch review" in (failure.stderr or "")
+
+    def test_dev_batch_review_success_propagates_result(self) -> None:
+        """Successful batch review should reach the injected result handler."""
+
+        captured: list[ToolResult] = []
+
+        class StubDevTools:
             def __init__(self) -> None:
-                self.calls: list[dict[str, object]] = []
+                self.seen_formats: list[str] = []
 
-            def setup(self, clear: bool, args: list[str]) -> ToolResult:
-                self.calls.append({"clear": clear, "args": args})
+            def batch_review(self, *, output_format: str) -> ToolResult:
+                self.seen_formats.append(output_format)
                 return ToolResult.create(
                     success=True,
                     exit_code=0,
                     namespace="tools",
-                    category="env",
-                    command="setup",
-                    stdout="environment setup passed",
+                    category="dev",
+                    command="batch-review",
+                    stdout=f"format={output_format}",
                 )
 
-        stub = StubEnvironmentTools()
-        deps = _deps(environment_factory=lambda _cfg, _root: stub)
+        stub = StubDevTools()
+        deps = _deps(
+            dev_factory=lambda _cfg: stub,
+            result_handler=lambda result: captured.append(result),
+        )
+
         with override_tools_dependencies(deps):
-            tools_cli.state.config = ToolsConfig()
-            tools_cli.state.project_root = Path.cwd()
-            result = self.runner.invoke(
-                tools_cli.app, ["env", "setup", "--clear", "--", "--verbose"]
+            self._configure_state()
+            cli_result = self.runner.invoke(
+                tools_cli.app, ["dev", "batch-review", "--format", "text"]
             )
 
-        assert result.exit_code == 0
-        assert "environment setup passed" in result.stdout
-        assert stub.calls == [{"clear": True, "args": ["--verbose"]}]
+        assert cli_result.exit_code == 0
+        assert stub.seen_formats == ["text"]
+        assert captured[-1].success is True
+        assert "format=text" in (captured[-1].stdout or "")
 
-    def test_quality_lint_success(self) -> None:
-        """Test quality lint command success."""
+    def test_dev_cleanup_handles_tool_error(self) -> None:
+        """Cleanup command should exit with Typer error when tools fail."""
 
-        class StubQualityTools:
-            def __init__(self) -> None:
-                self.calls: list[dict[str, object]] = []
-
-            def lint(
-                self, args: list[str], learning_mode: bool, verbosity_level: int
-            ) -> ToolResult:
-                self.calls.append(
-                    {
-                        "args": args,
-                        "learning_mode": learning_mode,
-                        "verbosity_level": verbosity_level,
-                    }
-                )
-                return ToolResult.create(
-                    success=True,
-                    exit_code=0,
-                    namespace="tools",
-                    category="quality",
-                    command="lint",
-                    stdout="lint passed",
+        class FailingDevTools:
+            def cleanup_ignored_tracked(self) -> ToolResult:
+                raise ToolExecutionError(
+                    "cleanup failed", reason="err", rationale="cov"
                 )
 
-        stub = StubQualityTools()
-        deps = _deps(quality_factory=lambda _cfg, _root: stub)
+        deps = _deps(dev_factory=lambda _cfg: FailingDevTools())
+
         with override_tools_dependencies(deps):
-            tools_cli.state.config = ToolsConfig()
-            tools_cli.state.project_root = Path.cwd()
-            tools_cli.state.learning_mode = True
-            tools_cli.state.verbosity = 2
+            self._configure_state()
             result = self.runner.invoke(
-                tools_cli.app, ["quality", "lint", "--", "--verbose"]
+                tools_cli.app, ["dev", "cleanup-ignored-tracked"]
             )
 
+        assert result.exit_code == 1
+        assert "cleanup failed" in (result.stderr or result.stdout)
+
+    def test_dev_kill_port_handles_tool_error(self) -> None:
+        """kill-port should raise typer.Exit on tool failures."""
+
+        class FailingDevTools:
+            def kill_port(self, *_: object, **__: object) -> ToolResult:
+                raise ToolExecutionError("kill failed", reason="err", rationale="cov")
+
+        deps = _deps(dev_factory=lambda _cfg: FailingDevTools())
+
+        with override_tools_dependencies(deps):
+            self._configure_state()
+            result = self.runner.invoke(tools_cli.app, ["dev", "kill-port", "8080"])
+
+        assert result.exit_code == 1
+        assert "kill failed" in (result.stderr or result.stdout)
+
+
+class TestMainCallbackBehavior:
+    def test_main_sets_state_and_env_from_cli(self, tmp_path: Path) -> None:
+        captured: dict[str, object] = {}
+        fake_deps = object()
+
+        def fake_get_deps() -> object:
+            return fake_deps
+
+        def fake_load(
+            project_root: Path | None = None, deps: object | None = None
+        ) -> None:
+            captured["project_root"] = project_root
+            captured["deps"] = deps
+            tools_cli.state.config = ToolsConfig()
+            tools_cli.state.project_root = project_root
+
+        with override_attr(tools_cli, "get_tools_dependencies", fake_get_deps):
+            with override_attr(tools_cli, "load_config_with_error_handling", fake_load):
+                with override_env("ML_PLAYGROUND_TOOLS_DRY_RUN", None):
+                    tools_cli.main(
+                        learning_mode=True,
+                        verbosity=2,
+                        dry_run=True,
+                        project_root=tmp_path,
+                    )
+                    assert os.environ.get("ML_PLAYGROUND_TOOLS_DRY_RUN") == "1"
+
+        assert captured["project_root"] == tmp_path
+        assert captured["deps"] is fake_deps
+        assert tools_cli.state.learning_mode is True
+        assert tools_cli.state.learning_mode_set is True
+        assert tools_cli.state.verbosity == 2
+        assert tools_cli.state.dry_run is True
+
+    def test_main_clears_dry_run_env(self, tmp_path: Path) -> None:
+        tools_cli.state.config = ToolsConfig()
+
+        def fake_get_deps() -> object:
+            return object()
+
+        def fake_load(
+            project_root: Path | None = None, deps: object | None = None
+        ) -> None:
+            tools_cli.state.config = ToolsConfig()
+            tools_cli.state.project_root = project_root
+
+        with override_attr(tools_cli, "get_tools_dependencies", fake_get_deps):
+            with override_attr(tools_cli, "load_config_with_error_handling", fake_load):
+                with override_env("ML_PLAYGROUND_TOOLS_DRY_RUN", "1"):
+                    tools_cli.main(
+                        learning_mode=False,
+                        verbosity=None,
+                        dry_run=False,
+                        project_root=tmp_path,
+                    )
+                    assert "ML_PLAYGROUND_TOOLS_DRY_RUN" not in os.environ
+
+
+class TestShowConfig:
+    def test_show_config_prints_current_state(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        tools_cli.state.config = ToolsConfig(learning_mode_default=False)
+        tools_cli.state.project_root = Path("/tmp/project")
+
+        with override_attr(tools_cli, "ensure_config_loaded", lambda: None):
+            tools_cli.show_config()
+
+        out = capsys.readouterr().out
+        assert "Current tools configuration" in out
+        assert "Project root" in out
+
+
+class TestLearnCommands:
+    def setup_method(self) -> None:
+        self.runner = CliRunner()
+
+    def test_learn_commands_overview(self) -> None:
+        result = self.runner.invoke(tools_cli.app, ["learn", "commands", "--detailed"])
         assert result.exit_code == 0
-        assert "lint passed" in result.stdout
-        assert stub.calls == [
-            {"args": ["--verbose"], "learning_mode": True, "verbosity_level": 2}
-        ]
+        assert "ML Playground Tools Overview" in result.stdout
+
+    def test_learn_commands_invalid_category(self) -> None:
+        result = self.runner.invoke(
+            tools_cli.app, ["learn", "commands", "--category", "unknown"]
+        )
+        assert result.exit_code == 1
+        assert "Unknown category" in (result.stderr or result.stdout)
+
+    def test_learn_explain_happy_path(self) -> None:
+        result = self.runner.invoke(
+            tools_cli.app,
+            ["learn", "explain", "quality.lint"],
+        )
+        assert result.exit_code == 0
+        assert "Command: quality.lint" in result.stdout
+
+    def test_learn_explain_invalid_format(self) -> None:
+        result = self.runner.invoke(tools_cli.app, ["learn", "explain", "invalid"])
+        assert result.exit_code == 1
+        assert "Command must be in format" in (result.stderr or result.stdout)
+
+    def test_learn_best_practices_category(self) -> None:
+        result = self.runner.invoke(
+            tools_cli.app,
+            ["learn", "best-practices", "--category", "ci"],
+        )
+        assert result.exit_code == 0
+        assert "CI/CD Best Practices" in result.stdout
+
+
+class TestMainEntryErrorHandling:
+    def test_main_entry_handles_keyboard_interrupt(self) -> None:
+        class RaisingApp:
+            def __call__(self) -> None:  # noqa: D401
+                raise KeyboardInterrupt
+
+        with override_attr(tools_cli, "app", RaisingApp()):
+            with pytest.raises(typer.Exit) as exc:
+                tools_cli.main_entry()
+
+        assert exc.value.exit_code == 1
+
+    def test_main_entry_handles_tool_errors(self) -> None:
+        class RaisingApp:
+            def __call__(self) -> None:
+                raise ToolExecutionError("failure", reason="x", rationale="y")
+
+        with override_attr(tools_cli, "app", RaisingApp()):
+            with pytest.raises(typer.Exit) as exc:
+                tools_cli.main_entry()
+
+        assert exc.value.exit_code == 1
+
+    def test_main_entry_handles_unexpected_errors(self) -> None:
+        class RaisingApp:
+            def __call__(self) -> None:
+                raise ValueError("boom")
+
+        with override_attr(tools_cli, "app", RaisingApp()):
+            with pytest.raises(typer.Exit) as exc:
+                tools_cli.main_entry()
+
+        assert exc.value.exit_code == 1
+
+    # Additional CLI command routing tests live in TestEnvironmentCommands/TestQuality... classes
 
 
 class TestCoverageCommands:

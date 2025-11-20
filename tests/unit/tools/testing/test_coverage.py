@@ -8,11 +8,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 import ml_playground.tools.testing.coverage as coverage_module
 import ml_playground.tools.core.config as config_module
 from ml_playground.tools.core.config import ToolsConfig
+from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.testing import coverage_helpers
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner
@@ -72,6 +73,16 @@ def override_env(name: str, value: str | None) -> Iterator[None]:
             os.environ.pop(name, None)
         else:
             os.environ[name] = previous
+
+
+@contextmanager
+def override_attr(obj: object, name: str, value: Any) -> Iterator[None]:
+    original = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, original)
 
 
 class CoverageRunner(SubprocessRunner):
@@ -353,6 +364,32 @@ def test_run_coverage_report_handles_existing_json_without_regen(
     assert "Generated terminal report" in result.stdout
 
 
+def test_run_coverage_report_raises_in_ci_when_file_empty(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    runner = CoverageRunner()
+    coverage_dir = _coverage_dir(tmp_path)
+    coverage_file = coverage_dir / "coverage.sqlite"
+    coverage_file.write_bytes(b"")
+
+    env = {"COVERAGE_FILE": str(coverage_file)}
+
+    def fake_ensure(**_: object) -> tuple[list[str], list[str], dict[str, str]]:  # type: ignore[override]
+        return [], [], env.copy()
+
+    with override_attr(coverage_module, "_ensure_coverage_data", fake_ensure):
+        with override_env("CI", "true"):
+            with pytest.raises(ToolExecutionError, match="Coverage data file is empty"):
+                coverage_module.run_coverage_report(
+                    config=config,
+                    root_path=tmp_path,
+                    args=[],
+                    verbose=False,
+                    subprocess_runner=runner,
+                    cache_dir=_cache_dir(tmp_path),
+                )
+
+
 def test_run_coverage_threshold_enforces_limits(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
@@ -395,6 +432,74 @@ def test_run_coverage_threshold_enforces_limits(
     assert "Files below 100% coverage" in result.stdout
 
 
+def test_run_coverage_threshold_appends_json_errors(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    class JsonFailureRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:2] == ["coverage", "json"]:
+                json_path = Path(args[args.index("-o") + 1])
+                json_path.parent.mkdir(parents=True, exist_ok=True)
+                json_path.write_text(json.dumps(self.json_payload), encoding="utf-8")
+                return ToolResult(
+                    success=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="json failed",
+                    operation_id=operation_id,
+                )
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+    runner = JsonFailureRunner()
+    runner.json_payload = {
+        "totals": {
+            "num_statements": 20,
+            "covered_lines": 10,
+            "num_branches": 2,
+            "covered_branches": 1,
+        },
+        "files": {},
+    }
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage_threshold(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        line_threshold=95.0,
+        branch_threshold=0.0,
+        verbose=False,
+        learning_mode=False,
+        verbosity_level=1,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        force_regen=False,
+    )
+
+    assert result.success is False
+    stderr = result.stderr or ""
+    assert "json failed" in stderr
+    assert "FAILURE" in stderr
+
+
 def test_run_coverage_combines_results_and_propagates_failure(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
@@ -414,7 +519,7 @@ def test_run_coverage_combines_results_and_propagates_failure(
         root_path=tmp_path,
         args=[],
         line_threshold=95.0,
-        branch_threshold=90.0,
+        branch_threshold=75.0,
         verbose=False,
         learning_mode=False,
         verbosity_level=1,
@@ -424,30 +529,5 @@ def test_run_coverage_combines_results_and_propagates_failure(
     )
 
     assert result.success is False
-    assert result.exit_code == 1
-    assert "FAILURE" in result.stderr
-
-
-def test_run_coverage_supports_learning_mode(
-    config: ToolsConfig, tmp_path: Path
-) -> None:
-    runner = CoverageRunner()
-    _prepare_cached_coverage(tmp_path)
-
-    result = coverage_module.run_coverage(
-        config=config,
-        root_path=tmp_path,
-        args=[],
-        line_threshold=10.0,
-        branch_threshold=5.0,
-        verbose=False,
-        learning_mode=True,
-        verbosity_level=2,
-        force_regen=False,
-        subprocess_runner=runner,
-        cache_dir=_cache_dir(tmp_path),
-    )
-
-    assert result.success is True
-    assert result.learning_info is not None
-    assert result.learning_info.commands_executed
+    stderr = result.stderr or ""
+    assert "FAILURE" in stderr

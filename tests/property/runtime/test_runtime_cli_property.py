@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -58,6 +59,66 @@ class LoggerProbe:
         self.errors.append(msg % args if args else msg)
 
 
+@dataclass
+class _FakeRuntimeCfg:
+    device: str
+    dtype: str
+    seed: int
+    out_dir: Path
+
+
+@dataclass
+class _FakePrepareCfg:
+    runtime: _FakeRuntimeCfg
+    data: dict[str, object]
+    logger: logging.Logger
+
+
+@dataclass
+class _FakeModel:
+    n_layer: int
+    n_head: int
+    n_embd: int
+    vocab_size: int
+    context_size: int
+
+
+@dataclass
+class _FakeOptimizer:
+    learning_rate: float
+
+
+@dataclass
+class _FakeTrainerState:
+    max_steps: int
+    eval_interval: int
+    save_interval: int
+
+
+@dataclass
+class _FakeTrainCfg:
+    runtime: _FakeRuntimeCfg
+    model: _FakeModel
+    optimizer: _FakeOptimizer
+    trainer: _FakeTrainerState
+    logger: logging.Logger
+
+
+@dataclass
+class _FakeSamplerState:
+    num_samples: int
+    temperature: float
+    top_k: int | None
+
+
+@dataclass
+class _FakeSampleCfg:
+    runtime: _FakeRuntimeCfg
+    model: _FakeModel
+    sampler: _FakeSamplerState
+    logger: logging.Logger
+
+
 class StubDependencies:
     """In-memory CLIDependencies implementation used for property tests."""
 
@@ -82,16 +143,43 @@ class StubDependencies:
                 train_out_dir=base / "train_out",
                 sample_out_dir=base / "sample_out",
             )
-            runtime_cfg = SimpleNamespace(
+            runtime_cfg = _FakeRuntimeCfg(
                 device="cpu",
                 dtype="float32",
                 seed=1337,
                 out_dir=Path("out"),
             )
             logger = logging.getLogger("ml_playground.tests.runtime_cli")
-            prepare_cfg = SimpleNamespace(logger=logger)
-            train_cfg = SimpleNamespace(runtime=runtime_cfg, logger=logger)
-            sample_cfg = SimpleNamespace(runtime=runtime_cfg, logger=logger)
+            prepare_cfg = _FakePrepareCfg(
+                runtime=runtime_cfg,
+                data={"tag": "prepare"},
+                logger=logger,
+            )
+            train_cfg = _FakeTrainCfg(
+                runtime=runtime_cfg,
+                model=_FakeModel(
+                    n_layer=6,
+                    n_head=8,
+                    n_embd=384,
+                    vocab_size=1024,
+                    context_size=128,
+                ),
+                optimizer=_FakeOptimizer(learning_rate=0.001),
+                trainer=_FakeTrainerState(max_steps=100, eval_interval=10, save_interval=20),
+                logger=logger,
+            )
+            sample_cfg = _FakeSampleCfg(
+                runtime=runtime_cfg,
+                model=_FakeModel(
+                    n_layer=4,
+                    n_head=4,
+                    n_embd=256,
+                    vocab_size=512,
+                    context_size=64,
+                ),
+                sampler=_FakeSamplerState(num_samples=5, temperature=1.0, top_k=None),
+                logger=logger,
+            )
             return SimpleNamespace(
                 prepare=prepare_cfg,
                 train=train_cfg,

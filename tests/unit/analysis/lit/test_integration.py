@@ -4,13 +4,24 @@
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Mapping, Optional
+from typing import Dict, Iterator, Mapping, Optional
 
 import pytest
 
 from ml_playground.analysis.lit import integration
+
+
+@contextmanager
+def override_attr(obj: object, name: str, value: object) -> Iterator[None]:
+    original = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, original)
 
 
 def _install_modules(modules: Dict[str, ModuleType]) -> Dict[str, Optional[ModuleType]]:
@@ -64,6 +75,20 @@ def test_load_lit_components_uses_expected_modules() -> None:
         assert types_mod.TextSegment is text_segment
     finally:
         _restore_modules(originals)
+
+
+def test_load_lit_components_requires_lit_dependencies() -> None:
+    """Import failures should explain how to install lit dependencies."""
+
+    def failing_import(name: str, package: str | None = None) -> ModuleType:
+        raise ImportError(f"missing {name}")
+
+    with override_attr(integration.importlib, "import_module", failing_import):
+        with pytest.raises(
+            RuntimeError, match="LIT dependencies are unavailable"
+        ) as exc:
+            integration._load_lit_components()
+        assert "uv sync --extra lit" in str(exc.value)
 
 
 def test_import_lit_server_prefers_primary_module() -> None:
@@ -167,6 +192,71 @@ def test_run_server_bundestag_char_invokes_server_factory(tmp_path: Path) -> Non
         _restore_modules(originals)
 
 
+def test_run_server_bundestag_char_uses_module_level_serve(tmp_path: Path) -> None:
+    """Fallback to module-level serve should start the server when app lacks serve."""
+
+    dataset_module = ModuleType("lit_nlp.api.dataset")
+    model_module = ModuleType("lit_nlp.api.model")
+    types_module = ModuleType("lit_nlp.api.types")
+
+    class DummyDatasetBase: ...
+
+    class DummyModelBase: ...
+
+    def text_segment() -> str:
+        return "segment"
+
+    dataset_module.Dataset = DummyDatasetBase  # type: ignore[attr-defined]
+    model_module.Model = DummyModelBase  # type: ignore[attr-defined]
+    types_module.TextSegment = text_segment  # type: ignore[attr-defined]
+
+    api_module = ModuleType("lit_nlp.api")
+    server_module = ModuleType("lit_nlp.server")
+
+    class ServerApp:
+        def __init__(
+            self, models: Mapping[str, object], datasets: Mapping[str, object]
+        ) -> None:
+            self.models = models
+            self.datasets = datasets
+
+    served_calls: list[tuple[object, int, str, bool]] = []
+
+    class ServerFactory:
+        def __call__(
+            self, models: Mapping[str, object], datasets: Mapping[str, object]
+        ) -> ServerApp:
+            return ServerApp(models, datasets)
+
+    def module_level_serve(
+        *, app: object, port: int, host: str, open_browser: bool
+    ) -> None:
+        served_calls.append((app, port, host, open_browser))
+
+    server_module.Server = ServerFactory()  # type: ignore[attr-defined]
+    server_module.serve = module_level_serve  # type: ignore[attr-defined]
+
+    modules = {
+        "lit_nlp.api": api_module,
+        "lit_nlp.api.dataset": dataset_module,
+        "lit_nlp.api.model": model_module,
+        "lit_nlp.api.types": types_module,
+        "lit_nlp.server": server_module,
+    }
+    originals = _install_modules(modules)
+    try:
+        integration.run_server_bundestag_char(
+            host="127.0.0.1", port=0, open_browser=False
+        )
+        assert served_calls, "module-level serve should be invoked"
+        _, served_port, served_host, served_browser = served_calls[0]
+        assert served_port == 0
+        assert served_host == "127.0.0.1"
+        assert served_browser is False
+    finally:
+        _restore_modules(originals)
+
+
 def test_import_lit_server_falls_back_to_runtime_server() -> None:
     """`_import_lit_server` should fall back to `runtime.server` if `dev_server` is missing."""
     server_module = ModuleType("lit_nlp.server")
@@ -187,3 +277,15 @@ def test_import_lit_server_falls_back_to_runtime_server() -> None:
         assert imported is runtime_server_module
     finally:
         _restore_modules(originals)
+
+
+def test_parse_cli_args_parses_values() -> None:
+    """CLI argument parser should return the expected tuple of values."""
+
+    host, port, open_browser = integration._parse_cli_args(
+        ["--host", "0.0.0.0", "--port", "0", "--open-browser"]
+    )
+
+    assert host == "0.0.0.0"
+    assert port == 0
+    assert open_browser is True

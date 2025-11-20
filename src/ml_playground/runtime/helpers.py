@@ -10,7 +10,7 @@ import typer
 from ml_playground.configuration import loading as config_loading
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.runtime.core.results import ToolResult
-from ml_playground.configuration.models import SharedConfig
+from ml_playground.runtime.protocols import SharedConfigLike
 
 
 def handle_tool_result(result: ToolResult, learning_mode: bool = False) -> None:
@@ -129,7 +129,7 @@ def log_directory(
 
 def log_command_status(
     tag: str,
-    shared_config: SharedConfig,
+    shared_config: SharedConfigLike,
     out_dir: Path | None,
     logger: LoggerLike,
 ) -> None:

@@ -101,6 +101,27 @@ INVALID_TOKENS = [
     token for token in INVALID_TOKEN_POOL if token not in ALL_VALID_TOKENS
 ]
 
+COMMAND_INFO = tools_cli.get_command_info()
+CATEGORIES = sorted(COMMAND_INFO.keys())
+CATEGORY_STRATEGY = st.sampled_from(CATEGORIES) if CATEGORIES else st.just("quality")
+INVALID_CATEGORIES = [
+    token for token in INVALID_TOKEN_POOL if token not in COMMAND_INFO
+] or ["unknown-category"]
+INVALID_CATEGORY_STRATEGY = st.sampled_from(INVALID_CATEGORIES)
+CATEGORY_COMMAND_MAP = {
+    category: sorted(info["commands"].keys()) for category, info in COMMAND_INFO.items()
+}
+VALID_EXPLAIN_TARGETS = [
+    f"{category}.{command}"
+    for category, commands in CATEGORY_COMMAND_MAP.items()
+    for command in commands
+]
+VALID_EXPLAIN_STRATEGY = (
+    st.sampled_from(VALID_EXPLAIN_TARGETS)
+    if VALID_EXPLAIN_TARGETS
+    else st.just("quality.lint")
+)
+
 
 def _reset_cli_state() -> None:
     tools_runtime.reset_state()
@@ -233,6 +254,111 @@ def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> 
     assert result.exit_code != 0
     error_stream = result.stderr or result.stdout
     assert "Invalid value for '--verbosity'" in error_stream or "Usage:" in error_stream
+
+
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    category=CATEGORY_STRATEGY,
+    detailed=st.booleans(),
+)
+@example(flags=[], category="quality", detailed=False)
+@example(flags=["--dry-run"], category="test", detailed=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_commands_accept_valid_categories(
+    flags: list[str], category: str, detailed: bool
+) -> None:
+    args = [*flags, "learn", "commands", "--category", category]
+    if detailed:
+        args.append("--detailed")
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    output = result.stdout
+    assert category in output
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, category=INVALID_CATEGORY_STRATEGY)
+@example(flags=[], category="totally-unknown")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_commands_reject_unknown_categories(
+    flags: list[str], category: str
+) -> None:
+    args = [*flags, "learn", "commands", "--category", category]
+    result = _invoke_cli(args)
+    assert result.exit_code == 1
+    error_stream = result.stderr or result.stdout
+    assert "Unknown category" in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, detailed=st.booleans())
+@example(flags=[], detailed=False)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_learn_commands_overview(flags: list[str], detailed: bool) -> None:
+    args = [*flags, "learn", "commands"]
+    if detailed:
+        args.append("--detailed")
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    text = result.stdout
+    assert "ML Playground Tools" in text
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, category=CATEGORY_STRATEGY)
+@example(flags=[], category="env")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_best_practices_valid_category(flags: list[str], category: str) -> None:
+    args = [*flags, "learn", "best-practices", "--category", category]
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    output = result.stdout
+    assert COMMAND_INFO[category]["name"] in output
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, category=INVALID_CATEGORY_STRATEGY)
+@example(flags=["--dry-run"], category="missing")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_best_practices_rejects_unknown_category(
+    flags: list[str], category: str
+) -> None:
+    args = [*flags, "learn", "best-practices", "--category", category]
+    result = _invoke_cli(args)
+    assert result.exit_code == 1
+    error_stream = result.stderr or result.stdout
+    assert "Unknown category" in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@example(flags=[])
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_learn_best_practices_overview(flags: list[str]) -> None:
+    args = [*flags, "learn", "best-practices"]
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    text = result.stdout
+    assert "Best Practices" in text
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, target=VALID_EXPLAIN_STRATEGY)
+@example(flags=[], target="quality.lint")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_explain_known_command(flags: list[str], target: str) -> None:
+    args = [*flags, "learn", "explain", target]
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    output = result.stdout
+    assert target.split(".")[0] in output
+    assert target.split(".")[1] in output
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=st.text(min_size=1, max_size=10))
+@example(flags=[], bad_value="invalid-format")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_explain_rejects_invalid_format(flags: list[str], bad_value: str) -> None:
+    assume_value = bad_value if "." not in bad_value else bad_value.replace(".", "-")
+    args = [*flags, "learn", "explain", assume_value]
+    result = _invoke_cli(args)
+    assert result.exit_code == 1
+    error_stream = result.stderr or result.stdout
+    assert "Command must be in format" in error_stream
 
 
 # --- Command execution coverage ------------------------------------------------

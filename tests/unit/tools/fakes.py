@@ -9,12 +9,15 @@ from typing import Any, Callable, Dict, List, Optional, Union, TypedDict
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 
 
-class _SubprocessCall(TypedDict, total=False):
+class _SubprocessCallRequired(TypedDict):
     command: list[str]
+    operation_id: OperationId
+
+
+class _SubprocessCall(_SubprocessCallRequired, total=False):
     cwd: str | Path | None
     env: dict[str, str] | None
     timeout: int | None
-    operation_id: OperationId
     capture_output: bool
 
 

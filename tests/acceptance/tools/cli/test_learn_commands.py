@@ -274,7 +274,6 @@ class TestLearnCommandsIntegration:
 
         # Verify categories mentioned in learn exist in main CLI
         learn_output = result.stdout
-        main_help = help_result.stdout
 
         # Key categories should be present in both
         for category in ["quality", "test", "env"]:

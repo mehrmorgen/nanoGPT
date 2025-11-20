@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Any, ContextManager, cast
 
 import hypothesis.strategies as st
-from hypothesis import example, given, settings
+from hypothesis import HealthCheck, assume, example, given, settings
 import pytest
 import typer
 from typer.testing import CliRunner
@@ -20,6 +20,7 @@ from ml_playground.runtime.cli.main import (
     CLIDependencies,
     extract_exp_config,
     global_device_setup,
+    global_options,
     log_command_status,
     log_directory,
     override_cli_dependencies,
@@ -38,7 +39,11 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
-from ml_playground.runtime.core.results import LearningModeEngine, ToolResult
+from ml_playground.runtime.core.results import (
+    LearningModeEngine,
+    ToolResult,
+    VerbosityLevel,
+)
 
 
 class LoggerProbe:
@@ -212,6 +217,54 @@ def test_run_or_exit_maps_known_exceptions_to_exit(
         run_or_exit(_raise, exception_exit_code=exit_code)
 
     assert excinfo.value.exit_code == exit_code
+
+
+@settings(
+    max_examples=40,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(
+    learning_mode=st.booleans(),
+    verbosity=st.integers(min_value=0, max_value=2),
+    use_exp_path=st.booleans(),
+    path_exists=st.booleans(),
+)
+def test_global_options_sets_context_flags(
+    learning_mode: bool,
+    verbosity: int,
+    use_exp_path: bool,
+    path_exists: bool,
+    tmp_path: Path,
+) -> None:
+    ctx = typer.Context(typer.main.get_command(app))
+    exp_path = tmp_path / "exp.toml" if use_exp_path else None
+    if exp_path is not None and path_exists:
+        exp_path.write_text("{}", encoding="utf-8")
+
+    if exp_path is not None and not path_exists:
+        assume(False)
+
+    global_options(
+        ctx,
+        exp_config=exp_path,
+        learning_mode=learning_mode,
+        verbosity=verbosity,
+    )
+
+    assert ctx.obj["exp_config"] == exp_path
+    if learning_mode:
+        assert ctx.obj.get("learning_mode") is True
+    else:
+        assert "learning_mode" not in ctx.obj
+
+    verbosity_value = ctx.obj.get("verbosity")
+    expected_level = VerbosityLevel(verbosity)
+    if expected_level != VerbosityLevel.STANDARD:
+        assert verbosity_value == expected_level
+    else:
+        assert verbosity_value in (None, VerbosityLevel.STANDARD)
 
 
 @given(experiment=_EXPERIMENT_NAMES)

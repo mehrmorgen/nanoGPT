@@ -4,11 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from ml_playground.configuration.models import (
-    PreparerConfig,
-    SamplerConfig,
-    TrainerConfig,
-)
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.data_pipeline.preparer import create_pipeline
 from ml_playground.sampling.runner import Sampler
@@ -16,6 +11,11 @@ from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.runtime.core.results import LearningModeEngine, ToolResult
 from ml_playground.runtime.device import global_device_setup
 from ml_playground.runtime.helpers import log_command_status
+from ml_playground.runtime.protocols import (
+    PrepareConfigLike,
+    SampleConfigLike,
+    TrainConfigLike,
+)
 
 # Constants for error messages
 _MISSING_TRAIN_RUNTIME_MSG = "Runtime configuration is missing for training."
@@ -26,9 +26,9 @@ _MISSING_SAMPLE_RUNTIME_MSG = "Runtime configuration is missing for sampling."
 class RuntimeRunHooks:
     """Injectable hooks for runtime execution flows."""
 
-    pipeline_factory: Callable[[PreparerConfig, Any], Any]
-    trainer_factory: Callable[[TrainerConfig, Any], Any]
-    sampler_factory: Callable[[SamplerConfig, Any], Any]
+    pipeline_factory: Callable[[Any, Any], Any]
+    trainer_factory: Callable[[Any, Any], Any]
+    sampler_factory: Callable[[Any, Any], Any]
     device_setup: Callable[[str, str, int], None]
     log_status: Callable[[str, Any, Path | None, LoggerLike], None]
     resolve_seed: Callable[[str, Any, int], int | None] | None = None
@@ -49,7 +49,7 @@ _DEFAULT_RUNTIME_RUN_HOOKS = _default_runtime_run_hooks()
 
 def run_prepare_impl(
     experiment: str,
-    prepare_cfg: PreparerConfig,
+    prepare_cfg: PrepareConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,
@@ -107,7 +107,7 @@ def run_prepare_impl(
 
 def run_train_impl(
     experiment: str,
-    train_cfg: TrainerConfig,
+    train_cfg: TrainConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,
@@ -203,7 +203,7 @@ def run_train_impl(
 
 def run_sample_impl(
     experiment: str,
-    sample_cfg: SamplerConfig,
+    sample_cfg: SampleConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,

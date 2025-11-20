@@ -382,7 +382,7 @@ def run_setup_ai_guidelines(
         log_aiignore_status(tool_dir)
         info("done.")
         return SetupResult(success=True, logs=logs, error=None)
-    except Exception as exc:  # pragma: no cover - caught by callers for ToolResult
+    except Exception as exc:
         message = f"Failed to setup AI guidelines: {exc}"
         err(message)
         return SetupResult(success=False, logs=logs, error=message)

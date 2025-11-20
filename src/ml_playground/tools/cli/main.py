@@ -13,6 +13,20 @@ from typing import TypedDict, Annotated, Optional
 
 import typer
 
+from ml_playground.tools.cli.commands.quality import quality_app
+from ml_playground.tools.cli.commands.testing import test_app
+from ml_playground.tools.cli.commands.environment import env_app
+from ml_playground.tools.cli.commands.ci import ci_app
+from ml_playground.tools.cli.commands.dev import dev_app
+from ml_playground.tools.cli.state import state
+from ml_playground.tools.cli.dependencies import (
+    get_tools_dependencies,
+)
+from ml_playground.tools.cli.config_loader import (
+    load_config_with_error_handling,
+    ensure_config_loaded,
+)
+
 from ml_playground.tools.core.errors import (
     ToolExecutionError,
     ToolConfigurationError,
@@ -344,23 +358,6 @@ def learn_best_practices(
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
 
-
-# Import state and dependencies from separate modules
-from ml_playground.tools.cli.state import state
-from ml_playground.tools.cli.dependencies import (
-    get_tools_dependencies,
-)
-from ml_playground.tools.cli.config_loader import (
-    load_config_with_error_handling,
-    ensure_config_loaded,
-)
-
-# Import command modules
-from ml_playground.tools.cli.commands.quality import quality_app
-from ml_playground.tools.cli.commands.testing import test_app
-from ml_playground.tools.cli.commands.environment import env_app
-from ml_playground.tools.cli.commands.ci import ci_app
-from ml_playground.tools.cli.commands.dev import dev_app
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

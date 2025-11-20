@@ -93,3 +93,40 @@ def test_reset_runtime_cli_dependencies_creates_fresh_instance() -> None:
 
     assert first is not second
     assert second.load_experiment("exp", None).tag == BASE_TAG
+
+
+def test_reset_runtime_cli_dependencies_handles_missing_default_factory() -> None:
+    """reset_runtime_cli_dependencies should be safe before any configuration.
+
+    This exercises the branch where no default factory has been registered yet
+    and ensures that subsequent configuration still behaves as expected.
+    """
+
+    # Reset before any configure call should not raise
+    bootstrap.reset_runtime_cli_dependencies()
+
+    bootstrap.configure_runtime_cli_dependencies(lambda: _make_dependencies(BASE_TAG))
+    deps = bootstrap.get_runtime_cli_dependencies()
+    assert deps.load_experiment("exp", None).tag == BASE_TAG
+
+
+def test_get_runtime_cli_dependencies_errors_when_never_configured() -> None:
+    """Calling get_runtime_cli_dependencies with no factory should raise.
+
+    This exercises the strict guard path where neither a current instance nor
+    a default factory has been registered yet.
+    """
+
+    # Snapshot existing internal state so we can restore it afterwards.
+    original_default = bootstrap._default_factory  # type: ignore[attr-defined]
+    original_current = bootstrap._current  # type: ignore[attr-defined]
+
+    try:
+        bootstrap._default_factory = None  # type: ignore[attr-defined]
+        bootstrap._current = None  # type: ignore[attr-defined]
+
+        with pytest.raises(RuntimeError):
+            bootstrap.get_runtime_cli_dependencies()
+    finally:
+        bootstrap._default_factory = original_default  # type: ignore[attr-defined]
+        bootstrap._current = original_current  # type: ignore[attr-defined]

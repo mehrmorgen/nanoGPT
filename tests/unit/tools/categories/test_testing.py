@@ -7,8 +7,8 @@ import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TypedDict
-from types import ModuleType
+from typing import Any, TypedDict
+from types import MethodType, ModuleType
 
 import pytest
 
@@ -23,6 +23,41 @@ from tests.unit.tools.fakes import (
     create_failure_result,
     create_success_result,
 )
+
+
+class CoverageJsonRunner(FakeSubprocessRunner):
+    """Fake runner that materializes coverage JSON payloads."""
+
+    def __init__(self, payload: dict[str, Any] | None = None) -> None:
+        super().__init__()
+        self._payload = payload or {
+            "totals": {
+                "num_statements": 20,
+                "covered_lines": 18,
+                "num_branches": 4,
+                "covered_branches": 2,
+            },
+            "files": {},
+        }
+
+    def run_uv_command(self, *args: Any, **kwargs: Any) -> ToolResult:  # type: ignore[override]
+        command = list(args[0]) if args else []
+        if command[:2] == ["coverage", "json"]:
+            json_path = Path(command[command.index("-o") + 1])
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path.write_text(json.dumps(self._payload), encoding="utf-8")
+        return super().run_uv_command(*args, **kwargs)
+
+
+class CoverageJsonFailureRunner(FakeSubprocessRunner):
+    """Fake runner that fails coverage json generation."""
+
+    def run_uv_command(self, *args: Any, **kwargs: Any) -> ToolResult:  # type: ignore[override]
+        command = list(args[0]) if args else []
+        operation_id: OperationId = kwargs["operation_id"]
+        if command[:2] == ["coverage", "json"]:
+            return create_failure_result(operation_id, stderr="coverage json failed")
+        return super().run_uv_command(*args, **kwargs)
 
 
 @pytest.fixture
@@ -342,6 +377,296 @@ def test_coverage_threshold_force_regen_overrides_cached_data(
     assert manifest["fingerprint"] == coverage_helpers.compute_coverage_fingerprint(
         tmp_path
     )
+
+
+class TestCollectCoverageMetrics:
+    def test_collect_metrics_runs_json_and_reports_totals(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Collect metrics by materializing coverage JSON via uv."""
+
+        runner = CoverageJsonRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        operation_id = OperationId(
+            namespace="tools", category="test", command="metrics"
+        )
+
+        result, lines = tools._collect_coverage_metrics(
+            {},
+            operation_id,
+            executed_commands=[],
+        )
+
+        assert result is None
+        assert any("Coverage totals" in line for line in lines)
+        assert any("coverage" in call["command"] for call in runner.calls)
+
+    def test_collect_metrics_raises_when_json_missing(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Raise an error when coverage json never materializes."""
+
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        operation_id = OperationId(
+            namespace="tools", category="test", command="metrics"
+        )
+
+        with pytest.raises(ToolExecutionError, match="Coverage JSON data not found"):
+            tools._collect_coverage_metrics({}, operation_id)
+
+    def test_collect_metrics_raises_on_json_parse_error(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Bubble up parsing failures when coverage json is corrupt."""
+
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        json_path = tmp_path / ".cache" / "coverage" / "coverage.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text("not-json", encoding="utf-8")
+        operation_id = OperationId(
+            namespace="tools", category="test", command="metrics"
+        )
+
+        with pytest.raises(ToolExecutionError, match="Failed to parse coverage JSON"):
+            tools._collect_coverage_metrics({}, operation_id)
+
+
+class TestEnsureCoverageData:
+    def test_reuses_cached_artifacts_when_fingerprint_matches(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Skip regeneration when fingerprint and coverage artifacts already match."""
+
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        coverage_path = _write_coverage_file(tmp_path)
+        fingerprint = "cached"
+
+        def _constant_fingerprint(self: testing_module.TestingTools) -> str:
+            return fingerprint
+
+        tools._compute_coverage_fingerprint = MethodType(  # type: ignore[assignment]
+            _constant_fingerprint, tools
+        )
+        _write_manifest(tmp_path, fingerprint)
+
+        result, notes, env = tools._ensure_coverage_data(
+            args=[],
+            learning_mode=False,
+            verbosity_level=1,
+            verbose=False,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="metrics"
+            ),
+        )
+
+        assert result is None
+        assert notes == []
+        assert env["COVERAGE_FILE"] == str(coverage_path)
+        assert runner.calls == []
+
+    def test_generates_fresh_data_when_cache_is_stale(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Regenerate coverage data and manifest when fingerprints differ."""
+
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        combine_calls: list[dict[str, Any]] = []
+
+        def _constant_fingerprint(self: testing_module.TestingTools) -> str:
+            return "fresh"
+
+        def _fake_combine(
+            self: testing_module.TestingTools,
+            *,
+            env: dict[str, str],
+            operation_id: OperationId,
+            executed_commands: list[str],
+        ) -> tuple[ToolResult | None, bool]:
+            combine_calls.append({"env": env.copy(), "cmds": list(executed_commands)})
+            return None, False
+
+        def _fake_run_coverage(
+            self: testing_module.TestingTools,
+            *,
+            args: list[str],
+            verbosity_level: int,
+            verbose: bool,
+            operation_id: OperationId,
+            executed_commands: list[str],
+        ) -> tuple[ToolResult | None, list[str]]:
+            coverage_file = self._coverage_file()
+            coverage_file.parent.mkdir(parents=True, exist_ok=True)
+            coverage_file.write_bytes(b"data")
+            return None, ["generated"]
+
+        tools._compute_coverage_fingerprint = MethodType(  # type: ignore[assignment]
+            _constant_fingerprint, tools
+        )
+        tools._combine_coverage_fragments = MethodType(  # type: ignore[assignment]
+            _fake_combine, tools
+        )
+        tools._run_coverage_test_for_data = MethodType(  # type: ignore[assignment]
+            _fake_run_coverage, tools
+        )
+
+        result, notes, env = tools._ensure_coverage_data(
+            args=["-k", "unit"],
+            learning_mode=False,
+            verbosity_level=2,
+            verbose=True,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="metrics"
+            ),
+            executed_commands=[],
+        )
+
+        manifest_path = _manifest_path(tmp_path)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        assert result is None
+        assert notes == ["generated"]
+        assert env["COVERAGE_FILE"] == str(tools._coverage_file())
+        assert len(combine_calls) == 2
+        assert manifest["fingerprint"] == "fresh"
+
+    def test_returns_failure_when_combine_fails(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """Propagate ToolResult failures from coverage fragment combination."""
+
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+
+        def _failing_combine(
+            self: testing_module.TestingTools,
+            *,
+            env: dict[str, str],
+            operation_id: OperationId,
+            executed_commands: list[str],
+        ) -> tuple[ToolResult | None, bool]:
+            failure = create_failure_result(operation_id, stderr="combine failed")
+            return failure, True
+
+        tools._combine_coverage_fragments = MethodType(  # type: ignore[assignment]
+            _failing_combine, tools
+        )
+
+        result, notes, _ = tools._ensure_coverage_data(
+            args=[],
+            learning_mode=False,
+            verbosity_level=0,
+            verbose=False,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="metrics"
+            ),
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.success is False
+        assert "combine failed" in (result.stderr or "")
+        assert notes == []
+
+
+class TestCoverageUtilities:
+    def test_coverage_env_creates_directories(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        tools = testing_module.TestingTools(config, tmp_path, FakeSubprocessRunner())
+        env = tools._coverage_env()
+
+        assert "COVERAGE_FILE" in env
+        coverage_path = Path(env["COVERAGE_FILE"])
+        assert coverage_path.parent.exists()
+        assert (tmp_path / ".cache" / "hypothesis").exists()
+
+    def test_run_coverage_test_invokes_pytest_fallback(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        coverage_file = tools._coverage_file()
+        if coverage_file.exists():
+            coverage_file.unlink()
+
+        notes_seen: list[str] = []
+
+        def fake_generate_pytest(
+            self: testing_module.TestingTools,
+            *,
+            args: list[str],
+            verbose: bool,
+            operation_id: OperationId,
+            executed_commands: list[str],
+        ) -> tuple[ToolResult | None, list[str]]:
+            executed_commands.append("pytest fallback")
+            return None, ["pytest fallback"]
+
+        def fake_coverage_test(
+            self: testing_module.TestingTools,
+            args: list[str],
+            *,
+            learning_mode: bool,
+            verbosity_level: int,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="tools",
+                category="test",
+                command="coverage",
+                stdout="coverage executed",
+            )
+
+        tools._generate_coverage_via_pytest = MethodType(fake_generate_pytest, tools)  # type: ignore[assignment]
+        tools.coverage_test = MethodType(fake_coverage_test, tools)  # type: ignore[assignment]
+
+        operation_id = OperationId(
+            namespace="tools", category="test", command="coverage-data"
+        )
+        result, notes = tools._run_coverage_test_for_data(
+            args=["-k", "unit"],
+            verbosity_level=1,
+            verbose=True,
+            operation_id=operation_id,
+            executed_commands=notes_seen,
+        )
+
+        assert result is None
+        assert notes and notes[-1] == "pytest fallback"
+        assert "coverage data" in notes[0]
+        assert "Executed:" in notes_seen[0]
+        assert "pytest fallback" in notes_seen
+
+    def test_combine_coverage_fragments_calls_coverage_combine(
+        self, config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = FakeSubprocessRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+        coverage_file = tools._coverage_file()
+        coverage_dir = coverage_file.parent
+        coverage_dir.mkdir(parents=True, exist_ok=True)
+        (coverage_file).write_bytes(b"data")
+        fragment = coverage_dir / f"{coverage_file.name}.1"
+        fragment.write_bytes(b"fragment")
+
+        executed: list[str] = []
+        operation_id = OperationId(
+            namespace="tools", category="test", command="combine"
+        )
+
+        result, combined = tools._combine_coverage_fragments(
+            env={"COVERAGE_FILE": str(coverage_file)},
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+
+        assert result is None
+        assert combined is True
+        assert any("coverage combine" in cmd for cmd in executed)
 
 
 def test_coverage_combines_report_and_threshold_success(

@@ -290,6 +290,26 @@ def test_create_tokenizer_word_unsupported_kwargs() -> None:
     assert "unsupported_param" in str(exc.value)
 
 
+def test_create_tokenizer_char_non_mapping_vocab() -> None:
+    """create_tokenizer raises TypeError when char vocab is not a mapping."""
+
+    with pytest.raises(TypeError) as exc:
+        # Pass a list instead of a mapping to trigger the type guard.
+        create_tokenizer("char", vocab=[("x", 1)])
+
+    assert "vocab must be a mapping when provided" in str(exc.value)
+
+
+def test_create_tokenizer_char_unsupported_kwargs() -> None:
+    """create_tokenizer raises ValueError for unsupported kwargs to char tokenizer."""
+
+    with pytest.raises(ValueError) as exc:
+        create_tokenizer("char", vocab={"x": 1}, unsupported_param="value")
+
+    assert "Unsupported keyword arguments for char tokenizer" in str(exc.value)
+    assert "unsupported_param" in str(exc.value)
+
+
 def test_create_tokenizer_tiktoken_non_string_encoding_name() -> None:
     """create_tokenizer raises TypeError for non-string encoding_name."""
     with pytest.raises(TypeError) as exc:

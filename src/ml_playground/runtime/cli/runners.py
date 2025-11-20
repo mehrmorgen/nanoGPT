@@ -4,12 +4,6 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-from ml_playground.configuration.models import (
-    PreparerConfig,
-    SamplerConfig,
-    SharedConfig,
-    TrainerConfig,
-)
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.runtime import helpers as rt_helpers
 from ml_playground.runtime import runners as runtime_runners
@@ -27,6 +21,12 @@ from ml_playground.runtime.core.bootstrap import (
 )
 from ml_playground.runtime.cli.result import handle_tool_result, run_or_exit
 from ml_playground.runtime.core.results import LearningModeEngine, ToolResult
+from ml_playground.runtime.protocols import (
+    PrepareConfigLike,
+    SampleConfigLike,
+    SharedConfigLike,
+    TrainConfigLike,
+)
 
 RunInvoker = Callable[[Callable[[], None]], None]
 
@@ -71,7 +71,7 @@ def _finalize_command_result(
 
 def run_prepare(
     experiment: str,
-    prepare_cfg: PreparerConfig,
+    prepare_cfg: PrepareConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,
@@ -102,7 +102,7 @@ def run_prepare(
 
 def run_train(
     experiment: str,
-    train_cfg: TrainerConfig,
+    train_cfg: TrainConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,
@@ -133,7 +133,7 @@ def run_train(
 
 def run_sample(
     experiment: str,
-    sample_cfg: SamplerConfig,
+    sample_cfg: SampleConfigLike,
     config_path: Path,
     shared: Any,
     learning_mode_engine: LearningModeEngine | None = None,
@@ -313,7 +313,7 @@ def log_directory(
 
 def log_command_status(
     tag: str,
-    shared: SharedConfig,
+    shared: SharedConfigLike,
     out_dir: Path | None,
     logger: LoggerLike,
 ) -> None:
