@@ -6,34 +6,38 @@ import json
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Mapping, cast
+from typing import Any, Callable, Dict, List, Mapping, Optional, cast
 
-import tomllib
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import (
-    SubprocessRunner,
     RealSubprocessRunner,
+    SubprocessRunner,
 )
-from .unit import run_unit, run_regression
-from .integration import run_integration
-from .e2e import run_e2e, run_acceptance
-from .property import run_property_tests
-from .coverage import run_coverage_test, run_coverage_report, run_coverage
+
+from . import mutation as _mutation
+from .coverage import run_coverage, run_coverage_report, run_coverage_test
 from .coverage_helpers import (
     clean_pytest_output as _clean_pytest_output_helper,
+    collect_undercovered_files as _collect_undercovered_files_helper,
     compute_coverage_fingerprint as _compute_coverage_fingerprint_helper,
+    format_command as _format_command_helper,
+    format_tool_invocation as _format_tool_invocation_helper,
+    format_undercovered_tree as _format_undercovered_tree_helper,
     read_coverage_manifest as _read_coverage_manifest_helper,
     write_coverage_manifest as _write_coverage_manifest_helper,
-    collect_undercovered_files as _collect_undercovered_files_helper,
-    format_undercovered_tree as _format_undercovered_tree_helper,
-    format_tool_invocation as _format_tool_invocation_helper,
-    format_command as _format_command_helper,
 )
-from . import mutation as _mutation
+from .e2e import run_acceptance, run_e2e
+from .integration import run_integration
+from .property import run_property_tests
+from .unit import run_regression, run_unit
 
 # Module-level default runner for tests to patch if needed
 _default_runner: SubprocessRunner | None = None
@@ -441,7 +445,7 @@ class TestingTools:
 
         try:
             with pyproject_path.open("rb") as f:
-                config_data: dict[str, Any] = tomllib.load(f)
+                config_data: dict[str, Any] = tomllib.load(f)  # type: ignore
 
             def _as_dict(obj: Any) -> dict[str, Any]:
                 result: dict[str, Any] = {}
@@ -451,7 +455,7 @@ class TestingTools:
                             result[k] = v
                 return result
 
-            tool_cfg = _as_dict(config_data.get("tool"))
+            tool_cfg = _as_dict(config_data.get("tool"))  # type: ignore
             ml_cfg = _as_dict(tool_cfg.get("ml_playground"))
             coverage_cfg = _as_dict(ml_cfg.get("coverage"))
             thresholds_cfg = _as_dict(coverage_cfg.get("thresholds"))

@@ -495,3 +495,211 @@ def test_mutation_run_handles_unexpected_step_exception(tmp_path: Path) -> None:
 
     assert result.success is False
     assert "Mutation exec failed" in (result.stderr or "")
+
+
+def test_mutation_summary_truncates_module_list(tmp_path: Path) -> None:
+    """mutation_summary should truncate the module list if there are too many."""
+    cfg = _config()
+
+    base = ModuleType("cosmic_ray")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {
+            "session": {"path": ".cache/cosmic-ray/session.sqlite"},
+            "test-runner": {"command": "pytest"},
+        }
+    )
+    # Return 10 modules to trigger truncation
+    modules_module = CosmicRayModulesModule(
+        lambda _cfg: [f"pkg.mod{i}" for i in range(10)]
+    )
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "cosmic_ray.modules": modules_module,
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_summary(cfg, tmp_path)
+
+    assert result.success is True
+    assert "modules to mutate: 10" in result.stdout
+    assert "... and 5 more" in result.stdout
+
+
+class _FakeCursorWithFetch:
+    """Simulate a real sqlite3 cursor with fetchone."""
+
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+        self._idx = 0
+
+    def fetchone(self) -> Any | None:
+        if self._idx >= len(self._rows):
+            return None
+        row = self._rows[self._idx]
+        self._idx += 1
+        return row
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._rows)
+
+
+class _FakeConnWithFetch:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def __enter__(self) -> _FakeConnWithFetch:
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        pass
+
+    def execute(self, sql: str) -> Any:
+        if "COUNT(*)" in sql:
+            if not self._rows:
+                return _FakeCursorWithFetch([])
+            return _FakeCursorWithFetch([self._rows[0]])
+        if not self._rows:
+            return _FakeCursorWithFetch([])
+        return _FakeCursorWithFetch(self._rows[1:])
+
+
+def test_mutation_report_handles_real_cursor_behavior(tmp_path: Path) -> None:
+    """mutation_report should handle cursors that have fetchone() (like real sqlite3)."""
+    cfg = _config()
+
+    base = ModuleType("cosmic_ray")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {"session": {"path": "session.sqlite"}}
+    )
+
+    # Prepare a fake sqlite module that returns a connection with fetchone-capable cursors
+    class FakeSqliteWithFetch(ModuleType):
+        def __init__(self) -> None:
+            super().__init__("sqlite3")
+
+        def connect(self, _path: Any) -> Any:
+            # First row is count (tuple), subsequent are outcomes (tuples)
+            return _FakeConnWithFetch(
+                [
+                    (5,),
+                    ("KILLED",),
+                    ("KILLED",),
+                    ("SURVIVED",),
+                    ("SURVIVED",),
+                    ("TIMEOUT",),
+                ]
+            )
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "sqlite3": FakeSqliteWithFetch(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+
+    assert result.success is True
+    assert "mutants processed: 5" in result.stdout
+    assert "killed: 2" in result.stdout
+    assert "survived: 2" in result.stdout
+    assert "timeout: 1" in result.stdout
+
+
+def test_mutation_report_handles_empty_result_set(tmp_path: Path) -> None:
+    """mutation_report should handle empty result sets from fetchone."""
+    cfg = _config()
+    base = ModuleType("cosmic_ray")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {"session": {"path": "session.sqlite"}}
+    )
+
+    class FakeSqliteEmpty(ModuleType):
+        def __init__(self) -> None:
+            super().__init__("sqlite3")
+
+        def connect(self, _path: Any) -> Any:
+            # Return empty rows to trigger None return from fetchone
+            return _FakeConnWithFetch([])
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "sqlite3": FakeSqliteEmpty(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+
+    assert result.success is True
+    assert "mutants processed: 0" in result.stdout
+
+
+def test_mutation_report_handles_connection_failure(tmp_path: Path) -> None:
+    """mutation_report should handle sqlite3.connect failure gracefully."""
+    cfg = _config()
+    base = ModuleType("cosmic_ray")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {"session": {"path": "session.sqlite"}}
+    )
+
+    class FakeSqliteBoom(ModuleType):
+        def __init__(self) -> None:
+            super().__init__("sqlite3")
+
+        def connect(self, _path: Any) -> Any:
+            raise Exception("db connect failed")
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "sqlite3": FakeSqliteBoom(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+
+    assert result.success is True  # Should be success but with warning message
+    assert "session file not found" in result.stdout
+
+
+def test_mutation_report_handles_scalar_rows_and_bad_ints(tmp_path: Path) -> None:
+    """mutation_report should handle scalar cursor results and parsing errors."""
+    cfg = _config()
+    base = ModuleType("cosmic_ray")
+    config_module = CosmicRayConfigModule(
+        lambda _path: {"session": {"path": "session.sqlite"}}
+    )
+
+    class FakeSqliteOdd(ModuleType):
+        def __init__(self) -> None:
+            super().__init__("sqlite3")
+
+        def connect(self, _path: Any) -> Any:
+            # First row is scalar count (not tuple)
+            # Subsequent rows include a non-string scalar that fails int conversion?
+            # Wait, outcome rows are just counted.
+            # Count row needs to be parseable as int.
+            # Let's fail the count parsing.
+            return _FakeConnWithFetch(["not-an-int", "outcome1"])
+
+    with install_modules(
+        {
+            "cosmic_ray": base,
+            "cosmic_ray.config": config_module,
+            "sqlite3": FakeSqliteOdd(),
+        }
+    ):
+        with override_cwd(tmp_path):
+            result = mutation_mod.mutation_report(cfg, tmp_path)
+
+    assert result.success is True
+    # _to_int returns 0 on failure
+    assert "mutants processed: 0" in result.stdout
+    assert "outcome1" in result.stdout
