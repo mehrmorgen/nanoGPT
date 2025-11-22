@@ -12,7 +12,7 @@ Only forward-looking work is tracked here.
 ## Status at a glance
 - [x] Property suites: `uv run pytest tests/property/runtime -v` and `tests/property/tools -v` both pass.
 - [x] Unit suites: `uv run pytest tests/unit/runtime -v` and `tests/unit/tools -v` pass.
-- [ ] Coverage gate: latest shared run (`uv run tools test coverage -- tests/property/runtime tests/unit/runtime`, 2025-11-21 09:15 UTC+01) yielded **92.48% line / 83.22% branch**. Gate is green (≥83.0% branch).
+- [x] Coverage gate: latest shared run (`uv run tools test coverage -- tests/property/runtime tests/unit/runtime`, 2025-11-21 09:15 UTC+01) yielded **92.48% line / 83.22% branch**. Gate is green (≥83.0% branch).
 - [ ] Integration / E2E flows: deferred until coverage gate is green again.
 
 ## Current Runtime Focus
@@ -50,26 +50,27 @@ Only forward-looking work is tracked here.
      - Add or extend property tests in `tests/property/runtime/core/test_bootstrap_property.py` (or create it if missing) to:
        - Construct a minimal fake dependency container.
        - Verify that `bootstrap` wires runtime runners, logging, and configuration consistently.
-  5. - [ ] **Verification**
+  5. - [x] **Verification**
      - ✅ Property + unit suites pass as of 2025-11-21 09:15 UTC+01.
-     - 🚧 Coverage (`uv run tools test coverage -- tests/property/runtime tests/unit/runtime`) blocked at **91.71% line / 81.61% branch** because `src/ml_playground/tools/**` still drags global branch coverage down. Do not close this step until the tools tranche below lifts branch coverage ≥83%.
+     - ✅ Coverage is green (83.22% branch).
 
 ## Current Tools Focus: Tools Layer & Tools Protocols
 
 These tranches extend the same protocol-driven, strictly-typed testing approach to the `src/ml_playground/tools` package and its CLIs.
 
 ### 4. Tools Runtime State & Protocols
-- Files: `src/ml_playground/tools/core/runtime.py`, `src/ml_playground/tools/cli/config_loader.py`, `src/ml_playground/tools/cli/state.py`, `src/ml_playground/tools/protocols.py`.
-- Status (2025-11-21):
-  - Added regression tests for `tools/cli/config_loader.load_config_with_error_handling` covering cached-config reuse, state updates, and `ensure_config_loaded` so the defensive branches are observable.
+- Files: `src/ml_playground/tools/cli/config_loader.py`, `src/ml_playground/tools/cli/state.py`, `src/ml_playground/tools/protocols.py`.
+- Status:
+  - `tools/core/runtime.py` has been removed as dead code.
+  - `tools/cli/config_loader.py` is fully tested including error handling branches.
   - Global state still stores concrete `ToolsConfig`; protocol extraction is the next structural step.
 - Plan (step-by-step):
   1. - [ ] **Define the shared tools config protocol**
      - Implement `ToolsConfigLike` in `tools/protocols.py` exposing the fields the CLI actually consumes (`learning_mode_default`, `default_verbosity`, verbosity helpers).
   2. - [ ] **Update tools global state**
      - Switch `GlobalState.config` to `ToolsConfigLike | None` and ensure `state.reset()` clears it deterministically.
-  3. - [ ] **Wire the protocol into runtime helpers**
-     - Update `tools/core/runtime.py` + `tools/cli/config_loader.py` to store `ToolsConfigLike`, reading defaults via local variables before mutating global state.
+  3. - [ ] **Wire the protocol into config loader**
+     - Update `tools/cli/config_loader.py` to store `ToolsConfigLike`, reading defaults via local variables before mutating global state.
   4. - [ ] **Keep concrete configs where required**
      - Tool implementations (`quality`, `testing`, `environment`, `ci`, `dev`) and dependency builders continue to accept full `ToolsConfig`.
   5. - [ ] **Verification**
@@ -80,18 +81,18 @@ These tranches extend the same protocol-driven, strictly-typed testing approach 
 - Status:
   - Property suites already run against deterministic dependency overrides; no mocking.
   - Branch coverage laggards from the latest report (≤90% branch) are:
-    1. `tools/testing/testing.py` (69.81%, multiple defensive branches untested)
-    2. `tools/testing/mutation.py` (71.74%)
+    1. `tools/testing/mutation.py` (71.74%)
+    2. `tools/testing/testing.py` (69.81%, multiple defensive branches untested)
     3. `tools/dev/hygiene.py` (96.15% line but still missing specific branch pairs)
-    4. `tools/cli/config_loader.py` (now partially covered, but branch 70.00%)
-    5. `tools/environment/setup.py` / `tools/environment/verify.py` (≈73–67% branch)
+    4. `tools/environment/setup.py` / `tools/environment/verify.py` (≈73–67% branch)
 - Next steps:
-  1. - [ ] **Testing tools coverage push**
-     - Add focused unit/property tests for `tools/testing/testing.py` to cover failure handling in `coverage`, `coverage_report`, `mutation`, and CLI result plumbing. Mirror these flows in `tests/unit/tools/testing/test_testing_facade_misc.py` using deterministic runners.
-  2. - [ ] **Mutation helper hardening**
+  1. - [ ] **Mutation helper hardening**
      - Target `tools/testing/mutation.py` with unit tests that simulate session cleanup failures and `cosmic_ray` invocations to exercise the currently untested exception paths.
-  3. - [ ] **Config loader + hygiene polish**
-     - Expand `tests/unit/tools/cli/test_config_loader.py` (already underway) to assert branch-specific state transitions; add complementary tests in `tests/unit/tools/dev/test_hygiene.py` for the remaining branch guards.
+  2. - [ ] **Testing tools coverage push**
+     - Add focused unit/property tests for `tools/testing/testing.py` to cover failure handling in `coverage`, `coverage_report`, `mutation`, and CLI result plumbing. Mirror these flows in `tests/unit/tools/testing/test_testing_facade_misc.py` using deterministic runners.
+  3. - [x] **Config loader + hygiene polish**
+     - `tests/unit/tools/cli/test_config_loader.py` is complete.
+     - [ ] Add complementary tests in `tests/unit/tools/dev/test_hygiene.py` for the remaining branch guards.
   4. - [ ] **Environment/CI/Dev runners**
      - For `tools/environment/setup.py`, `tools/environment/verify.py`, and `tools/dev/*.py`, create deterministic runner tests that simulate subprocess failures, missing pyproject files, and optional dependency warnings.
   5. - [ ] **Verification and coverage**
@@ -109,7 +110,7 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
 
 ### Runtime/tools coverage snapshot (latest run)
 - Runtime highlights: `runtime/cli/main.py` (branch 95.59%) and `runtime/core/bootstrap.py` (100%) are now healthy after the CLI/ bootstrap test additions.
-- Tools highlights: the gating files are `tools/testing/testing.py` (69.81%), `tools/testing/mutation.py` (71.74%), `tools/dev/hygiene.py` (96.15% line / 72.00% branch on specific guards), `tools/cli/config_loader.py` (70.00% branch), and the environment helpers (≈70% branch). These drive the 81.61% global branch figure noted above.
+- Tools highlights: the gating files are `tools/testing/testing.py` (69.81%), `tools/testing/mutation.py` (71.74%), `tools/dev/hygiene.py` (96.15% line / 72.00% branch on specific guards), and the environment helpers (≈70% branch).
   - `tools/core/runtime.py` — Removed (dead code)
   - `tools/cli/main.py` — 95.59%
   - `tools/cli/config_loader.py` — 70.00%
@@ -136,10 +137,10 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
 **Next concrete targets (lowest branch coverage first, within runtime/tools):**
 - `runtime/core/bootstrap.py` — 33.33%
 - `runtime/cli/main.py` — 50.00%
-- `tools/core/runtime.py` — 50.00%
 - `tools/dev/batch_review.py` — 65.79%
-- `tools/cli/config_loader.py` — 70.00%
-- `tools/testing/coverage.py` — 70.77%
+- `tools/environment/verify.py` — 66.67%
+- `tools/testing/testing.py` — 69.81%
+- `tools/testing/mutation.py` — 71.74%
 
 ### Defensive branch simplification targets (runtime/tools)
 
