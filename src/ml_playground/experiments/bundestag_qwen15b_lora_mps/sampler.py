@@ -9,7 +9,7 @@ from ml_playground.experiments.protocol import (
 
 
 class BundestagQwen15bLoraMpsSampler(_SamplerProto):
-    def sample(self, cfg: SamplerConfig) -> SampleReport:  # type: ignore[override]
+    def sample(self, cfg: SamplerConfig) -> SampleReport:
         """Minimal no-op sampler placeholder for the preset.
 
         This repository does not embed the full HF/PEFT sampling loop for Qwen.

@@ -33,7 +33,7 @@ class DevTools:
     ) -> None:
         self.config = config or ToolsConfig()
         # Module-level patch point for tests (module-only to avoid private imports)
-        global _default_runner  # noqa: PLW0603
+        global _default_runner  # noqa: PLW0603 - providing a test patch point
         if _default_runner is None:
             _default_runner = RealSubprocessRunner()
         self.subprocess_runner = subprocess_runner or _default_runner

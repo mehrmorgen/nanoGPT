@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+u#!/usr/bin/env bash
+u#!/usr/bin/env bash
 # Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail

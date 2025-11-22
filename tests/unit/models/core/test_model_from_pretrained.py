@@ -6,7 +6,7 @@ from ml_playground.models.core.model import GPT
 
 
 def test_from_pretrained_not_implemented() -> None:
-    """Test that from_pretrained raises NotImplementedError for legacy API compatibility."""
+    """from_pretrained must remain unsupported to keep the GPT API strict."""
 
     with pytest.raises(
         NotImplementedError, match="from_pretrained is not supported in this port"

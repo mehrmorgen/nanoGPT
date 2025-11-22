@@ -286,7 +286,7 @@ def _run_sampling(
 
 
 class SpeakGerSampler(_SamplerProto):
-    def sample(self, cfg: SamplerConfig) -> SampleReport:  # type: ignore[override]
+    def sample(self, cfg: SamplerConfig) -> SampleReport:
         # Strict fail-fast: require concrete runtime injected by CLI (no runtime_ref resolution here)
         runtime = getattr(cfg, "runtime", None)
         if not isinstance(runtime, RuntimeConfig):

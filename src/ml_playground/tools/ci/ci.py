@@ -39,7 +39,7 @@ class CITools:
         self.cache_dir = root_path / ".cache"
         # Use the project-local githooks pre-commit configuration
         self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
-        global _default_runner  # noqa: PLW0603
+        global _default_runner  # noqa: PLW0603 - providing a test patch point
         if _default_runner is None:
             _default_runner = RealSubprocessRunner()
         self._subprocess_runner = subprocess_runner or _default_runner

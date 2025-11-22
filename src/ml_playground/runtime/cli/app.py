@@ -67,9 +67,7 @@ def _apply_global_options(
     except (AttributeError, TypeError):
         return
 
-    if not isinstance(ctx.obj, dict):
-        ctx.obj = {}
-    ctx_dict = ctx.obj  # type: ignore[assignment]
+    ctx_dict = cast(dict[str, Any], ctx.obj)
 
     verbosity_level = (
         verbosity

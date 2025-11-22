@@ -266,7 +266,7 @@ _default_runner: SubprocessRunner = RealSubprocessRunner()
 def override_subprocess_runner(runner: SubprocessRunner) -> Iterator[None]:
     """Temporarily override the global subprocess runner used by helper functions."""
 
-    global _default_runner  # noqa: PLW0603
+    global _default_runner  # noqa: PLW0603 - providing a test patch point
     previous = _default_runner
     _default_runner = runner
     try:

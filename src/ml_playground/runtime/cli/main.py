@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, TYPE_CHECKING
+from typing import Callable
 
 import typer
 from typer.main import get_command
@@ -72,9 +72,6 @@ def default_cli_dependencies() -> CLIDependencies:
         run_sample=runtime_runners.run_sample_impl,
     )
 
-
-if TYPE_CHECKING:  # import for typing only
-    pass
 
 __all__ = [
     "app",

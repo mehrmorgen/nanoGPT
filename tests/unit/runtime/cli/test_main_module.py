@@ -95,3 +95,36 @@ def test_main_entry_runs_successfully_with_custom_echo() -> None:
 
     assert calls["runner"] == 1
     assert calls["echo"] == []
+
+
+def test_main_entry_uses_default_app_runner_when_not_provided() -> None:
+    calls: dict[str, Any] = {"runner": 0}
+
+    def fake_app() -> None:
+        calls["runner"] += 1
+
+    with override_attr(runtime_cli_main, "app", fake_app):
+        runtime_cli_main.main_entry()
+
+    assert calls["runner"] == 1
+
+
+def test_main_entry_uses_default_echo_on_exception() -> None:
+    captured: list[tuple[str, bool]] = []
+
+    def fake_echo(message: str, *, err: bool = False) -> object:
+        captured.append((message, err))
+        return None
+
+    def failing_runner() -> None:
+        raise RuntimeError("default boom")
+
+    with override_attr(runtime_cli_main.typer, "echo", fake_echo):
+        with pytest.raises(typer.Exit) as exc:
+            runtime_cli_main.main_entry(app_runner=failing_runner)
+
+    assert exc.value.exit_code == 1
+    assert any(
+        "Runtime CLI execution failed: default boom" in message and err
+        for message, err in captured
+    )

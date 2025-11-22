@@ -15,6 +15,13 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+# Import pytest typing for fixtures
+try:
+    from _pytest.logging import LogCaptureFixture
+except ImportError:
+    # Fallback for older pytest versions
+    from typing import Any as LogCaptureFixture
+
 from ml_playground.runtime.cli.main import (
     app,
     CLIDependencies,
@@ -91,7 +98,7 @@ _EXPERIMENT_NAMES = st.text(
 
 
 def test_run_or_exit_keyboard_interrupt_logs_message(
-    caplog: pytest.LogCaptureFixture,
+    caplog: LogCaptureFixture,
 ) -> None:
     """KeyboardInterrupt should log the provided message and exit cleanly."""
 
@@ -216,7 +223,7 @@ def test_run_or_exit_maps_known_exceptions_to_exit(
     with pytest.raises(typer.Exit) as excinfo:
         run_or_exit(_raise, exception_exit_code=exit_code)
 
-    assert excinfo.value.exit_code == exit_code
+    assert excinfo.value.exit_code == exit_code  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
 
 @settings(
@@ -390,3 +397,320 @@ def test_prepare_command_invokes_override(experiment: str) -> None:
 
         assert result.exit_code == 0
         assert calls["prepare"] == 1
+
+
+@given(experiment=_EXPERIMENT_NAMES)
+@example(experiment="train_test")
+@settings(max_examples=10, deadline=None, derandomize=True)
+def test_train_command_invokes_override(experiment: str) -> None:
+    """The CLI train command should delegate to the injected dependency."""
+
+    with TemporaryDirectory() as tmpdir:
+        base = Path(tmpdir)
+        dataset_dir = base / "dataset"
+        dataset_dir.mkdir()
+        train_dir = base / "train"
+        train_dir.mkdir()
+
+        config_path = dataset_dir / f"{experiment}.toml"
+        config_path.write_text("{}", encoding="utf-8")
+
+        shared = SharedConfig(
+            experiment=experiment,
+            config_path=config_path,
+            project_home=base,
+            dataset_dir=dataset_dir,
+            train_out_dir=train_dir,
+            sample_out_dir=base / "sample",
+        )
+
+        exp = ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=train_dir),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=base / "sample"),
+                sample=SampleConfig(),
+            ),
+            shared=shared,
+        )
+
+        calls: dict[str, int] = {"train": 0}
+
+        def _load_experiment(name: str, exp_config: Path | None) -> ExperimentConfig:
+            assert name == experiment
+            assert exp_config is None
+            return exp
+
+        def _run_train(
+            name: str,
+            _cfg: TrainerConfig,
+            _config_path: Path,
+            _shared: SharedConfig,
+            _engine: LearningModeEngine | None,
+        ) -> ToolResult:
+            calls["train"] += 1
+            assert name == experiment
+            assert _cfg is exp.train
+            assert _shared is shared
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command=name,
+                stdout="train ok",
+            )
+
+        def _noop_prepare(
+            name: str,
+            prepare_cfg: PreparerConfig,
+            config_path_arg: Path,
+            shared_cfg: SharedConfig,
+            learning_mode_engine: LearningModeEngine | None = None,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command=name,
+                stdout="prepare ok",
+            )
+
+        def _noop_sample(
+            name: str,
+            sample_cfg: SamplerConfig,
+            config_path_arg: Path,
+            shared_cfg: SharedConfig,
+            learning_mode_engine: LearningModeEngine | None = None,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command=name,
+                stdout="sample ok",
+            )
+
+        def _noop_train_prereqs(exp_cfg: ExperimentConfig) -> None:
+            return None
+
+        deps = CLIDependencies(
+            load_experiment=_load_experiment,
+            ensure_train_prerequisites=_noop_train_prereqs,
+            ensure_sample_prerequisites=lambda exp: None,
+            run_prepare=_noop_prepare,
+            run_train=_run_train,
+            run_sample=_noop_sample,
+        )
+
+        runner = CliRunner()
+        with override_cli_dependencies(deps):
+            result = runner.invoke(app, ["train", experiment])
+
+        assert result.exit_code == 0
+        assert calls["train"] == 1
+
+
+@given(experiment=_EXPERIMENT_NAMES)
+@example(experiment="sample_test")
+@settings(max_examples=10, deadline=None, derandomize=True)
+def test_sample_command_invokes_override(experiment: str) -> None:
+    """The CLI sample command should delegate to the injected dependency."""
+
+    with TemporaryDirectory() as tmpdir:
+        base = Path(tmpdir)
+        dataset_dir = base / "dataset"
+        dataset_dir.mkdir()
+        sample_dir = base / "sample"
+        sample_dir.mkdir()
+
+        config_path = dataset_dir / f"{experiment}.toml"
+        config_path.write_text("{}", encoding="utf-8")
+
+        shared = SharedConfig(
+            experiment=experiment,
+            config_path=config_path,
+            project_home=base,
+            dataset_dir=dataset_dir,
+            train_out_dir=base / "train",
+            sample_out_dir=sample_dir,
+        )
+
+        exp = ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=base / "train"),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=sample_dir),
+                sample=SampleConfig(),
+            ),
+            shared=shared,
+        )
+
+        calls: dict[str, int] = {"sample": 0}
+
+        def _load_experiment(name: str, exp_config: Path | None) -> ExperimentConfig:
+            assert name == experiment
+            assert exp_config is None
+            return exp
+
+        def _run_sample(
+            name: str,
+            _cfg: SamplerConfig,
+            _config_path: Path,
+            _shared: SharedConfig,
+            _engine: LearningModeEngine | None,
+        ) -> ToolResult:
+            calls["sample"] += 1
+            assert name == experiment
+            assert _cfg is exp.sample
+            assert _shared is shared
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="sample",
+                command=name,
+                stdout="sample ok",
+            )
+
+        def _noop_prepare(
+            name: str,
+            prepare_cfg: PreparerConfig,
+            config_path_arg: Path,
+            shared_cfg: SharedConfig,
+            learning_mode_engine: LearningModeEngine | None = None,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="prepare",
+                command=name,
+                stdout="prepare ok",
+            )
+
+        def _noop_train(
+            name: str,
+            train_cfg: TrainerConfig,
+            config_path_arg: Path,
+            shared_cfg: SharedConfig,
+            learning_mode_engine: LearningModeEngine | None = None,
+        ) -> ToolResult:
+            return ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="train",
+                command=name,
+                stdout="train ok",
+            )
+
+        def _noop_sample_prereqs(exp_cfg: ExperimentConfig) -> None:
+            return None
+
+        deps = CLIDependencies(
+            load_experiment=_load_experiment,
+            ensure_train_prerequisites=lambda exp: None,
+            ensure_sample_prerequisites=_noop_sample_prereqs,
+            run_prepare=_noop_prepare,
+            run_train=_noop_train,
+            run_sample=_run_sample,
+        )
+
+        runner = CliRunner()
+        with override_cli_dependencies(deps):
+            result = runner.invoke(app, ["sample", experiment])
+
+        assert result.exit_code == 0
+        assert calls["sample"] == 1
+
+
+@given(
+    experiment=_EXPERIMENT_NAMES,
+    host=st.ip_addresses(v=4).map(str),
+    port=st.integers(min_value=1024, max_value=65535),
+    open_browser=st.booleans(),
+    override_test_attr=st.just(None),
+)
+@example(
+    experiment="analyze_test",
+    host="127.0.0.1",
+    port=8050,
+    open_browser=True,
+    override_test_attr=None,
+)
+@settings(
+    max_examples=5,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+def test_analyze_command_invokes_override(
+    experiment: str,
+    host: str,
+    port: int,
+    open_browser: bool,
+    override_test_attr: Any,
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    """The CLI analyze command should delegate to the injected analysis runner."""
+
+    calls: dict[str, list[tuple[str, str, int, bool]]] = {"analyze": []}
+
+    def _run_analyze(
+        name: str,
+        analysis_host: str,
+        analysis_port: int,
+        should_open_browser: bool,
+        learning_engine: LearningModeEngine | None,
+    ) -> ToolResult:
+        calls["analyze"].append(
+            (name, analysis_host, analysis_port, should_open_browser)
+        )
+        assert name == experiment
+        assert analysis_host == host
+        assert analysis_port == port
+        assert should_open_browser == open_browser
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=name,
+            stdout="analyze ok",
+        )
+
+    # Mock the analysis runner
+    import ml_playground.runtime.cli.runners as runners_module
+
+    with override_attr(runners_module, "run_analyze", _run_analyze):
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "analyze",
+                experiment,
+                "--host",
+                host,
+                "--port",
+                str(port),
+                "--open-browser" if open_browser else "--no-open-browser",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert calls["analyze"] == [(experiment, host, port, open_browser)]

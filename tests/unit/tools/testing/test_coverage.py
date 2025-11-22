@@ -666,3 +666,130 @@ def test_run_coverage_report_raises_on_runner_exception(
             subprocess_runner=runner,
             cache_dir=_cache_dir(tmp_path),
         )
+
+
+def test_run_coverage_test_with_learning_mode(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    runner = CoverageRunner()
+
+    result = coverage_module.run_coverage_test(
+        config=config,
+        root_path=tmp_path,
+        args=["-k", "unit"],
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        learning_mode=True,
+    )
+
+    assert result.success is True
+    assert result.learning_info is not None
+    assert result.operation_id.command == "coverage-test"
+    assert result.operation_id.category == "test"
+
+
+def test_run_coverage_report_with_learning_mode(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    runner = CoverageRunner()
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage_report(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=False,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        learning_mode=True,
+    )
+
+    assert result.success is True
+    assert result.learning_info is not None
+    assert result.operation_id.command == "coverage-report"
+
+
+def test_run_coverage_threshold_with_learning_mode(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    runner = CoverageRunner()
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage_threshold(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        line_threshold=0.0,
+        branch_threshold=0.0,
+        verbose=False,
+        learning_mode=True,
+        verbosity_level=1,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        force_regen=False,
+    )
+
+    assert result.success is True
+    assert result.learning_info is not None
+    assert result.operation_id.command == "coverage-threshold"
+
+
+def test_ensure_coverage_data_combines_fragments_when_main_missing(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should combine fragments if main coverage file is missing but fragments exist."""
+    runner = CoverageRunner()
+    create_sample_source_file(tmp_path)
+
+    # Setup: manifest exists, but main coverage file is missing. Fragments exist.
+    coverage_dir = _coverage_dir(tmp_path)
+    coverage_file = coverage_dir / "coverage.sqlite"
+    fragment = coverage_dir / "coverage.sqlite.1234"
+    fragment.write_bytes(b"fragment-data")
+
+    # Write manifest matching current state
+    _write_matching_manifest(tmp_path)
+
+    # Ensure main file is gone
+    if coverage_file.exists():
+        coverage_file.unlink()
+
+    # Mock combine to "create" the main file
+    original_run_uv = runner.run_uv_command
+
+    def fake_run_uv(
+        args: List[str],
+        *,
+        env: Dict[str, str] | None = None,
+        operation_id: OperationId,
+        **kwargs: Any,
+    ) -> ToolResult:
+        if args[:2] == ["coverage", "combine"]:
+            if env and "COVERAGE_FILE" in env:
+                Path(env["COVERAGE_FILE"]).write_bytes(b"combined-data")
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                operation_id=operation_id,
+            )
+        return original_run_uv(args, env=env, operation_id=operation_id, **kwargs)
+
+    runner.run_uv_command = fake_run_uv  # type: ignore[assignment]
+
+    # We invoke via run_coverage_report which calls _ensure_coverage_data
+    result = coverage_module.run_coverage_report(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+    )
+
+    assert result.success is True
+    assert "Combined existing coverage fragments" in result.stdout
+    assert coverage_file.exists()
+    assert coverage_file.read_bytes() == b"combined-data"

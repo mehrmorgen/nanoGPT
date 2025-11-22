@@ -8,7 +8,7 @@ import hypothesis.strategies as st
 from hypothesis import example, given, settings
 import pytest
 import typer
-import ml_playground.tools.core.runtime as tools_runtime
+import ml_playground.tools.core.config as core_config
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
 from click import Command
@@ -16,6 +16,7 @@ from click.testing import CliRunner, Result
 from typer.main import get_command
 
 import ml_playground.tools.cli.main as tools_cli
+from ml_playground.tools.cli.state import state as cli_state
 from tests.property.tools._helpers import override_tools_with_deterministic_runner
 
 _MISSING = object()
@@ -57,12 +58,12 @@ def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
 
 @contextmanager
 def _stubbed_tools_config() -> Iterator[None]:
-    original_loader = tools_runtime.load_tools_config
+    original_loader = core_config.load_tools_config
     try:
-        tools_runtime.load_tools_config = _load_tools_config_stub
+        core_config.load_tools_config = _load_tools_config_stub
         yield
     finally:
-        tools_runtime.load_tools_config = original_loader
+        core_config.load_tools_config = original_loader
 
 
 def _collect_command_paths(
@@ -124,8 +125,9 @@ VALID_EXPLAIN_STRATEGY = (
 
 
 def _reset_cli_state() -> None:
-    tools_runtime.reset_state()
-    tools_runtime.set_config(PRELOADED_CONFIG, PROJECT_ROOT)
+    cli_state.reset()
+    cli_state.config = PRELOADED_CONFIG
+    cli_state.project_root = PROJECT_ROOT
 
 
 def _invoke_cli(raw_args: Sequence[str]) -> Result:

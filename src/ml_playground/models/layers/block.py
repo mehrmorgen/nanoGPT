@@ -13,7 +13,7 @@ class Block(nn.Module):
     """Single transformer block (attention + MLP with residuals)."""
 
     def __init__(self, config: GPTConfig) -> None:
-        super().__init__()  # type: ignore[reportUnknownMemberType]
+        super().__init__()  # type: ignore[reportUnknownMemberType]  # TODO(torch-typing): PyTorch Module.__init__ is partially unknown
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)

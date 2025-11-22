@@ -408,6 +408,309 @@ class _FailingPytestRunner(FakeSubprocessRunner):
         )
 
 
+class _FailingCoverageRunner(FakeSubprocessRunner):
+    def run_uv_command(self, *args: Any, **kwargs: Any) -> ToolResult:  # type: ignore[override]
+        return ToolResult(
+            success=False,
+            exit_code=9,
+            stdout="cov json failed",
+            stderr="cov err",
+            operation_id=kwargs.get(
+                "operation_id",
+                OperationId(
+                    namespace="tools", category="test", command="coverage-json"
+                ),
+            ),
+        )
+
+
+def _manifest_fp() -> dict[str, str]:
+    return {"fingerprint": "fp"}
+
+
+def test_collect_coverage_metrics_returns_runner_failure(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, _FailingCoverageRunner())
+    coverage_dir = tmp_path / ".cache" / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
+
+    result, metrics = tools._collect_coverage_metrics(  # type: ignore[attr-defined]
+        env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage"
+        ),
+        executed_commands=[],
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.exit_code == 9
+    assert metrics == []
+
+
+def test_collect_coverage_metrics_handles_missing_branch_totals(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    coverage_dir = tmp_path / ".cache" / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
+    json_path = coverage_dir / "coverage.json"
+    json_path.write_text(
+        """
+{"totals": {"num_statements": 5, "covered_lines": 4}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    _, metrics = tools._collect_coverage_metrics(  # type: ignore[attr-defined]
+        env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage"
+        ),
+        executed_commands=[],
+    )
+
+    assert any("Branch totals: not available" in line for line in metrics)
+
+
+def test_collect_coverage_metrics_raises_on_bad_json(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    coverage_dir = tmp_path / ".cache" / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
+    json_path = coverage_dir / "coverage.json"
+    json_path.write_text("{not-json}", encoding="utf-8")
+
+    with pytest.raises(ToolExecutionError):
+        tools._collect_coverage_metrics(  # type: ignore[attr-defined]
+            env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+            executed_commands=[],
+        )
+
+
+def test_read_coverage_thresholds_returns_empty_when_missing(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    assert tools._read_coverage_thresholds_from_config() == {}  # type: ignore[attr-defined]
+
+
+def test_read_coverage_thresholds_returns_empty_on_invalid_toml(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("not = [valid", encoding="utf-8")
+
+    assert tools._read_coverage_thresholds_from_config() == {}  # type: ignore[attr-defined]
+
+
+def test_ensure_coverage_data_returns_combine_failure(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    failure = ToolResult(
+        success=False,
+        exit_code=7,
+        stdout="",
+        stderr="combine fail",
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage-combine"
+        ),
+    )
+
+    def _combine_failure(
+        *,
+        env: dict[str, str],
+        operation_id: OperationId,
+        executed_commands: list[str],
+    ) -> tuple[ToolResult | None, bool]:  # pragma: no cover - helper wiring
+        del env, operation_id, executed_commands
+        return failure, False
+
+    with (
+        override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"),
+        override_attr(tools, "_read_coverage_manifest", _manifest_fp),
+        override_attr(tools, "_combine_coverage_fragments", _combine_failure),
+    ):
+        result, notes, env = tools._ensure_coverage_data(  # type: ignore[attr-defined]
+            args=["-q"],
+            learning_mode=False,
+            verbosity_level=1,
+            verbose=False,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+            executed_commands=[],
+        )
+
+    assert result is failure
+    assert notes == []
+    assert "COVERAGE_FILE" in env
+
+
+def test_ensure_coverage_data_returns_generation_failure(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    failure = ToolResult(
+        success=False,
+        exit_code=11,
+        stdout="fail",
+        stderr="gen",
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage-generate"
+        ),
+    )
+
+    def _combine_noop(
+        *,
+        env: dict[str, str],
+        operation_id: OperationId,
+        executed_commands: list[str],
+    ) -> tuple[ToolResult | None, bool]:  # pragma: no cover - helper wiring
+        del env, operation_id, executed_commands
+        return None, False
+
+    def _run_data_failure(
+        *,
+        args: list[str],
+        verbosity_level: int,
+        verbose: bool,
+        operation_id: OperationId,
+        executed_commands: list[str],
+    ) -> tuple[ToolResult | None, list[str]]:  # pragma: no cover - helper wiring
+        del args, verbosity_level, verbose, operation_id, executed_commands
+        return failure, []
+
+    with (
+        override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"),
+        override_attr(tools, "_read_coverage_manifest", _manifest_fp),
+        override_attr(tools, "_combine_coverage_fragments", _combine_noop),
+        override_attr(tools, "_run_coverage_test_for_data", _run_data_failure),
+    ):
+        result, notes, _ = tools._ensure_coverage_data(  # type: ignore[attr-defined]
+            args=[],
+            learning_mode=False,
+            verbosity_level=1,
+            verbose=False,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+            executed_commands=[],
+        )
+
+    assert result is failure
+    assert notes == []
+
+
+def test_ensure_coverage_data_reports_missing_final_artifacts(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+
+    def fake_combine(**_: Any) -> tuple[ToolResult | None, bool]:
+        return None, False
+
+    def _run_data_success(
+        *,
+        args: list[str],
+        verbosity_level: int,
+        verbose: bool,
+        operation_id: OperationId,
+        executed_commands: list[str],
+    ) -> tuple[ToolResult | None, list[str]]:  # pragma: no cover - helper wiring
+        del args, verbosity_level, verbose, operation_id, executed_commands
+        return None, ["ran coverage"]
+
+    with (
+        override_attr(tools, "_compute_coverage_fingerprint", lambda: "fp"),
+        override_attr(tools, "_read_coverage_manifest", _manifest_fp),
+        override_attr(tools, "_combine_coverage_fragments", fake_combine),
+        override_attr(tools, "_run_coverage_test_for_data", _run_data_success),
+    ):
+        result, notes, _ = tools._ensure_coverage_data(  # type: ignore[attr-defined]
+            args=["-q"],
+            learning_mode=False,
+            verbosity_level=1,
+            verbose=True,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+            executed_commands=[],
+        )
+
+    assert isinstance(result, ToolResult)
+    assert result.exit_code == 1
+    assert any("ran coverage" in note for note in notes)
+
+
+def test_run_coverage_test_for_data_handles_missing_command_list(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+
+    def fake_coverage_test(
+        args: list[str], *, learning_mode: bool, verbosity_level: int
+    ) -> ToolResult:
+        coverage_file = tools._coverage_file()  # type: ignore[attr-defined]
+        coverage_file.parent.mkdir(parents=True, exist_ok=True)
+        coverage_file.write_bytes(b"data")
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="run",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage-test"
+            ),
+        )
+
+    with override_attr(tools, "coverage_test", fake_coverage_test):
+        result, notes = tools._run_coverage_test_for_data(  # type: ignore[attr-defined]
+            args=["-q"],
+            verbosity_level=1,
+            verbose=False,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+        )
+
+    assert result is None
+    assert any("Automatically ran coverage" in note for note in notes)
+
+
+def test_generate_coverage_via_pytest_handles_default_executed_list(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+
+    result, notes = tools._generate_coverage_via_pytest(  # type: ignore[attr-defined]
+        args=["-q"],
+        verbose=False,
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage"
+        ),
+    )
+
+    assert result is None
+    assert any("Coverage pipeline generated no data" in note for note in notes)
+
+
+def test_clean_learning_mode_includes_explanation(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    result = tools.clean([], learning_mode=True, verbosity_level=2)
+
+    assert result.learning_info is not None
+    assert any("Cleaning" in part for part in result.learning_info.explanations)
+
+
 def test_generate_coverage_via_pytest_failure_returns_result(
     cfg: ToolsConfig, tmp_path: Path
 ) -> None:

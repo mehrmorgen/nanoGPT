@@ -10,7 +10,7 @@ from ml_playground.sampling.runner import Sampler as _CoreSampler
 
 
 class ShakespeareSampler(_SamplerProto):
-    def sample(self, cfg: SamplerConfig) -> SampleReport:  # type: ignore[override]
+    def sample(self, cfg: SamplerConfig) -> SampleReport:
         out_dir: Path = cfg.runtime.out_dir
         shared = SharedConfig(
             experiment="shakespeare",

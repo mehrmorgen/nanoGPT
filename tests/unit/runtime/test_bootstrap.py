@@ -110,6 +110,19 @@ def test_reset_runtime_cli_dependencies_handles_missing_default_factory() -> Non
     assert deps.load_experiment("exp", None).tag == BASE_TAG
 
 
+def test_get_runtime_cli_dependencies_recreates_missing_current_instance() -> None:
+    bootstrap.configure_runtime_cli_dependencies(lambda: _make_dependencies("fresh"))
+    first = bootstrap.get_runtime_cli_dependencies()
+
+    # Simulate an external consumer clearing the cached instance.
+    bootstrap._current = None  # type: ignore[attr-defined]
+
+    recreated = bootstrap.get_runtime_cli_dependencies()
+
+    assert recreated is not first
+    assert recreated.load_experiment("exp", None).tag == "fresh"
+
+
 def test_get_runtime_cli_dependencies_errors_when_never_configured() -> None:
     """Calling get_runtime_cli_dependencies with no factory should raise.
 
@@ -124,6 +137,25 @@ def test_get_runtime_cli_dependencies_errors_when_never_configured() -> None:
     try:
         bootstrap._default_factory = None  # type: ignore[attr-defined]
         bootstrap._current = None  # type: ignore[attr-defined]
+
+        with pytest.raises(RuntimeError):
+            bootstrap.get_runtime_cli_dependencies()
+    finally:
+        bootstrap._default_factory = original_default  # type: ignore[attr-defined]
+        bootstrap._current = original_current  # type: ignore[attr-defined]
+
+
+def test_reset_runtime_cli_dependencies_without_any_factory_is_safe() -> None:
+    original_default = bootstrap._default_factory  # type: ignore[attr-defined]
+    original_current = bootstrap._current  # type: ignore[attr-defined]
+
+    try:
+        bootstrap._default_factory = None  # type: ignore[attr-defined]
+        bootstrap._current = None  # type: ignore[attr-defined]
+
+        # Should not raise even though no factory is registered.
+        bootstrap.reset_runtime_cli_dependencies()
+        assert bootstrap._current is None  # type: ignore[attr-defined]
 
         with pytest.raises(RuntimeError):
             bootstrap.get_runtime_cli_dependencies()

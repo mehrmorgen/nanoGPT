@@ -10,7 +10,7 @@ class MLP(nn.Module):
     """Feed-forward block used inside each transformer block."""
 
     def __init__(self, config: GPTConfig) -> None:
-        super().__init__()  # type: ignore[reportUnknownMemberType]
+        super().__init__()  # type: ignore[reportUnknownMemberType]  # TODO(torch-typing): PyTorch Module.__init__ is partially unknown
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu = nn.GELU(approximate="tanh")
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)

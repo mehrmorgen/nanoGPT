@@ -113,7 +113,7 @@ def run_kill_port(
 
 def _pids_by_port(port: int) -> list[int]:
     """Get PIDs of processes using a specific port."""
-    import psutil  # type: ignore
+    import psutil
 
     pids: set[int] = set()
     try:
@@ -146,7 +146,7 @@ def _pids_by_port(port: int) -> list[int]:
 
 def _kill_pid(pid: int) -> bool:
     """Kill a process by PID."""
-    import psutil  # type: ignore
+    import psutil
 
     try:
         proc = psutil.Process(pid)

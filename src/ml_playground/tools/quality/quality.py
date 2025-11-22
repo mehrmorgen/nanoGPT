@@ -43,7 +43,7 @@ class QualityTools:
         self.root_path = root_path
         self.pkg_path = root_path / "src" / "ml_playground"
         # Module-level patch point for tests
-        global _default_runner  # noqa: PLW0603
+        global _default_runner  # noqa: PLW0603 - providing a test patch point
         if _default_runner is None:
             _default_runner = RealSubprocessRunner()
         self.subprocess_runner = subprocess_runner or _default_runner

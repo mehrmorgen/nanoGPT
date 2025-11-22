@@ -1,6 +1,10 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from ml_playground.tools.core.config import ToolsConfig
@@ -85,6 +89,14 @@ class _StubRunner(SubprocessRunner):
 
 def _minimal_tools_config() -> ToolsConfig:
     return ToolsConfig()
+
+
+@dataclass
+class _FakeToolResult:
+    success: bool
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
 
 
 def test_run_workflow_status_json_happy_path(tmp_path: Path) -> None:
@@ -208,3 +220,187 @@ def test_get_coverage_status_handles_missing_file(tmp_path: Path) -> None:
     status = ws._get_coverage_status(cfg, tmp_path, runner)
     assert status["status"] == "not_available"
     assert "Run coverage-test" in status["message"]
+
+
+def test_get_coverage_status_reports_available_data(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    coverage_root = tmp_path / ".cache" / "coverage"
+    coverage_root.mkdir(parents=True)
+    (coverage_root / "coverage.sqlite").write_text("sqlite-placeholder")
+
+    class _FakeTestingTools:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.coverage_calls: list[list[str]] = []
+
+        def coverage_report(self, args: list[str], *, verbose: bool) -> ToolResult:
+            self.coverage_calls.append(args)
+            del verbose
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="TOTAL 90% 85%",
+                stderr="",
+                operation_id=OperationId(
+                    namespace="tools", category="dev", command="coverage"
+                ),
+            )
+
+    original = ws.TestingTools
+    ws.TestingTools = _FakeTestingTools  # type: ignore[assignment]
+    try:
+        status = ws._get_coverage_status(cfg, tmp_path, runner)
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]
+
+    assert status["status"] == "available"
+    assert status["line_percentage"] == 90.0
+    assert status["branch_percentage"] == 85.0
+
+
+def test_get_coverage_status_handles_exceptions(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    coverage_root = tmp_path / ".cache" / "coverage"
+    coverage_root.mkdir(parents=True)
+    (coverage_root / "coverage.sqlite").write_text("sqlite-placeholder")
+
+    class _ExplodingTestingTools:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def coverage_report(self, *_args: Any, **_kwargs: Any) -> ToolResult:
+            raise RuntimeError("boom")
+
+    original = ws.TestingTools
+    ws.TestingTools = _ExplodingTestingTools  # type: ignore[assignment]
+    try:
+        status = ws._get_coverage_status(cfg, tmp_path, runner)
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]
+
+    assert status["status"] == "unknown"
+    assert "error" in status
+
+
+def test_get_blocking_issues_reports_all_sources() -> None:
+    issues = ws._get_blocking_issues(
+        {"overall_status": "failed", "issues_count": 3},
+        {"overall_status": "failed"},
+        {"has_changes": True},
+    )
+    assert "Quality checks failing" in issues[0]
+    assert any("Test failures" in issue for issue in issues)
+    assert any("Uncommitted changes" in issue for issue in issues)
+
+
+def test_run_quality_batch_handles_failures_and_errors(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    class _QualityToolsStub:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=False,
+                exit_code=1,
+                stdout="lint output",
+                stderr="issue-one\nissue-two\n",
+            )
+
+        def typecheck(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr="type-error\n",
+            )
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            raise RuntimeError("deadcode failure")
+
+    module_name = "ml_playground.tools.quality.quality"
+    original_module = sys.modules.get(module_name)
+    stub_module = ModuleType(module_name)
+    stub_module.QualityTools = _QualityToolsStub  # type: ignore[attr-defined]
+    sys.modules[module_name] = stub_module
+    try:
+        summary = ws._run_quality_batch(cfg, tmp_path, runner)
+    finally:
+        if original_module is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = original_module
+
+    assert summary["overall"]["status"] == "failed"
+    assert summary["lint"]["status"] == "failed"
+    assert summary["typecheck"]["status"] == "failed"
+    assert summary["deadcode"]["status"] == "error"
+    assert summary["overall"]["total_issues"] > 0
+
+
+def test_run_test_batch_simple_handles_failures_and_exceptions(
+    tmp_path: Path,
+) -> None:
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    class _TestingToolsStub:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def unit(self, args: list[str]) -> _FakeToolResult:
+            assert "-q" in args
+            return _FakeToolResult(
+                success=False,
+                exit_code=1,
+                stdout="2 passed in 0.50s",
+                stderr="",
+            )
+
+        def integration(self, _args: list[str]) -> _FakeToolResult:
+            raise RuntimeError("integration unavailable")
+
+    original = ws.TestingTools
+    ws.TestingTools = _TestingToolsStub  # type: ignore[assignment]
+    try:
+        results = ws._run_test_batch_simple(cfg, tmp_path, runner)
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]
+
+    assert results["unit"]["status"] == "failed"
+    assert results["overall"]["status"] == "failed"
+    assert results["unit"]["count"] == 2
+    assert results["unit"]["duration"] == "0.50s"
+    assert results["integration"]["status"] == "error"
+
+
+def test_format_status_text_output_lists_sections() -> None:
+    text = ws._format_status_text_output(
+        {
+            "timestamp": "2024-01-01T00:00:00",
+            "git_status": {"current_branch": "main", "status": "clean"},
+            "quality_status": {"overall_status": "passed"},
+            "test_status": {"overall_status": "failed", "total_tests": 10},
+            "coverage_status": {
+                "status": "available",
+                "line_percentage": 92.0,
+                "branch_percentage": 84.0,
+            },
+            "readiness": {
+                "ready_for_merge": False,
+                "blocking_issues": ["Needs tests"],
+            },
+        }
+    )
+
+    assert "Workflow Status" in text
+    assert "Git:" in text
+    assert "Quality:" in text
+    assert "Tests:" in text
+    assert "Coverage:" in text
+    assert "Blocking issues" in text

@@ -9,7 +9,7 @@ class LayerNorm(nn.Module):
     """Layer normalization with optional bias, mirroring the original GPT implementation."""
 
     def __init__(self, ndim: int, bias: bool) -> None:
-        super().__init__()  # type: ignore[reportUnknownMemberType]
+        super().__init__()  # type: ignore[reportUnknownMemberType]  # TODO(torch-typing): PyTorch Module.__init__ is partially unknown
         self.weight = nn.Parameter(torch.ones(ndim))
         self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
 

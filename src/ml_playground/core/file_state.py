@@ -7,13 +7,13 @@ from typing import Dict, Iterable, Set, Tuple
 def _ensure_hashable_path(path: Path) -> None:
     """Populate internal Path attributes for subclasses lacking them."""
 
-    if hasattr(path, "_raw_paths") and getattr(path, "_raw_paths") is not None:  # type: ignore[attr-defined]
+    if hasattr(path, "_raw_paths") and getattr(path, "_raw_paths") is not None:  # type: ignore[attr-defined]  # TODO(path-hack): Accessing internal Path attributes for hashability
         return
 
     inner = getattr(path, "_inner", None)
     source = inner if isinstance(inner, Path) else Path(str(path))
 
-    raw_paths = getattr(source, "_raw_paths", None)  # type: ignore[attr-defined]
+    raw_paths = getattr(source, "_raw_paths", None)  # type: ignore[attr-defined]  # TODO(path-hack): Accessing internal Path attributes for hashability
     if raw_paths is None:
         raw_paths = [str(source)]
 
