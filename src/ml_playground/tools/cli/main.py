@@ -171,7 +171,7 @@ def learn_commands(
             typer.echo("\n💡 Use --detailed for full command descriptions")
             typer.echo("💡 Use --category <name> to focus on specific tools")
 
-    except Exception as e:
+    except (KeyError, AttributeError, TypeError, ValueError) as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
 
@@ -259,7 +259,7 @@ def learn_explain(
 
         typer.echo(f"\n💡 Usage: tools {category} {cmd_name}")
 
-    except Exception as e:
+    except (KeyError, AttributeError, TypeError, ValueError) as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
 
@@ -354,7 +354,7 @@ def learn_best_practices(
 
         typer.echo("\n💡 Use --category <name> for category-specific practices")
 
-    except Exception as e:
+    except (KeyError, AttributeError, TypeError, ValueError) as e:
         typer.echo(f"❌ Error: {e}", err=True)
         raise typer.Exit(1)
 

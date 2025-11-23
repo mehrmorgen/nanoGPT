@@ -245,7 +245,7 @@ class TestCLIBasics:
 
     def test_cli_handles_unexpected_config_error(self) -> None:
         def boom(_project_root: Path | None = None) -> ToolsConfig:
-            raise RuntimeError("boom")
+            raise AttributeError("boom")
 
         deps = _deps(load_config=boom)
         with override_tools_dependencies(deps):
@@ -443,7 +443,7 @@ class TestCLIErrorBranches:
 
     def test_cli_handles_unexpected_config_error(self) -> None:
         def boom(_project_root: Path | None = None) -> ToolsConfig:
-            raise RuntimeError("boom")
+            raise AttributeError("boom")
 
         deps = _deps(load_config=boom)
         with override_tools_dependencies(deps):
@@ -1603,7 +1603,7 @@ class TestConfigLoadingErrors:
         """Unexpected exceptions should result in Typer exit."""
 
         def boom(_: Path | None = None) -> ToolsConfig:  # pragma: no cover - stub
-            raise RuntimeError("unexpected failure")
+            raise AttributeError("unexpected failure")
 
         deps = _deps(load_config=boom)
         with override_tools_dependencies(deps):

@@ -5,6 +5,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.core.error_handling import (
+    DataError,
+    FileOperationError,
+    CheckpointError,
+)
 from ml_playground.data_pipeline.preparer import create_pipeline
 from ml_playground.sampling.runner import Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
@@ -82,7 +87,7 @@ def run_prepare_impl(
             stdout=f"Successfully prepared data for experiment: {experiment}",
             learning_info=learning_info,
         )
-    except Exception as e:
+    except (DataError, ValueError, FileNotFoundError, RuntimeError, OSError) as e:
         prepare_cfg.logger.error(f"Pipeline for {experiment} failed: {e}")
 
         learning_info = None
@@ -168,7 +173,14 @@ def run_train_impl(
             stdout=f"Successfully completed training for experiment: {experiment}",
             learning_info=learning_info,
         )
-    except Exception as e:
+    except (
+        RuntimeError,
+        ValueError,
+        CheckpointError,
+        OSError,
+        AttributeError,
+        TypeError,
+    ) as e:
         train_cfg.logger.error(f"Training for {experiment} failed: {e}")
 
         learning_info = None
@@ -254,7 +266,15 @@ def run_sample_impl(
             stdout=f"Successfully completed sampling for experiment: {experiment}",
             learning_info=learning_info,
         )
-    except Exception as e:
+    except (
+        DataError,
+        ValueError,
+        FileOperationError,
+        RuntimeError,
+        AttributeError,
+        TypeError,
+        OSError,
+    ) as e:
         sample_cfg.logger.error(f"Sampling for {experiment} failed: {e}")
 
         learning_info = None
@@ -328,7 +348,7 @@ def run_analyze(
             stdout=f"Analysis placeholder executed for {experiment} (Host={host}, Port={port}, Open={open_browser})",
             learning_info=learning_info,
         )
-    except Exception as e:
+    except (ValueError, RuntimeError, AttributeError, TypeError, OSError) as e:
         return ToolResult.create(
             success=False,
             exit_code=1,

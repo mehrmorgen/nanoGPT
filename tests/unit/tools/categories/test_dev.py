@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 import os
 from types import SimpleNamespace
@@ -399,7 +400,7 @@ def test_cleanup_ignored_tracked_exception_path(
     # Simulate an unexpected exception by providing no results and raising via runner behavior
     class RaisingRunner(FakeSubprocessRunner):
         def run_subprocess(self, *args, **kwargs):  # type: ignore[override]
-            raise RuntimeError("unexpected")
+            raise subprocess.SubprocessError("unexpected")
 
     tools = dev.DevTools(
         config=ToolsConfig(),
@@ -805,7 +806,7 @@ def test_cleanup_ignored_tracked_rm_failure_returns_failure(tmp_path: Path) -> N
 def test_cleanup_ignored_tracked_exception_returns_failure(tmp_path: Path) -> None:
     class RaisingRunner(FakeSubprocessRunner):
         def run_subprocess(self, *args, **kwargs):  # type: ignore[override]
-            raise RuntimeError("boom")
+            raise subprocess.SubprocessError("boom")
 
     runner = RaisingRunner()
     tools = dev.DevTools(
@@ -823,7 +824,7 @@ def test_kill_port_exception_path_returns_failure(
     tools, runner = dev_tools
 
     def raising(port: int) -> list[int]:
-        raise RuntimeError("network error")
+        raise OSError("network error")
 
     # Patch the module-level functions
     import ml_playground.tools.dev.hygiene as hygiene_module

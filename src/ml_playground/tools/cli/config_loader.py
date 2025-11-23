@@ -47,7 +47,7 @@ def load_config_with_error_handling(
     except ToolConfigurationError as e:
         typer.echo(f"Configuration error: {e}", err=True)
         raise typer.Exit(1)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, OSError) as e:
         typer.echo(f"Unexpected error loading configuration: {e}", err=True)
         raise typer.Exit(1)
 

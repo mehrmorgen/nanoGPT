@@ -206,7 +206,7 @@ def test_load_config_with_error_handling_unexpected_error(
         """Fake dependencies that implements ToolsDependencies protocol."""
 
         def load_config(self, root: Path | None) -> ToolsConfig:
-            raise RuntimeError("unexpected boom")
+            raise AttributeError("unexpected boom")
 
         # Add other required methods for ToolsDependencies protocol
         def quality_factory(self, config: ToolsConfig, project_root: Path) -> Any:

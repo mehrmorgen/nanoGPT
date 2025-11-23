@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from ..core.interfaces import OperationId, ToolResult
 from ..utils.subprocess_utils import SubprocessRunner
@@ -53,7 +54,7 @@ def run_cleanup_ignored_tracked(
             command=operation_id.command,
             stdout=f"Removed {len(ignored_files)} ignored tracked files from git.",
         )
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         return ToolResult.create(
             success=False,
             exit_code=1,
@@ -100,7 +101,9 @@ def run_kill_port(
             command=operation_id.command,
             stdout=f"Killed {len(pids)} processes running on port {port}.",
         )
-    except Exception as exc:
+    except (OSError, AttributeError, TypeError, ValueError) as exc:
+        # Handle psutil system access errors and process iteration failures
+        # psutil.Error is not imported here to avoid import overhead in the exception path
         return ToolResult.create(
             success=False,
             exit_code=1,

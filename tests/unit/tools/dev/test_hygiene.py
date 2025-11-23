@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from contextlib import contextmanager
 from types import SimpleNamespace, ModuleType
 from typing import Callable, Iterator
@@ -86,7 +87,7 @@ def test_run_cleanup_returns_error_on_exception(tmp_path) -> None:
             super().__init__([])
 
         def run_subprocess(self, *args, **kwargs):  # type: ignore[override]
-            raise RuntimeError("git missing")
+            raise subprocess.SubprocessError("git missing")
 
     result = hygiene.run_cleanup_ignored_tracked(ExplodingRunner(), tmp_path)
 
@@ -145,7 +146,7 @@ def test_run_kill_port_propagates_kill_failure(tmp_path) -> None:
 
 def test_run_kill_port_handles_lookup_exception(tmp_path) -> None:
     def raising(_: int) -> list[int]:
-        raise RuntimeError("psutil error")
+        raise OSError("psutil error")
 
     with (
         override_attr(hygiene, "_pids_by_port", raising),

@@ -236,8 +236,8 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
                 stderr="",
                 operation_id=operation_id,
             )
-        except Exception as e:
-            # Handle any other sqlite3.connect issues (like module compatibility problems)
+        except (AttributeError, TypeError, ValueError) as e:
+            # Handle sqlite3.connect issues like module compatibility problems
             return ToolResult(
                 success=True,
                 exit_code=0,

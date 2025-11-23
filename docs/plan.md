@@ -123,14 +123,24 @@ We also track **defensive branches** (especially broad `except Exception` handle
 - **runtime/runners.py**
   - Branches:
     - Outer `try/except Exception as e` around `run_prepare_impl`, `run_train_impl`, `run_sample_impl`, and `run_analyze` that convert unexpected failures into `ToolResult`.
-  - Status:
-    - [ ] **Later – review outer handlers**: Revisit whether the outer generic `except Exception` blocks should be narrowed to domain-specific errors once E2E/CLI behavior expectations are fully documented.
+  - Status: ✅ **COMPLETED** - Narrowed to specific exception types for each function:
+    - `run_prepare_impl`: `(DataError, ValueError, FileNotFoundError, RuntimeError, OSError)`
+    - `run_train_impl`: `(RuntimeError, ValueError, CheckpointError, OSError, AttributeError, TypeError)`
+    - `run_sample_impl`: `(DataError, ValueError, FileOperationError, RuntimeError, AttributeError, TypeError, OSError)`
+    - `run_analyze`: `(ValueError, RuntimeError, AttributeError, TypeError, OSError)`
 
 - **Additional patterns identified**
   - Git worktree detection in `tools/environment/environment.py` and `tools/environment/setup.py`
   - Silent `pass` statements in logging operations
   - Broad `getattr` usage with fallback objects
   - Status: Documented for future review - these patterns are generally appropriate for their contexts
+
+### Additional Defensive Branch Simplification Completed
+
+- **tools/cli/config_loader.py** - Narrowed from `except Exception` to `(AttributeError, TypeError, ValueError, OSError)`
+- **tools/testing/mutation.py** - Narrowed from `except Exception` to `(AttributeError, TypeError, ValueError)` for sqlite3.connect issues
+- **tools/cli/main.py** - Narrowed CLI command exception handlers from `except Exception` to `(KeyError, AttributeError, TypeError, ValueError)`
+- **tools/dev/hygiene.py** - Narrowed git operation handler from `except Exception` to `(OSError, subprocess.SubprocessError, ValueError)` and psutil handler to `(OSError, psutil.Error, AttributeError, ValueError)`
 
 ## Future Test-Suite Typing Workstreams
 
