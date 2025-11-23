@@ -38,7 +38,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
    - **Scope**: ~82 instances identified (e.g., `sampling/runner.py`, `core/file_state.py`).
    - **Action**: Replace dynamic attribute access with defined Protocols or dataclasses.
 
-3. - [ ] **Address TODOs**
+3. - [x] **Address TODOs**
    - **Scope**: ~7 relevant TODOs in `src` (excluding generated JSONs).
    - **Action**: Resolve or ticket actionable technical debt.
 
