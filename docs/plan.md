@@ -54,5 +54,17 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
    - Verify `uv run ml-playground` flows (prepare -> train -> sample).
    - Use strictly typed configuration overrides for E2E scenarios.
 
+## Phase 4: Documentation & Code Simplification
+
+**Objective**: Ensure documentation compliance and remove unnecessary abstractions.
+
+1. - [ ] **Documentation Compliance**
+   - **Action**: Review `IMPORT_GUIDELINES.md` exceptions (cycle breaks, lazy imports) and track them.
+   - **Action**: Verify "Required Sections per Experiment Readme" across all experiments.
+
+2. - [ ] **Remove Pointless Indirections**
+   - **Scope**: `tools/utils/filesystem_utils.py` (wrappers around pathlib), `tools/utils/subprocess_utils.py` (global runner vs DI).
+   - **Action**: Remove `FilesystemOperations` if `tmp_path` covers testing needs. Refactor `run_subprocess` to strict DI.
+
 ## Known Patterns (For Review)
 - **Git Worktree Detection**: Used in `tools/environment` (2 matches). Deemed appropriate for context but monitor for complexity.
