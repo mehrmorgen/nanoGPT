@@ -238,6 +238,28 @@ class TestRealSubprocessRunner:
                 operation_id=operation_id,
             )
 
+    def test_run_subprocess_dry_run(self) -> None:
+        """Test dry run mode skips execution."""
+        runner = RealSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="dry-run"
+        )
+
+        os.environ["ML_PLAYGROUND_TOOLS_DRY_RUN"] = "1"
+        try:
+            result = runner.run_subprocess(
+                ["echo", "should not run"],
+                operation_id=operation_id,
+            )
+        finally:
+            os.environ.pop("ML_PLAYGROUND_TOOLS_DRY_RUN", None)
+
+        assert result.success is True
+        assert "[dry-run]" in result.stdout
+        assert "should not run" in result.stdout
+        # Ideally verify it didn't run, but that's hard with RealSubprocessRunner unless we mock subprocess.run
+        # The dry-run logic returns early, so subprocess.run shouldn't be called.
+
     def test_run_uv_command_includes_project(self, tmp_path: Path) -> None:
         class RecordingRunner(RealSubprocessRunner):
             def __init__(self) -> None:

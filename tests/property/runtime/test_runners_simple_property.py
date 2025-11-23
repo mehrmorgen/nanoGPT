@@ -84,6 +84,7 @@ class _StubPreparerCfg:
     runtime: _StubRuntimeCfg
     data: _FakePreparerData
     logger: LoggerLike
+    tokenizer_type: str = "gpt2"
 
 
 @dataclass

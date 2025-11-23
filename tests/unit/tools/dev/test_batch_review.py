@@ -790,3 +790,32 @@ def test_batch_review_mixed_structured_failures_and_exceptions(tmp_path: Path) -
             batch_review_module.QualityTools = original_quality
         if original_testing:
             batch_review_module.TestingTools = original_testing
+
+
+def test_batch_review_extraction_helpers() -> None:
+    """Test extraction helpers with various inputs."""
+    # Test count extraction
+    assert batch_review_module._extract_test_count("5 passed") == 5
+    assert batch_review_module._extract_test_count("no matches") == 0
+
+    # Test duration extraction
+    assert batch_review_module._extract_duration("in 1.23s") == "1.23s"
+    assert batch_review_module._extract_duration("in 0.5 seconds") == "0.5s"
+    assert batch_review_module._extract_duration("no matches") == "0s"
+
+    # Test coverage extraction
+    coverage_out = "TOTAL 90% 80%"
+    assert (
+        batch_review_module._extract_coverage_percentage(coverage_out, "line") == 90.0
+    )
+    assert (
+        batch_review_module._extract_coverage_percentage(coverage_out, "branch") == 80.0
+    )
+    assert batch_review_module._extract_coverage_percentage("no matches", "line") == 0.0
+
+
+def test_batch_review_timestamp() -> None:
+    """Test timestamp generation."""
+    ts = batch_review_module._get_timestamp()
+    assert isinstance(ts, str)
+    assert "T" in ts  # ISO format check

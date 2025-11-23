@@ -30,19 +30,20 @@ def load_config_with_error_handling(
         target_root = project_root if project_root is not None else state.project_root
 
         loaded_config = dependencies.load_config(target_root)
+
+        # Apply configuration defaults to global state if not already set
+        # We read from the local variable to avoid depending on state.config being set yet
+        if not state.learning_mode_set:
+            state.learning_mode = loaded_config.learning_mode_default
+            state.mark_learning_mode_default(True)
+
+        state.verbosity = loaded_config.default_verbosity
+
+        # Finally store the config
         state.config = loaded_config
 
         if project_root is not None:
             state.project_root = project_root
-        elif state.project_root is None and target_root is not None:
-            state.project_root = target_root
-
-        # Apply configuration defaults to global state if not already set
-        if not state.learning_mode_set:
-            state.learning_mode = state.config.learning_mode_default
-            state.mark_learning_mode_default(True)
-
-        state.verbosity = state.config.default_verbosity
 
     except ToolConfigurationError as e:
         typer.echo(f"Configuration error: {e}", err=True)

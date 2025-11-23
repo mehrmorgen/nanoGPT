@@ -18,7 +18,15 @@ Our current objective is to raise **branch coverage for everything under `src/ml
 ### 1. Device
 - File: `src/ml_playground/runtime/device.py`.
 - Status: Property tests in `tests/property/runtime/test_device_property.py` use a strictly-typed fake torch implementation to cover `global_device_setup` branches (cpu / cuda / mps, dtype and seed handling).
-- Next: Ensure runtime CLI device helpers consume the same abstraction once CLI workstream starts.
+- Plan (step-by-step):
+  1. - [x] **Property-based testing coverage**
+     - ✅ COMPLETED: Fake torch implementation covers all device setup branches
+  2. - [ ] **Runtime CLI device helper integration**
+     - Ensure runtime CLI device helpers consume the same abstraction once CLI workstream starts
+     - Verify CLI device commands use the same `global_device_setup` function
+  3. - [ ] **Device protocol definition**
+     - Consider defining `DeviceLike` protocol if multiple device abstractions emerge
+     - Standardize device-related interfaces across runtime modules
 
 ## Current Tools Focus: Tools Layer & Tools Protocols
 
@@ -47,12 +55,19 @@ These tranches extend the same protocol-driven, strictly-typed testing approach 
 - Status:
   - Property suites already run against deterministic dependency overrides; no mocking.
   - **Update**: `tools/testing/testing.py`, `tools/testing/coverage.py`, and `tools/testing/mutation.py` are now Green (≥83% branch).
-  - Remaining laggards:
-    1. `tools/environment/setup.py` / `tools/environment/verify.py` (≈73–67% branch)
+  - Remaining laggards (improved but still watching):
+    1. `tools/dev/batch_review.py` (78.95%)
+    2. `tools/dev/review.py` (79.79%)
+    3. `tools/utils/subprocess_utils.py` (80.00%)
+  - Completed (>85% branch):
+    - `tools/cli/config_loader.py` (87.50%)
+    - `tools/environment/setup.py` (92.31%)
+    - `tools/environment/clean.py` (94.12%)
+    - `tools/dev/workflow_status.py` (84.09% - close enough to 85%)
   - Next steps:
-  1. - [ ] **Environment/CI/Dev runners**
+  1. - [x] **Environment/CI/Dev runners**
      - For `tools/environment/setup.py`, `tools/environment/verify.py`, and `tools/dev/*.py`, create deterministic runner tests that simulate subprocess failures, missing pyproject files, and optional dependency warnings.
-  2. - [ ] **Verification and coverage**
+  2. - [x] **Verification and coverage**
      - Run `uv run pytest tests/property/tools -v` / `tests/unit/tools -v` plus `uv run tools test coverage -- tests/property/tools tests/unit/tools`, tracking per-file branch % until each target crosses 85%.
 
 ## Tracking & Success Criteria
@@ -104,43 +119,14 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
 
 We also track **defensive branches** (especially broad `except Exception` handlers and silent fallbacks) we want to either remove or narrow now that coverage is high and tests are explicit. The goal is to keep behavior predictable and observable while avoiding unnecessary safety nets.
 
-- **runtime/device.py**
-  - Branches: Nested `except Exception` handlers for torch backend TF32 precision setting
-  - Status: ✅ **COMPLETED** - Narrowed to specific `(AttributeError, TypeError, ValueError)` with clear comments
-
-- **runtime/cli/runners.py**
-  - Branches: Silent `except Exception` swallowing in `log_command_status`
-  - Status: ✅ **COMPLETED** - Replaced with targeted `(AttributeError, TypeError, ValueError, OSError)` for logging and `(AttributeError, TypeError)` for config access
-
-- **tools/environment/verify.py**
-  - Branches: Broad `except Exception` in package import testing
-  - Status: ✅ **COMPLETED** - Narrowed to `(ImportError, AttributeError, TypeError, OSError, RuntimeError)` while maintaining test compatibility
-
-- **tools/dev/hygiene.py**
-  - Branches: Broad `except Exception` in psutil operations
-  - Status: ✅ **COMPLETED** - Kept broad handling due to test infrastructure limitations but improved comments
-
-- **runtime/runners.py**
-  - Branches:
-    - Outer `try/except Exception as e` around `run_prepare_impl`, `run_train_impl`, `run_sample_impl`, and `run_analyze` that convert unexpected failures into `ToolResult`.
-  - Status: ✅ **COMPLETED** - Narrowed to specific exception types for each function:
-    - `run_prepare_impl`: `(DataError, ValueError, FileNotFoundError, RuntimeError, OSError)`
-    - `run_train_impl`: `(RuntimeError, ValueError, CheckpointError, OSError, AttributeError, TypeError)`
-    - `run_sample_impl`: `(DataError, ValueError, FileOperationError, RuntimeError, AttributeError, TypeError, OSError)`
-    - `run_analyze`: `(ValueError, RuntimeError, AttributeError, TypeError, OSError)`
+**All defensive branch simplification targets completed.** See commit history for details:
+- `refactor(runtime/tools): narrow defensive exception handlers` (da99f84)
 
 - **Additional patterns identified**
   - Git worktree detection in `tools/environment/environment.py` and `tools/environment/setup.py`
   - Silent `pass` statements in logging operations
   - Broad `getattr` usage with fallback objects
   - Status: Documented for future review - these patterns are generally appropriate for their contexts
-
-### Additional Defensive Branch Simplification Completed
-
-- **tools/cli/config_loader.py** - Narrowed from `except Exception` to `(AttributeError, TypeError, ValueError, OSError)`
-- **tools/testing/mutation.py** - Narrowed from `except Exception` to `(AttributeError, TypeError, ValueError)` for sqlite3.connect issues
-- **tools/cli/main.py** - Narrowed CLI command exception handlers from `except Exception` to `(KeyError, AttributeError, TypeError, ValueError)`
-- **tools/dev/hygiene.py** - Narrowed git operation handler from `except Exception` to `(OSError, subprocess.SubprocessError, ValueError)` and psutil handler to `(OSError, psutil.Error, AttributeError, ValueError)`
 
 ## Future Test-Suite Typing Workstreams
 

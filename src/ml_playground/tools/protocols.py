@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ml_playground.tools.core.config import (
-    CIToolsConfig,
-    EnvironmentToolsConfig,
-    QualityToolsConfig,
-    TestToolsConfig,
-)
+
+class ToolCategoryConfigLike(Protocol):
+    """Protocol for tool category configuration.
+
+    This matches the common fields in ToolConfig that the CLI might inspect,
+    primarily ``enabled``.
+    """
+
+    @property
+    def enabled(self) -> bool: ...
 
 
 class ToolsConfigLike(Protocol):
@@ -19,10 +23,23 @@ class ToolsConfigLike(Protocol):
     attributes and may contain many more fields.
     """
 
-    learning_mode_default: bool
-    default_verbosity: int
+    @property
+    def learning_mode_default(self) -> bool: ...
 
-    quality: QualityToolsConfig
-    testing: TestToolsConfig
-    environment: EnvironmentToolsConfig
-    ci: CIToolsConfig
+    @property
+    def default_verbosity(self) -> int: ...
+
+    @property
+    def display_command_prefix(self) -> str | None: ...
+
+    @property
+    def quality(self) -> ToolCategoryConfigLike: ...
+
+    @property
+    def testing(self) -> ToolCategoryConfigLike: ...
+
+    @property
+    def environment(self) -> ToolCategoryConfigLike: ...
+
+    @property
+    def ci(self) -> ToolCategoryConfigLike: ...

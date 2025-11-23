@@ -631,3 +631,136 @@ def test_run_test_batch_simple_structured_failures_vs_exceptions(
 
     finally:
         ws.TestingTools = original  # type: ignore[assignment]
+
+
+def test_run_workflow_status_yaml_output(tmp_path: Path) -> None:
+    """Test YAML output format."""
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    # Mock internal helpers to return deterministic data
+    orig_quality = ws._get_quality_status
+    orig_test = ws._get_test_status
+    orig_cov = ws._get_coverage_status
+    orig_git = ws._get_git_status
+
+    ws._get_quality_status = lambda *args: {"overall_status": "passed"}  # type: ignore
+    ws._get_test_status = lambda *args: {"overall_status": "passed"}  # type: ignore
+    ws._get_coverage_status = lambda *args: {"status": "available"}  # type: ignore
+    ws._get_git_status = lambda *args: {"status": "clean"}  # type: ignore
+
+    try:
+        result = ws.run_workflow_status(
+            cfg,
+            project_root_path=tmp_path,
+            output_format="yaml",
+            subprocess_runner=runner,
+        )
+    except ImportError:
+        # If yaml is not installed, it might fall back or error.
+        # The code imports yaml inside the function.
+        pass
+    else:
+        assert result.success is True
+        assert "overall_status: passed" in result.stdout
+        assert "status: clean" in result.stdout
+    finally:
+        ws._get_quality_status = orig_quality
+        ws._get_test_status = orig_test
+        ws._get_coverage_status = orig_cov
+        ws._get_git_status = orig_git
+
+
+def test_run_workflow_status_text_output(tmp_path: Path) -> None:
+    """Test text output format."""
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    # Mock internal helpers
+    orig_quality = ws._get_quality_status
+    orig_test = ws._get_test_status
+    orig_cov = ws._get_coverage_status
+    orig_git = ws._get_git_status
+
+    ws._get_quality_status = lambda *args: {"overall_status": "passed"}  # type: ignore
+    ws._get_test_status = lambda *args: {"overall_status": "passed", "total_tests": 5}  # type: ignore
+    ws._get_coverage_status = lambda *args: {
+        "status": "available",
+        "line_percentage": 80.0,
+    }  # type: ignore
+    ws._get_git_status = lambda *args: {"status": "clean", "current_branch": "main"}  # type: ignore
+
+    try:
+        result = ws.run_workflow_status(
+            cfg,
+            project_root_path=tmp_path,
+            output_format="text",
+            subprocess_runner=runner,
+        )
+
+        assert result.success is True
+        assert "Workflow Status" in result.stdout
+        assert "Quality: ✓ passed" in result.stdout
+        assert "Tests: ✓ 5 tests" in result.stdout
+    finally:
+        ws._get_quality_status = orig_quality
+        ws._get_test_status = orig_test
+        ws._get_coverage_status = orig_cov
+        ws._get_git_status = orig_git
+
+
+def test_run_workflow_status_default_runner(tmp_path: Path) -> None:
+    """Test that default runner is used if not provided."""
+    cfg = _minimal_tools_config()
+
+    # We need to mock RealSubprocessRunner to avoid actual execution
+    class _MockRealRunner:
+        def run_subprocess(self, *args: Any, **kwargs: Any) -> ToolResult:
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="mock",
+                stderr="",
+                operation_id=OperationId("test", "test", "test"),
+            )
+
+    import ml_playground.tools.utils.subprocess_utils as subprocess_utils
+
+    orig_runner = getattr(subprocess_utils, "RealSubprocessRunner", None)
+    subprocess_utils.RealSubprocessRunner = _MockRealRunner  # type: ignore
+
+    # Mock helpers to avoid other side effects
+    orig_quality = ws._get_quality_status
+    orig_test = ws._get_test_status
+    orig_cov = ws._get_coverage_status
+    orig_git = ws._get_git_status
+
+    ws._get_quality_status = lambda *args: {}  # type: ignore
+    ws._get_test_status = lambda *args: {}  # type: ignore
+    ws._get_coverage_status = lambda *args: {}  # type: ignore
+    ws._get_git_status = lambda *args: {}  # type: ignore
+
+    try:
+        result = ws.run_workflow_status(
+            cfg,
+            project_root_path=tmp_path,
+            output_format="json",
+            subprocess_runner=None,
+        )
+    finally:
+        if orig_runner:
+            subprocess_utils.RealSubprocessRunner = orig_runner
+        ws._get_quality_status = orig_quality
+        ws._get_test_status = orig_test
+        ws._get_coverage_status = orig_cov
+        ws._get_git_status = orig_git
+
+    assert result.success is True
+
+
+def test_extraction_helpers_edge_cases() -> None:
+    """Test extraction helpers with non-matching input."""
+    assert ws._extract_test_count("no matches here") == 0
+    assert ws._extract_duration("no matches here") == "0s"
+    assert ws._extract_coverage_percentage("no matches", "line") == 0.0
+    assert ws._extract_coverage_percentage("no matches", "branch") == 0.0
