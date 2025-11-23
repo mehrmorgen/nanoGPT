@@ -35,7 +35,7 @@ repos:
   #   pass_filenames: false
   #   stages: [pre-commit]
   - id: coverage-threshold
-    name: coverage threshold (>=90.00%)
+    name: coverage threshold (>=92.50%)
     entry: uv
     args: [run, tools, test, coverage, --verbose]
     language: system
