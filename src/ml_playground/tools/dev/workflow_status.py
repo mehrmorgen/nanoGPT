@@ -123,6 +123,7 @@ def _get_git_status(
         }
     except (
         ToolExecutionError,
+        ToolTimeoutError,
         TimeoutError,
         CommandNotFoundError,
         RuntimeError,
@@ -151,6 +152,7 @@ def _get_quality_status(
         }
     except (
         ToolExecutionError,
+        ToolTimeoutError,
         TimeoutError,
         CommandNotFoundError,
         RuntimeError,
@@ -178,6 +180,7 @@ def _get_test_status(
         }
     except (
         ToolExecutionError,
+        ToolTimeoutError,
         TimeoutError,
         CommandNotFoundError,
         RuntimeError,
@@ -213,6 +216,7 @@ def _get_coverage_status(
         }
     except (
         ToolExecutionError,
+        ToolTimeoutError,
         TimeoutError,
         CommandNotFoundError,
         RuntimeError,
@@ -355,7 +359,13 @@ def _run_quality_batch(
                 total_issues += len(unused_count)
             else:
                 total_issues += int(unused_count)
-    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
+    except (
+        ToolExecutionError,
+        ToolTimeoutError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+    ) as e:
         results["deadcode"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -391,7 +401,13 @@ def _run_test_batch_simple(
         total_tests += test_count
         if not unit_result.success:
             overall_success = False
-    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
+    except (
+        ToolExecutionError,
+        ToolTimeoutError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+    ) as e:
         results["unit"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -408,7 +424,13 @@ def _run_test_batch_simple(
         total_tests += test_count
         if not integration_result.success:
             overall_success = False
-    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
+    except (
+        ToolExecutionError,
+        ToolTimeoutError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+    ) as e:
         results["integration"] = {"status": "error", "error": str(e)}
         overall_success = False
 
