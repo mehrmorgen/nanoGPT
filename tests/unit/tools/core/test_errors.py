@@ -21,7 +21,7 @@ class TestHandleSubprocessFailure:
         assert "pytest" in str(exc.value)
 
     def test_timeout_detected(self) -> None:
-        with pytest.raises(errors.TimeoutError) as exc:
+        with pytest.raises(errors.ToolTimeoutError) as exc:
             errors.handle_subprocess_failure(
                 "pytest", 1, "Command timed out", timeout_seconds=30
             )

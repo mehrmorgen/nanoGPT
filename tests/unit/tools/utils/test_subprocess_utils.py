@@ -9,7 +9,7 @@ from typing import Iterator
 
 import pytest
 
-from ml_playground.tools.core.errors import TimeoutError as ToolTimeoutError
+from ml_playground.tools.core.errors import ToolTimeoutError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 import ml_playground.tools.utils.subprocess_utils as subprocess_utils
 from ml_playground.tools.utils.subprocess_utils import (

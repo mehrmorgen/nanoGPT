@@ -99,7 +99,7 @@ def quality_lint_check(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -129,7 +129,7 @@ def quality_deadcode(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -159,7 +159,7 @@ def quality_basedpyright(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,
@@ -189,7 +189,7 @@ def quality_mypy(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except Exception as e:
+    except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
             ToolResult.create(
                 success=False,

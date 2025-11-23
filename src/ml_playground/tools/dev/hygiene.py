@@ -128,10 +128,10 @@ def _pids_by_port(port: int) -> list[int]:
                 conn_port = getattr(laddr, "port", None)
                 if conn_port == port and conn.pid is not None:
                     pids.add(int(conn.pid))
-            except Exception:
+            except (psutil.Error, OSError, ValueError):
                 # Connection may be inaccessible or have incomplete data
                 continue
-    except Exception:
+    except (psutil.Error, OSError, ValueError):
         # Fallback: iterate processes if net_connections is restricted
         try:
             for proc in psutil.process_iter(attrs=["pid"]):  # type: ignore
@@ -141,9 +141,9 @@ def _pids_by_port(port: int) -> list[int]:
                         if laddr and getattr(laddr, "port", None) == port:
                             pids.add(int(proc.pid))
                             break
-                except Exception:
+                except (psutil.Error, OSError, ValueError):
                     continue
-        except Exception:
+        except (psutil.Error, OSError, ValueError):
             # Process iteration may be restricted on some systems
             return []
     return sorted(pids)

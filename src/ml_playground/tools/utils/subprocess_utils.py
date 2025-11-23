@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Protocol, Union
 
-from ml_playground.tools.core.errors import ToolExecutionError, TimeoutError
+from ml_playground.tools.core.errors import ToolExecutionError, ToolTimeoutError
 from ml_playground.tools.core.interfaces import ToolResult, OperationId
 
 
@@ -131,7 +131,7 @@ class RealSubprocessRunner:
             )
 
         except subprocess.TimeoutExpired as exc:
-            raise TimeoutError(
+            raise ToolTimeoutError(
                 f"Command '{format_command(command)}' timed out after {timeout} seconds",
                 reason=f"Process exceeded timeout of {timeout} seconds",
                 rationale="Timeouts prevent runaway processes and indicate environmental issues",

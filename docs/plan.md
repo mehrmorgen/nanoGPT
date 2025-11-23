@@ -29,7 +29,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
 
 **Objective**: Clean up defensive patterns identified in the codebase.
 
-1. - [ ] **Narrow `except Exception` blocks**
+1. - [x] **Narrow `except Exception` blocks**
    - **Scope**: ~33 instances identified (e.g., `tools/cli/commands/quality.py`, `tools/dev/review.py`).
    - **Action**: Replace broad handlers with specific exceptions (e.g., `FileNotFoundError`, `ValidationError`).
    - **Goal**: Fail fast and loudly for unexpected errors.

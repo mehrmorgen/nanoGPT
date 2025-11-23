@@ -206,10 +206,8 @@ def test_safe_file_operation_unexpected_error() -> None:
         raise ValueError("logic error")
 
     logger = logging.getLogger("ml_pg_test_unexpected")
-    with pytest.raises(FileOperationError, match="Unexpected error") as unexpected:
+    with pytest.raises(ValueError, match="logic error"):
         safe_file_operation(bad_logic, logger=logger)
-    assert unexpected.value.reason == "ValueError raised outside expected IO failures"
-    assert "investigate the triggering logic" in unexpected.value.rationale
 
 
 def test_progress_reporter_no_total_and_small_updates(

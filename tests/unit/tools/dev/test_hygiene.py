@@ -159,6 +159,14 @@ def test_run_kill_port_handles_lookup_exception(tmp_path) -> None:
 
 
 def _install_fake_psutil(fake: ModuleType) -> ModuleType | None:
+    # Ensure base Error class exists if not already set
+    if not hasattr(fake, "Error"):
+
+        class Error(Exception):
+            pass
+
+        fake.Error = Error  # type: ignore[attr-defined]
+
     original = sys.modules.get("psutil")
     sys.modules["psutil"] = fake
     return original
@@ -199,7 +207,7 @@ def test_pids_by_port_falls_back_to_process_iter_on_error() -> None:
     fake_psutil = ModuleType("psutil")
 
     def net_connections(kind: str):  # type: ignore[override]
-        raise RuntimeError("blocked")
+        raise OSError("blocked")
 
     class Proc:
         def __init__(self, pid: int, ports: list[int]) -> None:
@@ -267,10 +275,10 @@ def test_pids_by_port_falls_back_to_empty_list_on_complete_failure() -> None:
     fake_psutil = ModuleType("psutil")
 
     def net_connections(kind: str):  # type: ignore[override]
-        raise RuntimeError("blocked")
+        raise OSError("blocked")
 
     def process_iter(attrs=None):  # type: ignore[override]
-        raise RuntimeError("access denied")
+        raise OSError("access denied")
 
     fake_psutil.net_connections = net_connections  # type: ignore[attr-defined]
     fake_psutil.process_iter = process_iter  # type: ignore[attr-defined]
@@ -295,7 +303,7 @@ def test_pids_by_port_handles_individual_connection_exceptions() -> None:
         @property
         def laddr(self):
             if self.should_fail:
-                raise RuntimeError("connection error")
+                raise OSError("connection error")
             return SimpleNamespace(port=8000)
 
         @property

@@ -16,7 +16,7 @@ import typer
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from ml_playground.runtime.cli.app import _apply_global_options, global_options, app
+from ml_playground.runtime.cli.app import global_options, app
 from ml_playground.runtime.core.results import VerbosityLevel
 
 
@@ -107,7 +107,7 @@ def test_apply_global_options_sets_context_values(
     if exp_config is not None and not exp_config.exists():
         exp_config = None
 
-    _apply_global_options(ctx, exp_config, learning_mode, verbosity)
+    global_options(ctx, exp_config, learning_mode, verbosity)
 
     assert ctx.obj.get("exp_config") == exp_config
 
@@ -144,7 +144,7 @@ def test_apply_global_options_missing_config_exits(
     records, logger_factory = _fake_logger_factory()
 
     with pytest.raises(typer.Exit) as exc_info:
-        _apply_global_options(
+        global_options(
             ctx,
             exp_config,
             learning_mode,
@@ -177,7 +177,7 @@ def test_apply_global_options_no_subcommand_shows_help(
         return click_ctx
 
     with pytest.raises(typer.Exit) as exc_info:
-        _apply_global_options(
+        global_options(
             ctx,
             None,
             learning_mode,
@@ -251,7 +251,7 @@ def test_context_object_handling_edge_cases(
     ctx.ensure_object = lambda: None  # This will cause issues
 
     # Should handle gracefully by returning early
-    _apply_global_options(ctx, None, learning_mode, verbosity)
+    global_options(ctx, None, learning_mode, verbosity)
 
     # Test with non-dict obj (should convert to dict)
     ctx2 = SimpleNamespace()
@@ -263,7 +263,7 @@ def test_context_object_handling_edge_cases(
 
     ctx2.ensure_object = ensure_object
 
-    _apply_global_options(ctx2, None, learning_mode, verbosity)
+    global_options(ctx2, None, learning_mode, verbosity)
     assert isinstance(ctx2.obj, dict)
 
 
@@ -295,7 +295,7 @@ def test_apply_global_options_context_getter_type_error_fallback() -> None:
     messages, echo_func = _fake_echo()
 
     with pytest.raises(typer.Exit) as exc_info:
-        _apply_global_options(
+        global_options(
             ctx,
             None,
             False,
@@ -321,7 +321,7 @@ def test_verbosity_conversion(learning_mode: bool, verbosity_int: int) -> None:
     """Test that integer verbosity is correctly converted to VerbosityLevel."""
     ctx = _fake_context(obj={})
 
-    _apply_global_options(ctx, None, learning_mode, verbosity_int)
+    global_options(ctx, None, learning_mode, verbosity_int)
 
     expected_level = VerbosityLevel(verbosity_int)
     if expected_level != VerbosityLevel.STANDARD:
@@ -341,7 +341,7 @@ def test_verbosity_enum_passthrough(
     """Test that VerbosityLevel enum is passed through unchanged."""
     ctx = _fake_context(obj={})
 
-    _apply_global_options(ctx, None, learning_mode, verbosity_enum)
+    global_options(ctx, None, learning_mode, verbosity_enum)
 
     if verbosity_enum != VerbosityLevel.STANDARD:
         assert ctx.obj.get("verbosity") is verbosity_enum

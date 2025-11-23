@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Dict, Any
 
 from ..core.config import ToolsConfig
-from ..core.errors import ToolExecutionError, TimeoutError, CommandNotFoundError
+from ..core.errors import (
+    ToolExecutionError,
+    ToolTimeoutError,
+    CommandNotFoundError,
+    ToolConfigurationError,
+)
 from ..core.interfaces import OperationId, ToolResult
 from ..testing.testing import TestingTools
 from ..utils.subprocess_utils import SubprocessRunner
@@ -294,7 +299,13 @@ def _run_quality_batch(
                 total_issues += len(issues_count)
             else:
                 total_issues += int(issues_count)
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        ToolConfigurationError,
+        ToolTimeoutError,
+        OSError,
+        ValueError,
+    ) as e:
         results["lint"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -316,7 +327,13 @@ def _run_quality_batch(
                 total_issues += len(errors_count)
             else:
                 total_issues += int(errors_count)
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        ToolConfigurationError,
+        ToolTimeoutError,
+        OSError,
+        ValueError,
+    ) as e:
         results["typecheck"] = {"status": "error", "error": str(e)}
         overall_success = False
 

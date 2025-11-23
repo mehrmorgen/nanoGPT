@@ -80,7 +80,7 @@ def run_review_list(
         )
     except ToolExecutionError:
         raise
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         return ToolResult.create(
             success=False,
             exit_code=1,
@@ -123,7 +123,7 @@ def run_review_bulk_reply(
         )
     except ToolExecutionError:
         raise
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         return ToolResult.create(
             success=False,
             exit_code=1,
@@ -183,7 +183,7 @@ def run_review_delete(
         )
     except ToolExecutionError:
         raise
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         return ToolResult.create(
             success=False,
             exit_code=1,

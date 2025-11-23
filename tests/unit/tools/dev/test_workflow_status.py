@@ -8,6 +8,7 @@ from types import ModuleType
 from typing import Any
 
 from ml_playground.tools.core.config import ToolsConfig
+from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.dev import workflow_status as ws
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner
@@ -189,7 +190,7 @@ def test_get_quality_status_handles_exceptions(tmp_path: Path) -> None:
     cfg = _minimal_tools_config()
 
     def failing_quality(*_: Any, **__: Any) -> dict[str, Any]:
-        raise RuntimeError("boom")
+        raise ToolExecutionError("boom", reason="fail", rationale="test")
 
     original = ws._run_quality_batch
     ws._run_quality_batch = failing_quality  # type: ignore[assignment]
@@ -203,7 +204,7 @@ def test_get_test_status_handles_exceptions(tmp_path: Path) -> None:
     cfg = _minimal_tools_config()
 
     def failing_test(*_: Any, **__: Any) -> dict[str, Any]:
-        raise RuntimeError("boom")
+        raise ToolExecutionError("boom", reason="fail", rationale="test")
 
     original = ws._run_test_batch_simple
     ws._run_test_batch_simple = failing_test  # type: ignore[assignment]
@@ -272,7 +273,7 @@ def test_get_coverage_status_handles_exceptions(tmp_path: Path) -> None:
             pass
 
         def coverage_report(self, *_args: Any, **_kwargs: Any) -> ToolResult:
-            raise RuntimeError("boom")
+            raise ToolExecutionError("boom", reason="fail", rationale="test")
 
     original = ws.TestingTools
     ws.TestingTools = _ExplodingTestingTools  # type: ignore[assignment]
@@ -321,7 +322,9 @@ def test_run_quality_batch_handles_failures_and_errors(tmp_path: Path) -> None:
             )
 
         def deadcode(self, _args: list[str]) -> _FakeToolResult:
-            raise RuntimeError("deadcode failure")
+            raise ToolExecutionError(
+                "deadcode failure", reason="fail", rationale="test"
+            )
 
     module_name = "ml_playground.tools.quality.quality"
     original_module = sys.modules.get(module_name)
@@ -363,7 +366,9 @@ def test_run_test_batch_simple_handles_failures_and_exceptions(
             )
 
         def integration(self, _args: list[str]) -> _FakeToolResult:
-            raise RuntimeError("integration unavailable")
+            raise ToolExecutionError(
+                "integration unavailable", reason="fail", rationale="test"
+            )
 
     original = ws.TestingTools
     ws.TestingTools = _TestingToolsStub  # type: ignore[assignment]
@@ -416,7 +421,7 @@ def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
     """
     from ml_playground.tools.core.errors import (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
     )
 
@@ -444,7 +449,9 @@ def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
                 )
             else:
                 # Other commands raise typed exceptions
-                raise ToolExecutionError("Tool execution failed")
+                raise ToolExecutionError(
+                    "Tool execution failed", reason="Failure", rationale="Rationale"
+                )
 
     # Mock quality tools to return structured failures
     class _QualityToolsWithFailures:
@@ -457,7 +464,7 @@ def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
             )
 
         def typecheck(self, _args: list[str]) -> _FakeToolResult:
-            raise TimeoutError(
+            raise ToolTimeoutError(
                 "Typecheck timed out",
                 reason="Process exceeded the configured timeout limit",
                 rationale="Timeouts indicate environmental assumptions are wrong",
@@ -481,7 +488,9 @@ def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
             )
 
         def integration(self, _args: list[str]) -> _FakeToolResult:
-            raise RuntimeError("Integration tests failed")
+            raise ToolExecutionError(
+                "Integration tests failed", reason="fail", rationale="test"
+            )
 
     # Apply mocks
     import ml_playground.tools.dev.workflow_status as ws_module
@@ -532,6 +541,8 @@ def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
 
 def test_run_quality_batch_structured_failures_vs_exceptions(tmp_path: Path) -> None:
     """Test _run_quality_batch distinguishes between structured failures and exceptions."""
+    from ml_playground.tools.core.errors import ToolTimeoutError
+
     cfg = _minimal_tools_config()
 
     class _QualityToolsMixed:
@@ -546,7 +557,7 @@ def test_run_quality_batch_structured_failures_vs_exceptions(tmp_path: Path) -> 
 
         def typecheck(self, _args: list[str]) -> _FakeToolResult:
             # Typed exception
-            raise TimeoutError(
+            raise ToolTimeoutError(
                 "Typecheck timeout",
                 reason="Process exceeded the configured timeout limit",
                 rationale="Timeouts indicate environmental assumptions are wrong",

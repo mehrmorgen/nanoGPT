@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from ..core.config import ToolsConfig
-from ..core.errors import ToolExecutionError, TimeoutError, CommandNotFoundError
+from ..core.errors import ToolExecutionError, ToolTimeoutError, CommandNotFoundError
 from ..core.interfaces import OperationId, ToolResult
 from ..quality.quality import QualityTools
 from ..testing.testing import TestingTools
@@ -104,7 +104,7 @@ def _run_quality_batch(
                 total_issues += int(issues_count)
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,
@@ -132,7 +132,7 @@ def _run_quality_batch(
                 total_issues += int(errors_count)
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,
@@ -160,7 +160,7 @@ def _run_quality_batch(
                 total_issues += int(unused_count)
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,
@@ -205,7 +205,7 @@ def _run_test_batch(
             overall_success = False
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,
@@ -231,7 +231,7 @@ def _run_test_batch(
             overall_success = False
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,
@@ -263,7 +263,7 @@ def _run_test_batch(
             }
     except (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
         RuntimeError,
         ValueError,

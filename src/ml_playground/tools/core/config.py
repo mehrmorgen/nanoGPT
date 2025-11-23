@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import tomllib
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError
 
 from ml_playground.tools.core.errors import ToolConfigurationError
 
@@ -228,7 +228,7 @@ def load_tools_config(project_root: Path | None = None) -> ToolsConfig:
 
     try:
         pyproject_data = _load_pyproject_toml(project_root)
-    except Exception as e:
+    except (ToolConfigurationError, OSError) as e:
         if isinstance(e, ToolConfigurationError):
             raise
         raise ToolConfigurationError(
@@ -246,7 +246,7 @@ def load_tools_config(project_root: Path | None = None) -> ToolsConfig:
         config = ToolsConfig.model_validate(tools_section)
         logger.debug("Successfully loaded tools configuration")
         return config
-    except Exception as e:
+    except ValidationError as e:
         raise ToolConfigurationError(
             f"Invalid tools configuration: {e}",
             reason="Configuration validation failed",

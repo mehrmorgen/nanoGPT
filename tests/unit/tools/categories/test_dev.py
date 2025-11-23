@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 import os
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -44,8 +45,7 @@ class _ReviewStub:
         self.bulk_called = False
         self.deleted_ids: list[str] = []
 
-    @staticmethod
-    def _infer_repo(remote: str) -> tuple[str, str]:
+    def infer_repo(self, remote: str) -> tuple[str, str]:
         assert remote == "origin"
         return ("owner", "repo")
 
@@ -84,20 +84,31 @@ class _ReviewStub:
         }
         return threads
 
-    def _load_replies(self, replies_file: Path) -> list[str]:
+    def render_threads(
+        self,
+        threads: list[object],  # noqa: ANN401
+        *,
+        apply_filters: Any,
+        unreplied: bool,
+        unresolved: bool,
+        viewer: str | None,
+    ) -> list[str]:
+        return ["render"]
+
+    def load_replies(self, replies_file: Path) -> list[str]:
         assert replies_file.name == "replies.json"
         return ["reply"]
 
-    def _bulk_reply(self, *, fetch: object, replies: list[str]) -> None:  # noqa: ANN401
+    def bulk_reply(self, *, fetch: object, replies: list[str]) -> None:  # noqa: ANN401
         assert getattr(fetch, "threads", None) is not None
         assert replies == ["reply"]
         self.bulk_called = True
 
-    def _load_comment_targets(self, path: Path) -> list[str]:
+    def load_comment_targets(self, path: Path) -> list[str]:
         assert path.name == "targets.json"
         return ["c1", "c2"]
 
-    def _comment_lookup(self, fetch: object) -> dict[str, str]:  # noqa: ANN401
+    def comment_lookup(self, fetch: object) -> dict[str, str]:  # noqa: ANN401
         assert getattr(fetch, "threads", None) is not None
         return {"c1": "comment-1", "c2": "comment-2"}
 
@@ -329,18 +340,23 @@ def test_review_list_returns_failure_on_exception(
     dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
 ) -> None:
     _tools, runner = dev_tools
+
+    class FailingStub(_ReviewStub):
+        def infer_repo(self, remote: str) -> tuple[str, str]:
+            raise ValueError("boom")
+
     tools = dev.DevTools(
         config=ToolsConfig(),
         subprocess_runner=runner,
         root_path=_tools.root_path,
-        review_module_factory=lambda: _ReviewStub(),
+        review_module_factory=lambda: FailingStub(),
     )
 
-    runner.set_results([_make_result("list", success=False)])
-
-    result = tools.review_list(pr_number=1)
+    result = tools.review_list(pr_number=42)
 
     assert result.success is False
+    assert "Failed to list review comments" in result.stderr
+    assert "boom" in result.stderr
 
 
 def test_review_bulk_reply_returns_failure_on_general_exception(
@@ -348,8 +364,8 @@ def test_review_bulk_reply_returns_failure_on_general_exception(
 ) -> None:
     _tools, runner = dev_tools
 
-    class Stub:
-        def _load_replies(self, replies_file: Path) -> list[str]:  # noqa: ANN401
+    class Stub(_ReviewStub):
+        def load_replies(self, replies_file: Path) -> list[str]:  # noqa: ANN401
             raise ValueError("invalid json")
 
     tools = dev.DevTools(
@@ -372,10 +388,10 @@ def test_review_delete_propagates_deletion_failure(
     _tools, runner = dev_tools
 
     class Stub(_ReviewStub):
-        def _load_comment_targets(self, path: Path) -> list[str]:  # noqa: ANN401
+        def load_comment_targets(self, path: Path) -> list[str]:  # noqa: ANN401
             return ["c1"]
 
-        def _comment_lookup(self, fetch: object) -> dict[str, str]:  # noqa: ANN401
+        def comment_lookup(self, fetch: object) -> dict[str, str]:  # noqa: ANN401
             return {"c1": "comment-1"}
 
     tools = dev.DevTools(
@@ -989,8 +1005,8 @@ def test_cleanup_ignored_tracked_listing_error_passes_through(tmp_path: Path) ->
 
 def test_review_list_generic_exception_returns_toolresult() -> None:
     class Crash:
-        def _infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
-            raise RuntimeError("explode")
+        def infer_repo(self, remote: str) -> tuple[str, str]:  # noqa: ANN401
+            raise ValueError("explode")
 
     tools = dev.DevTools(review_module_factory=lambda: Crash())
     out = tools.review_list(1)

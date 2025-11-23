@@ -137,7 +137,7 @@ class EnvironmentTools:
                 if gitdir_content.startswith("gitdir: "):
                     gitdir_path = gitdir_content[8:]  # Remove "gitdir: " prefix
                     git_hooks_dir = Path(gitdir_path) / "hooks"
-            except Exception:
+            except OSError:
                 pass  # Fall back to default behavior
 
         try:
@@ -223,7 +223,7 @@ uv run pre-commit run
                 operation_id=operation_id,
             )
 
-        except Exception as exc:
+        except OSError as exc:
             return ToolResult(
                 success=False,
                 exit_code=1,

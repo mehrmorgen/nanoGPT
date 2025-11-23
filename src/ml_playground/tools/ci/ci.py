@@ -264,7 +264,7 @@ class CITools:
                 reason="Command execution exceeded configured timeout",
                 rationale="CI operations must complete within reasonable time bounds",
             ) from exc
-        except Exception as exc:
+        except OSError as exc:
             raise ToolExecutionError(
                 f"Failed to execute act command: {exc}",
                 reason="Subprocess execution failed",
@@ -363,7 +363,7 @@ class CITools:
                 operation_id=operation_id,
             )
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             return ToolResult(
                 success=False,
                 exit_code=1,

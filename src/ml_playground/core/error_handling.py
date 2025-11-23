@@ -209,13 +209,6 @@ def safe_file_operation(
             reason=f"{e.__class__.__name__} raised during file operation",
             rationale="Filesystem paths must be reachable and writable for this action",
         ) from e
-    except Exception as e:
-        logger.error(f"Unexpected error during file operation: {e}")
-        raise FileOperationError(
-            f"Unexpected error during file operation: {e}",
-            reason=f"{e.__class__.__name__} raised outside expected IO failures",
-            rationale="File helpers expect predictable IO exceptions; investigate the triggering logic",
-        ) from e
 
 
 def validate_file_exists(path: Path, description: str = "File") -> None:

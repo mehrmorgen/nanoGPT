@@ -417,7 +417,7 @@ class TestQualityCILocal:
         original_run = subprocess.run
 
         def fake_run(*args, **kwargs):
-            raise RuntimeError("act not installed")
+            raise OSError("act not installed")
 
         subprocess.run = fake_run
 

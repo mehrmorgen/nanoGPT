@@ -122,13 +122,14 @@ def test_run_quality_batch_behavior_via_public_api(tmp_path: Path) -> None:
 
 def test_quality_error_handling_via_public_api(tmp_path: Path) -> None:
     """Quality tool exceptions should surface as error entries via public API."""
+    from ml_playground.tools.core.errors import ToolExecutionError
 
     class RaisingQualityTools:
         def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
             pass
 
         def lint(self, _: list[str]) -> ToolResult:  # noqa: ANN001
-            raise RuntimeError("lint boom")
+            raise ToolExecutionError("lint boom", reason="fail", rationale="test")
 
         def typecheck(self, _: list[str]) -> ToolResult:  # noqa: ANN001
             return _tool_result(
@@ -291,6 +292,7 @@ def test_run_test_batch_behavior_via_public_api(tmp_path: Path) -> None:
 
 def test_test_error_handling_via_public_api(tmp_path: Path) -> None:
     """Test failures and exceptions should mark test summary entries appropriately via public API."""
+    from ml_playground.tools.core.errors import ToolExecutionError
 
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
     coverage_file.parent.mkdir(parents=True, exist_ok=True)
@@ -310,7 +312,9 @@ def test_test_error_handling_via_public_api(tmp_path: Path) -> None:
             )
 
         def integration(self, _: list[str]) -> ToolResult:  # noqa: ANN001
-            raise RuntimeError("integration unavailable")
+            raise ToolExecutionError(
+                "integration unavailable", reason="fail", rationale="test"
+            )
 
         def coverage_report(self, *_: object, **__: object) -> ToolResult:  # noqa: ANN401
             raise ValueError("coverage failure")
@@ -558,7 +562,7 @@ def test_batch_review_error_downgrade_behavior(tmp_path: Path) -> None:
     """
     from ml_playground.tools.core.errors import (
         ToolExecutionError,
-        TimeoutError,
+        ToolTimeoutError,
         CommandNotFoundError,
     )
 
@@ -575,7 +579,7 @@ def test_batch_review_error_downgrade_behavior(tmp_path: Path) -> None:
             )
 
         def typecheck(self, _args: list[str]) -> ToolResult:
-            raise TimeoutError(
+            raise ToolTimeoutError(
                 "Typecheck timed out",
                 reason="Process exceeded timeout limit",
                 rationale="Timeouts indicate performance issues",
@@ -671,6 +675,8 @@ def test_batch_review_mixed_structured_failures_and_exceptions(tmp_path: Path) -
     Verifies that structured failures (success=False) and exceptions are both
     properly handled and downgraded to appropriate status codes.
     """
+    from ml_playground.tools.core.errors import ToolExecutionError
+
     # Create a coverage file to trigger coverage_report call
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
     coverage_file.parent.mkdir(parents=True, exist_ok=True)
@@ -692,7 +698,9 @@ def test_batch_review_mixed_structured_failures_and_exceptions(tmp_path: Path) -
 
         def typecheck(self, _args: list[str]) -> ToolResult:
             # Exception
-            raise RuntimeError("Typecheck crashed")
+            raise ToolExecutionError(
+                "Typecheck crashed", reason="fail", rationale="test"
+            )
 
         def deadcode(self, _args: list[str]) -> ToolResult:
             # Structured success

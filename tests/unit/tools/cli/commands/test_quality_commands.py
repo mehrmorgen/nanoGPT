@@ -110,7 +110,7 @@ class TestQualityLintCheckAndDeadcode:
 
         class FailingTools:
             def lint_check(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
-                raise RuntimeError("boom")
+                raise ToolExecutionError("boom", reason="fail", rationale="test")
 
         with override_attr(
             quality_commands, "get_quality_tools", lambda: FailingTools()

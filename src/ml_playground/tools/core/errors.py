@@ -69,7 +69,7 @@ class InvalidArgumentError(ToolExecutionError):
     pass
 
 
-class TimeoutError(ToolExecutionError):
+class ToolTimeoutError(ToolExecutionError):
     """Raised when tool execution times out.
 
     This occurs when a tool runs longer than the configured timeout
@@ -93,7 +93,7 @@ def handle_subprocess_failure(
     Raises:
         CommandNotFoundError: If the command was not found
         InvalidArgumentError: If the arguments were invalid
-        TimeoutError: If the process timed out
+        ToolTimeoutError: If the process timed out
         ToolExecutionError: For other execution failures
     """
     if "command not found" in stderr.lower() or "not found" in stderr.lower():
@@ -118,7 +118,7 @@ def handle_subprocess_failure(
         or "timed out" in stderr_normalized
     ):
         timeout_msg = f" (timeout: {timeout_seconds}s)" if timeout_seconds else ""
-        raise TimeoutError(
+        raise ToolTimeoutError(
             f"Tool '{command}' timed out{timeout_msg}",
             reason="Process exceeded the configured timeout limit",
             rationale="Timeouts indicate environmental assumptions are wrong; choose timeouts based on expected operation duration",
