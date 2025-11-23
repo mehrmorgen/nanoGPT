@@ -11,9 +11,15 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
 
 **Objective**: Extend strict typing and mock-free testing to all test kinds (property, unit) for runtime and tools.
 
-1. - [ ] **Property Tests Coverage Analysis**
+1. - [x] **Property Tests Coverage Analysis**
    - Re-run coverage focused on production files exercised by property suites.
    - Record per-file branch coverage to identify gaps.
+   - **Gaps Identified**:
+     - `tools/utils/subprocess_utils.py`: 80.00%
+     - `training/loop/runner.py`: 84.09%
+     - `tools/testing/coverage.py`: 83.08%
+     - `tools/testing/unit.py`: 83.33%
+     - `tools/dev/review.py`: 79.79%
 
 2. - [ ] **Property Test Expansion**
    - `tests/property/runtime`: Expand strategies for complex objects (e.g., model configs).
