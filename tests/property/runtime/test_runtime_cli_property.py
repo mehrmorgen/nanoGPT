@@ -29,6 +29,15 @@ from ml_playground.runtime.core.results import ToolResult
 from ml_playground.configuration.models import SharedConfig
 
 
+@pytest.fixture(autouse=True)
+def configure_deps() -> None:
+    """Ensure default CLI dependencies are configured."""
+    from ml_playground.runtime.cli.main import default_cli_dependencies
+    from ml_playground.runtime.core.bootstrap import configure_runtime_cli_dependencies
+
+    configure_runtime_cli_dependencies(default_cli_dependencies)
+
+
 EXPERIMENT_NAMES = st.text(
     alphabet="abcdefghijklmnopqrstuvwxyz0123456789_",
     min_size=1,

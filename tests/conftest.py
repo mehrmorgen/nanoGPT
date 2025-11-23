@@ -160,8 +160,9 @@ def minimal_full_experiment_toml(
     Parameters allow injecting extra lines per section via string snippets
     (already properly indented TOML lines).
     """
-    base = """
+    base = f"""
     [prepare]
+    dataset_dir = "{_fmt_path(dataset_dir)}"
 
     [train.model]
     """

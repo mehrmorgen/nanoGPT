@@ -43,6 +43,9 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
         def is_available(self) -> bool:  # pragma: no cover - trivial
             return self.is_available_fn()
 
+        def manual_seed(self, _seed: int) -> None:  # pragma: no cover - trivial
+            return None
+
         def manual_seed_all(self, _seed: int) -> None:  # pragma: no cover - trivial
             return None
 

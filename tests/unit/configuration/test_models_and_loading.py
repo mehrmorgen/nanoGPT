@@ -254,23 +254,6 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
-    """Test full loader incomplete train config."""
-    toml_text = """
-[prepare]
-
-[train.model]
-n_layer=1
-
-# Missing other required sections
-"""
-    cfg_path = tmp_path / "incomplete.toml"
-    cfg_path.write_text(toml_text)
-
-    with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
-
-
 def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
     """Test full loader unknown top level sections raise."""
     cfg_path = tmp_path / "cfg.toml"
@@ -654,6 +637,7 @@ def test_config_canonical_exports() -> None:
 
 def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     """Test full loader incomplete sample config."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -664,11 +648,30 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
+
+
+def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
+    """Test full loader incomplete train config."""
+    # Use tmp_path as project_home to ensure no defaults are found
+    toml_text = """
+[prepare]
+
+[train.model]
+n_layer=1
+
+# Missing other required sections
+"""
+    cfg_path = tmp_path / "incomplete.toml"
+    cfg_path.write_text(toml_text)
+
+    with pytest.raises(ValidationError):
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
     """Test full loader no train section raises."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = """
 [prepare]
 
@@ -680,11 +683,12 @@ out_dir = "out/test"
     cfg_path = tmp_path / "no_train.toml"
     cfg_path.write_text(toml_text)
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
     """Test full loader no sample section raises."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -693,11 +697,12 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
     cfg_path = tmp_path / "no_sample.toml"
     cfg_path.write_text(toml_text)
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     """Test full loader train missing data section."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -707,11 +712,12 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     """Test full loader train missing runtime section."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -721,11 +727,12 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
     """Test full loader sample missing runtime section."""
+    # Use tmp_path as project_home to ensure no defaults are found
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -736,7 +743,7 @@ def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        config_loading.load_experiment_toml(cfg_path)
+        config_loading.load_full_experiment_config(cfg_path, tmp_path, "test_exp")
 
 
 def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:

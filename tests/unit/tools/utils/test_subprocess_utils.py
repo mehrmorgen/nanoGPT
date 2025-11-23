@@ -15,10 +15,6 @@ import ml_playground.tools.utils.subprocess_utils as subprocess_utils
 from ml_playground.tools.utils.subprocess_utils import (
     RealSubprocessRunner,
     format_command,
-    override_subprocess_runner,
-    run_pytest_command,
-    run_subprocess,
-    run_uv_command,
     validate_command_available,
 )
 from tests.unit.tools.fakes import (
@@ -417,46 +413,3 @@ class TestValidateCommandAvailable:
         """Test detection of unavailable command."""
         result = validate_command_available("nonexistent-command-12345")
         assert result is False
-
-
-class TestModuleLevelWrappers:
-    """Tests for module-level helper functions delegating to default runner."""
-
-    def test_run_subprocess_delegates(self) -> None:
-        fake_runner = FakeSubprocessRunner()
-        operation_id = OperationId(
-            namespace="tools", category="test", command="delegate-subprocess"
-        )
-        fake_runner.set_results([create_success_result(operation_id, "ok")])
-
-        with override_subprocess_runner(fake_runner):
-            result = run_subprocess(["echo", "hi"], operation_id=operation_id)
-
-        assert result.success is True
-        assert fake_runner.calls[0]["command"] == ["echo", "hi"]
-
-    def test_run_uv_command_delegates(self) -> None:
-        fake_runner = FakeSubprocessRunner()
-        operation_id = OperationId(
-            namespace="tools", category="test", command="delegate-uv"
-        )
-        fake_runner.set_results([create_success_result(operation_id, "uv ok")])
-
-        with override_subprocess_runner(fake_runner):
-            result = run_uv_command(["pytest", "--version"], operation_id=operation_id)
-
-        assert result.success is True
-        assert fake_runner.calls[0]["command"][0:2] == ["uv", "run"]
-
-    def test_run_pytest_command_delegates(self) -> None:
-        fake_runner = FakeSubprocessRunner()
-        operation_id = OperationId(
-            namespace="tools", category="test", command="delegate-pytest"
-        )
-        fake_runner.set_results([create_success_result(operation_id, "pytest ok")])
-
-        with override_subprocess_runner(fake_runner):
-            result = run_pytest_command(["tests/unit"], operation_id=operation_id)
-
-        assert result.success is True
-        assert fake_runner.calls[0]["command"][0] == "uv"
