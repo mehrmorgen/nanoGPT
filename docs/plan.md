@@ -46,7 +46,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
 
 **Objective**: Validate end-to-end workflows with the hardened runtime/tools.
 
-1. - [ ] **Re-enable and Refactor Integration Tests**
+1. - [x] **Re-enable and Refactor Integration Tests**
    - Ensure `tests/integration` follows the "no mock" policy.
    - Use ephemeral resources (tmp_path, fake runners).
 
@@ -58,13 +58,20 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
 
 **Objective**: Ensure documentation compliance and remove unnecessary abstractions.
 
-1. - [ ] **Documentation Compliance**
+1. - [x] **Documentation Compliance**
    - **Action**: Review `IMPORT_GUIDELINES.md` exceptions (cycle breaks, lazy imports) and track them.
    - **Action**: Verify "Required Sections per Experiment Readme" across all experiments.
+   - **Action**: Cleaned up `__init__.py` files and moved side-effects to `main.py`.
 
 2. - [ ] **Remove Pointless Indirections**
-   - **Scope**: `tools/utils/filesystem_utils.py` (wrappers around pathlib), `tools/utils/subprocess_utils.py` (global runner vs DI).
-   - **Action**: Remove `FilesystemOperations` if `tmp_path` covers testing needs. Refactor `run_subprocess` to strict DI.
+   - **Scope**: `tools/utils/subprocess_utils.py` (global runner vs DI).
+   - **Action**: Refactor `run_subprocess` to strict DI.
+   - **Done**: Removed unused `FilesystemOperations` wrapper.
+
+3. - [x] **Refactor Test Imports**
+   - **Scope**: `tests` importing from `ml_playground.runtime.cli`.
+   - **Action**: Update tests to import from submodules (`.main`, `.commands`) so `runtime/cli/__init__.py` can be removed or emptied.
+   - **Done**: Removed `runtime/cli/__init__.py` and updated usage in `runners.py` and `test_cli_property.py`.
 
 ## Known Patterns (For Review)
 - **Git Worktree Detection**: Used in `tools/environment` (2 matches). Deemed appropriate for context but monitor for complexity.

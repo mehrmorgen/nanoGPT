@@ -161,9 +161,9 @@ def test_log_command_status_swallows_log_directory_errors(
     def boom(*_args: object, **_kwargs: object) -> None:
         raise OSError("boom")
 
-    import ml_playground.runtime.cli as cli_pkg
+    import ml_playground.runtime.cli.runners as runners_module
 
-    with override_attr(cli_pkg, "log_directory", boom):
+    with override_attr(runners_module, "log_directory", boom):
         log_command_status("tag", shared, shared.dataset_dir, logger)
 
     assert logger.infos == []
@@ -174,7 +174,8 @@ def test_global_device_setup_handles_runtime_error() -> None:
         def manual_seed(self, seed: int) -> None:  # pragma: no cover - invoked
             raise RuntimeError("fail")
 
-    global_device_setup("cpu", "float32", 123, torch_module=BadTorch())
+    with pytest.raises(RuntimeError, match="fail"):
+        global_device_setup("cpu", "float32", 123, torch_module=BadTorch())
 
 
 def test_global_device_setup_sets_cuda_state() -> None:
@@ -196,8 +197,8 @@ def test_global_device_setup_sets_cuda_state() -> None:
             is_available=_cuda_available,
         ),
         backends=SimpleNamespace(
-            cuda=SimpleNamespace(matmul=SimpleNamespace(fp32_precision="highest")),
-            cudnn=SimpleNamespace(fp32_precision="highest"),
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+            cudnn=SimpleNamespace(allow_tf32=False),
         ),
     )
 
@@ -207,8 +208,8 @@ def test_global_device_setup_sets_cuda_state() -> None:
 
     assert ("cpu", 7) in seed_calls
     assert ("cuda", 7) in seed_calls
-    assert fake_torch.backends.cuda.matmul.fp32_precision == "tf32"
-    assert fake_torch.backends.cudnn.fp32_precision == "tf32"
+    assert fake_torch.backends.cuda.matmul.allow_tf32 is True
+    assert fake_torch.backends.cudnn.allow_tf32 is True
 
 
 @given(exc_type=_EXCEPTIONS, message=_MESSAGES, exit_code=st.integers(1, 32))

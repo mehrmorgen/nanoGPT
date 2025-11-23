@@ -145,7 +145,7 @@ def _load_and_merge_configs(
     else:
         ldres_raw = {}
 
-    merged = merge_mappings(defaults_raw, raw_exp, override_only=True)
+    merged = merge_mappings(defaults_raw, raw_exp, override_only=False)
 
     merged_payload = merge_mappings(merged, ldres_raw)
     return cast(ExperimentPayload, merged_payload)

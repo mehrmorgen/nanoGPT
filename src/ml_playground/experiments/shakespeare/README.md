@@ -29,6 +29,13 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 - Rotated checkpoints and TensorBoard logs under `[train.runtime].out_dir`.
   For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
+## Environment Setup (preferred)
+
+```bash
+uv run tools env setup
+uv run tools env verify
+```
+
 ## How to Run
 
 - Config: `src/ml_playground/experiments/shakespeare/config.toml`

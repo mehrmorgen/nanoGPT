@@ -7,7 +7,6 @@ from typing import Any, Callable
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.runtime import helpers as rt_helpers
 from ml_playground.runtime import runners as runtime_runners
-import ml_playground.runtime.cli as _cli_pkg
 from ml_playground.sampling.runner import Sampler as _DefaultSampler
 from ml_playground.training.loop.runner import Trainer as _DefaultTrainer
 from ml_playground.data_pipeline.preparer import (
@@ -322,11 +321,10 @@ def log_command_status(
     This ensures tests overriding `cli.log_directory` affect behavior here.
     Swallows exceptions consistently with runtime.helpers.
     """
-    # Use package-level override if present - kept for test isolation
-    # Tests override this via monkeypatching to verify error handling
-    pkg_log_directory = getattr(_cli_pkg, "log_directory", log_directory)
+    # Use local wrapper directly
+    # Tests should override this module's log_directory if needed
     try:
-        pkg_log_directory(tag, "out_dir", out_dir, logger)
+        log_directory(tag, "out_dir", out_dir, logger)
     except (AttributeError, TypeError, ValueError, OSError):
         # Expected logging errors - don't fail the main operation
         pass
@@ -338,7 +336,7 @@ def log_command_status(
         return
 
     try:
-        pkg_log_directory(tag, "dataset_dir", dataset_dir, logger)
+        log_directory(tag, "dataset_dir", dataset_dir, logger)
     except (AttributeError, TypeError, ValueError, OSError):
         # Expected logging errors - don't fail the main operation
         pass
