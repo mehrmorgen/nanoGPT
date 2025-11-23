@@ -21,10 +21,10 @@ Our current objective is to raise **branch coverage for everything under `src/ml
 - Plan (step-by-step):
   1. - [x] **Property-based testing coverage**
      - ✅ COMPLETED: Fake torch implementation covers all device setup branches
-  2. - [ ] **Runtime CLI device helper integration**
+  2. - [x] **Runtime CLI device helper integration**
      - Ensure runtime CLI device helpers consume the same abstraction once CLI workstream starts
      - Verify CLI device commands use the same `global_device_setup` function
-  3. - [ ] **Device protocol definition**
+  3. - [x] **Device protocol definition**
      - Consider defining `DeviceLike` protocol if multiple device abstractions emerge
      - Standardize device-related interfaces across runtime modules
 
@@ -39,15 +39,15 @@ These tranches extend the same protocol-driven, strictly-typed testing approach 
   - `tools/cli/config_loader.py` is fully tested including error handling branches.
   - Global state still stores concrete `ToolsConfig`; protocol extraction is the next structural step.
 - Plan (step-by-step):
-  1. - [ ] **Define the shared tools config protocol**
+  1. - [x] **Define the shared tools config protocol**
      - Implement `ToolsConfigLike` in `tools/protocols.py` exposing the fields the CLI actually consumes (`learning_mode_default`, `default_verbosity`, verbosity helpers).
-  2. - [ ] **Update tools global state**
+  2. - [x] **Update tools global state**
      - Switch `GlobalState.config` to `ToolsConfigLike | None` and ensure `state.reset()` clears it deterministically.
-  3. - [ ] **Wire the protocol into config loader**
+  3. - [x] **Wire the protocol into config loader**
      - Update `tools/cli/config_loader.py` to store `ToolsConfigLike`, reading defaults via local variables before mutating global state.
-  4. - [ ] **Keep concrete configs where required**
+  4. - [x] **Keep concrete configs where required**
      - Tool implementations (`quality`, `testing`, `environment`, `ci`, `dev`) and dependency builders continue to accept full `ToolsConfig`.
-  5. - [ ] **Verification**
+  5. - [x] **Verification**
      - `uv run pytest tests/property/tools/cli -v` and `tests/property/tools -v` must stay green after protocol extraction.
 
 ### 3. Tools Categories & Deterministic Runners
