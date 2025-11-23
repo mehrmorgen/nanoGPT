@@ -477,26 +477,6 @@ def test_sampler_compile_requires_compile_fn(out_dir: Path) -> None:
     assert "compile_model_fn" in str(excinfo.value)
 
 
-def test_sampler_requires_runtime(out_dir: Path) -> None:
-    """Sampler should fail fast when runtime config is missing."""
-    cfg = SamplerConfig.model_construct(
-        runtime=None,
-        sample=SampleConfig(
-            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
-        ),
-    )
-    shared = SharedConfig(
-        experiment="unit",
-        config_path=out_dir / "cfg.toml",
-        project_home=out_dir,
-        dataset_dir=out_dir,
-        train_out_dir=out_dir,
-        sample_out_dir=out_dir,
-    )
-    with pytest.raises(ValueError, match="Runtime configuration is missing"):
-        Sampler(cfg, shared)
-
-
 def test_sampler_setup_torch_env_handles_cuda_errors(out_dir: Path) -> None:
     """_setup_torch_env should swallow CUDA availability errors."""
     _write_char_meta(out_dir / "meta.pkl")
@@ -752,18 +732,6 @@ def test_sample_constructs_shared_when_missing(
     caplog.set_level("INFO", logger="ml_playground.sampler")
     sample(cfg, None)
     assert "Sampling..." in caplog.text
-
-
-def test_sample_requires_runtime_when_shared_missing(tmp_path: Path) -> None:
-    """sample() should raise a clear error if runtime config is absent."""
-    cfg = SamplerConfig.model_construct(
-        runtime=None,
-        sample=SampleConfig(
-            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
-        ),
-    )
-    with pytest.raises(ValueError, match="Runtime configuration is missing"):
-        sample(cfg, None)
 
 
 def test_sampler_file_prompt_read_error(out_dir: Path) -> None:

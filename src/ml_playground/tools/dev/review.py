@@ -6,30 +6,58 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Protocol, Iterable, Callable, cast
 
+from dataclasses import dataclass
+
 from ..core.errors import ToolExecutionError
 from ..core.interfaces import OperationId, ToolResult
 from ..utils.subprocess_utils import SubprocessRunner
 
 
+@dataclass
+class ReviewComment:
+    author: str
+    viewer_did_author: bool
+    body: str
+    url: str
+    id: str
+    database_id: int | None = None
+    created_at: str | None = None
+
+
+@dataclass
+class ReviewThread:
+    url: str
+    is_resolved: bool
+    comments: list[ReviewComment]
+
+
+@dataclass
+class ReviewFetchResult:
+    threads: list[ReviewThread]
+    viewer: str | None
+
+
 class _ReviewModuleProtocol(Protocol):
     def infer_repo(self, remote: str) -> tuple[str, str]: ...
 
-    def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> Any: ...
+    def fetch_review_threads(
+        self, owner: str, repo: str, pr_number: int
+    ) -> ReviewFetchResult: ...
 
     def apply_filters(
         self,
-        threads: Iterable[Any],
+        threads: Iterable[ReviewThread],
         *,
         unreplied: bool,
         unresolved: bool,
         viewer: str | None,
-    ) -> list[Any]: ...
+    ) -> list[ReviewThread]: ...
 
     def render_threads(
         self,
-        threads: Iterable[Any],
+        threads: Iterable[ReviewThread],
         *,
-        apply_filters: Callable[..., list[Any]],
+        apply_filters: Callable[..., list[ReviewThread]],
         unreplied: bool,
         unresolved: bool,
         viewer: str | None,
@@ -37,11 +65,13 @@ class _ReviewModuleProtocol(Protocol):
 
     def load_replies(self, replies_file: Path) -> dict[str, str]: ...
 
-    def bulk_reply(self, *, fetch: Any, replies: dict[str, str]) -> None: ...
+    def bulk_reply(
+        self, *, fetch: ReviewFetchResult, replies: dict[str, str]
+    ) -> None: ...
 
     def load_comment_targets(self, path: Path) -> list[str]: ...
 
-    def comment_lookup(self, fetch: Any) -> dict[str, str]: ...
+    def comment_lookup(self, fetch: ReviewFetchResult) -> dict[str, str]: ...
 
 
 def run_review_list(

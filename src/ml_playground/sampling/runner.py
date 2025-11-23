@@ -21,7 +21,6 @@ from ml_playground.configuration.models import (
     ModelConfig,
     SamplerConfig,
     READ_POLICY_BEST,
-    RuntimeConfig,
     SharedConfig,
 )
 from ml_playground.core.error_handling import DataError, FileOperationError
@@ -98,10 +97,7 @@ class Sampler:
         self.cfg = cfg
         self.shared = shared
         self.deps: SamplerDependencies = deps or default_sampler_dependencies()
-        runtime_cfg = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
-        if runtime_cfg is None:
-            raise ValueError("Runtime configuration is missing")
-        self.runtime_cfg = runtime_cfg
+        self.runtime_cfg = cfg.runtime
         self.sample_cfg = cfg.sample
 
         self.out_dir = shared.sample_out_dir
@@ -143,8 +139,8 @@ class Sampler:
         """Load the configured checkpoint and materialize a `GPT` model."""
         checkpoint = self._load_checkpoint()
         model = self._init_model_from_checkpoint(checkpoint)
-        if getattr(self.runtime_cfg, "compile", False):
-            compile_fn = getattr(self.cfg, "compile_model_fn", None)
+        if self.runtime_cfg.compile:
+            compile_fn = self.cfg.compile_model_fn
             if compile_fn is None:
                 raise ValueError(
                     "SamplerConfig.compile_model_fn must be provided when runtime.compile is True"
@@ -290,10 +286,7 @@ def sample(
     """Run sampling with optional shared configuration fallback."""
 
     if shared is None:
-        runtime = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
-        if runtime is None:
-            raise ValueError("Runtime configuration is missing")
-        out_dir = runtime.out_dir
+        out_dir = cfg.runtime.out_dir
         shared = SharedConfig(
             experiment="unknown",
             config_path=out_dir / "config.toml",

@@ -276,10 +276,7 @@ class Trainer:
                     try:
                         if (
                             self.writer
-                            and getattr(
-                                self.cfg.runtime, "tensorboard_update_mode", "eval"
-                            )
-                            == "log"
+                            and self.cfg.runtime.tensorboard_update_mode == "log"
                         ):
                             scaled_loss = loss.item() * self.cfg.data.grad_accum_steps
                             self.writer.add_scalar(

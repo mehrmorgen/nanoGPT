@@ -9,6 +9,9 @@ from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.dev.review import (
     ReviewModule,
+    ReviewFetchResult,
+    ReviewThread,
+    ReviewComment,
     run_review_list,
     run_review_bulk_reply,
     run_review_delete,
@@ -258,23 +261,26 @@ def test_bulk_reply_success(tmp_path: Path) -> None:
     runner = FakeSubprocessRunner()
 
     # Mock comment lookup via fetch result structure
-    # fetch result is Any, we can mock it
-    class MockFetch:
-        threads = [
-            type(
-                "Thread",
-                (),
-                {
-                    "comments": [
-                        type(
-                            "Comment",
-                            (),
-                            {"id": "C_1", "url": "http://url", "database_id": 1},
-                        )()
-                    ]
-                },
-            )()
-        ]
+    fetch_result = ReviewFetchResult(
+        threads=[
+            ReviewThread(
+                url="http://url",
+                is_resolved=False,
+                comments=[
+                    ReviewComment(
+                        author="me",
+                        viewer_did_author=True,
+                        body="comment",
+                        url="http://url",
+                        id="C_1",
+                        database_id=1,
+                        created_at="2023-01-01",
+                    )
+                ],
+            )
+        ],
+        viewer="me",
+    )
 
     runner.add_result(
         ToolResult(
@@ -290,7 +296,7 @@ def test_bulk_reply_success(tmp_path: Path) -> None:
 
     review = ReviewModule(runner, tmp_path)
     replies = {"C_1": "reply body"}
-    review.bulk_reply(fetch=MockFetch(), replies=replies)
+    review.bulk_reply(fetch=fetch_result, replies=replies)
 
     assert len(runner.calls) == 1
     assert "inReplyTo=C_1" in runner.calls[0]["command"]
