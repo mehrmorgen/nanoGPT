@@ -404,3 +404,230 @@ def test_format_status_text_output_lists_sections() -> None:
     assert "Tests:" in text
     assert "Coverage:" in text
     assert "Blocking issues" in text
+
+
+def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
+    tmp_path: Path,
+) -> None:
+    """Test that workflow_status properly handles both structured failures and typed exceptions.
+
+    This test ensures the contract is maintained: run_workflow_status always returns
+    success=True, but individual status checks can show 'failed' vs 'error' states.
+    """
+    from ml_playground.tools.core.errors import (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+    )
+
+    cfg = _minimal_tools_config()
+
+    # Create a runner that simulates different failure modes
+    class _MixedFailureRunner(_StubRunner):
+        def run_subprocess(  # type: ignore[override]
+            self,
+            command: list[str],
+            *,
+            cwd: str | Path | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            env: dict[str, str] | None = None,
+            capture_output: bool = True,
+        ) -> ToolResult:
+            del cwd, timeout, env, capture_output
+            if "git" in command:
+                # Git raises typed exception to simulate failure
+                raise ToolExecutionError(
+                    "Git command failed",
+                    reason="Git subprocess execution failed",
+                    rationale="Git operations must succeed for workflow status",
+                )
+            else:
+                # Other commands raise typed exceptions
+                raise ToolExecutionError("Tool execution failed")
+
+    # Mock quality tools to return structured failures
+    class _QualityToolsWithFailures:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=False, exit_code=1, stdout="", stderr="lint errors"
+            )
+
+        def typecheck(self, _args: list[str]) -> _FakeToolResult:
+            raise TimeoutError(
+                "Typecheck timed out",
+                reason="Process exceeded the configured timeout limit",
+                rationale="Timeouts indicate environmental assumptions are wrong",
+            )
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            raise CommandNotFoundError(
+                "Deadcode tool not found",
+                reason="External tool binary is not available in PATH",
+                rationale="All required tools must be installed and accessible for the development workflow to function",
+            )
+
+    # Mock testing tools to mix failures and exceptions
+    class _TestingToolsWithFailures:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def unit(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=False, exit_code=1, stdout="1 passed", stderr=""
+            )
+
+        def integration(self, _args: list[str]) -> _FakeToolResult:
+            raise RuntimeError("Integration tests failed")
+
+    # Apply mocks
+    import ml_playground.tools.dev.workflow_status as ws_module
+    import ml_playground.tools.quality.quality as quality_module
+
+    original_quality = getattr(quality_module, "QualityTools", None)
+    original_testing = getattr(ws_module, "TestingTools", None)
+
+    quality_module.QualityTools = _QualityToolsWithFailures  # type: ignore[attr-defined]
+    ws_module.TestingTools = _TestingToolsWithFailures  # type: ignore[assignment]
+
+    try:
+        result = ws.run_workflow_status(
+            cfg, tmp_path, subprocess_runner=_MixedFailureRunner()
+        )
+
+        # Main contract: workflow status always succeeds
+        assert result.success is True
+        assert result.exit_code == 0
+
+        # Parse the JSON output to verify detailed status
+        import json
+
+        status_data = json.loads(result.stdout)
+
+        # Git should show 'unknown' due to structured failure
+        assert status_data["git_status"]["status"] == "unknown"
+
+        # Quality should show 'failed' due to structured failures (not 'unknown' because exceptions are caught and converted to structured failures)
+        assert status_data["quality_status"]["overall_status"] == "failed"
+
+        # Tests should show 'failed' due to structured failures
+        assert status_data["test_status"]["overall_status"] == "failed"
+
+        # Coverage should be 'not_available' (no coverage file)
+        assert status_data["coverage_status"]["status"] == "not_available"
+
+        # Readiness should reflect the failures
+        assert status_data["readiness"]["ready_for_merge"] is False
+
+    finally:
+        # Restore originals
+        if original_quality:
+            quality_module.QualityTools = original_quality
+        if original_testing:
+            ws_module.TestingTools = original_testing
+
+
+def test_run_quality_batch_structured_failures_vs_exceptions(tmp_path: Path) -> None:
+    """Test _run_quality_batch distinguishes between structured failures and exceptions."""
+    cfg = _minimal_tools_config()
+
+    class _QualityToolsMixed:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> _FakeToolResult:
+            # Structured failure (success=False)
+            return _FakeToolResult(
+                success=False, exit_code=1, stdout="", stderr="lint issue"
+            )
+
+        def typecheck(self, _args: list[str]) -> _FakeToolResult:
+            # Typed exception
+            raise TimeoutError(
+                "Typecheck timeout",
+                reason="Process exceeded the configured timeout limit",
+                rationale="Timeouts indicate environmental assumptions are wrong",
+            )
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            # Structured failure (success=False)
+            return _FakeToolResult(
+                success=False, exit_code=1, stdout="", stderr="dead code"
+            )
+
+    import ml_playground.tools.quality.quality as quality_module
+
+    original = getattr(quality_module, "QualityTools", None)
+    quality_module.QualityTools = _QualityToolsMixed  # type: ignore[attr-defined]
+
+    try:
+        results = ws._run_quality_batch(cfg, tmp_path, _StubRunner())
+
+        # Structured failures should show "failed" status
+        assert results["lint"]["status"] == "failed"
+        assert results["deadcode"]["status"] == "failed"
+
+        # Typed exceptions should show "error" status
+        assert results["typecheck"]["status"] == "error"
+        assert "timeout" in results["typecheck"]["error"].lower()
+
+        # Overall should be failed due to failures
+        assert results["overall"]["status"] == "failed"
+        assert results["overall"]["success"] is False
+
+    finally:
+        if original:
+            quality_module.QualityTools = original
+
+
+def test_run_test_batch_simple_structured_failures_vs_exceptions(
+    tmp_path: Path,
+) -> None:
+    """Test _run_test_batch_simple distinguishes between structured failures and exceptions."""
+    from ml_playground.tools.core.errors import CommandNotFoundError
+
+    cfg = _minimal_tools_config()
+
+    class _TestingToolsMixed:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def unit(self, _args: list[str]) -> _FakeToolResult:
+            # Structured failure (success=False)
+            return _FakeToolResult(
+                success=False, exit_code=1, stdout="5 passed", stderr=""
+            )
+
+        def integration(self, _args: list[str]) -> _FakeToolResult:
+            # Typed exception
+            raise CommandNotFoundError(
+                "Integration tests not available",
+                reason="External tool binary is not available in PATH",
+                rationale="All required tools must be installed and accessible for the development workflow to function",
+            )
+
+    original = ws.TestingTools
+    ws.TestingTools = _TestingToolsMixed  # type: ignore[assignment]
+
+    try:
+        results = ws._run_test_batch_simple(cfg, tmp_path, _StubRunner())
+
+        # Structured failure should show "failed" status with test data
+        assert results["unit"]["status"] == "failed"
+        assert results["unit"]["count"] == 5
+        assert results["unit"]["duration"] == "0s"  # default from _extract_duration
+
+        # Typed exception should show "error" status
+        assert results["integration"]["status"] == "error"
+        assert "not available" in results["integration"]["error"].lower()
+
+        # Overall should be failed
+        assert results["overall"]["status"] == "failed"
+        assert results["overall"]["success"] is False
+        assert results["overall"]["total_tests"] == 5  # count from unit tests only
+
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]

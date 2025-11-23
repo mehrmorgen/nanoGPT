@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from ml_playground.tools.core.config import ToolsConfig
+from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import (
@@ -401,7 +402,7 @@ class TestingTools:
                         stderr=combined_stderr or result.stderr,
                         operation_id=operation_id,
                     )
-            except Exception as e:
+            except (ToolExecutionError, OSError, RuntimeError, ValueError) as e:
                 return ToolResult(
                     success=False,
                     exit_code=1,

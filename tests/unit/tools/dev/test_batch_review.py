@@ -4,6 +4,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import ml_playground.tools.dev.batch_review as batch_review_module
 from ml_playground.tools.core.config import ToolsConfig
@@ -298,3 +299,246 @@ def test_run_batch_review_supports_yaml_and_text(tmp_path: Path) -> None:
     assert "Quality Checks" in text_result.stdout
     assert "Overall Status" in text_result.stdout
     assert text_result.success is False and text_result.exit_code == 1
+
+
+def test_batch_review_error_downgrade_behavior(tmp_path: Path) -> None:
+    """Test that exceptions are properly downgraded to structured error responses.
+
+    This test verifies the contract: run_batch_review always returns success=True
+    but individual tool failures are captured as structured "error" entries instead
+    of propagating as exceptions.
+    """
+    from ml_playground.tools.core.errors import (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+    )
+
+    # Mock quality tools to raise different types of exceptions
+    class _QualityToolsWithExceptions:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> ToolResult:
+            raise ToolExecutionError(
+                "Lint tool execution failed",
+                reason="External tool binary failed to execute",
+                rationale="Tool execution failures indicate environment issues",
+            )
+
+        def typecheck(self, _args: list[str]) -> ToolResult:
+            raise TimeoutError(
+                "Typecheck timed out",
+                reason="Process exceeded timeout limit",
+                rationale="Timeouts indicate performance issues",
+            )
+
+        def deadcode(self, _args: list[str]) -> ToolResult:
+            raise CommandNotFoundError(
+                "Deadcode tool not found",
+                reason="Tool binary not in PATH",
+                rationale="Missing tools indicate setup issues",
+            )
+
+    # Mock testing tools to raise exceptions
+    class _TestingToolsWithExceptions:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def unit(self, _args: list[str]) -> ToolResult:
+            raise RuntimeError("Unit test framework failed")
+
+        def integration(self, _args: list[str]) -> ToolResult:
+            raise ValueError("Integration test setup failed")
+
+        def coverage_report(self, *_args: Any, **_kwargs: Any) -> ToolResult:
+            raise ImportError("Coverage module not available")
+
+    # Apply mocks
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+
+    batch_review_module.QualityTools = _QualityToolsWithExceptions  # type: ignore[assignment]
+    batch_review_module.TestingTools = _TestingToolsWithExceptions  # type: ignore[assignment]
+
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Main contract: batch review doesn't crash but reflects actual status
+        assert result.success is False  # Should be False due to all the errors
+        assert result.exit_code == 1
+
+        # Parse JSON to verify structured error responses
+        import json
+
+        payload = json.loads(result.stdout)
+
+        # Quality checks should show "error" status for each tool
+        quality_checks = payload["quality_checks"]
+        assert quality_checks["lint"]["status"] == "error"
+        assert "execution failed" in quality_checks["lint"]["error"].lower()
+
+        assert quality_checks["typecheck"]["status"] == "error"
+        assert "timeout" in quality_checks["typecheck"]["error"].lower()
+
+        assert quality_checks["deadcode"]["status"] == "error"
+        assert "not found" in quality_checks["deadcode"]["error"].lower()
+
+        assert quality_checks["overall"]["status"] == "failed"
+        assert quality_checks["overall"]["success"] is False
+
+        # Test summary should show "error" status for each tool
+        test_summary = payload["test_summary"]
+        assert test_summary["unit"]["status"] == "error"
+        assert "framework failed" in test_summary["unit"]["error"].lower()
+
+        assert test_summary["integration"]["status"] == "error"
+        assert "setup failed" in test_summary["integration"]["error"].lower()
+
+        assert test_summary["coverage"]["status"] == "not_available"  # No coverage file
+
+        assert test_summary["overall"]["status"] == "failed"
+        assert test_summary["overall"]["success"] is False
+
+        # Overall status should reflect failures
+        overall_status = payload["overall_status"]
+        assert overall_status["success"] is False
+        assert overall_status["quality_status"] == "failed"
+        assert overall_status["test_status"] == "failed"
+        assert overall_status["ready_for_merge"] is False
+
+    finally:
+        # Restore originals
+        if original_quality:
+            batch_review_module.QualityTools = original_quality
+        if original_testing:
+            batch_review_module.TestingTools = original_testing
+
+
+def test_batch_review_mixed_structured_failures_and_exceptions(tmp_path: Path) -> None:
+    """Test batch review with mix of structured failures and exceptions.
+
+    Verifies that structured failures (success=False) and exceptions are both
+    properly handled and downgraded to appropriate status codes.
+    """
+    # Create a coverage file to trigger coverage_report call
+    coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
+    coverage_file.parent.mkdir(parents=True, exist_ok=True)
+    coverage_file.write_text("data", encoding="utf-8")
+
+    # Mock quality tools with mixed success/failure/exception patterns
+    class _QualityToolsMixed:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> ToolResult:
+            # Structured failure
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=False,
+                stderr="lint error 1\nlint error 2",
+            )
+
+        def typecheck(self, _args: list[str]) -> ToolResult:
+            # Exception
+            raise RuntimeError("Typecheck crashed")
+
+        def deadcode(self, _args: list[str]) -> ToolResult:
+            # Structured success
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=True,
+                stdout="no dead code found",
+            )
+
+    # Mock testing tools with mixed patterns
+    class _TestingToolsMixed:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def unit(self, _args: list[str]) -> ToolResult:
+            # Structured failure
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=False,
+                stdout="1 passed, 1 failed",
+                stderr="test failure details",
+            )
+
+        def integration(self, _args: list[str]) -> ToolResult:
+            # Structured success
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="3 passed in 0.5s",
+            )
+
+        def coverage_report(self, *_args: Any, **_kwargs: Any) -> ToolResult:
+            # Exception
+            raise ValueError("Coverage parsing failed")
+
+    # Apply mocks
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+
+    batch_review_module.QualityTools = _QualityToolsMixed  # type: ignore[assignment]
+    batch_review_module.TestingTools = _TestingToolsMixed  # type: ignore[assignment]
+
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Main contract: doesn't crash but reflects actual status
+        assert result.success is False  # Should be False due to failures/errors
+
+        # Parse and verify mixed handling
+        import json
+
+        payload = json.loads(result.stdout)
+
+        # Quality checks: mix of failed, error, passed
+        quality_checks = payload["quality_checks"]
+        assert quality_checks["lint"]["status"] == "failed"  # structured failure
+        assert quality_checks["lint"]["issues"] == 2
+
+        assert quality_checks["typecheck"]["status"] == "error"  # exception
+        assert "crashed" in quality_checks["typecheck"]["error"].lower()
+
+        assert quality_checks["deadcode"]["status"] == "passed"  # structured success
+        assert quality_checks["overall"]["status"] == "failed"  # some failures
+
+        # Test summary: mix of failed, passed, error
+        test_summary = payload["test_summary"]
+        assert test_summary["unit"]["status"] == "failed"  # structured failure
+        assert (
+            test_summary["unit"]["count"] == 1
+        )  # Only counts passed tests, not failed
+
+        assert test_summary["integration"]["status"] == "passed"  # structured success
+        assert test_summary["integration"]["count"] == 3
+
+        assert test_summary["coverage"]["status"] == "error"  # exception
+        assert "parsing failed" in test_summary["coverage"]["error"].lower()
+
+        assert test_summary["overall"]["status"] == "failed"  # some failures
+
+        # Overall status should reflect the mixed results
+        overall_status = payload["overall_status"]
+        assert overall_status["success"] is False
+        assert overall_status["quality_status"] == "failed"
+        assert overall_status["test_status"] == "failed"
+        assert overall_status["ready_for_merge"] is False
+
+    finally:
+        # Restore originals
+        if original_quality:
+            batch_review_module.QualityTools = original_quality
+        if original_testing:
+            batch_review_module.TestingTools = original_testing

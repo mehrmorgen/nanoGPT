@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import List
 
@@ -129,6 +130,7 @@ def run_coverage_report(
     operation_id = OperationId(
         namespace="tools", category="test", command="coverage-report"
     )
+    from ..core.errors import ToolExecutionError
 
     executed, notes, env = _ensure_coverage_data(
         config=config,
@@ -188,14 +190,18 @@ def run_coverage_report(
                     timeout=config.testing.timeout,
                     operation_id=operation_id,
                 )
-            except Exception:
-                from ..core.errors import ToolExecutionError
-
+            except (
+                ToolExecutionError,
+                TimeoutError,
+                OSError,
+                subprocess.SubprocessError,
+                RuntimeError,
+            ) as exc:
                 raise ToolExecutionError(
                     f"Failed to generate {description}",
-                    reason="Coverage report generation failed",
+                    reason=f"Subprocess error: {exc}",
                     rationale="Coverage report generation must succeed for quality gates",
-                )
+                ) from exc
 
             if result.success:
                 suffix = " after refreshing coverage data" if regenerated else ""
@@ -988,6 +994,13 @@ def _read_coverage_thresholds_from_config(root_path: Path) -> dict[str, float]:
             "line_threshold": float(thresholds_cfg.get("line_threshold", 0.0)),
             "branch_threshold": float(thresholds_cfg.get("branch_threshold", 0.0)),
         }
-    except Exception:
+    except (tomllib.TOMLDecodeError, KeyError, TypeError, ValueError) as exc:
         # If we can't read the config, return empty dict (no thresholds)
+        # Log the specific error for debugging
+        import sys
+
+        print(
+            f"[coverage] Warning: Could not read coverage thresholds from pyproject.toml: {exc}",
+            file=sys.stderr,
+        )
         return {}

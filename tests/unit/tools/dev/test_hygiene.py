@@ -259,3 +259,64 @@ def test_kill_pid_returns_false_on_psutil_errors() -> None:
         _restore_psutil(original)
 
     assert result is False
+
+
+def test_pids_by_port_falls_back_to_empty_list_on_complete_failure() -> None:
+    """Test the final fallback when both net_connections and process_iter fail."""
+    fake_psutil = ModuleType("psutil")
+
+    def net_connections(kind: str):  # type: ignore[override]
+        raise RuntimeError("blocked")
+
+    def process_iter(attrs=None):  # type: ignore[override]
+        raise RuntimeError("access denied")
+
+    fake_psutil.net_connections = net_connections  # type: ignore[attr-defined]
+    fake_psutil.process_iter = process_iter  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._pids_by_port(9000)
+    finally:
+        _restore_psutil(original)
+
+    assert result == []  # Should return empty list when all methods fail
+
+
+def test_pids_by_port_handles_individual_connection_exceptions() -> None:
+    """Test that individual connection exceptions are skipped but processing continues."""
+    fake_psutil = ModuleType("psutil")
+
+    class BadConnection:
+        def __init__(self, should_fail: bool = False):
+            self.should_fail = should_fail
+
+        @property
+        def laddr(self):
+            if self.should_fail:
+                raise RuntimeError("connection error")
+            return SimpleNamespace(port=8000)
+
+        @property
+        def pid(self):
+            return 42 if not self.should_fail else None
+
+    def net_connections(kind: str):  # type: ignore[override]
+        assert kind == "inet"
+        return [
+            BadConnection(should_fail=False),  # Good connection
+            BadConnection(should_fail=True),  # Bad connection (should be skipped)
+            BadConnection(should_fail=False),  # Another good connection
+            SimpleNamespace(laddr=None, pid=24),  # No laddr (should be skipped)
+            SimpleNamespace(laddr=SimpleNamespace(port=7000), pid=99),  # Wrong port
+        ]
+
+    fake_psutil.net_connections = net_connections  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._pids_by_port(8000)
+    finally:
+        _restore_psutil(original)
+
+    assert result == [42]  # Should only include the good connections with port 8000

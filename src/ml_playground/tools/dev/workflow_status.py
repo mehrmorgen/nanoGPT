@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Dict, Any
 
 from ..core.config import ToolsConfig
+from ..core.errors import ToolExecutionError, TimeoutError, CommandNotFoundError
 from ..core.interfaces import OperationId, ToolResult
 from ..testing.testing import TestingTools
 from ..utils.subprocess_utils import SubprocessRunner
@@ -114,7 +116,14 @@ def _get_git_status(
             else False,
             "status": "clean" if not status_result.stdout.strip() else "dirty",
         }
-    except Exception:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        OSError,
+        subprocess.SubprocessError,
+    ):
         return {"status": "unknown", "error": "Could not determine git status"}
 
 
@@ -135,7 +144,14 @@ def _get_quality_status(
                 if quality_results.get(check, {}).get("status") == "passed"
             ),
         }
-    except Exception:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        OSError,
+        subprocess.SubprocessError,
+    ):
         return {"status": "unknown", "error": "Could not determine quality status"}
 
 
@@ -155,7 +171,14 @@ def _get_test_status(
                 "status", "unknown"
             ),
         }
-    except Exception:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        OSError,
+        subprocess.SubprocessError,
+    ):
         return {"status": "unknown", "error": "Could not determine test status"}
 
 
@@ -183,7 +206,16 @@ def _get_coverage_status(
                 coverage_result.stdout, "branch"
             ),
         }
-    except Exception:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        OSError,
+        subprocess.SubprocessError,
+        FileNotFoundError,
+        ImportError,
+    ):
         return {"status": "unknown", "error": "Could not determine coverage status"}
 
 
@@ -306,7 +338,7 @@ def _run_quality_batch(
                 total_issues += len(unused_count)
             else:
                 total_issues += int(unused_count)
-    except Exception as e:
+    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
         results["deadcode"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -342,7 +374,7 @@ def _run_test_batch_simple(
         total_tests += test_count
         if not unit_result.success:
             overall_success = False
-    except Exception as e:
+    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
         results["unit"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -359,7 +391,7 @@ def _run_test_batch_simple(
         total_tests += test_count
         if not integration_result.success:
             overall_success = False
-    except Exception as e:
+    except (ToolExecutionError, TimeoutError, CommandNotFoundError, RuntimeError) as e:
         results["integration"] = {"status": "error", "error": str(e)}
         overall_success = False
 

@@ -41,7 +41,7 @@ def mutation_reset(config: ToolsConfig, root_path: Path) -> ToolResult:
         try:
             session_file.unlink()
             output = f"Removed Cosmic Ray session: {session_file}"
-        except Exception as exc:
+        except (OSError, PermissionError) as exc:
             raise ToolExecutionError(
                 f"Failed to remove Cosmic Ray session file: {session_file}",
                 reason=f"File deletion failed: {exc}",
@@ -121,7 +121,7 @@ def mutation_summary(config: ToolsConfig, root_path: Path) -> ToolResult:
             stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
             operation_id=operation_id,
         )
-    except Exception as e:
+    except (KeyError, ValueError, TypeError, AssertionError) as e:
         return ToolResult(
             success=False,
             exit_code=1,
@@ -221,7 +221,7 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
 
         try:
             conn_ctx = sqlite3.connect(session_path)
-        except Exception:
+        except (sqlite3.Error, OSError, FileNotFoundError):
             return ToolResult(
                 success=True,
                 exit_code=0,
@@ -241,7 +241,7 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
             def _to_int(value: Any) -> int:
                 try:
                     return int(value)
-                except Exception:
+                except (ValueError, TypeError):
                     return 0
 
             total: int
@@ -298,7 +298,13 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
             stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
             operation_id=operation_id,
         )
-    except Exception as e:
+    except (
+        getattr(sqlite3, 'Error', Exception),
+        KeyError,
+        ValueError,
+        TypeError,
+        AssertionError,
+    ) as e:
         return ToolResult(
             success=False,
             exit_code=1,
@@ -344,7 +350,7 @@ def mutation_run(
                         stderr=combined_stderr or result.stderr,
                         operation_id=operation_id,
                     )
-            except Exception as e:
+            except (ToolExecutionError, OSError, RuntimeError, ValueError) as e:
                 return ToolResult(
                     success=False,
                     exit_code=1,

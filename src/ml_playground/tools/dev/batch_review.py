@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from ..core.config import ToolsConfig
+from ..core.errors import ToolExecutionError, TimeoutError, CommandNotFoundError
 from ..core.interfaces import OperationId, ToolResult
 from ..quality.quality import QualityTools
 from ..testing.testing import TestingTools
@@ -101,7 +102,13 @@ def _run_quality_batch(
                 total_issues += len(issues_count)
             else:
                 total_issues += int(issues_count)
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["lint"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -123,7 +130,13 @@ def _run_quality_batch(
                 total_issues += len(errors_count)
             else:
                 total_issues += int(errors_count)
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["typecheck"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -145,7 +158,13 @@ def _run_quality_batch(
                 total_issues += len(unused_count)
             else:
                 total_issues += int(unused_count)
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["deadcode"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -184,7 +203,13 @@ def _run_test_batch(
         total_tests += test_count
         if not unit_result.success:
             overall_success = False
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["unit"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -204,7 +229,13 @@ def _run_test_batch(
         total_tests += test_count
         if not integration_result.success:
             overall_success = False
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["integration"] = {"status": "error", "error": str(e)}
         overall_success = False
 
@@ -230,7 +261,13 @@ def _run_test_batch(
                 "branch_pct": 0,
                 "note": "Run 'uv run tools test coverage-test' to generate coverage data",
             }
-    except Exception as e:
+    except (
+        ToolExecutionError,
+        TimeoutError,
+        CommandNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as e:
         results["coverage"] = {"status": "error", "error": str(e)}
 
     results["overall"] = {
