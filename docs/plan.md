@@ -22,43 +22,11 @@ Only forward-looking work is tracked here.
 - Status: Property tests in `tests/property/runtime/test_device_property.py` use a strictly-typed fake torch implementation to cover `global_device_setup` branches (cpu / cuda / mps, dtype and seed handling).
 - Next: Ensure runtime CLI device helpers consume the same abstraction once CLI workstream starts.
 
-### 2. Runners (Production-Side Refactor)
-- File: `src/ml_playground/runtime/runners.py`.
-- Status:
-  - Property tests in `tests/property/runtime/test_runners_simple_property.py` exercise success and failure paths for `run_prepare_impl`, `run_train_impl`, `run_sample_impl`, and `run_analyze`, including seed-resolver hooks and learning-mode branches.
-  - Coverage is improving but tests currently rely on stub config objects that are not aligned with the concrete `PreparerConfig`/`TrainerConfig`/`SamplerConfig` types.
-- Plan:
-  1. - [x] Introduce protocol-style config interfaces under `src/ml_playground/runtime/protocols.py`, modelling only what `runners.py` actually reads (runtime device/dtype/seed, logger, and minimal model/data/sampler/trainer attributes).
-  2. - [x] Update `run_prepare_impl`, `run_train_impl`, and `run_sample_impl` in `runtime/runners.py` to depend on these protocols instead of the concrete configuration dataclasses, without changing control flow.
-  3. - [x] Ensure existing production call sites that pass real configs continue to type-check and behave the same via structural compatibility.
-  4. - [x] Update `tests/property/runtime/test_runners_simple_property.py` to rely on the new protocols for its stub config dataclasses so the tests become type-clean without broad `type: ignore` usage.
-- Goal: Clean separation between runtime behavior and configuration representation, enabling strictly-typed fakes in tests and higher coverage for failure paths and learning-mode behavior.
-
-### 3. Runtime CLI & Bootstrap (Next Tranche)
-- Files: `src/ml_playground/runtime/core/bootstrap.py`, `src/ml_playground/runtime/helpers.py`, `src/ml_playground/runtime/cli/app.py`, `src/ml_playground/runtime/cli/main.py`, `src/ml_playground/runtime/cli/runners.py`, plus their existing tests under `tests/property/runtime/**` and `tests/unit/runtime/**`.
-- Plan (step-by-step):
-  1. - [x] **Inventory existing CLI tests**
-     - Open `tests/property/runtime/cli/test_cli_property.py` and `tests/property/runtime/test_runtime_cli_property.py`.
-     - List which commands / flags / error paths are already covered.
-  2. - [x] **Add or extend property tests for missing paths**
-     - For each uncovered CLI command or global option branch, add a new Hypothesis example in the CLI property tests.
-     - Use Typer’s `CliRunner` helpers and the existing patterns in `tests/property/runtime/test_runners_simple_property.py` and `tests/unit/runtime/test_cli_runtime.py` for guidance.
-  3. - [x] **Align CLI runners with runtime protocols**
-     - Update `runtime/cli/runners.py` so that helper functions take `PrepareConfigLike`, `TrainConfigLike`, and `SampleConfigLike` from `runtime/protocols.py` instead of concrete config types.
-     - Ensure no behavior changes: keep logging, error handling, and learning-mode wiring identical.
-  4. - [x] **Exercise bootstrap wiring**
-     - Add or extend property tests in `tests/property/runtime/core/test_bootstrap_property.py` (or create it if missing) to:
-       - Construct a minimal fake dependency container.
-       - Verify that `bootstrap` wires runtime runners, logging, and configuration consistently.
-  5. - [x] **Verification**
-     - ✅ Property + unit suites pass as of 2025-11-21 09:15 UTC+01.
-     - ✅ Coverage is green (83.22% branch).
-
 ## Current Tools Focus: Tools Layer & Tools Protocols
 
 These tranches extend the same protocol-driven, strictly-typed testing approach to the `src/ml_playground/tools` package and its CLIs.
 
-### 4. Tools Runtime State & Protocols
+### 2. Tools Runtime State & Protocols
 - Files: `src/ml_playground/tools/cli/config_loader.py`, `src/ml_playground/tools/cli/state.py`, `src/ml_playground/tools/protocols.py`.
 - Status:
   - `tools/core/runtime.py` has been removed as dead code.
@@ -76,26 +44,17 @@ These tranches extend the same protocol-driven, strictly-typed testing approach 
   5. - [ ] **Verification**
      - `uv run pytest tests/property/tools/cli -v` and `tests/property/tools -v` must stay green after protocol extraction.
 
-### 5. Tools Categories & Deterministic Runners
+### 3. Tools Categories & Deterministic Runners
 - Files: `src/ml_playground/tools/quality/quality.py`, `src/ml_playground/tools/testing/testing.py`, `src/ml_playground/tools/environment/environment.py`, `src/ml_playground/tools/ci/ci.py`, `src/ml_playground/tools/dev/dev.py`, plus helpers under `src/ml_playground/tools/**`.
 - Status:
   - Property suites already run against deterministic dependency overrides; no mocking.
-  - Branch coverage laggards from the latest report (≤90% branch) are:
-    1. `tools/testing/mutation.py` (71.74%)
-    2. `tools/testing/testing.py` (69.81%, multiple defensive branches untested)
-    3. `tools/dev/hygiene.py` (96.15% line but still missing specific branch pairs)
-    4. `tools/environment/setup.py` / `tools/environment/verify.py` (≈73–67% branch)
-- Next steps:
-  1. - [ ] **Mutation helper hardening**
-     - Target `tools/testing/mutation.py` with unit tests that simulate session cleanup failures and `cosmic_ray` invocations to exercise the currently untested exception paths.
-  2. - [ ] **Testing tools coverage push**
-     - Add focused unit/property tests for `tools/testing/testing.py` to cover failure handling in `coverage`, `coverage_report`, `mutation`, and CLI result plumbing. Mirror these flows in `tests/unit/tools/testing/test_testing_facade_misc.py` using deterministic runners.
-  3. - [x] **Config loader + hygiene polish**
-     - `tests/unit/tools/cli/test_config_loader.py` is complete.
-     - [ ] Add complementary tests in `tests/unit/tools/dev/test_hygiene.py` for the remaining branch guards.
-  4. - [ ] **Environment/CI/Dev runners**
+  - **Update**: `tools/testing/testing.py`, `tools/testing/coverage.py`, and `tools/testing/mutation.py` are now Green (≥83% branch).
+  - Remaining laggards:
+    1. `tools/environment/setup.py` / `tools/environment/verify.py` (≈73–67% branch)
+  - Next steps:
+  1. - [ ] **Environment/CI/Dev runners**
      - For `tools/environment/setup.py`, `tools/environment/verify.py`, and `tools/dev/*.py`, create deterministic runner tests that simulate subprocess failures, missing pyproject files, and optional dependency warnings.
-  5. - [ ] **Verification and coverage**
+  2. - [ ] **Verification and coverage**
      - Run `uv run pytest tests/property/tools -v` / `tests/unit/tools -v` plus `uv run tools test coverage -- tests/property/tools tests/unit/tools`, tracking per-file branch % until each target crosses 85%.
 
 ## Tracking & Success Criteria
@@ -110,7 +69,7 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
 
 ### Runtime/tools coverage snapshot (latest run)
 - Runtime highlights: `runtime/cli/main.py` (branch 95.59%) and `runtime/core/bootstrap.py` (100%) are now healthy after the CLI/ bootstrap test additions.
-- Tools highlights: the gating files are `tools/testing/testing.py` (69.81%), `tools/testing/mutation.py` (71.74%), `tools/dev/hygiene.py` (96.15% line / 72.00% branch on specific guards), and the environment helpers (≈70% branch).
+- Tools highlights:
   - `tools/core/runtime.py` — Removed (dead code)
   - `tools/cli/main.py` — 95.59%
   - `tools/cli/config_loader.py` — 70.00%
@@ -118,9 +77,9 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
   - `tools/cli/commands/dev.py` — line 75.68% (branch n/a)
   - `tools/cli/commands/environment.py` — line 79.17% (branch n/a)
   - `tools/cli/commands/quality.py` — line 84.52% (branch n/a)
-  - `tools/testing/coverage.py` — 76.92%
-  - `tools/testing/mutation.py` — 71.74%
-  - `tools/testing/testing.py` — 69.81%
+  - `tools/testing/coverage.py` — 83.08%
+  - `tools/testing/mutation.py` — 89.13%
+  - `tools/testing/testing.py` — 91.67%
   - `tools/testing/unit.py` — 83.33%
   - `tools/utils/subprocess_utils.py` — 70.00%
   - `tools/environment/environment.py` — 100.00%
@@ -135,12 +94,13 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
   - `tools/dev/workflow_status.py` — 56.82%
 
 **Next concrete targets (lowest branch coverage first, within runtime/tools):**
-- `runtime/core/bootstrap.py` — 33.33%
-- `runtime/cli/main.py` — 50.00%
+- `tools/dev/workflow_status.py` — 56.82%
 - `tools/dev/batch_review.py` — 65.79%
 - `tools/environment/verify.py` — 66.67%
-- `tools/testing/testing.py` — 69.81%
-- `tools/testing/mutation.py` — 71.74%
+- `tools/dev/review.py` — 69.15%
+- `tools/cli/config_loader.py` — 70.00%
+- `tools/utils/subprocess_utils.py` — 70.00%
+- `tools/environment/setup.py` — 73.08%
 
 ### Defensive branch simplification targets (runtime/tools)
 
@@ -201,84 +161,8 @@ We also track **defensive branches** (especially broad `except Exception` handle
 
 ## Future Test-Suite Typing Workstreams
 
-Once the runtime and tools production surfaces are protocol-aligned and the corresponding property tests are green, the next phase is to extend strict typing and mock-free testing to **all test kinds** that exercise this scope. We will tackle **one kind of test at a time**, using the existing directory layout under `tests/` as the source of truth.
+Once the runtime and tools production surfaces are protocol-aligned and the corresponding property tests are green, the next phase is to extend strict typing and mock-free testing to **all test kinds** that exercise this scope.
 
 1. **Property tests (runtime + tools)**
-   - Runtime-focused property tests (all under `tests/property/runtime`):
-     - `tests/property/runtime/test_device_property.py`
-     - `tests/property/runtime/test_runners_simple_property.py`
-     - `tests/property/runtime/test_runners_property.py`
-     - `tests/property/runtime/test_helpers_property.py`
-     - `tests/property/runtime/test_core_results_property.py`
-     - `tests/property/runtime/core/test_bootstrap_property.py`
-     - CLI-focused: `tests/property/runtime/cli/test_app_property.py`, `test_cli_property.py`, `test_commands_property.py`, `test_main_property.py`, `test_runners_property.py`, `tests/property/runtime/test_runtime_cli_property.py`
-   - Tools-focused property tests (all under `tests/property/tools`):
-     - Core/helpers: `tests/property/tools/core/test_runtime_state_property.py`, `tests/property/tools/_helpers.py`
-     - CLI: `tests/property/tools/cli/test_tools_cli_property.py`
-     - Categories: `tests/property/tools/quality/test_quality_tools_property.py`, `tests/property/tools/testing/test_testing_tools_property.py`, `tests/property/tools/environment/test_environment_tools_property.py`, `tests/property/tools/ci/test_ci_tools_property.py`, `tests/property/tools/dev/test_batch_review_property.py`, `tests/property/tools/dev/test_dev_tools_property.py`
-     - Utilities: `tests/property/tools/testing/test_coverage_helpers_property.py`, `tests/property/tools/utils/test_subprocess_utils_property.py`
    - Steps:
-     1. - [x] Ensure every fake or stub used in property tests is **strictly typed** and satisfies the relevant runtime/tools protocols (e.g. `PrepareConfigLike`, `TrainConfigLike`, `SampleConfigLike`, `SharedConfigLike`, `ToolsConfigLike`). Prefer small dataclasses or simple helper classes over anonymous `SimpleNamespace` objects.
-     2. - [x] Confirm that property tests do **not** use `unittest.mock` or patching frameworks. Where substitution is needed, rely on:
-        - Constructor parameters / dependency injection, or
-        - Module-level patch points explicitly designed for tests (e.g. deterministic runners via context managers).
-     3. - [x] Run property tests for runtime and tools:
-        - `uv run pytest tests/property/runtime -v`
-        - `uv run pytest tests/property/tools -v`
-     4. - [x] Run type checking, ensuring tests are included in the checking scope (via `tools quality typecheck` or equivalent), and fix any reported issues by tightening stubs rather than weakening types.
-     5. - [ ] Re-run coverage focused on the production files exercised by these property suites and record per-file branch % in this plan.
-
-2. **Unit tests (runtime + tools)**
-   - Runtime-focused unit tests (all under `tests/unit/runtime`):
-     - CLI helpers: `tests/unit/runtime/cli/test_cli.py`, `test_device.py`, `test_main_module.py`, `test_typer_helpers.py`
-     - Core runtime: `tests/unit/runtime/test_bootstrap.py`, `tests/unit/runtime/test_cli_runtime.py`, `tests/unit/runtime/test_results.py`
-   - Tools-focused unit tests (all under `tests/unit/tools`):
-     - Core: `tests/unit/tools/core/test_config.py`, `test_errors.py`, `test_interfaces.py`, `test_learning_mode.py`, `test_runtime_state.py`
-     - CLI: `tests/unit/tools/cli/test_main.py`, `tests/unit/tools/cli/commands/test_ci_commands.py`, `test_dev_commands.py`, `test_environment_commands.py`, `test_quality_commands.py`, `test_testing_commands.py`
-     - Categories: `tests/unit/tools/categories/test_ci.py`, `test_dev.py`, `test_environment.py`, `test_quality.py`, `test_testing.py`, `test_testing_additional.py`
-     - Testing helpers: `tests/unit/tools/testing/test_coverage.py`, `test_coverage_helpers.py`, `test_mutation.py`, `test_testing_facade_misc.py`
-     - Dev tools: `tests/unit/tools/dev/test_batch_review.py`, `test_hygiene.py`, `test_review_rendering.py`
-     - Utils: `tests/unit/tools/utils/test_subprocess_utils.py`, and shared fakes in `tests/unit/tools/fakes.py`
-   - Steps:
-     1. - [x] Replace any remaining mocks or untyped stubs with small, typed helper classes or `SimpleNamespace` instances that implement the required protocol attributes/methods. Where possible, **reuse** the same stubs used in the property tests.
-     2. - [x] Ensure these tests do not introduce `type: ignore` except where strictly necessary (and document the reason next to any ignore).
-     3. - [x] Run unit tests and type checks:
-        - `uv run pytest tests/unit/runtime -v`
-        - `uv run pytest tests/unit/tools -v`
-        - `uv run tools quality typecheck`
-     4. - [x] Fix any typing issues by tightening the tests (e.g. refining stubs) rather than loosening production types.
-
-3. **Integration tests (runtime + tools)**
-   - Files:
-     - `tests/integration/test_datasets_shakespeare.py`
-     - `tests/integration/test_speakger_pilot.py`
-     - `tests/integration/test_trainer_loop.py`
-   - Steps:
-     1. - [x] Identify where these tests hit runtime or tools surfaces (e.g. training loops that implicitly rely on runtime runners or tools commands).
-     2. - [x] Ensure any shared fixtures or helper utilities use protocol-compatible types and deterministic fakes where external systems are involved (e.g. filesystem layout, subprocesses).
-     3. - [x] Avoid `unittest.mock`; if behavior substitution is needed, create explicit helper functions or fixtures that wrap the real APIs.
-     4. - [x] Run integration tests: `uv run pytest tests/integration -v`.
-     5. - [x] Include integration tests in type checking where feasible and fix any typing errors by improving test fixtures and helpers.
-
-4. **Acceptance tests (runtime + tools)**
-   - Files:
-     - `tests/acceptance/steps/test_checkpointing_steps.py`
-     - `tests/acceptance/steps/test_tools_cli_steps.py`
-     - `tests/acceptance/tools/cli/test_learn_commands.py`
-   - Steps:
-     1. - [x] Keep acceptance tests as **black-box behavior checks** while ensuring that any shared helpers (e.g. step definitions, CLI runners) are strictly typed and rely on the same deterministic patterns as the property/unit tests.
-     2. - [x] Where acceptance tests drive tools or runtime CLIs, use the real entry points (`ml_playground.tools.cli.main`, `ml_playground.runtime.cli.main`) and inject deterministic configuration/paths via test-only TOML files or fixtures.
-     3. - [x] Run acceptance tests: `uv run pytest tests/acceptance -v`.
-     4. - [x] Ensure any helpers used by acceptance tests are covered by unit/property tests and are type-clean.
-
-5. **End-to-end (E2E) tests (runtime + tools)**
-   - Files:
-     - `tests/e2e/ml_playground/test_sample_smoke.py`
-     - `tests/e2e/ml_playground/experiments/bundestag_char/test_cli_bundestag_char.py`
-     - `tests/e2e/ml_playground/experiments/speakger/test_sampler_analysis.py`
-   - Steps:
-     1. - [x] Treat E2E tests as **full pipeline** checks using real CLIs and minimal but realistic configuration (see the experiment configs under `tests/e2e/ml_playground/experiments/**`).
-     2. - [x] Ensure any E2E-specific fixtures (e.g. temporary directories, sample configs) are typed and reuse the same protocol-compatible config objects where applicable.
-     3. - [x] Avoid mocks; if external systems must be isolated (e.g. network), do so via configuration (e.g. localhost endpoints, temporary dirs) rather than patching.
-     4. - [x] Run E2E tests: `uv run pytest tests/e2e -v`.
-     5. - [x] Optionally include E2E suites in coverage runs to observe high-level coverage, but rely primarily on property/unit/integration tests to hit detailed branches.
+     1. - [ ] Re-run coverage focused on the production files exercised by these property suites and record per-file branch % in this plan.

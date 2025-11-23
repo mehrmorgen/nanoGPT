@@ -6,7 +6,7 @@ import json
 import os
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, cast
 
 import pytest  # type: ignore[import-not-found]
 
@@ -434,7 +434,7 @@ def test_ensure_coverage_data_uses_stdout_for_generation_error(
                 force_regen=True,
             )
 
-    assert "generation via stdout" in exc.value.reason
+    assert "generation via stdout" in cast(ToolExecutionError, exc.value).reason
 
 
 def test_ensure_coverage_data_uses_stdout_for_combine_error(
@@ -479,7 +479,7 @@ def test_ensure_coverage_data_uses_stdout_for_combine_error(
                 force_regen=True,
             )
 
-    assert "combine via stdout" in exc.value.reason
+    assert "combine via stdout" in cast(ToolExecutionError, exc.value).reason
 
 
 def test_run_coverage_threshold_enforces_limits(
@@ -793,3 +793,319 @@ def test_ensure_coverage_data_combines_fragments_when_main_missing(
     assert "Combined existing coverage fragments" in result.stdout
     assert coverage_file.exists()
     assert coverage_file.read_bytes() == b"combined-data"
+
+
+def test_ensure_coverage_data_fails_on_initial_combine_error(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should raise ToolExecutionError if initial fragment combination fails."""
+    runner = CoverageRunner()
+
+    # Force _combine_coverage_fragments to return a failure result
+    def fake_combine(**_: Any) -> tuple[ToolResult, bool]:  # type: ignore[override]
+        return (
+            ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr="combine failed",
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="coverage-combine"
+                ),
+            ),
+            True,
+        )
+
+    with override_attr(coverage_module, "_combine_coverage_fragments", fake_combine):
+        with pytest.raises(
+            ToolExecutionError, match="Coverage fragment combination failed"
+        ):
+            coverage_module.run_coverage_report(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                verbose=False,
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+            )
+
+
+def test_ensure_coverage_data_fails_on_second_combine_error(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should raise ToolExecutionError if post-generation fragment combination fails."""
+    runner = CoverageRunner()
+    create_sample_source_file(tmp_path)
+
+    # Mock the sequence:
+    # 1. Initial combine -> (None, False) (nothing to combine yet)
+    # 2. Generation -> success (real generation or mocked)
+    # 3. Second combine -> (Failure, True)
+
+    original_combine = coverage_module._combine_coverage_fragments
+
+    call_count = 0
+
+    def fake_combine(**kwargs: Any) -> tuple[ToolResult | None, bool]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            return (
+                ToolResult(
+                    success=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="second combine failed",
+                    operation_id=OperationId(
+                        namespace="tools", category="test", command="coverage-combine"
+                    ),
+                ),
+                True,
+            )
+        return original_combine(**kwargs)
+
+    with override_attr(coverage_module, "_combine_coverage_fragments", fake_combine):
+        with pytest.raises(
+            ToolExecutionError, match="Coverage fragment combination failed"
+        ):
+            coverage_module.run_coverage_report(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                verbose=False,
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+                force_regen=True,  # Force regen to ensure we hit the generation path
+            )
+
+
+def test_read_coverage_thresholds_handles_missing_config(tmp_path: Path) -> None:
+    """Should return empty dict if pyproject.toml is missing."""
+    thresholds = coverage_module._read_coverage_thresholds_from_config(tmp_path)
+    assert thresholds == {}
+
+
+def test_read_coverage_thresholds_handles_malformed_config(tmp_path: Path) -> None:
+    """Should return empty dict if config parsing fails."""
+    (tmp_path / "pyproject.toml").write_text("INVALID TOML [", encoding="utf-8")
+    thresholds = coverage_module._read_coverage_thresholds_from_config(tmp_path)
+    assert thresholds == {}
+
+
+def test_read_coverage_thresholds_reads_correct_values(tmp_path: Path) -> None:
+    """Should correctly extract thresholds from valid TOML."""
+    toml_content = """
+[tool.ml_playground.coverage.thresholds]
+line_threshold = 85.5
+branch_threshold = 75.0
+"""
+    (tmp_path / "pyproject.toml").write_text(toml_content, encoding="utf-8")
+
+    thresholds = coverage_module._read_coverage_thresholds_from_config(tmp_path)
+    assert thresholds["line_threshold"] == 85.5
+    assert thresholds["branch_threshold"] == 75.0
+
+
+def test_run_coverage_test_cleans_up_fragments(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should remove existing coverage fragments before running."""
+    runner = CoverageRunner()
+    coverage_dir = _coverage_dir(tmp_path)
+
+    # Create dummy fragments
+    (coverage_dir / "coverage.sqlite.1").write_text("frag1", encoding="utf-8")
+    (coverage_dir / "coverage.sqlite.2").write_text("frag2", encoding="utf-8")
+
+    coverage_module.run_coverage_test(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+    )
+
+    assert not (coverage_dir / "coverage.sqlite.1").exists()
+    assert not (coverage_dir / "coverage.sqlite.2").exists()
+
+
+def test_run_coverage_threshold_raises_when_coverage_file_missing(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should raise ToolExecutionError if coverage file is missing despite ensure success."""
+    runner = CoverageRunner()
+
+    # Mock _ensure_coverage_data to return success but do nothing (so file remains missing)
+    def fake_ensure(**_: Any) -> tuple[list[str], list[str], dict[str, str]]:  # type: ignore[override]
+        return [], [], {}
+
+    with override_attr(coverage_module, "_ensure_coverage_data", fake_ensure):
+        with pytest.raises(ToolExecutionError, match="Coverage data file not found"):
+            coverage_module.run_coverage_threshold(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+            )
+
+
+def test_run_coverage_test_verbose_logging(config: ToolsConfig, tmp_path: Path) -> None:
+    """Should log output when verbose is True."""
+    runner = CoverageRunner()
+    create_sample_source_file(tmp_path)
+
+    # Capture output to verify verbose logging
+    # This is tricky because the function returns ToolResult, but _run_coverage_test_for_data
+    # (which uses verbose) is internal.
+    # However, we can test run_coverage_report with verbose=True and force regen.
+
+    result = coverage_module.run_coverage_report(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        force_regen=True,
+    )
+
+    assert result.success is True
+    # We expect some verbose output if the runner produced stdout/stderr,
+    # but our fake runner might not unless we configure it.
+    # The default CoverageRunner returns "pytest" in stdout for run_pytest_command.
+    # The code in _run_coverage_test_for_data appends stdout/stderr to notes if verbose.
+    # And _ensure_coverage_data extends notes.
+    # And run_coverage_report includes notes in output.
+
+    assert "Automatically ran coverage" in result.stdout
+
+
+def test_run_coverage_with_learning_mode_aggregates_info(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """run_coverage should combine learning info from report and threshold steps."""
+    runner = CoverageRunner()
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        line_threshold=0.0,
+        branch_threshold=0.0,
+        verbose=False,
+        learning_mode=True,
+        verbosity_level=1,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+    )
+
+    assert result.success is True
+    assert result.learning_info is not None
+    # Check that we have commands from both phases
+    cmds = [cmd for cmd in result.learning_info.commands_executed]
+    assert any("coverage report" in cmd for cmd in cmds)
+    assert any("coverage json" in cmd for cmd in cmds)
+
+
+def test_coverage_threshold_handles_missing_totals(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should fail gracefully when coverage totals are zero/missing."""
+    runner = CoverageRunner()
+    # Payload with zero statements/branches to trigger "data missing" paths
+    runner.json_payload = {
+        "totals": {
+            "num_statements": 0,
+            "covered_lines": 0,
+            "num_branches": 0,
+            "covered_branches": 0,
+        },
+        "files": {},
+    }
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage_threshold(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        line_threshold=90.0,
+        branch_threshold=90.0,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+    )
+
+    assert result.success is False
+    assert "Line coverage totals missing" in result.stderr
+    assert "Branch coverage data missing" in result.stderr
+
+
+def test_run_coverage_test_verbose_captures_subprocess_output(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should include subprocess stdout/stderr in verbose output."""
+
+    # We need a runner that produces output and we need to trigger _run_coverage_test_for_data
+    # which happens when we force regen.
+    class NoisyRunner(CoverageRunner):
+        def run_uv_command(self, args: List[str], **kwargs: Any) -> ToolResult:
+            if args[:2] == ["coverage", "run"]:
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="coverage run stdout",
+                    stderr="coverage run stderr",
+                    operation_id=kwargs["operation_id"],
+                )
+            return super().run_uv_command(args, **kwargs)
+
+    runner = NoisyRunner()
+    create_sample_source_file(tmp_path)
+
+    result = coverage_module.run_coverage_report(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        force_regen=True,
+    )
+
+    assert result.success is True
+    assert "coverage run stdout" in result.stdout
+    assert "coverage run stderr" in result.stdout
+
+
+def test_ensure_coverage_data_fails_on_generation_error(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    """Should raise ToolExecutionError if coverage data generation fails."""
+    runner = CoverageRunner()
+
+    def fake_generate(**_: Any) -> tuple[ToolResult, list[str]]:  # type: ignore[override]
+        return (
+            ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr="generation failed",
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="coverage-test"
+                ),
+            ),
+            [],
+        )
+
+    with override_attr(coverage_module, "_run_coverage_test_for_data", fake_generate):
+        with pytest.raises(ToolExecutionError, match="Coverage data generation failed"):
+            coverage_module.run_coverage_report(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                verbose=False,
+                subprocess_runner=runner,
+                cache_dir=_cache_dir(tmp_path),
+                force_regen=True,
+            )
