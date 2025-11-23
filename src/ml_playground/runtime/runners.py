@@ -20,6 +20,7 @@ from ml_playground.runtime.protocols import (
     PrepareConfigLike,
     SampleConfigLike,
     TrainConfigLike,
+    DeviceSetup,
 )
 
 # Constants for error messages
@@ -34,7 +35,7 @@ class RuntimeRunHooks:
     pipeline_factory: Callable[[Any, Any], Any]
     trainer_factory: Callable[[Any, Any], Any]
     sampler_factory: Callable[[Any, Any], Any]
-    device_setup: Callable[[str, str, int], None]
+    device_setup: DeviceSetup
     log_status: Callable[[str, Any, Path | None, LoggerLike], None]
     resolve_seed: Callable[[str, Any, int], int | None] | None = None
 

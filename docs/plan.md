@@ -21,7 +21,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
      - `tools/testing/unit.py`: 83.33%
      - `tools/dev/review.py`: 79.79%
 
-2. - [ ] **Property Test Expansion**
+2. - [x] **Property Test Expansion**
    - `tests/property/runtime`: Expand strategies for complex objects (e.g., model configs).
    - `tests/property/tools`: Cover more CLI states and edge cases (e.g., malformed configs).
 

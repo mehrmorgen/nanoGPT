@@ -62,3 +62,9 @@ class SharedConfigLike(Protocol):
     """
 
     dataset_dir: Any
+
+
+class DeviceSetup(Protocol):
+    """Protocol for global device setup function."""
+
+    def __call__(self, device: str, dtype: str, seed: int) -> None: ...
