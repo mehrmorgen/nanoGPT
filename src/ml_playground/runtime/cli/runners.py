@@ -327,17 +327,20 @@ def log_command_status(
     pkg_log_directory = getattr(_cli_pkg, "log_directory", log_directory)
     try:
         pkg_log_directory(tag, "out_dir", out_dir, logger)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, OSError):
+        # Expected logging errors - don't fail the main operation
         pass
 
     try:
-        dataset_dir = shared.dataset_dir  # may raise
-    except Exception:
+        dataset_dir = shared.dataset_dir  # may raise AttributeError
+    except (AttributeError, TypeError):
+        # Shared config may not have dataset_dir - this is expected
         return
 
     try:
         pkg_log_directory(tag, "dataset_dir", dataset_dir, logger)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, OSError):
+        # Expected logging errors - don't fail the main operation
         pass
 
 

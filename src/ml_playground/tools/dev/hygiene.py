@@ -126,6 +126,7 @@ def _pids_by_port(port: int) -> list[int]:
                 if conn_port == port and conn.pid is not None:
                     pids.add(int(conn.pid))
             except Exception:
+                # Connection may be inaccessible or have incomplete data
                 continue
     except Exception:
         # Fallback: iterate processes if net_connections is restricted
@@ -140,6 +141,7 @@ def _pids_by_port(port: int) -> list[int]:
                 except Exception:
                     continue
         except Exception:
+            # Process iteration may be restricted on some systems
             return []
     return sorted(pids)
 

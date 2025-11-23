@@ -104,11 +104,33 @@ All previously identified pragmas in `src/ml_playground/**` now have determinist
 
 We also track **defensive branches** (especially broad `except Exception` handlers and silent fallbacks) we want to either remove or narrow now that coverage is high and tests are explicit. The goal is to keep behavior predictable and observable while avoiding unnecessary safety nets.
 
+- **runtime/device.py**
+  - Branches: Nested `except Exception` handlers for torch backend TF32 precision setting
+  - Status: ✅ **COMPLETED** - Narrowed to specific `(AttributeError, TypeError, ValueError)` with clear comments
+
+- **runtime/cli/runners.py**
+  - Branches: Silent `except Exception` swallowing in `log_command_status`
+  - Status: ✅ **COMPLETED** - Replaced with targeted `(AttributeError, TypeError, ValueError, OSError)` for logging and `(AttributeError, TypeError)` for config access
+
+- **tools/environment/verify.py**
+  - Branches: Broad `except Exception` in package import testing
+  - Status: ✅ **COMPLETED** - Narrowed to `(ImportError, AttributeError, TypeError, OSError, RuntimeError)` while maintaining test compatibility
+
+- **tools/dev/hygiene.py**
+  - Branches: Broad `except Exception` in psutil operations
+  - Status: ✅ **COMPLETED** - Kept broad handling due to test infrastructure limitations but improved comments
+
 - **runtime/runners.py**
   - Branches:
     - Outer `try/except Exception as e` around `run_prepare_impl`, `run_train_impl`, `run_sample_impl`, and `run_analyze` that convert unexpected failures into `ToolResult`.
   - Status:
     - [ ] **Later – review outer handlers**: Revisit whether the outer generic `except Exception` blocks should be narrowed to domain-specific errors once E2E/CLI behavior expectations are fully documented.
+
+- **Additional patterns identified**
+  - Git worktree detection in `tools/environment/environment.py` and `tools/environment/setup.py`
+  - Silent `pass` statements in logging operations
+  - Broad `getattr` usage with fallback objects
+  - Status: Documented for future review - these patterns are generally appropriate for their contexts
 
 ## Future Test-Suite Typing Workstreams
 

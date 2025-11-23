@@ -33,14 +33,17 @@ def global_device_setup(
                 mm = getattr(getattr(b, "cuda", object()), "matmul", object())
                 try:
                     setattr(mm, "fp32_precision", "tf32")
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
+                    # Backend may not support TF32 precision setting
                     pass
                 cudnn = getattr(b, "cudnn", object())
                 try:
                     setattr(cudnn, "fp32_precision", "tf32")
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
+                    # CUDNN may not support TF32 precision setting
                     pass
-            except Exception:
+            except (AttributeError, TypeError):
+                # Torch backends structure may differ across versions
                 pass
     except (RuntimeError, AssertionError, AttributeError):
         # Never fail CLI due to environment-specific torch issues

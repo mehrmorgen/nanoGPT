@@ -103,7 +103,7 @@ def run_info(
             info_lines.append(f"Package import: ✓ {pkg_name} imports successfully")
         else:
             info_lines.append(f"Package import: ✗ {pkg_name} import failed")
-    except Exception:
+    except (ImportError, AttributeError, TypeError, OSError, RuntimeError):
         info_lines.append(f"Package import: ✗ Could not test {pkg_name} import")
 
     return ToolResult(
