@@ -28,8 +28,8 @@ def _tool_result(
     )
 
 
-def test_run_quality_batch_aggregates_results(tmp_path: Path) -> None:
-    """`_run_quality_batch` should compile tool outputs and total failure counts."""
+def test_run_quality_batch_behavior_via_public_api(tmp_path: Path) -> None:
+    """Quality batch behavior should be observable through public API."""
 
     class StubQualityTools:
         def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
@@ -62,26 +62,66 @@ def test_run_quality_batch_aggregates_results(tmp_path: Path) -> None:
                 stdout="unused\nthing",
             )
 
-    original = batch_review_module.QualityTools
+    # Mock testing tools to return minimal successful results
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=True,
+                stdout="1 passed in 0.1s",
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="2 passed in 0.2s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 90% 75%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
     batch_review_module.QualityTools = StubQualityTools
+    batch_review_module.TestingTools = StubTestingTools
     try:
-        result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Parse JSON output to verify quality batch behavior
+        import json
+
+        payload = json.loads(result.stdout)
+        quality_checks = payload["quality_checks"]
+
+        assert quality_checks["lint"]["status"] == "failed"
+        assert quality_checks["lint"]["issues"] == 2
+        assert quality_checks["typecheck"]["errors"] == 1
+        assert quality_checks["deadcode"]["unused_items"] == 2
+        assert quality_checks["overall"] == {
+            "status": "failed",
+            "total_issues": 3,
+            "success": False,
+        }
     finally:
-        batch_review_module.QualityTools = original
-
-    assert result["lint"]["status"] == "failed"
-    assert result["lint"]["issues"] == 2
-    assert result["typecheck"]["errors"] == 1
-    assert result["deadcode"]["unused_items"] == 2
-    assert result["overall"] == {
-        "status": "failed",
-        "total_issues": 3,
-        "success": False,
-    }
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
 
 
-def test_run_quality_batch_records_errors(tmp_path: Path) -> None:
-    """Exceptions raised by quality tools should surface as error entries."""
+def test_quality_error_handling_via_public_api(tmp_path: Path) -> None:
+    """Quality tool exceptions should surface as error entries via public API."""
 
     class RaisingQualityTools:
         def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
@@ -101,20 +141,60 @@ def test_run_quality_batch_records_errors(tmp_path: Path) -> None:
         def deadcode(self, _: list[str]) -> ToolResult:  # noqa: ANN001
             raise ValueError("deadcode fail")
 
-    original = batch_review_module.QualityTools
+    # Mock testing tools to return minimal successful results
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=True,
+                stdout="1 passed in 0.1s",
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="2 passed in 0.2s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 90% 75%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
     batch_review_module.QualityTools = RaisingQualityTools
+    batch_review_module.TestingTools = StubTestingTools
     try:
-        result = batch_review_module._run_quality_batch(ToolsConfig(), tmp_path, None)
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Parse JSON output to verify error handling
+        import json
+
+        payload = json.loads(result.stdout)
+        quality_checks = payload["quality_checks"]
+
+        assert quality_checks["lint"]["status"] == "error"
+        assert quality_checks["deadcode"]["status"] == "error"
+        assert quality_checks["overall"]["success"] is False
     finally:
-        batch_review_module.QualityTools = original
-
-    assert result["lint"]["status"] == "error"
-    assert result["deadcode"]["status"] == "error"
-    assert result["overall"]["success"] is False
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
 
 
-def test_run_test_batch_collects_counts_and_coverage(tmp_path: Path) -> None:
-    """`_run_test_batch` should summarize test counts, durations, and coverage."""
+def test_run_test_batch_behavior_via_public_api(tmp_path: Path) -> None:
+    """Test batch behavior should be observable through public API."""
 
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
     coverage_file.parent.mkdir(parents=True, exist_ok=True)
@@ -151,26 +231,66 @@ def test_run_test_batch_collects_counts_and_coverage(tmp_path: Path) -> None:
                 stdout="TOTAL 90% 75%",
             )
 
-    original = batch_review_module.TestingTools
+    # Mock quality tools to return minimal successful results
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def lint(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=True,
+                stdout="No issues found",
+            )
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="typecheck",
+                success=True,
+                stdout="Type checking passed",
+            )
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=True,
+                stdout="No dead code found",
+            )
+
+    original_testing = batch_review_module.TestingTools
+    original_quality = batch_review_module.QualityTools
     batch_review_module.TestingTools = HappyTestingTools
+    batch_review_module.QualityTools = StubQualityTools
     try:
-        result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Parse JSON output to verify test batch behavior
+        import json
+
+        payload = json.loads(result.stdout)
+        test_summary = payload["test_summary"]
+
+        assert test_summary["unit"]["count"] == 2
+        assert test_summary["integration"]["duration"] == "1.01s"
+        assert test_summary["coverage"] == {
+            "status": "available",
+            "line_pct": 90,
+            "branch_pct": 75,
+        }
+        assert test_summary["overall"]["total_tests"] == 5
+        assert test_summary["overall"]["success"] is True
     finally:
-        batch_review_module.TestingTools = original
-
-    assert result["unit"]["count"] == 2
-    assert result["integration"]["duration"] == "1.01s"
-    assert result["coverage"] == {
-        "status": "available",
-        "line_pct": 90,
-        "branch_pct": 75,
-    }
-    assert result["overall"]["total_tests"] == 5
-    assert result["overall"]["success"] is True
+        batch_review_module.TestingTools = original_testing
+        batch_review_module.QualityTools = original_quality
 
 
-def test_run_test_batch_handles_failures(tmp_path: Path) -> None:
-    """Failures and exceptions should mark test summary entries appropriately."""
+def test_test_error_handling_via_public_api(tmp_path: Path) -> None:
+    """Test failures and exceptions should mark test summary entries appropriately via public API."""
 
     coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
     coverage_file.parent.mkdir(parents=True, exist_ok=True)
@@ -195,110 +315,238 @@ def test_run_test_batch_handles_failures(tmp_path: Path) -> None:
         def coverage_report(self, *_: object, **__: object) -> ToolResult:  # noqa: ANN401
             raise ValueError("coverage failure")
 
-    original = batch_review_module.TestingTools
-    batch_review_module.TestingTools = FailingTestingTools
-    try:
-        result = batch_review_module._run_test_batch(ToolsConfig(), tmp_path, None)
-    finally:
-        batch_review_module.TestingTools = original
+    # Mock quality tools to return minimal successful results
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
 
-    assert result["unit"]["status"] == "failed"
-    assert result["integration"]["status"] == "error"
-    assert result["coverage"]["status"] == "error"
-    assert result["overall"]["success"] is False
+        def lint(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=True,
+                stdout="No issues found",
+            )
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="typecheck",
+                success=True,
+                stdout="Type checking passed",
+            )
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=True,
+                stdout="No dead code found",
+            )
+
+    original_testing = batch_review_module.TestingTools
+    original_quality = batch_review_module.QualityTools
+    batch_review_module.TestingTools = FailingTestingTools
+    batch_review_module.QualityTools = StubQualityTools
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+
+        # Parse JSON output to verify error handling
+        import json
+
+        payload = json.loads(result.stdout)
+        test_summary = payload["test_summary"]
+
+        assert test_summary["unit"]["status"] == "failed"
+        assert test_summary["integration"]["status"] == "error"
+        assert test_summary["coverage"]["status"] == "error"
+        assert test_summary["overall"]["success"] is False
+    finally:
+        batch_review_module.TestingTools = original_testing
+        batch_review_module.QualityTools = original_quality
 
 
 def test_run_batch_review_formats_json(tmp_path: Path) -> None:
     """`run_batch_review` should combine sub-results and emit JSON output."""
 
-    quality = {
-        "overall": {"status": "passed", "success": True},
-        "lint": {"status": "passed"},
-    }
-    tests = {
-        "overall": {"status": "passed", "success": True},
-        "unit": {"status": "passed"},
-    }
+    # Create mock tools that return predictable results
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
 
-    original_quality = batch_review_module._run_quality_batch
-    original_test_batch = batch_review_module._run_test_batch
-    original_ts = batch_review_module._get_timestamp
+        def lint(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=True,
+                stdout="No issues",
+            )
 
-    batch_review_module._run_quality_batch = (  # type: ignore[assignment]
-        lambda *args, **kwargs: quality
-    )
-    batch_review_module._run_test_batch = (  # type: ignore[assignment]
-        lambda *args, **kwargs: tests
-    )
-    batch_review_module._get_timestamp = lambda: "ts"  # type: ignore[assignment]
+        def typecheck(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="typecheck",
+                success=True,
+                stdout="Type check passed",
+            )
 
+        def deadcode(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=True,
+                stdout="No dead code",
+            )
+
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=True,
+                stdout="1 passed in 0.1s",
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="2 passed in 0.2s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 95% 80%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+    batch_review_module.QualityTools = StubQualityTools
+    batch_review_module.TestingTools = StubTestingTools
     try:
         result = batch_review_module.run_batch_review(
             ToolsConfig(), tmp_path, output_format="json"
         )
-    finally:
-        batch_review_module._run_quality_batch = original_quality  # type: ignore[assignment]
-        batch_review_module._run_test_batch = original_test_batch  # type: ignore[assignment]
-        batch_review_module._get_timestamp = original_ts  # type: ignore[assignment]
 
-    payload = json.loads(result.stdout)
-    assert payload["quality_checks"] == quality
-    assert payload["test_summary"] == tests
-    assert payload["overall_status"]["success"] is True
-    assert result.success is True and result.exit_code == 0
+        payload = json.loads(result.stdout)
+
+        # Verify structure and expected results
+        assert "quality_checks" in payload
+        assert "test_summary" in payload
+        assert "overall_status" in payload
+        assert "timestamp" in payload
+        assert "project_root" in payload
+
+        # Verify overall success
+        assert payload["overall_status"]["success"] is True
+        assert result.success is True and result.exit_code == 0
+    finally:
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
 
 
 def test_run_batch_review_supports_yaml_and_text(tmp_path: Path) -> None:
     """YAML and text formats should be supported with deterministic output."""
 
-    quality = {
-        "overall": {"status": "failed", "success": False},
-        "lint": {"status": "failed"},
-    }
-    tests = {
-        "overall": {"status": "passed", "success": True},
-        "unit": {"status": "passed"},
-    }
+    # Create mock tools that return failed quality results to test failure case
+    class FailingQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
 
-    original_quality = batch_review_module._run_quality_batch
-    original_test_batch = batch_review_module._run_test_batch
-    original_ts = batch_review_module._get_timestamp
+        def lint(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=False,
+                stderr="lint error",
+            )
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="typecheck",
+                success=True,
+                stdout="Type check passed",
+            )
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=True,
+                stdout="No dead code",
+            )
+
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=True,
+                stdout="1 passed in 0.1s",
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="2 passed in 0.2s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 95% 80%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
     original_yaml = sys.modules.get("yaml")
 
-    batch_review_module._run_quality_batch = (  # type: ignore[assignment]
-        lambda *args, **kwargs: quality
-    )
-    batch_review_module._run_test_batch = (  # type: ignore[assignment]
-        lambda *args, **kwargs: tests
-    )
-    batch_review_module._get_timestamp = lambda: "fixed-ts"  # type: ignore[assignment]
+    batch_review_module.QualityTools = FailingQualityTools
+    batch_review_module.TestingTools = StubTestingTools
 
-    yaml_stub = types.SimpleNamespace(
-        dump=lambda data, default_flow_style=False: "yaml-output"
-    )
-    sys.modules["yaml"] = yaml_stub
+    def _yaml_dump(data: Any, default_flow_style: bool = False) -> str:
+        return "yaml-output"
+
+    yaml_stub = types.SimpleNamespace(dump=_yaml_dump)
+    sys.modules["yaml"] = yaml_stub  # type: ignore[assignment]
 
     try:
         yaml_result = batch_review_module.run_batch_review(
             ToolsConfig(), tmp_path, output_format="yaml"
         )
         assert yaml_result.stdout == "yaml-output"
-        assert yaml_result.success is False
+        assert yaml_result.success is False  # Due to lint failure
 
         text_result = batch_review_module.run_batch_review(
             ToolsConfig(), tmp_path, output_format="text"
         )
+        assert "Quality Checks" in text_result.stdout
+        assert "Overall Status" in text_result.stdout
+        assert text_result.success is False and text_result.exit_code == 1
     finally:
-        batch_review_module._run_quality_batch = original_quality  # type: ignore[assignment]
-        batch_review_module._run_test_batch = original_test_batch  # type: ignore[assignment]
-        batch_review_module._get_timestamp = original_ts  # type: ignore[assignment]
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
         if original_yaml is not None:
             sys.modules["yaml"] = original_yaml
         else:
             del sys.modules["yaml"]
-    assert "Quality Checks" in text_result.stdout
-    assert "Overall Status" in text_result.stdout
-    assert text_result.success is False and text_result.exit_code == 1
 
 
 def test_batch_review_error_downgrade_behavior(tmp_path: Path) -> None:

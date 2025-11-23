@@ -155,14 +155,24 @@ def test_mutation_reset_raises_tool_execution_error_on_unlink_failure(
     """mutation_reset should wrap unexpected unlink failures in ToolExecutionError."""
 
     cfg = _config()
+    # Use the same relative path that the mutation module uses
     session = tmp_path / ".cache" / "cosmic-ray" / "session.sqlite"
     session.parent.mkdir(parents=True, exist_ok=True)
     session.write_text("data", encoding="utf-8")
 
-    def failing_unlink(path: Path) -> None:
-        if path == session:
+    def failing_unlink(self: Path) -> None:  # type: ignore[override]
+        # Check if this is the session file relative to current working directory
+        current_session = Path(".cache/cosmic-ray/session.sqlite")
+        if self.resolve() == current_session.resolve():
             raise OSError("boom")
-        path.unlink()
+        # Call the original method using super() to avoid recursion
+        # Since we're overriding a class method, we need to use the original implementation
+        import os
+
+        if self.is_file():
+            os.remove(self)
+        elif self.is_dir():
+            os.rmdir(self)
 
     with override_cwd(tmp_path):
         with override_attr(Path, "unlink", failing_unlink):  # type: ignore[arg-type]
@@ -651,6 +661,8 @@ def test_mutation_report_handles_connection_failure(tmp_path: Path) -> None:
     class FakeSqliteBoom(ModuleType):
         def __init__(self) -> None:
             super().__init__("sqlite3")
+            # Add the Error attribute that real sqlite3 has
+            self.Error = Exception
 
         def connect(self, _path: Any) -> Any:
             raise Exception("db connect failed")

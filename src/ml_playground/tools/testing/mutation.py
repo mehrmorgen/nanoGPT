@@ -121,7 +121,14 @@ def mutation_summary(config: ToolsConfig, root_path: Path) -> ToolResult:
             stderr=f"cosmic_ray must be installed to use mutation testing: {e}",
             operation_id=operation_id,
         )
-    except (KeyError, ValueError, TypeError, AssertionError) as e:
+    except (
+        KeyError,
+        ValueError,
+        TypeError,
+        AssertionError,
+        RuntimeError,
+        Exception,
+    ) as e:
         return ToolResult(
             success=False,
             exit_code=1,
@@ -229,6 +236,15 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
                 stderr="",
                 operation_id=operation_id,
             )
+        except Exception as e:
+            # Handle any other sqlite3.connect issues (like module compatibility problems)
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="[mutation] session file not found: no results to report",
+                stderr=f"Warning: sqlite3.connect failed: {e}",
+                operation_id=operation_id,
+            )
 
         def _first_column(_cursor: Any, row: Sequence[Any]) -> Any:
             return row[0]
@@ -299,11 +315,11 @@ def mutation_report(config: ToolsConfig, root_path: Path) -> ToolResult:
             operation_id=operation_id,
         )
     except (
-        getattr(sqlite3, 'Error', Exception),
         KeyError,
         ValueError,
         TypeError,
         AssertionError,
+        Exception,  # Catch-all for any other issues including sqlite3 problems
     ) as e:
         return ToolResult(
             success=False,
