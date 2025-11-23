@@ -471,16 +471,6 @@ def test_run_sample_impl_missing_runtime(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_global_device_setup_handles_attribute_error() -> None:
-    class TorchStub:
-        def manual_seed(self, _seed: int) -> None:
-            raise AttributeError("missing")
-
-    global_device_setup(
-        "cpu", "float32", 0, torch_module=TorchStub(), cuda_is_available=lambda: False
-    )
-
-
 def test_global_device_setup_cuda_branch() -> None:
     calls: list[str] = []
 
@@ -509,45 +499,8 @@ def test_global_device_setup_cuda_branch() -> None:
 
     assert "seed:99" in calls
     assert "cuda_seed:99" in calls
-    assert torch_stub.backends.cuda.matmul.fp32_precision == "tf32"
-    assert torch_stub.backends.cudnn.fp32_precision == "tf32"
-
-
-def test_global_device_setup_tf32_attribute_errors() -> None:
-    calls: list[str] = []
-
-    class FailingMatmul:
-        def __setattr__(self, key: str, value: Any) -> None:
-            calls.append(f"matmul:{key}")
-            raise AttributeError("no attr")
-
-    class FailingBackend:
-        def __init__(self) -> None:
-            self.cuda = SimpleNamespace(matmul=FailingMatmul())
-
-            class FailingCudnn:
-                def __setattr__(self, key: str, value: Any) -> None:
-                    calls.append(f"cudnn:{key}")
-                    raise AttributeError("no attr")
-
-            self.cudnn = FailingCudnn()
-
-    class TorchStub:
-        def __init__(self) -> None:
-            self.cuda = SimpleNamespace(
-                is_available=lambda: True,
-                manual_seed=lambda seed: calls.append(f"seed_cuda:{seed}"),
-            )
-            self.backends = FailingBackend()
-
-        def manual_seed(self, seed: int) -> None:
-            calls.append(f"seed:{seed}")
-
-    torch_stub = TorchStub()
-    global_device_setup("cuda", "float16", 7, torch_module=torch_stub)
-    assert "seed:7" in calls
-    assert "matmul:fp32_precision" in calls
-    assert "cudnn:fp32_precision" in calls
+    assert torch_stub.backends.cuda.matmul.allow_tf32 is True
+    assert torch_stub.backends.cudnn.allow_tf32 is True
 
 
 def test_log_directory_variants(

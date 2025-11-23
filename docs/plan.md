@@ -34,7 +34,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
    - **Action**: Replace broad handlers with specific exceptions (e.g., `FileNotFoundError`, `ValidationError`).
    - **Goal**: Fail fast and loudly for unexpected errors.
 
-2. - [ ] **Refactor Broad `getattr` Usage**
+2. - [x] **Refactor Broad `getattr` Usage**
    - **Scope**: ~82 instances identified (e.g., `sampling/runner.py`, `core/file_state.py`).
    - **Action**: Replace dynamic attribute access with defined Protocols or dataclasses.
 

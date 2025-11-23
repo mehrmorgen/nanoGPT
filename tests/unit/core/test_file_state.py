@@ -29,6 +29,15 @@ class _RaisingPath(Path):
     def __repr__(self) -> str:
         return f"_RaisingPath({self._inner!s})"
 
+    def __str__(self) -> str:
+        return str(self._inner)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+    def __eq__(self, other: object) -> bool:
+        return str(self) == str(other)
+
 
 def test_snapshot_file_states_handles_oserror(tmp_path: Path) -> None:
     """Test snapshot file states handles oserror."""

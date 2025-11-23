@@ -18,33 +18,16 @@ def global_device_setup(
     Centralizes side-effectful setup so other modules don't repeat it.
     """
     torch_mod: Any = torch_module if torch_module is not None else torch
-    try:
-        torch_mod.manual_seed(seed)
-        _cuda_available = (
-            cuda_is_available()
-            if cuda_is_available is not None
-            else getattr(torch_mod, "cuda").is_available()
-        )
-        if _cuda_available:
-            getattr(torch_mod, "cuda").manual_seed(seed)
-            # Guarded attribute assignments to avoid optional member access warnings
-            try:
-                b = getattr(torch_mod, "backends", object())
-                mm = getattr(getattr(b, "cuda", object()), "matmul", object())
-                try:
-                    setattr(mm, "fp32_precision", "tf32")
-                except (AttributeError, TypeError, ValueError):
-                    # Backend may not support TF32 precision setting
-                    pass
-                cudnn = getattr(b, "cudnn", object())
-                try:
-                    setattr(cudnn, "fp32_precision", "tf32")
-                except (AttributeError, TypeError, ValueError):
-                    # CUDNN may not support TF32 precision setting
-                    pass
-            except (AttributeError, TypeError):
-                # Torch backends structure may differ across versions
-                pass
-    except (RuntimeError, AssertionError, AttributeError):
-        # Never fail CLI due to environment-specific torch issues
-        pass
+    torch_mod.manual_seed(seed)
+    _cuda_available = (
+        cuda_is_available()
+        if cuda_is_available is not None
+        else torch_mod.cuda.is_available()
+    )
+    if _cuda_available:
+        torch_mod.cuda.manual_seed(seed)
+        # Enable TF32 for better performance on Ampere+
+        if hasattr(torch_mod.backends, "cuda"):
+            torch_mod.backends.cuda.matmul.allow_tf32 = True
+        if hasattr(torch_mod.backends, "cudnn"):
+            torch_mod.backends.cudnn.allow_tf32 = True

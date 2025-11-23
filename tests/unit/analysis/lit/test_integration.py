@@ -112,8 +112,6 @@ def test_import_lit_server_raises_runtime_error_with_version_hint() -> None:
         for name in [
             "lit_nlp.server",
             "lit_nlp.dev_server",
-            "lit_nlp.runtime.server",
-            "lit_nlp.lib.server",
         ]:
             sys.modules.pop(name, None)
 
@@ -229,7 +227,7 @@ def test_run_server_bundestag_char_uses_module_level_serve(tmp_path: Path) -> No
             return ServerApp(models, datasets)
 
     def module_level_serve(
-        *, app: object, port: int, host: str, open_browser: bool
+        app: object, *, port: int, host: str, open_browser: bool
     ) -> None:
         served_calls.append((app, port, host, open_browser))
 
@@ -253,28 +251,6 @@ def test_run_server_bundestag_char_uses_module_level_serve(tmp_path: Path) -> No
         assert served_port == 0
         assert served_host == "127.0.0.1"
         assert served_browser is False
-    finally:
-        _restore_modules(originals)
-
-
-def test_import_lit_server_falls_back_to_runtime_server() -> None:
-    """`_import_lit_server` should fall back to `runtime.server` if `dev_server` is missing."""
-    server_module = ModuleType("lit_nlp.server")
-    dev_server_module = ModuleType("lit_nlp.dev_server")
-    runtime_server_module = ModuleType("lit_nlp.runtime.server")
-
-    modules = {
-        "lit_nlp.server": server_module,
-        "lit_nlp.dev_server": dev_server_module,
-        "lit_nlp.runtime.server": runtime_server_module,
-    }
-    originals = _install_modules(modules)
-    try:
-        for name in ["lit_nlp.dev_server", "lit_nlp.server"]:
-            sys.modules.pop(name, None)
-
-        imported = integration._import_lit_server()
-        assert imported is runtime_server_module
     finally:
         _restore_modules(originals)
 

@@ -41,6 +41,16 @@ class LitTypesModule(Protocol):
     def TextSegment(self) -> object: ...
 
 
+class LitApp(Protocol):
+    def serve(self, *, port: int, host: str, open_browser: bool) -> None: ...
+
+
+class LitServerModule(Protocol):
+    def serve(
+        self, app: object, *, port: int, host: str, open_browser: bool
+    ) -> None: ...
+
+
 def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
     try:
         importlib.import_module("lit_nlp.api")
@@ -67,32 +77,28 @@ class LitServerFactory(Protocol):
 
 
 def _import_lit_server() -> ModuleType:
-    paths = (
-        "lit_nlp.server",
-        "lit_nlp.dev_server",
-        "lit_nlp.runtime.server",
-        "lit_nlp.lib.server",
-    )
-    last_err: Exception | None = None
-    for candidate in paths:
-        try:
-            return importlib.import_module(candidate)
-        except (ImportError, ModuleNotFoundError) as err:
-            last_err = err
-
+    # Standard modern import path for LIT development server
     try:
-        lit_pkg = importlib.import_module("lit_nlp")
-        lit_ver = getattr(lit_pkg, "__version__", "<unknown>")
-        ver_msg = f"(detected lit-nlp version: {lit_ver})"
-    except (ImportError, AttributeError):
-        ver_msg = "(lit-nlp not importable)"
+        return importlib.import_module("lit_nlp.dev_server")
+    except (ImportError, ModuleNotFoundError) as err:
+        # Fallback for older versions or alternative structures
+        try:
+            return importlib.import_module("lit_nlp.server")
+        except (ImportError, ModuleNotFoundError):
+            pass
 
-    message = (
-        "Unable to import LIT server module. Tried: lit_nlp.server, "
-        + "lit_nlp.dev_server, lit_nlp.runtime.server, lit_nlp.lib.server.\n"
-        + f"{ver_msg}. Last error: {last_err}"
-    )
-    raise RuntimeError(message)
+        try:
+            lit_pkg = importlib.import_module("lit_nlp")
+            lit_ver = getattr(lit_pkg, "__version__", "<unknown>")
+            ver_msg = f"(detected lit-nlp version: {lit_ver})"
+        except (ImportError, AttributeError):
+            ver_msg = "(lit-nlp not importable)"
+
+        message = (
+            "Unable to import LIT server module. Tried: lit_nlp.dev_server, lit_nlp.server.\n"
+            + f"{ver_msg}. Last error: {err}"
+        )
+        raise RuntimeError(message) from err
 
 
 def run_server_bundestag_char(
@@ -220,91 +226,23 @@ def run_server_bundestag_char(
     logger.info(f"Starting server at {url}")
     _ = sys.stdout.flush()
 
-    # Prefer the first-party serve method exposed by lit.Server
-    serve_method = getattr(app, "serve", None)
-    started = False
-    if callable(serve_method):
-        serve_kwargs = {"port": port, "host": host, "open_browser": open_browser}
-        try:
-            _ = serve_method(**serve_kwargs)
-            started = True
-        except TypeError:
-            # Try legacy positional signatures used by older lit-nlp releases.
-            try:
-                _ = serve_method(port, host, open_browser)
-                started = True
-            except TypeError:
-                try:
-                    _ = serve_method(port, host)
-                    started = True
-                except Exception as err:
-                    logger.debug("Failed legacy serve(%s, %s): %s", port, host, err)
-
-    if started:
+    # Use standard serve method
+    app_serve = getattr(app, "serve", None)
+    if callable(app_serve):
+        cast(LitApp, app).serve(port=port, host=host, open_browser=open_browser)
         return
 
+    # Fallback: module-level serve if app.serve is missing (older API)
     module_serve = getattr(server_module, "serve", None)
     if callable(module_serve):
-        serve_kwargs = {
-            "app": app,
-            "port": port,
-            "host": host,
-            "open_browser": open_browser,
-        }
-        try:
-            _ = module_serve(**serve_kwargs)
-            started = True
-        except TypeError:
-            try:
-                _ = module_serve(app, port, host, open_browser)
-                started = True
-            except TypeError:
-                try:
-                    _ = module_serve(app, port, host)
-                    started = True
-                except Exception as err:
-                    logger.debug(
-                        "Failed module-level serve(%s, %s): %s", port, host, err
-                    )
-
-    if started:
+        cast(LitServerModule, server_module).serve(
+            app, port=port, host=host, open_browser=open_browser
+        )
         return
 
-    tried_calls: list[str] = []
-    try:
-        from werkzeug.serving import run_simple  # type: ignore
-
-        # 3a) Try the object itself as a WSGI application
-        try:
-            logger.info(
-                "Fallback: starting via werkzeug.run_simple(...) using app as WSGI application"
-            )
-            tried_calls.append("werkzeug.run_simple(app)")
-            _ = run_simple(
-                hostname=host, port=port or 5432, application=cast(WSGIApp, app)
-            )
-            started = True
-        except (RuntimeError, TypeError, ValueError):
-            # 3b) Try a nested .app attribute (common Flask pattern)
-            if hasattr(app, "app"):
-                wsgi_app = cast(WSGIApp, getattr(app, "app"))
-                logger.info(
-                    "Fallback: starting via werkzeug.run_simple(...) using app.app as WSGI application"
-                )
-                tried_calls.append("werkzeug.run_simple(app.app)")
-                _ = run_simple(hostname=host, port=port or 5432, application=wsgi_app)
-                started = True
-    except (ImportError, RuntimeError, TypeError, ValueError):
-        tried_calls.append("werkzeug.run_simple import failed")
-
-    if not started:
-        attempted = ", ".join(tried_calls) if tried_calls else "<none>"
-        message = (
-            "Unable to start LIT server: no compatible entrypoint found.\n"
-            + f"Tried call patterns on: {attempted}.\n"
-            + "Consider updating lit-nlp or using an alternative version compatible with this integration."
-        )
-        raise RuntimeError(message)
+    raise RuntimeError(
+        "Unable to start LIT server: neither app.serve() nor module serve() available."
+    )
 
 
 def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:

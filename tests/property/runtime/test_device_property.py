@@ -56,6 +56,8 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
     @dataclass
     class _FakeBackends:
         mps: _FakeMps
+        cuda: Any
+        cudnn: Any
 
     class _FakeGenerator:
         def manual_seed(self, _seed: int) -> None:  # pragma: no cover - trivial
@@ -65,7 +67,9 @@ def test_global_device_setup(device_type: str, dtype: str, seed: int) -> None:
         def __init__(self, cuda_available: bool, mps_available: bool) -> None:
             self.cuda = _FakeCuda(is_available_fn=lambda: cuda_available)
             self.backends = _FakeBackends(
-                mps=_FakeMps(is_available_fn=lambda: mps_available)
+                mps=_FakeMps(is_available_fn=lambda: mps_available),
+                cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=True)),
+                cudnn=SimpleNamespace(allow_tf32=True),
             )
             self._last_device: Any | None = None
 
