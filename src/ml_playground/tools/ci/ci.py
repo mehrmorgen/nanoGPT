@@ -14,8 +14,7 @@ from ml_playground.tools.utils.subprocess_utils import (
     RealSubprocessRunner,
 )
 
-# Module-level default runner for tests to patch if needed
-_default_runner: SubprocessRunner | None = None
+# Module-level default runner removed in favor of direct instantiation in __init__
 
 
 class CITools:
@@ -39,10 +38,7 @@ class CITools:
         self.cache_dir = root_path / ".cache"
         # Use the project-local githooks pre-commit configuration
         self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
-        global _default_runner  # noqa: PLW0603 - providing a test patch point
-        if _default_runner is None:
-            _default_runner = RealSubprocessRunner()
-        self._subprocess_runner = subprocess_runner or _default_runner
+        self._subprocess_runner = subprocess_runner or RealSubprocessRunner()
 
     @property
     def category(self) -> str:

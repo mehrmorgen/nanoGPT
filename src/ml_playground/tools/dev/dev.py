@@ -17,8 +17,7 @@ from .hygiene import run_cleanup_ignored_tracked, run_kill_port
 from .status import run_dev_batch_review, run_dev_workflow_status
 
 
-# Module-level default runner for tests to patch if needed
-_default_runner: SubprocessRunner | None = None
+# Module-level default runner removed in favor of direct instantiation in __init__
 
 
 class DevTools:
@@ -32,11 +31,7 @@ class DevTools:
         review_module_factory: Callable[[], object] | None = None,
     ) -> None:
         self.config = config or ToolsConfig()
-        # Module-level patch point for tests (module-only to avoid private imports)
-        global _default_runner  # noqa: PLW0603 - providing a test patch point
-        if _default_runner is None:
-            _default_runner = RealSubprocessRunner()
-        self.subprocess_runner = subprocess_runner or _default_runner
+        self.subprocess_runner = subprocess_runner or RealSubprocessRunner()
         self.root_path = root_path or Path.cwd()
         self._review_module_factory = review_module_factory
 

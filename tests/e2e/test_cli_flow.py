@@ -10,7 +10,10 @@ from pathlib import Path
 
 import pytest
 
-@pytest.mark.skip(reason="E2E flow failing with IndexError in subprocess, pending debug")
+
+@pytest.mark.skip(
+    reason="E2E flow failing with IndexError in subprocess, pending debug"
+)
 def test_e2e_bundestag_char_flow(tmp_path: Path) -> None:
     """Verify prepare -> train -> sample flow using bundestag_char experiment via CLI."""
     # Arrange: Create input data and config override
@@ -20,7 +23,7 @@ def test_e2e_bundestag_char_flow(tmp_path: Path) -> None:
     input_file.write_text("Hello world " * 1000, encoding="utf-8")
 
     out_dir = tmp_path / "out"
-    
+
     # Config override: point to tmp_path for data and output, use tiny model
     config_content = f"""
 [prepare]
@@ -85,7 +88,7 @@ max_new_tokens = 10
         "-c",
         "from ml_playground.runtime.cli.main import main_entry; main_entry()",
     ]
-    
+
     def run_cli_safe(command: str, *args: str) -> None:
         cmd = [
             *base_cmd,

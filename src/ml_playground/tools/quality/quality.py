@@ -19,8 +19,7 @@ from .deadcode import run_deadcode
 from .typing import run_basedpyright, run_mypy, run_typecheck
 
 
-# Module-level default runner for tests to patch if needed
-_default_runner: SubprocessRunner | None = None
+# Module-level default runner removed in favor of direct instantiation in __init__
 
 
 class QualityTools:
@@ -42,11 +41,7 @@ class QualityTools:
         self.config = config
         self.root_path = root_path
         self.pkg_path = root_path / "src" / "ml_playground"
-        # Module-level patch point for tests
-        global _default_runner  # noqa: PLW0603 - providing a test patch point
-        if _default_runner is None:
-            _default_runner = RealSubprocessRunner()
-        self.subprocess_runner = subprocess_runner or _default_runner
+        self.subprocess_runner = subprocess_runner or RealSubprocessRunner()
         self.learning_engine = LearningModeEngine()
 
     @property

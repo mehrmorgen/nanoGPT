@@ -26,8 +26,7 @@ from .integration import run_integration
 from .property import run_property_tests
 from .unit import run_regression, run_unit
 
-# Module-level default runner for tests to patch if needed
-_default_runner: SubprocessRunner | None = None
+# Module-level default runner removed in favor of direct instantiation in __init__
 
 
 class TestingTools:
@@ -51,10 +50,7 @@ class TestingTools:
         self.config = config
         self.root_path = root_path
         self.cache_dir = root_path / ".cache"
-        global _default_runner  # noqa: PLW0603 - providing a test patch point
-        if _default_runner is None:
-            _default_runner = RealSubprocessRunner()
-        self.subprocess_runner = subprocess_runner or _default_runner
+        self.subprocess_runner = subprocess_runner or RealSubprocessRunner()
         self.learning_engine = LearningModeEngine()
 
     @property

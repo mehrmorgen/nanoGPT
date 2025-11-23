@@ -18,8 +18,7 @@ from .clean import run_clean
 from .services import run_ai_guidelines, run_tensorboard, run_gguf_help
 
 
-# Module-level default runner for tests to patch if needed
-_default_runner: SubprocessRunner | None = None
+# Module-level default runner removed in favor of direct instantiation in __init__
 
 
 class EnvironmentTools:
@@ -43,11 +42,7 @@ class EnvironmentTools:
         self.cache_dir = root_path / ".cache"
         self.venv_path = root_path / ".venv"
         self.pkg_name = "ml_playground"
-        # Module-level patch point for tests
-        global _default_runner  # noqa: PLW0603 - providing a test patch point
-        if _default_runner is None:
-            _default_runner = RealSubprocessRunner()
-        self.subprocess_runner = subprocess_runner or _default_runner
+        self.subprocess_runner = subprocess_runner or RealSubprocessRunner()
 
     @property
     def category(self) -> str:

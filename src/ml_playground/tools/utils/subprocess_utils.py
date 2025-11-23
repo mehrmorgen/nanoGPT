@@ -5,9 +5,8 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Protocol, Union
+from typing import Dict, List, Optional, Protocol, Union
 
 from ml_playground.tools.core.errors import ToolExecutionError, ToolTimeoutError
 from ml_playground.tools.core.interfaces import ToolResult, OperationId
@@ -256,80 +255,3 @@ def validate_command_available(command: str) -> bool:
 def format_command(command: List[str]) -> str:
     """Format a command for display purposes."""
     return " ".join(shlex.quote(arg) for arg in command)
-
-
-# Default global instance for tools that don't inject their own runner
-_default_runner: SubprocessRunner = RealSubprocessRunner()
-
-
-@contextmanager
-def override_subprocess_runner(runner: SubprocessRunner) -> Iterator[None]:
-    """Temporarily override the global subprocess runner used by helper functions."""
-
-    global _default_runner  # noqa: PLW0603 - providing a test patch point
-    previous = _default_runner
-    _default_runner = runner
-    try:
-        yield
-    finally:
-        _default_runner = previous
-
-
-def run_subprocess(
-    command: List[str],
-    *,
-    cwd: Optional[Union[str, Path]] = None,
-    env: Optional[Dict[str, str]] = None,
-    timeout: Optional[int] = None,
-    operation_id: OperationId,
-    capture_output: bool = True,
-) -> ToolResult:
-    """Execute a subprocess with proper error handling and timeout support."""
-    return _default_runner.run_subprocess(
-        command,
-        cwd=cwd,
-        env=env,
-        timeout=timeout,
-        operation_id=operation_id,
-        capture_output=capture_output,
-    )
-
-
-def run_uv_command(
-    args: List[str],
-    *,
-    cwd: Optional[Union[str, Path]] = None,
-    env: Optional[Dict[str, str]] = None,
-    timeout: Optional[int] = None,
-    operation_id: OperationId,
-    python: Optional[str] = None,
-    no_project: bool = False,
-) -> ToolResult:
-    """Execute a uv command with proper configuration."""
-    return _default_runner.run_uv_command(
-        args,
-        cwd=cwd,
-        env=env,
-        timeout=timeout,
-        operation_id=operation_id,
-        python=python,
-        no_project=no_project,
-    )
-
-
-def run_pytest_command(
-    args: List[str],
-    *,
-    cwd: Optional[Union[str, Path]] = None,
-    env: Optional[Dict[str, str]] = None,
-    timeout: Optional[int] = None,
-    operation_id: OperationId,
-) -> ToolResult:
-    """Execute pytest with standard configuration."""
-    return _default_runner.run_pytest_command(
-        args,
-        cwd=cwd,
-        env=env,
-        timeout=timeout,
-        operation_id=operation_id,
-    )
