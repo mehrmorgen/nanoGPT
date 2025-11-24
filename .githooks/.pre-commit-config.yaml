@@ -36,8 +36,8 @@ repos:
   #   stages: [pre-commit]
   - id: coverage-threshold
     name: coverage threshold (>=92.50%)
-    entry: uv
-    args: [run, tools, test, coverage, --verbose]
+    entry: bash
+    args: [-c, "PYTHONPATH=src uv run python -m ml_playground.tools.cli.main test coverage --verbose"]
     language: system
     pass_filenames: false
   - id: basedpyright

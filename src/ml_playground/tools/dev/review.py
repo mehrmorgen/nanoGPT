@@ -26,6 +26,7 @@ class ReviewComment:
 
 @dataclass
 class ReviewThread:
+    id: str
     url: str
     is_resolved: bool
     comments: list[ReviewComment]
@@ -257,7 +258,10 @@ class ReviewModule:
             self.created_at = created_at
 
     class _Thread:
-        def __init__(self, url: str, is_resolved: bool, comments: list[Any]) -> None:
+        def __init__(
+            self, id: str, url: str, is_resolved: bool, comments: list[Any]
+        ) -> None:
+            self.id = id
             self.url = url
             self.is_resolved = is_resolved
             self.comments = comments
@@ -315,6 +319,7 @@ class ReviewModule:
             " repository(owner:$owner,name:$repo){"
             "   pullRequest(number:$pr){"
             "     reviewThreads(first:100){ nodes {"
+            "       id"
             "       isResolved"
             "       comments(first:50){ nodes {"
             "         author { login }"
@@ -376,6 +381,7 @@ class ReviewModule:
         threads: list[Any] = []
         for t in threads_json:
             tdict = _as_dict(t)
+            thread_id = str(tdict.get("id", ""))
             is_resolved = bool(tdict.get("isResolved", False))
             comments_nodes = _as_list(_as_dict(tdict.get("comments")).get("nodes"))
             comments: list[ReviewModule._Comment] = []
@@ -408,7 +414,10 @@ class ReviewModule:
             thread_url = comments[0].url if comments else ""
             threads.append(
                 ReviewModule._Thread(
-                    url=thread_url, is_resolved=is_resolved, comments=comments
+                    id=thread_id,
+                    url=thread_url,
+                    is_resolved=is_resolved,
+                    comments=comments,
                 )
             )
 
@@ -501,19 +510,20 @@ class ReviewModule:
         return mapping
 
     def bulk_reply(self, *, fetch: Any, replies: dict[str, str]) -> None:
-        # Resolve identifiers to GraphQL comment IDs from review-list output and reply via GraphQL
-        lookup = self.comment_lookup(fetch)
+        # Resolve identifiers to GraphQL thread IDs from review-list output and reply via GraphQL
+        # Note: addPullRequestReviewComment is deprecated; use addPullRequestReviewThreadReply
+        lookup = self.thread_lookup(fetch)
         if not replies:
             return
         for key, body in replies.items():
-            comment_id = lookup.get(key)
-            if comment_id is None and key.startswith("http"):
-                comment_id = lookup.get(key.split("#")[-1])
-            if comment_id is None:
+            thread_id = lookup.get(key)
+            if thread_id is None and key.startswith("http"):
+                thread_id = lookup.get(key.split("#")[-1])
+            if thread_id is None:
                 continue
             mutation = (
-                "mutation($inReplyTo:ID!,$body:String!){"
-                " addPullRequestReviewComment(input:{inReplyTo:$inReplyTo, body:$body}){"
+                "mutation($threadId:ID!,$body:String!){"
+                " addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$threadId, body:$body}){"
                 "   comment { id }"
                 " }"
                 " }"
@@ -525,7 +535,7 @@ class ReviewModule:
                 "-f",
                 f"query={mutation}",
                 "-F",
-                f"inReplyTo={comment_id}",
+                f"threadId={thread_id}",
                 "-F",
                 f"body={body}",
             ]
@@ -557,6 +567,21 @@ class ReviewModule:
             if isinstance(x, str):
                 items.append(x)
         return items
+
+    def thread_lookup(self, fetch: Any) -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        for th in getattr(fetch, "threads", []) or []:
+            thread_id = getattr(th, "id", None)
+            if not thread_id:
+                continue
+            for cm in getattr(th, "comments", []) or []:
+                if getattr(cm, "id", None):
+                    mapping.setdefault(cm.id, thread_id)
+                if getattr(cm, "url", None):
+                    mapping.setdefault(cm.url, thread_id)
+                    if "#" in cm.url:
+                        mapping.setdefault(cm.url.split("#")[-1], thread_id)
+        return mapping
 
     def comment_lookup(self, fetch: Any) -> dict[str, str]:
         mapping: dict[str, str] = {}

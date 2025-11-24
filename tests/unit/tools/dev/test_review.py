@@ -109,6 +109,7 @@ def test_fetch_review_threads_success(tmp_path: Path) -> None:
                     "reviewThreads": {
                         "nodes": [
                             {
+                                "id": "TH_1",
                                 "isResolved": False,
                                 "comments": {
                                     "nodes": [
@@ -208,6 +209,7 @@ def test_run_review_bulk_reply_success(tmp_path: Path) -> None:
                     "reviewThreads": {
                         "nodes": [
                             {
+                                "id": "TH_1",
                                 "comments": {
                                     "nodes": [
                                         {
@@ -217,7 +219,7 @@ def test_run_review_bulk_reply_success(tmp_path: Path) -> None:
                                             "author": {"login": "me"},
                                         }
                                     ]
-                                }
+                                },
                             }
                         ]
                     }
@@ -264,6 +266,7 @@ def test_bulk_reply_success(tmp_path: Path) -> None:
     fetch_result = ReviewFetchResult(
         threads=[
             ReviewThread(
+                id="TH_1",
                 url="http://url",
                 is_resolved=False,
                 comments=[
@@ -299,7 +302,7 @@ def test_bulk_reply_success(tmp_path: Path) -> None:
     review.bulk_reply(fetch=fetch_result, replies=replies)
 
     assert len(runner.calls) == 1
-    assert "inReplyTo=C_1" in runner.calls[0]["command"]
+    assert "threadId=TH_1" in runner.calls[0]["command"]
 
 
 def test_run_review_delete_success(tmp_path: Path) -> None:
@@ -326,6 +329,7 @@ def test_run_review_delete_success(tmp_path: Path) -> None:
                     "reviewThreads": {
                         "nodes": [
                             {
+                                "id": "TH_ToDel",
                                 "comments": {
                                     "nodes": [
                                         {
@@ -335,7 +339,7 @@ def test_run_review_delete_success(tmp_path: Path) -> None:
                                             "author": {"login": "me"},
                                         }
                                     ]
-                                }
+                                },
                             }
                         ]
                     }
