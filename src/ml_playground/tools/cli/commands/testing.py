@@ -42,6 +42,9 @@ def _invoke_tests(
             "tests/unit": "unit",
             "tests/property": "property_tests",
             "tests/regression": "regression",
+            "tests/integration": "integration",
+            "tests/e2e": "e2e",
+            "tests/acceptance": "acceptance",
         }
         method_name = suite_map.get(test_dir)
         if method_name is None:
