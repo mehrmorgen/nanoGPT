@@ -29,3 +29,31 @@ Feature: Tools CLI entrypoint
     And the output contains:
       | text |
       | No such command |
+
+  Scenario: Display quality tools help
+    When I invoke the "tools" CLI with arguments "quality --help"
+    Then the command exits with code 0
+    And the output contains:
+      | text |
+      | Code quality tools |
+      | lint |
+      | format |
+      | typecheck |
+
+  Scenario: Display env tools help
+    When I invoke the "tools" CLI with arguments "env --help"
+    Then the command exits with code 0
+    And the output contains:
+      | text |
+      | Environment management tools |
+      | setup |
+      | verify |
+
+  Scenario: Display dev tools help
+    When I invoke the "tools" CLI with arguments "dev --help"
+    Then the command exits with code 0
+    And the output contains:
+      | text |
+      | Development workflow tools |
+      | review-list |
+      | workflow-status |

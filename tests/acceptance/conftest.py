@@ -6,6 +6,7 @@ separate reporting/CI handling for acceptance tests.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Callable, Generator
@@ -26,12 +27,19 @@ def run_cli(
     project_root: Path,
 ) -> Generator[Callable[..., subprocess.CompletedProcess[str]], None, None]:
     def _run(command: str, *args: str) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        # Ensure src is in PYTHONPATH so uv run can find the package even if not installed in editable mode
+        env["PYTHONPATH"] = f"{project_root / 'src'}:{env.get('PYTHONPATH', '')}"
+        # Force wide terminal to prevent wrapping/truncation in Rich output
+        env["COLUMNS"] = "200"
+        env["LINES"] = "40"
         return subprocess.run(
             ["uv", "run", command, *args],
             cwd=project_root,
             capture_output=True,
             text=True,
             check=False,
+            env=env,
         )
 
     yield _run

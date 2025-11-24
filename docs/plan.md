@@ -10,7 +10,7 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
 ## Pending Tasks
 
 ### Acceptance & E2E Tests
-- [ ] **Complete Acceptance Tests**
+- [x] **Complete Acceptance Tests**
   - **Scope**: Tools and Runtime.
   - **Goal**: Ensure high-level feature requirements are met via acceptance tests.
 

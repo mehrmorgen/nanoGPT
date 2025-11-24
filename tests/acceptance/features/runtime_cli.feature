@@ -13,3 +13,18 @@ Feature: Runtime CLI entrypoint
       | train |
       | sample |
       | analyze |
+      | --exp-config |
+
+  Scenario: Display prepare command help
+    When I invoke the "ml-playground" CLI with arguments "prepare --help"
+    Then the command exits with code 0
+    And the output contains:
+      | text |
+      | Prepare data for an experiment |
+
+  Scenario: Display train command help
+    When I invoke the "ml-playground" CLI with arguments "train --help"
+    Then the command exits with code 0
+    And the output contains:
+      | text |
+      | Train a model for an experiment |
