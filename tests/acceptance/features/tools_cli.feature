@@ -13,6 +13,8 @@ Feature: Tools CLI entrypoint
       | test |
       | env |
       | dev |
+      | ci |
+      | learn |
 
   Scenario: Show effective tools configuration
     When I invoke the "tools" CLI with arguments "config"
@@ -30,30 +32,34 @@ Feature: Tools CLI entrypoint
       | text |
       | No such command |
 
-  Scenario: Display quality tools help
-    When I invoke the "tools" CLI with arguments "quality --help"
+  Scenario Outline: Display subcommand help
+    When I invoke the "tools" CLI with arguments "<subcommand> --help"
     Then the command exits with code 0
     And the output contains:
       | text |
-      | Code quality tools |
-      | lint |
-      | format |
-      | typecheck |
+      | <expected_text> |
 
-  Scenario: Display env tools help
-    When I invoke the "tools" CLI with arguments "env --help"
-    Then the command exits with code 0
-    And the output contains:
-      | text |
-      | Environment management tools |
-      | setup |
-      | verify |
+    Examples:
+      | subcommand | expected_text |
+      | quality    | Code quality tools |
+      | test       | Testing tools |
+      | env        | Environment management tools |
+      | dev        | Development workflow tools |
+      | ci         | CI/CD operations |
+      | learn      | Learning mode utilities |
 
-  Scenario: Display dev tools help
-    When I invoke the "tools" CLI with arguments "dev --help"
-    Then the command exits with code 0
+  Scenario Outline: Require subcommand selection
+    When I invoke the "tools" CLI with arguments "<subcommand>"
+    Then the command exits with code 2
     And the output contains:
       | text |
-      | Development workflow tools |
-      | review-list |
-      | workflow-status |
+      | Usage: tools |
+
+    Examples:
+      | subcommand |
+      | quality |
+      | test |
+      | env |
+      | dev |
+      | ci |
+      | learn |
