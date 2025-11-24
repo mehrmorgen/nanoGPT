@@ -27,17 +27,47 @@ vier_gewinnt/
 1. **Prepare the dataset:**
 
    ```bash
-   uv run python -m ml_playground.cli prepare vier_gewinnt
+   uv run cli prepare vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
 
 1. **Train the model:**
 
    ```bash
-   uv run python -m ml_playground.cli train vier_gewinnt
+   uv run cli train vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
 
 1. **Sample from the model:**
 
    ```bash
-   uv run python -m ml_playground.cli sample vier_gewinnt
+   uv run cli sample vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
+
+   Replace `config.easy.toml` with `config.medium.toml` or `config.hard.toml` to target the other difficulty presets.
+
+## Player Algorithms
+
+The experiment includes several AI implementations for data generation and interactive play:
+
+### Random Player
+- **Algorithm**: Uniformly selects a random column from the set of currently valid moves.
+- **Usage**: Serves as a baseline or for generating high-variance noise in datasets.
+
+### Heuristic Player
+- **Algorithm**: Rule-based decision making with the following priority:
+  1. **Win Immediately**: If a move results in a win, take it.
+  2. **Block Opponent**: If the opponent can win on their next turn, block that column.
+  3. **Center Preference**: If no critical moves exist, prioritize columns in the order `[3, 2, 4, 1, 5, 0, 6]` (center-out).
+  4. **Fallback**: If preferred columns are full, choose randomly among valid moves.
+
+### Minimax Player
+- **Algorithm**: Depth-limited Minimax search (default depth=4) with Alpha-Beta pruning.
+- **Evaluation Function**:
+  - **Terminal States**: +/- 100,000 points for a win/loss.
+  - **Positional Scoring**:
+    - **Center Control**: +3 points for each token in the center column.
+    - **Window Scoring** (evaluating 4-token windows):
+      - 4-in-a-row (Self): +100 points
+      - 3-in-a-row (Self): +5 points
+      - 2-in-a-row (Self): +2 points
+      - 3-in-a-row (Opponent): -4 points (penalty for leaving threats open)
+

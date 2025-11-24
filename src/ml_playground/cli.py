@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ __all__ = ["main"]
 
 @dataclass(frozen=True)
 class CLIDependencies:
-    load_experiment: Callable[[str, Path | None], ExperimentConfig]
+    load_experiment: Callable[[str, Path | None, str | None], ExperimentConfig]
     ensure_train_prerequisites: Callable[[ExperimentConfig], Any]
     ensure_sample_prerequisites: Callable[[ExperimentConfig], Any]
     run_prepare: Callable[[str, PreparerConfig, Path, SharedConfig], None]
@@ -48,6 +49,26 @@ def _run_prepare_impl(
 ) -> None:
     """Run the full prepare flow for an experiment."""
     prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
+
+    # Try to load a custom preparer from the experiment module
+    try:
+        mod_name = f"ml_playground.experiments.{experiment}.preparer"
+        mod = importlib.import_module(mod_name)
+        if hasattr(mod, "Preparer"):
+            preparer_cls = getattr(mod, "Preparer")
+            # Instantiate with no args (expecting arguments to be optional)
+            preparer = preparer_cls()
+            if hasattr(preparer, "prepare"):
+                prepare_cfg.logger.info(f"Using custom preparer for {experiment}")
+                # Call prepare with cfg and shared
+                preparer.prepare(prepare_cfg, shared)
+                prepare_cfg.logger.info(f"Custom pipeline for {experiment} finished.")
+                return
+    except (ImportError, AttributeError, TypeError) as e:
+        # Log debug but fall back to default pipeline
+        prepare_cfg.logger.debug(f"Could not load custom preparer for {experiment}: {e}")
+        pass
+
     pipeline = create_pipeline(prepare_cfg, shared)
     pipeline.run()
     prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
@@ -183,6 +204,13 @@ def _extract_exp_config(ctx: typer.Context) -> Path | None:
     exp_config = obj.get("exp_config")
     logging.getLogger(__name__).debug("Context exp_config resolved to %s", exp_config)
     return exp_config
+
+
+def _resolve_exp_config(ctx: typer.Context, explicit: Path | None) -> Path | None:
+    """Prefer an explicitly provided --exp-config, fall back to the global option."""
+    if explicit is not None:
+        return explicit
+    return _extract_exp_config(ctx)
 
 
 def run_or_exit(
@@ -395,13 +423,27 @@ def global_options(
 def prepare(
     ctx: typer.Context,
     experiment: ExperimentArg,
+    variant: Annotated[
+        Optional[str],
+        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+    ] = None,
+    exp_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--exp-config",
+            help=(
+                "Path to an experiment-specific config TOML. When provided, it replaces "
+                "the experiment's config.toml. default_config.toml is still loaded first."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Prepare data for an experiment."""
-    exp_config_path = _extract_exp_config(ctx)
+    exp_config_path = _resolve_exp_config(ctx, exp_config)
     deps = get_cli_dependencies()
 
     def _do_prepare() -> None:
-        exp = deps.load_experiment(experiment, exp_config_path)
+        exp = deps.load_experiment(experiment, exp_config_path, variant)
         deps.run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
 
     run_or_exit(
@@ -414,13 +456,27 @@ def prepare(
 def train(
     ctx: typer.Context,
     experiment: ExperimentArg,
+    variant: Annotated[
+        Optional[str],
+        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+    ] = None,
+    exp_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--exp-config",
+            help=(
+                "Path to an experiment-specific config TOML. When provided, it replaces "
+                "the experiment's config.toml. default_config.toml is still loaded first."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Train a model for an experiment."""
-    exp_config_path = _extract_exp_config(ctx)
+    exp_config_path = _resolve_exp_config(ctx, exp_config)
     deps = get_cli_dependencies()
 
     run_or_exit(
-        lambda: _run_train_cmd(experiment, exp_config_path, deps),
+        lambda: _run_train_cmd(experiment, exp_config_path, variant, deps),
         keyboard_interrupt_msg="\nTraining cancelled.",
     )
 
@@ -429,13 +485,27 @@ def train(
 def sample(
     ctx: typer.Context,
     experiment: ExperimentArg,
+    variant: Annotated[
+        Optional[str],
+        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+    ] = None,
+    exp_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--exp-config",
+            help=(
+                "Path to an experiment-specific config TOML. When provided, it replaces "
+                "the experiment's config.toml. default_config.toml is still loaded first."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Sample from a trained model."""
-    exp_config_path = _extract_exp_config(ctx)
+    exp_config_path = _resolve_exp_config(ctx, exp_config)
     deps = get_cli_dependencies()
 
     run_or_exit(
-        lambda: _run_sample_cmd(experiment, exp_config_path, deps),
+        lambda: _run_sample_cmd(experiment, exp_config_path, variant, deps),
         keyboard_interrupt_msg="\nSampling cancelled.",
     )
 
@@ -444,6 +514,16 @@ def sample(
 def analyze(
     ctx: typer.Context,
     experiment: ExperimentArg,
+    exp_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--exp-config",
+            help=(
+                "Path to an experiment-specific config TOML. When provided, it replaces "
+                "the experiment's config.toml. default_config.toml is still loaded first."
+            ),
+        ),
+    ] = None,
     host: str = typer.Option(
         "127.0.0.1", help="Host for the analysis server (not implemented)"
     ),
@@ -455,6 +535,10 @@ def analyze(
     ),
 ) -> None:
     """Run analysis for an experiment (not implemented)."""
+    exp_config_path = _resolve_exp_config(ctx, exp_config)
+    if exp_config_path is not None:
+        ctx.obj = getattr(ctx, "obj", {}) or {}
+        ctx.obj["exp_config"] = exp_config_path
     _run_analyze(experiment, host, port, open_browser)
 
 
@@ -478,12 +562,13 @@ def main(argv: list[str] | None = None) -> int | None:
 def _run_train_cmd(
     experiment: str,
     exp_config_path: Path | None,
+    variant: str | None = None,
     deps: CLIDependencies | None = None,
 ) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
     if deps is None:
         deps = get_cli_dependencies()
-    exp = deps.load_experiment(experiment, exp_config_path)
+    exp = deps.load_experiment(experiment, exp_config_path, variant)
     deps.ensure_train_prerequisites(exp)
     deps.run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
 
@@ -491,12 +576,13 @@ def _run_train_cmd(
 def _run_sample_cmd(
     experiment: str,
     exp_config_path: Path | None,
+    variant: str | None = None,
     deps: CLIDependencies | None = None,
 ) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
     if deps is None:
         deps = get_cli_dependencies()
-    exp = deps.load_experiment(experiment, exp_config_path)
+    exp = deps.load_experiment(experiment, exp_config_path, variant)
     deps.ensure_sample_prerequisites(exp)
     deps.run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
 

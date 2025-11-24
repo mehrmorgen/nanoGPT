@@ -12,14 +12,16 @@ from ml_playground.configuration.models import ExperimentConfig
 _PROJECT_HOME = Path(__file__).resolve().parent.parent.parent
 
 
-def cfg_path_for(experiment: str, exp_config: Optional[Path]) -> Path:
+def cfg_path_for(experiment: str, exp_config: Optional[Path], variant: str | None = None) -> Path:
     """Return the canonical path to an experiment configuration file."""
-    return get_cfg_path(experiment, exp_config)
+    return get_cfg_path(experiment, exp_config, variant)
 
 
-def load_experiment(experiment: str, exp_config: Optional[Path]) -> ExperimentConfig:
+def load_experiment(
+    experiment: str, exp_config: Optional[Path], variant: str | None = None
+) -> ExperimentConfig:
     """Load the fully merged configuration for a CLI invocation."""
-    cfg_path = cfg_path_for(experiment, exp_config)
+    cfg_path = cfg_path_for(experiment, exp_config, variant)
     return load_full_experiment_config(cfg_path, _PROJECT_HOME, experiment)
 
 

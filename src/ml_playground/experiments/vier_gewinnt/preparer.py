@@ -5,28 +5,47 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from pathlib import Path
+from typing import Optional
+
+from ml_playground.configuration.models import PreparerConfig, SharedConfig
+from ml_playground.core.tokenizer import create_tokenizer
+from ml_playground.data_pipeline.transforms.io import write_bin_and_meta
+from ml_playground.data_pipeline.transforms.tokenization import prepare_with_tokenizer
 
 logging.basicConfig(level=logging.INFO)
 
 
 class Preparer:
-    def __init__(self, input_file, output_dir):
+    def __init__(self, input_file: str | None = None, output_dir: str | None = None):
         self.input_file = input_file
         self.output_dir = output_dir
 
-    def prepare(self) -> None:
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+    def prepare(
+        self, cfg: Optional[PreparerConfig] = None, shared: Optional[SharedConfig] = None
+    ) -> None:
+        if cfg and shared:
+            input_path = cfg.raw_text_path
+            output_path = shared.dataset_dir
+            tokenizer_type = cfg.tokenizer_type
+        else:
+            input_path = Path(self.input_file) if self.input_file else None
+            output_path = Path(self.output_dir) if self.output_dir else None
+            tokenizer_type = "char"
 
-        output_file_path = os.path.join(self.output_dir, "games.txt")
+        if not input_path or not output_path:
+            raise ValueError("Input file and output directory must be provided.")
 
-        valid_games = 0
+        if not output_path.exists():
+            output_path.mkdir(parents=True, exist_ok=True)
+
+        # output_file_path = output_path / "games.txt"
+        dataset_txt_path = output_path / "dataset.txt"
+
+        valid_games = []
         invalid_lines = 0
 
-        with (
-            open(self.input_file, "r", encoding="utf-8") as f_in,
-            open(output_file_path, "w", encoding="utf-8") as f_out,
-        ):
+        with open(input_path, "r", encoding="utf-8") as f_in:
             for line_number, line in enumerate(f_in, start=1):
                 stripped = line.strip()
                 if not stripped:
@@ -48,15 +67,32 @@ class Preparer:
                     logging.warning("Line %d has empty winner or moves", line_number)
                     continue
 
-                f_out.write(moves + "\n")
-                valid_games += 1
+                valid_games.append(moves)
 
         logging.info(
             "Prepared %d games from %s (skipped %d malformed lines)",
-            valid_games,
-            self.input_file,
+            len(valid_games),
+            input_path,
             invalid_lines,
         )
+
+        full_text = "\n".join(valid_games)
+
+        # Write dataset.txt (100% of training data as readable text)
+        with open(dataset_txt_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        logging.info(f"Wrote readable dataset to {dataset_txt_path}")
+
+        # Generate binaries for training
+        tokenizer = create_tokenizer(tokenizer_type)
+        # Default split 0.9, hardcoded here or can be extracted from cfg.extras if needed
+        train_ids, val_ids, meta, tokenizer = prepare_with_tokenizer(
+            full_text, tokenizer, split=0.9
+        )
+        
+        # Ensure we use a dummy data config or None to default filenames
+        write_bin_and_meta(output_path, train_ids, val_ids, meta)
+        logging.info(f"Wrote binaries and meta to {output_path}")
 
 
 def main() -> None:

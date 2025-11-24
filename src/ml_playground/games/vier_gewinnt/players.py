@@ -52,8 +52,10 @@ class HeuristicPlayer(Player):
 class MinimaxPlayer(Player):
     def __init__(self, depth=4):
         self.depth = depth
+        self.player_id = None
 
     def get_move(self, game: VierGewinnt):
+        self.player_id = game.current_player
         _, move = self.minimax(game, self.depth, True, -np.inf, np.inf)
         return move
 
@@ -91,12 +93,75 @@ class MinimaxPlayer(Player):
             return min_eval, best_move
 
     def evaluate_board(self, game):
-        if game.check_win(self.player):
-            return 100
-        elif game.check_win(3 - self.player):
-            return -100
-        else:
-            return 0  # Simple evaluation, can be improved
+        # Terminal states
+        if game.check_win(self.player_id):
+            return 100000
+        elif game.check_win(3 - self.player_id):
+            return -100000
+        elif game.is_full():
+            return 0
+            
+        # Heuristic scoring
+        score = 0
+        
+        # 1. Center column preference (tokens in center are more valuable)
+        center_col = game.cols // 2
+        center_count = np.sum(game.board[:, center_col] == self.player_id)
+        score += center_count * 3
+
+        # 2. Window scoring (horizontal, vertical, diagonal)
+        # We want to award points for having potential connections
+        score += self.score_position(game, self.player_id)
+        score -= self.score_position(game, 3 - self.player_id) # Penalize opponent's potential
+
+        return score
+
+    def score_position(self, game, player):
+        score = 0
+        
+        # Horizontal
+        for r in range(game.rows):
+            row_array = [int(i) for i in list(game.board[r, :])]
+            for c in range(game.cols - 3):
+                window = row_array[c : c + 4]
+                score += self.evaluate_window(window, player)
+
+        # Vertical
+        for c in range(game.cols):
+            col_array = [int(i) for i in list(game.board[:, c])]
+            for r in range(game.rows - 3):
+                window = col_array[r : r + 4]
+                score += self.evaluate_window(window, player)
+
+        # Positive Diagonal
+        for r in range(game.rows - 3):
+            for c in range(game.cols - 3):
+                window = [game.board[r + i][c + i] for i in range(4)]
+                score += self.evaluate_window(window, player)
+
+        # Negative Diagonal
+        for r in range(game.rows - 3):
+            for c in range(game.cols - 3):
+                window = [game.board[r + 3 - i][c + i] for i in range(4)]
+                score += self.evaluate_window(window, player)
+
+        return score
+
+    def evaluate_window(self, window, player):
+        score = 0
+        opp_player = 3 - player
+
+        if window.count(player) == 4:
+            score += 100
+        elif window.count(player) == 3 and window.count(0) == 1:
+            score += 5
+        elif window.count(player) == 2 and window.count(0) == 2:
+            score += 2
+
+        if window.count(opp_player) == 3 and window.count(0) == 1:
+            score -= 4
+
+        return score
 
     def create_temp_game(self, game, col, player):
         temp_game = VierGewinnt(rows=game.rows, cols=game.cols)
@@ -108,8 +173,3 @@ class MinimaxPlayer(Player):
                 break
         return temp_game
 
-    @property
-    def player(self):
-        # This is a bit of a hack, the minimax player needs to know which player it is
-        # In a real implementation, this would be passed in the constructor
-        return 1
