@@ -36,7 +36,7 @@ def run_e2e(
     operation_id = OperationId(namespace="tools", category="test", command="e2e")
 
     result = subprocess_runner.run_pytest_command(
-        ["tests/e2e", *args],
+        ["-v", "tests/e2e", *args],
         cwd=root_path,
         timeout=config.testing.timeout,
         operation_id=operation_id,
@@ -80,7 +80,7 @@ def run_acceptance(
     operation_id = OperationId(namespace="tools", category="test", command="acceptance")
 
     result = subprocess_runner.run_pytest_command(
-        ["tests/acceptance", *args],
+        ["-v", "tests/acceptance", *args],
         cwd=root_path,
         timeout=config.testing.timeout,
         operation_id=operation_id,

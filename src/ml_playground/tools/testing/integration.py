@@ -38,7 +38,7 @@ def run_integration(
     )
 
     result = subprocess_runner.run_pytest_command(
-        ["-m", "integration", "--no-cov", *args],
+        ["-v", "-m", "integration", "--no-cov", *args],
         cwd=root_path,
         timeout=config.testing.timeout,
         operation_id=operation_id,

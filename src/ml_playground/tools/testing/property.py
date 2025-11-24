@@ -36,15 +36,11 @@ def run_property_tests(
     operation_id = OperationId(namespace="tools", category="test", command="property")
 
     result = subprocess_runner.run_pytest_command(
-        ["tests/property", *args],
+        ["-v", "tests/property", *args],
         cwd=root_path,
         timeout=config.testing.timeout,
         operation_id=operation_id,
     )
-
-    # Clean pytest output
-    if result.stdout:
-        result.stdout = _clean_pytest_output(result.stdout)
 
     if learning_mode:
         learning_engine = LearningModeEngine()
@@ -57,30 +53,3 @@ def run_property_tests(
         )
 
     return result
-
-
-def _clean_pytest_output(output: str) -> str:
-    """Remove pytest progress lines and xdist status messages."""
-    lines: list[str] = []
-    for line in output.splitlines():
-        # Skip progress indicators and xdist status
-        if any(
-            skip in line
-            for skip in [
-                "test session starts",
-                "[gw",
-                "workers [",
-                "scheduling",
-                ".",
-                "=",
-                "PASSED",
-                "FAILED",
-                "ERROR",
-                "warnings summary",
-                "short test summary",
-            ]
-        ):
-            continue
-        lines.append(line)
-
-    return "\n".join(lines)

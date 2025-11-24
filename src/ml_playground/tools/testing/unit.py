@@ -36,7 +36,7 @@ def run_unit(
     operation_id = OperationId(namespace="tools", category="test", command="unit")
 
     result = subprocess_runner.run_pytest_command(
-        ["tests/unit", *args],
+        ["-v", "tests/unit", *args],
         cwd=root_path,
         timeout=config.testing.timeout,
         operation_id=operation_id,

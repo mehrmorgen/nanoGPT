@@ -75,10 +75,6 @@ def run_coverage_test(
         operation_id=operation_id,
     )
 
-    # Clean pytest output
-    if result.stdout:
-        result.stdout = _clean_pytest_output(result.stdout)
-
     if learning_mode:
         learning_engine = LearningModeEngine()
         learning_engine.verbosity = VerbosityLevel(verbosity_level)

@@ -14,6 +14,11 @@ This plan outlines the next phases of development for `ml_playground`, focusing 
   - **Scope**: Tools and Runtime.
   - **Goal**: Ensure high-level feature requirements are met via acceptance tests.
 
+- [x] **CLI Consistency Enhancements**
+  - **Scope**: All CLI tools (`tools`, `runtime`).
+  - **Action**: Implemented alphabetical command sorting, fixed output suppression in tests, and added missing test commands.
+  - **Documentation**: Updated `DEVELOPMENT.md` with CLI standards.
+
 - [~] **Verify `uv run ml-playground` flows**
   - **Status**: `tests/e2e/test_cli_flow.py` implemented but skipped due to runtime environment issues (`IndexError` in model forward pass on CPU?).
   - **Goal**: Enable and fix E2E tests to validate full prepare -> train -> sample cycle.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -18,9 +17,6 @@ from ml_playground.tools.utils.subprocess_utils import (
 
 from . import mutation as _mutation
 from .coverage import run_coverage, run_coverage_report, run_coverage_test
-from .coverage_helpers import (
-    clean_pytest_output as _clean_pytest_output_helper,
-)
 from .e2e import run_acceptance, run_e2e
 from .integration import run_integration
 from .property import run_property_tests
@@ -31,8 +27,6 @@ from .unit import run_regression, run_unit
 
 class TestingTools:
     """Testing tools implementation."""
-
-    _PYTEST_PROGRESS_RE = re.compile(r"^[\.s]+(?:\s+\[\s*\d+%])?$")
 
     def __init__(
         self,
@@ -57,15 +51,6 @@ class TestingTools:
     def category(self) -> str:
         """Tool category identifier."""
         return "test"
-
-    def _clean_pytest_output(self, output: str) -> str:
-        """Remove pytest progress lines and xdist status messages."""
-        return _clean_pytest_output_helper(output)
-
-    def _clean_pytest_result(self, result: ToolResult) -> ToolResult:
-        if result.stdout:
-            result.stdout = self._clean_pytest_output(result.stdout)
-        return result
 
     def unit(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
@@ -164,6 +149,7 @@ class TestingTools:
 
         result = self.subprocess_runner.run_pytest_command(
             [
+                "-v",
                 "tests/unit",
                 "tests/property",
                 "tests/regression",
@@ -173,7 +159,7 @@ class TestingTools:
             timeout=self.config.testing.timeout,
             operation_id=operation_id,
         )
-        result = self._clean_pytest_result(result)
+        # result = self._clean_pytest_result(result)  # Removed to preserve verbose output
 
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
