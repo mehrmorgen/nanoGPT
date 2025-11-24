@@ -17,24 +17,21 @@ Developer tooling that powers the `uv run tools ...` command surface. Provides T
 ```bash
 src/ml_playground/tools/
 ├── README.md          # package overview (this file)
-├── cli.py             # Typer entrypoint dispatching to categories
-├── __init__.py        # package exports and CLI glue
-├── categories/        # user-facing command groups (env, quality, test, ci, dev, agentic)
-├── core/              # shared services (state mgmt, dependency injection, logging)
-└── utils/             # helpers (subprocess, filesystem, serialization)
+├── cli/               # Typer entrypoint and CLI infrastructure
+├── ci/                # CI tools (quality gate, coverage badge)
+├── dev/               # developer tools (review, status, ai-setup)
+├── environment/       # environment management tools
+├── quality/           # quality enforcement tools (lint, format)
+├── testing/           # testing tools (pytest, coverage)
+├── core/              # shared services and interfaces
+└── utils/             # low-level utilities
 ```
 
 ## Key Concepts
 
-- **Command categories** (`src/ml_playground/tools/categories/`) expose focused Typer apps:
-  - `env`: provisioning, verification, cache cleanup.
-  - `quality`: lint/format bundles and targeted checks.
-  - `test`: pytest orchestrations and coverage tasks.
-  - `ci`: full quality gate execution (delegates to pre-commit).
-  - `dev`: review automation, repo hygiene, port management.
-  - `agentic`: AI-assisted batch operations and review helpers.
-- **Core services** provide shared logging, configuration loading, and dependency wiring so categories stay thin.
-- **Utilities** wrap subprocess execution, environment management, and path handling with consistent error reporting.
+- **Tool Categories**: Organized as subpackages (`ci`, `dev`, `environment`, `quality`, `testing`).
+- **CLI Infrastructure**: The `cli` subpackage handles command registration and dependency injection.
+- **Core Services**: Shared logic lives in `core` to keep commands thin.
 
 ## Usage
 
@@ -42,18 +39,9 @@ src/ml_playground/tools/
 # discover available tool groups
 uv run tools --help
 
-# run the quality gate bundle (delegates to pre-commit)
+# run the quality gate bundle
 uv run tools ci quality-gate
 
-# verify local environment artifacts
-uv run tools env verify
-
-# list review comments needing replies
-uv run tools dev review-list <pr_number> --unreplied --unresolved
+# list review comments
+uv run tools dev review-list <pr_number>
 ```
-
-## Implementation Notes
-
-- Commands should depend on the shared services provided in `core/` to keep CLI handlers declarative.
-- New categories must be registered inside `cli.py` and documented within their subdirectory README if additional context is required.
-- Follow the centralized tokenizer and configuration protocols when tool commands reach into `ml_playground` modules (see `../../../docs/framework_utilities.md`).
