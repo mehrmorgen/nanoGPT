@@ -157,7 +157,7 @@ def run_server_bundestag_char(
         # Non-fatal; keep embedded samples
         pass
 
-    class BundestagTextDataset(dataset_base):
+    class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):
             self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
 
@@ -173,7 +173,7 @@ def run_server_bundestag_char(
         def __iter__(self):
             return iter(self._examples)
 
-    class EchoModel(model_base):
+    class EchoModel(model_base):  # type: ignore[valid-type, misc]
         """Trivial model that returns the input text as generated output.
 
         Serves as a PoC to exercise LIT views for text data without trained weights.

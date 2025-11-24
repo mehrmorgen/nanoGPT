@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, cast
 
 import pytest
 
-from ml_playground.analysis.lit import integration
+from ml_playground.tools.analysis.lit import integration
 
 
 def _make_fake_lit_modules() -> tuple[dict[str, ModuleType], dict[str, object]]:

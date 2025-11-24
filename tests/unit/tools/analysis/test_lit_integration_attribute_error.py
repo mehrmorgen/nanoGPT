@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from ml_playground.analysis.lit import integration
+from ml_playground.tools.analysis.lit import integration
 
 
 def test_load_lit_components_wraps_import_error() -> None:

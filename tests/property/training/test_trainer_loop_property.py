@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typing import Any
+
+import hypothesis
 import hypothesis.strategies as st
 import numpy as np
 import pytest
@@ -20,6 +23,10 @@ from ml_playground.configuration.models import (
     TrainerConfig,
 )
 from ml_playground.training.loop.runner import Trainer
+
+
+def _noop_checkpoint_loader(*args: Any, **kwargs: Any) -> None:
+    return None
 
 
 def _make_config(
@@ -76,6 +83,7 @@ def _make_config(
             block_size=128,
         ),
         peft=TrainerConfig.PeftConfig(enabled=False),
+        checkpoint_load_fn=_noop_checkpoint_loader,
     )
 
     shared = SharedConfig(
@@ -145,6 +153,7 @@ def test_trainer_completes_with_valid_config(
     max_iters=st.integers(min_value=2, max_value=5),
     eval_interval=st.integers(min_value=1, max_value=2),
 )
+@hypothesis.example(max_iters=2, eval_interval=1)
 @settings(
     max_examples=5,
     deadline=None,

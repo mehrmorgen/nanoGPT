@@ -19,12 +19,11 @@ Visualization and evaluation helpers that complement the training and sampling w
 ## Structure
 
 ```bash
-src/ml_playground/analysis/
+src/ml_playground/tools/analysis/
 ├── README.md          # package overview (this file)
 ├── lit/               # LIT server entrypoints, configs, and adapters
 ├── lit_integration.py # high-level helpers for launching LIT against checkpoints
-├── sample_quality.py  # deterministic quality metrics for generated text
-└── sample_quality_public.py # lightweight public entrypoints for docs/demos
+└── sample_quality.py  # deterministic quality metrics for generated text
 ```
 
 ## Key Components
@@ -32,23 +31,22 @@ src/ml_playground/analysis/
 - **`lit/`** contains the minimal LIT server setup described in `docs/LIT.md`. It exposes a Typer command for running the UI on a dedicated port with an isolated virtual environment.
 - **`lit_integration.py`** wires `ml_playground` checkpoints and tokenizer metadata into LIT so you can inspect activations, gradients, and counterfactuals.
 - **`sample_quality.py`** implements repeatable quality heuristics (e.g., distinct-n, repetition penalties) used by CLI sampling tests.
-- **`sample_quality_public.py`** provides a stripped-down variant suitable for external documentation examples where internal dependencies are avoided.
 
 ## Usage Examples
 
 ```bash
 # boot the minimal LIT server (see docs/LIT.md for prerequisites)
-uv run lit-tasks run --port 5432
+uv run tools analysis lit --port 5432
 
-# shutdown the LIT server
-uv run lit-tasks stop --port 5432
+# analyze a generated sample file
+uv run tools analysis sample-quality output/samples/sample_001.txt
 ```
 
 ```python
-from ml_playground.analysis.sample_quality import compute_quality_report
+from ml_playground.tools.analysis.sample_quality import analyze_sample_file, format_analysis
 
-report = compute_quality_report("Generated text", reference="Ground truth")
-print(report.distinct_n)
+analysis = analyze_sample_file("output/samples/sample_001.txt")
+print(format_analysis(analysis))
 ```
 
 ## Notes

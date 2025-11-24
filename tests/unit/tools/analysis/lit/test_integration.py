@@ -11,7 +11,7 @@ from typing import Dict, Iterator, Mapping, Optional
 
 import pytest
 
-from ml_playground.analysis.lit import integration
+from ml_playground.tools.analysis.lit import integration
 
 
 @contextmanager

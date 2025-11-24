@@ -18,6 +18,7 @@ from ml_playground.tools.cli.commands.testing import test_app
 from ml_playground.tools.cli.commands.environment import env_app
 from ml_playground.tools.cli.commands.ci import ci_app
 from ml_playground.tools.cli.commands.dev import dev_app
+from ml_playground.tools.cli.commands.analysis import analysis_app
 from ml_playground.tools.cli.state import state
 from ml_playground.tools.cli.dependencies import (
     get_tools_dependencies,
@@ -115,6 +116,14 @@ def get_command_info() -> dict[str, CategoryInfo]:
                 "batch-review": "Perform batch review operations for AI",
                 "workflow-status": "Get current workflow status for AI",
                 "setup-ai-guidelines": "Set up AI development guidelines",
+            },
+        },
+        "analysis": {
+            "name": "Analysis Tools",
+            "description": "Analysis tools (LIT, sample quality)",
+            "commands": {
+                "lit": "Run LIT server for bundestag_char experiment",
+                "sample-quality": "Analyze quality of a generated sample file",
             },
         },
     }
@@ -372,6 +381,7 @@ app.add_typer(test_app, name="test")
 app.add_typer(env_app, name="env")
 app.add_typer(ci_app, name="ci")
 app.add_typer(dev_app, name="dev")
+app.add_typer(analysis_app, name="analysis")
 app.add_typer(learn_app, name="learn")
 
 

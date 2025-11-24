@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from ml_playground.analysis.sample_quality_public import (
+from ml_playground.tools.analysis.sample_quality import (
     extract_header,
     line_stats,
     ngram_stats,
@@ -130,7 +130,7 @@ def test_find_anomalies_complete_line() -> None:
 
 def test_format_analysis_no_repeated_lines():
     """format_analysis should handle case with no repeated lines."""
-    from ml_playground.analysis.sample_quality import (
+    from ml_playground.tools.analysis.sample_quality import (
         SampleAnalysis,
         Header,
         LineStats,
@@ -159,7 +159,7 @@ def test_format_analysis_no_repeated_lines():
 
 def test_format_analysis_long_line_preview():
     """format_analysis should truncate long lines in preview."""
-    from ml_playground.analysis.sample_quality import (
+    from ml_playground.tools.analysis.sample_quality import (
         SampleAnalysis,
         Header,
         LineStats,
@@ -188,7 +188,7 @@ def test_format_analysis_long_line_preview():
 
 def test_format_analysis_with_stray_years():
     """format_analysis should display stray year tokens when present."""
-    from ml_playground.analysis.sample_quality import (
+    from ml_playground.tools.analysis.sample_quality import (
         SampleAnalysis,
         Header,
         LineStats,

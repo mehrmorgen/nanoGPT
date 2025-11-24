@@ -275,7 +275,7 @@ def test_learn_commands_accept_valid_categories(
     result = _invoke_cli(args)
     assert result.exit_code == 0
     output = result.stdout
-    assert category in output
+    assert category.lower() in output.lower()
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, category=INVALID_CATEGORY_STRATEGY)

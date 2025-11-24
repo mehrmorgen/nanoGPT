@@ -15,6 +15,7 @@ Feature: Tools CLI entrypoint
       | dev |
       | ci |
       | learn |
+      | analysis |
 
   Scenario: Show effective tools configuration
     When I invoke the "tools" CLI with arguments "config"
@@ -47,6 +48,7 @@ Feature: Tools CLI entrypoint
       | dev        | Development workflow tools |
       | ci         | CI/CD operations |
       | learn      | Learning mode utilities |
+      | analysis   | Analysis tools |
 
   Scenario Outline: Require subcommand selection
     When I invoke the "tools" CLI with arguments "<subcommand>"
@@ -63,3 +65,4 @@ Feature: Tools CLI entrypoint
       | dev |
       | ci |
       | learn |
+      | analysis |

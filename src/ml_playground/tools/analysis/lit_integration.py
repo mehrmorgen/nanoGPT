@@ -100,7 +100,7 @@ def run_server_bundestag_char(
     # Try to read input.txt if it exists, but keep it optional and tiny.
     try:
         # Resolve to the src/ml_playground/experiments/bundestag_char directory
-        base_dir = Path(__file__).resolve().parents[1]
+        base_dir = Path(__file__).resolve().parents[2]
         exp_dir = base_dir / "experiments" / "bundestag_char"
         input = exp_dir / "datasets" / "input.txt"
         if input.exists():
@@ -115,7 +115,7 @@ def run_server_bundestag_char(
 
     text_segment_factory = types_module.TextSegment
 
-    class BundestagTextDataset(dataset_base):
+    class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):
             self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
 
@@ -130,7 +130,7 @@ def run_server_bundestag_char(
         def __iter__(self):
             return iter(self._examples)
 
-    class EchoModel(model_base):
+    class EchoModel(model_base):  # type: ignore[valid-type, misc]
         """Trivial model that returns the input text as generated output.
 
         Serves as a PoC to exercise LIT views for text data without trained weights.
