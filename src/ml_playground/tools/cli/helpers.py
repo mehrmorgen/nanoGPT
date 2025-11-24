@@ -3,6 +3,9 @@
 from pathlib import Path
 from typing import cast
 
+import click
+import typer.core
+
 from ml_playground.tools.ci.ci import CITools
 from ml_playground.tools.cli.config_loader import ensure_config_loaded
 from ml_playground.tools.cli.dependencies import get_tools_dependencies
@@ -13,6 +16,13 @@ from ml_playground.tools.dev.dev import DevTools
 from ml_playground.tools.environment.environment import EnvironmentTools
 from ml_playground.tools.quality.quality import QualityTools
 from ml_playground.tools.testing.testing import TestingTools
+
+
+class OrderedGroup(typer.core.TyperGroup):
+    """Click Group that lists commands alphabetically."""
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return sorted(self.commands)
 
 
 def get_quality_tools() -> QualityTools:

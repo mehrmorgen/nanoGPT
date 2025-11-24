@@ -13,6 +13,7 @@ from ml_playground.tools.core.errors import (
 from ml_playground.tools.cli.helpers import (
     get_ci_tools,
     handle_tool_result,
+    OrderedGroup,
 )
 
 # Create CI app
@@ -20,67 +21,20 @@ ci_app = typer.Typer(
     name="ci",
     help="CI/CD operations (quality gates, badges)",
     no_args_is_help=True,
+    cls=OrderedGroup,
 )
 
 
-@ci_app.command("quality-gate")
-def ci_quality_gate(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pre-commit arguments")
-    ] = None,
-) -> None:
-    """Run the full pre-commit quality gate."""
-    try:
-        tools = get_ci_tools()
-        result = tools.quality_gate(args or [])
-        handle_tool_result(result)
-    except ToolExecutionError as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="ci",
-                command="quality-gate",
-                stderr=str(e),
-            )
-        )
-
-
-@ci_app.command("quality-fast")
-def ci_quality_fast(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional pre-commit arguments")
-    ] = None,
-) -> None:
-    """Run lint/format focused pre-commit hooks."""
-    try:
-        tools = get_ci_tools()
-        result = tools.quality_fast(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="ci",
-                command="quality-fast",
-                stderr=f"Error running quality fast: {e}",
-            )
-        )
-
-
-@ci_app.command("quality-ext")
-def ci_quality_ext(
+@ci_app.command("coverage-badge")
+def ci_coverage_badge(
     args: Annotated[
         Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
     ] = None,
 ) -> None:
-    """Run extended quality gates (mutation testing moved to testing tools)."""
+    """Regenerate the SVG coverage badges."""
     try:
         tools = get_ci_tools()
-        result = tools.quality_ext(args or [])
+        result = tools.coverage_badge(args or [])
         handle_tool_result(result)
     except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
@@ -89,8 +43,8 @@ def ci_quality_ext(
                 exit_code=1,
                 namespace="tools",
                 category="ci",
-                command="quality-ext",
-                stderr=f"Error running quality ext: {e}",
+                command="coverage-badge",
+                stderr=f"Error generating coverage badge: {e}",
             )
         )
 
@@ -126,16 +80,16 @@ def ci_quality_ci_local(
         )
 
 
-@ci_app.command("coverage-badge")
-def ci_coverage_badge(
+@ci_app.command("quality-ext")
+def ci_quality_ext(
     args: Annotated[
         Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
     ] = None,
 ) -> None:
-    """Regenerate the SVG coverage badges."""
+    """Run extended quality gates (mutation testing moved to testing tools)."""
     try:
         tools = get_ci_tools()
-        result = tools.coverage_badge(args or [])
+        result = tools.quality_ext(args or [])
         handle_tool_result(result)
     except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
@@ -144,7 +98,55 @@ def ci_coverage_badge(
                 exit_code=1,
                 namespace="tools",
                 category="ci",
-                command="coverage-badge",
-                stderr=f"Error generating coverage badge: {e}",
+                command="quality-ext",
+                stderr=f"Error running quality ext: {e}",
+            )
+        )
+
+
+@ci_app.command("quality-fast")
+def ci_quality_fast(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional pre-commit arguments")
+    ] = None,
+) -> None:
+    """Run lint/format focused pre-commit hooks."""
+    try:
+        tools = get_ci_tools()
+        result = tools.quality_fast(args or [])
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="ci",
+                command="quality-fast",
+                stderr=f"Error running quality fast: {e}",
+            )
+        )
+
+
+@ci_app.command("quality-gate")
+def ci_quality_gate(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional pre-commit arguments")
+    ] = None,
+) -> None:
+    """Run the full pre-commit quality gate."""
+    try:
+        tools = get_ci_tools()
+        result = tools.quality_gate(args or [])
+        handle_tool_result(result)
+    except ToolExecutionError as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="ci",
+                command="quality-gate",
+                stderr=str(e),
             )
         )

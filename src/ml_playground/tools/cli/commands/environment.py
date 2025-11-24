@@ -15,6 +15,7 @@ from ml_playground.tools.core.errors import (
 from ml_playground.tools.cli.helpers import (
     get_environment_tools,
     handle_tool_result,
+    OrderedGroup,
 )
 
 # Create environment app
@@ -22,7 +23,110 @@ env_app = typer.Typer(
     name="env",
     help="Environment management tools (setup, sync, clean)",
     no_args_is_help=True,
+    cls=OrderedGroup,
 )
+
+
+@env_app.command("ai-guidelines")
+def env_ai_guidelines(
+    tool: Annotated[str, typer.Argument(help="Target tool name for AI guidelines")],
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Preview actions without executing")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Set up AI guideline symlinks for the requested tool."""
+    try:
+        tools = get_environment_tools()
+        result = tools.ai_guidelines(args or [], tool=tool, dry_run=dry_run)
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="env",
+                command="ai-guidelines",
+                stderr=f"Error setting up AI guidelines: {e}",
+            )
+        )
+
+
+@env_app.command("clean")
+def env_clean(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Remove caches and temporary build artifacts."""
+    try:
+        tools = get_environment_tools()
+        result = tools.clean(args or [])
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="env",
+                command="clean",
+                stderr=f"Error cleaning environment: {e}",
+            )
+        )
+
+
+@env_app.command("gguf-help")
+def env_gguf_help(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show llama.cpp GGUF conversion help."""
+    try:
+        tools = get_environment_tools()
+        result = tools.gguf_help(args or [])
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="env",
+                command="gguf-help",
+                stderr=f"Error showing GGUF help: {e}",
+            )
+        )
+
+
+@env_app.command("info")
+def env_info(
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Show environment information."""
+    try:
+        tools = get_environment_tools()
+        result = tools.info(
+            args or [],
+        )
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="env",
+                command="info",
+                stderr=f"Error getting environment info: {e}",
+            )
+        )
 
 
 @env_app.command("setup")
@@ -92,108 +196,6 @@ def env_sync(
         )
 
 
-@env_app.command("verify")
-def env_verify(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Ensure the project package imports correctly."""
-    try:
-        tools = get_environment_tools()
-        result = tools.verify(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="verify",
-                stderr=f"Error verifying environment: {e}",
-            )
-        )
-
-
-@env_app.command("clean")
-def env_clean(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Remove caches and temporary build artifacts."""
-    try:
-        tools = get_environment_tools()
-        result = tools.clean(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="clean",
-                stderr=f"Error cleaning environment: {e}",
-            )
-        )
-
-
-@env_app.command("info")
-def env_info(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Show environment information."""
-    try:
-        tools = get_environment_tools()
-        result = tools.info(
-            args or [],
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="info",
-                stderr=f"Error getting environment info: {e}",
-            )
-        )
-
-
-@env_app.command("ai-guidelines")
-def env_ai_guidelines(
-    tool: Annotated[str, typer.Argument(help="Target tool name for AI guidelines")],
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Preview actions without executing")
-    ] = False,
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
-    ] = None,
-) -> None:
-    """Set up AI guideline symlinks for the requested tool."""
-    try:
-        tools = get_environment_tools()
-        result = tools.ai_guidelines(args or [], tool=tool, dry_run=dry_run)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="ai-guidelines",
-                stderr=f"Error setting up AI guidelines: {e}",
-            )
-        )
-
-
 @env_app.command("tensorboard")
 def env_tensorboard(
     logdir: Annotated[
@@ -237,16 +239,16 @@ def env_tensorboard(
         )
 
 
-@env_app.command("gguf-help")
-def env_gguf_help(
+@env_app.command("verify")
+def env_verify(
     args: Annotated[
         Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
     ] = None,
 ) -> None:
-    """Show llama.cpp GGUF conversion help."""
+    """Ensure the project package imports correctly."""
     try:
         tools = get_environment_tools()
-        result = tools.gguf_help(args or [])
+        result = tools.verify(args or [])
         handle_tool_result(result)
     except (ToolExecutionError, ToolConfigurationError) as e:
         handle_tool_result(
@@ -255,7 +257,7 @@ def env_gguf_help(
                 exit_code=1,
                 namespace="tools",
                 category="env",
-                command="gguf-help",
-                stderr=f"Error showing GGUF help: {e}",
+                command="verify",
+                stderr=f"Error verifying environment: {e}",
             )
         )

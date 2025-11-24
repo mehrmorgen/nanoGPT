@@ -26,6 +26,7 @@ from ml_playground.tools.cli.config_loader import (
     load_config_with_error_handling,
     ensure_config_loaded,
 )
+from ml_playground.tools.cli.helpers import OrderedGroup
 
 from ml_playground.tools.core.errors import (
     ToolExecutionError,
@@ -47,12 +48,14 @@ app = typer.Typer(
     help="ML Playground unified development tools",
     no_args_is_help=True,
     rich_markup_mode="rich",
+    cls=OrderedGroup,
 )
 
 learn_app = typer.Typer(
     name="learn",
     help="Learning mode utilities and educational content",
     no_args_is_help=True,
+    cls=OrderedGroup,
 )
 
 

@@ -402,6 +402,13 @@ optimized for non-interactive or copy-paste workflows.
   git rev-list refactor/p11-di-samplerconfig ^master
   ```
 
+## CLI Standards
+
+- **Typer/Click Implementation**: Build all CLIs using `typer`.
+- **Help Behavior**: Always set `no_args_is_help=True` for all Typer applications and subcommands so users see help instead of errors when running without arguments.
+- **Alphabetical Sorting**: Sort command functions alphabetically by their command name string in the source code. This ensures consistent ordering in `--help` output.
+- **Output**: Do not suppress standard output (stdout/stderr) from subprocesses unless strictly necessary for a specific "quiet" mode. Users expect to see tool output, especially for tests.
+
 ## Architecture Notes
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for detailed diagrams and flows covering configuration loading, dataset lifecycle, runtime entry points, and checkpoint retention policies.

@@ -42,10 +42,6 @@ def run_e2e(
         operation_id=operation_id,
     )
 
-    # Clean pytest output
-    if result.stdout:
-        result.stdout = _clean_pytest_output(result.stdout)
-
     if learning_mode:
         learning_engine = LearningModeEngine()
         learning_engine.verbosity = VerbosityLevel(verbosity_level)
@@ -90,10 +86,6 @@ def run_acceptance(
         operation_id=operation_id,
     )
 
-    # Clean pytest output
-    if result.stdout:
-        result.stdout = _clean_pytest_output(result.stdout)
-
     if learning_mode:
         learning_engine = LearningModeEngine()
         learning_engine.verbosity = VerbosityLevel(verbosity_level)
@@ -105,32 +97,3 @@ def run_acceptance(
         )
 
     return result
-
-
-def _clean_pytest_output(output: str) -> str:
-    """Remove pytest progress lines and xdist status messages."""
-    lines = output.splitlines()
-    cleaned_lines: list[str] = []
-
-    for line in lines:
-        # Skip progress indicators and xdist status
-        if any(
-            skip in line
-            for skip in [
-                "test session starts",
-                "[gw",
-                "workers [",
-                "scheduling",
-                ".",
-                "=",
-                "PASSED",
-                "FAILED",
-                "ERROR",
-                "warnings summary",
-                "short test summary",
-            ]
-        ):
-            continue
-        cleaned_lines.append(line)
-
-    return "\n".join(cleaned_lines)
