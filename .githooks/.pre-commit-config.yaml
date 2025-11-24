@@ -33,7 +33,7 @@ repos:
     language: system
     pass_filenames: false
     stages: [pre-commit]
-  - id: coverage-threshold
+  - id: coverage-threshold (unit + property)
     name: coverage threshold (>=92.50%)
     entry: bash
     args: [-c, "PYTHONPATH=src uv run python -m ml_playground.tools.cli.main test coverage --verbose"]
