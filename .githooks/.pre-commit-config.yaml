@@ -18,22 +18,21 @@ repos:
   - id: checkmake
 - repo: local
   hooks:
-  # TODO(mock-free-refactor): re-enable coverage badge hook after coverage branch lands
-  # - id: coverage-badge
-  #   name: coverage badge
-  #   entry: bash
-  #   args:
-  #     - -c
-  #     - |
-  #       set -e
-  #       if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
-  #         COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
-  #       fi
-  #       make coverage-badge SKIP_COVERAGE_TESTS=1
-  #       git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
-  #   language: system
-  #   pass_filenames: false
-  #   stages: [pre-commit]
+  - id: coverage-badge
+    name: coverage badge
+    entry: bash
+    args:
+      - -c
+      - |
+        set -e
+        if [ ! -f .cache/coverage/coverage.sqlite ]; then
+          PYTHONPATH=src uv run python -m ml_playground.tools.cli.main test coverage
+        fi
+        PYTHONPATH=src uv run python -m ml_playground.tools.cli.main ci coverage-badge
+        git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
+    language: system
+    pass_filenames: false
+    stages: [pre-commit]
   - id: coverage-threshold
     name: coverage threshold (>=92.50%)
     entry: bash

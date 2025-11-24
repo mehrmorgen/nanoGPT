@@ -118,6 +118,7 @@ __all__ = [
 
 def main(argv: list[str] | None = None) -> int | None:
     """Programmatic entry point for the runtime CLI."""
+    configure_cli_dependencies(default_cli_dependencies)
     registry.load_preparers()
     cmd = get_command(app)
     return cmd.main(args=argv, standalone_mode=False)
@@ -129,6 +130,7 @@ def main_entry(
     echo: EchoFunc | None = None,
 ) -> None:
     """Console entry point wrapping the Typer application."""
+    configure_cli_dependencies(default_cli_dependencies)
     runner = app_runner or app
 
     def _default_echo(message: str, *, err: bool = False) -> object:

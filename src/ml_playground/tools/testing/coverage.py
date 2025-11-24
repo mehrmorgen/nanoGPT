@@ -68,6 +68,10 @@ def run_coverage_test(
             "-v",
             "tests/unit",
             "tests/property",
+            "tests/acceptance",
+            "tests/e2e",
+            "tests/integration",
+            "tests/regression",
         ],
         cwd=root_path,
         env=env,
@@ -930,7 +934,15 @@ def _generate_coverage_via_pytest(
         "PYTHONHASHSEED": "0",
     }
 
-    pytest_args = ["tests/unit", "tests/property", *args]
+    pytest_args = [
+        "tests/unit",
+        "tests/property",
+        "tests/acceptance",
+        "tests/e2e",
+        "tests/integration",
+        "tests/regression",
+        *args,
+    ]
     pytest_cmd = ["pytest", *pytest_args]
     formatted_pytest_cmd = _format_command(pytest_cmd)
     if formatted_pytest_cmd not in executed_commands:
