@@ -4,11 +4,7 @@
 set -euo pipefail
 
 # Hard enforcement BEFORE pre-commit's isolated staging: scan working tree tests/ for mocks
-if files=$(find tests \
-    \( -path 'tests/unit/cli/*' -o -path 'tests/property/cli/*' -o -path 'tests/acceptance/cli/*' \
-       -o -path 'tests/unit/runtime/*' -o -path 'tests/property/runtime/*' -o -path 'tests/acceptance/runtime/*' \
-       -o -path 'tests/unit/tools/*' -o -path 'tests/property/tools/*' -o -path 'tests/acceptance/tools/*' \) \
-    -prune -o -type f -name '*.py' -print 2>/dev/null) && [ -n "$files" ]; then
+if files=$(find tests -type f -name '*.py' -print 2>/dev/null) && [ -n "$files" ]; then
   if [ -n "$files" ]; then
     found=0
     tokens=(
