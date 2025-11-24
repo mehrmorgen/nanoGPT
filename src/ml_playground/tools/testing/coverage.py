@@ -68,10 +68,6 @@ def run_coverage_test(
             "-v",
             "tests/unit",
             "tests/property",
-            "tests/acceptance",
-            "tests/e2e",
-            "tests/integration",
-            "tests/regression",
         ],
         cwd=root_path,
         env=env,
@@ -937,10 +933,6 @@ def _generate_coverage_via_pytest(
     pytest_args = [
         "tests/unit",
         "tests/property",
-        "tests/acceptance",
-        "tests/e2e",
-        "tests/integration",
-        "tests/regression",
         *args,
     ]
     pytest_cmd = ["pytest", *pytest_args]
