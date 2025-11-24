@@ -133,6 +133,36 @@ def test_regression(
     _invoke_tests(ctx, "tests/regression", pattern, list(extra_args or []))
 
 
+@test_app.command("integration")
+def test_integration(
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[list[str] | None, typer.Argument()] = None,
+) -> None:
+    """Run integration tests."""
+    _invoke_tests(ctx, "tests/integration", pattern, list(extra_args or []))
+
+
+@test_app.command("e2e")
+def test_e2e(
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[list[str] | None, typer.Argument()] = None,
+) -> None:
+    """Run end-to-end tests."""
+    _invoke_tests(ctx, "tests/e2e", pattern, list(extra_args or []))
+
+
+@test_app.command("acceptance")
+def test_acceptance(
+    ctx: typer.Context,
+    pattern: Annotated[str | None, typer.Argument()] = None,
+    extra_args: Annotated[list[str] | None, typer.Argument()] = None,
+) -> None:
+    """Run acceptance tests."""
+    _invoke_tests(ctx, "tests/acceptance", pattern, list(extra_args or []))
+
+
 @test_app.command("all")
 def test_all(
     args: Annotated[
