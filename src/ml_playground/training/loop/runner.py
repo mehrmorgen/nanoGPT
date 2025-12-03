@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, Protocol, cast
 
 import torch
-from torch.amp.grad_scaler import GradScaler
+from torch.cuda.amp import GradScaler
 from torch.optim import Optimizer
 
 from ml_playground.configuration.models import (

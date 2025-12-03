@@ -11,9 +11,10 @@ authors = [
     { name = "Andrej Karpathy" },
 ]
 license = { file = "LICENSE" }
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    "numpy>=2.3.4",
+    "numpy>=2.1.0; platform_system != 'Darwin' or platform_machine != 'x86_64'",
+    "numpy>=1.26.0,<2.0.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
     "requests>=2.32.5",
     "tiktoken>=0.12.0",
     "tqdm>=4.67.1",
@@ -29,9 +30,9 @@ dependencies = [
     "hatchling>=1.27.0",
     "pip >= 25.3",
     "torch==2.9.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
-    "torch==2.9.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
+    "torch==2.9.0; platform_system == 'Linux' and platform_machine == 'aarch64'",
     "torch==2.9.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
-    "torch==2.9.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "torch==2.2.2; platform_system == 'Darwin' and platform_machine == 'x86_64'",
     "torch==2.9.0; platform_system == 'Windows'",
     "transformers==4.57.1",
     "peft>=0.17.1",

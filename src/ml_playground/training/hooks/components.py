@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Callable, cast
 
 import torch
-from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
+from torch.cuda.amp import GradScaler
+from torch.utils.tensorboard.writer import SummaryWriter
 
 from ml_playground.configuration.models import TrainerConfig
 from ml_playground.training.ema import EMA
@@ -39,18 +39,9 @@ def initialize_components(
         except AttributeError as exc:  # torch.compile unavailable or stubbed
             raise RuntimeError("torch.compile requested but unavailable") from exc
 
-    device_arg: str | None = None
-    enabled_arg: bool
-    if runtime.device_type == "cuda":
-        device_arg = "cuda"
-        enabled_arg = cfg.runtime.dtype == "float16"
-    else:
-        enabled_arg = False
-
-    if device_arg is not None:
-        scaler = GradScaler(device=device_arg, enabled=enabled_arg)
-    else:
-        scaler = GradScaler(enabled=enabled_arg)
+    # GradScaler in torch 2.2.2 doesn't have device param; enabled only on CUDA with float16
+    enabled_arg = runtime.device_type == "cuda" and cfg.runtime.dtype == "float16"
+    scaler = GradScaler(enabled=enabled_arg)
 
     ema: EMA | None = None
     if cfg.runtime.ema_decay > 0.0:

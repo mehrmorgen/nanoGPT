@@ -66,6 +66,9 @@ events.out.tfevents.*
 scripts/llama_cpp/llama-gguf
 scripts/llama_cpp/llama-quantize
 
+# Local Python version pin (platform-specific)
+.python-version
+
 # Local editor/workspace folders
 .windsurf/
 .junie/
