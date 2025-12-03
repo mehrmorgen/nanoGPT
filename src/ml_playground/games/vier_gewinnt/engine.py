@@ -1,15 +1,16 @@
+from __future__ import annotations
 import numpy as np
 
 
 class VierGewinnt:
-    def __init__(self, rows=6, cols=7):
+    def __init__(self, rows: int = 6, cols: int = 7) -> None:
         self.rows = rows
         self.cols = cols
         self.board = np.zeros((rows, cols), dtype=int)
         self.current_player = 1
         self.move_history = []
 
-    def make_move(self, col):
+    def make_move(self, col: int) -> int:
         if col < 0 or col >= self.cols or self.board[0, col] != 0:
             raise ValueError("Invalid move")
 
@@ -26,7 +27,7 @@ class VierGewinnt:
         self.current_player = 3 - self.current_player  # Switch player (1 -> 2, 2 -> 1)
         return 0  # No winner yet
 
-    def check_win(self, player):
+    def check_win(self, player: int) -> bool:
         # Check horizontal
         for r in range(self.rows):
             for c in range(self.cols - 3):
@@ -53,16 +54,16 @@ class VierGewinnt:
 
         return False
 
-    def is_full(self):
+    def is_full(self) -> bool:
         return not any(self.board[0, :] == 0)
 
-    def get_valid_moves(self):
+    def get_valid_moves(self) -> list[int]:
         return [c for c in range(self.cols) if self.board[0, c] == 0]
 
-    def to_string(self):
+    def to_string(self) -> str:
         return np.array2string(self.board)
 
-    def reset(self):
+    def reset(self) -> None:
         self.board = np.zeros((self.rows, self.cols), dtype=int)
         self.current_player = 1
         self.move_history = []

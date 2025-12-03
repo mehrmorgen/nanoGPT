@@ -5,7 +5,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Callable, Optional, Tuple
 
 import torch
 import typer
@@ -34,8 +34,8 @@ __all__ = ["main"]
 @dataclass(frozen=True)
 class CLIDependencies:
     load_experiment: Callable[[str, Path | None, str | None], ExperimentConfig]
-    ensure_train_prerequisites: Callable[[ExperimentConfig], Any]
-    ensure_sample_prerequisites: Callable[[ExperimentConfig], Any]
+    ensure_train_prerequisites: Callable[[ExperimentConfig], Path]
+    ensure_sample_prerequisites: Callable[[ExperimentConfig], Tuple[Path, Path]]
     run_prepare: Callable[[str, PreparerConfig, Path, SharedConfig], None]
     run_train: Callable[[str, TrainerConfig, Path, SharedConfig], None]
     run_sample: Callable[[str, SamplerConfig, Path, SharedConfig], None]
@@ -45,7 +45,7 @@ def _run_prepare_impl(
     experiment: str,
     prepare_cfg: PreparerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full prepare flow for an experiment."""
     prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
@@ -78,7 +78,7 @@ def _run_train_impl(
     experiment: str,
     train_cfg: TrainerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full training flow for an experiment."""
     if not train_cfg.runtime:
@@ -105,7 +105,7 @@ def _run_sample_impl(
     experiment: str,
     sample_cfg: SamplerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full sampling flow for an experiment."""
     if not sample_cfg.runtime:
@@ -283,7 +283,7 @@ def _run_prepare(
     experiment: str,
     prepare_cfg: PreparerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full prepare flow for an experiment."""
     prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
@@ -296,7 +296,7 @@ def _run_train(
     experiment: str,
     train_cfg: TrainerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full training flow for an experiment."""
     if not train_cfg.runtime:
@@ -323,7 +323,7 @@ def _run_sample(
     experiment: str,
     sample_cfg: SamplerConfig,
     config_path: Path,
-    shared: Any,
+    shared: SharedConfig,
 ) -> None:
     """Run the full sampling flow for an experiment."""
     if not sample_cfg.runtime:

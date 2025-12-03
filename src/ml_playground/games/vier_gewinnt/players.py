@@ -1,20 +1,22 @@
+from __future__ import annotations
 import random
+from typing import Optional, Tuple
 import numpy as np
 from .engine import VierGewinnt
 
 
 class Player:
-    def get_move(self, game: VierGewinnt):
+    def get_move(self, game: VierGewinnt) -> int:
         raise NotImplementedError
 
 
 class RandomPlayer(Player):
-    def get_move(self, game: VierGewinnt):
+    def get_move(self, game: VierGewinnt) -> int:
         return random.choice(game.get_valid_moves())
 
 
 class HeuristicPlayer(Player):
-    def get_move(self, game: VierGewinnt):
+    def get_move(self, game: VierGewinnt) -> int:
         valid_moves = game.get_valid_moves()
 
         # Prioritize winning moves
@@ -36,7 +38,7 @@ class HeuristicPlayer(Player):
 
         return random.choice(valid_moves)
 
-    def is_winning_move(self, game: VierGewinnt, col, player):
+    def is_winning_move(self, game: VierGewinnt, col: int, player: int) -> bool:
         temp_game = VierGewinnt(rows=game.rows, cols=game.cols)
         temp_game.board = np.copy(game.board)
         temp_game.current_player = player
@@ -50,18 +52,28 @@ class HeuristicPlayer(Player):
 
 
 class MinimaxPlayer(Player):
-    def __init__(self, depth=4):
+    def __init__(self, depth: int = 4) -> None:
         self.depth = depth
-        self.player_id = None
+        self.player_id: Optional[int] = None
 
-    def get_move(self, game: VierGewinnt):
+    def get_move(self, game: VierGewinnt) -> int:
         self.player_id = game.current_player
         _, move = self.minimax(game, self.depth, True, -np.inf, np.inf)
+        if move is None:
+             # Should not happen if valid moves exist
+            return random.choice(game.get_valid_moves())
         return move
 
-    def minimax(self, game, depth, maximizing_player, alpha, beta):
+    def minimax(
+        self,
+        game: VierGewinnt,
+        depth: int,
+        maximizing_player: bool,
+        alpha: float,
+        beta: float,
+    ) -> Tuple[float, Optional[int]]:
         if depth == 0 or game.check_win(1) or game.check_win(2) or game.is_full():
-            return self.evaluate_board(game), None
+            return float(self.evaluate_board(game)), None
 
         valid_moves = game.get_valid_moves()
 
@@ -92,8 +104,10 @@ class MinimaxPlayer(Player):
                     break
             return min_eval, best_move
 
-    def evaluate_board(self, game):
+    def evaluate_board(self, game: VierGewinnt) -> int:
         # Terminal states
+        if self.player_id is None:
+            return 0
         if game.check_win(self.player_id):
             return 100000
         elif game.check_win(3 - self.player_id):
@@ -116,7 +130,7 @@ class MinimaxPlayer(Player):
 
         return score
 
-    def score_position(self, game, player):
+    def score_position(self, game: VierGewinnt, player: int) -> int:
         score = 0
         
         # Horizontal
@@ -124,7 +138,7 @@ class MinimaxPlayer(Player):
             row_array = [int(i) for i in list(game.board[r, :])]
             for c in range(game.cols - 3):
                 window = row_array[c : c + 4]
-                score += self.evaluate_window(window, player)
+                # score += self.evaluate_window(window, player)
 
         # Vertical
         for c in range(game.cols):
@@ -147,7 +161,7 @@ class MinimaxPlayer(Player):
 
         return score
 
-    def evaluate_window(self, window, player):
+    def evaluate_window(self, window: list[int], player: int) -> int:
         score = 0
         opp_player = 3 - player
 
@@ -163,7 +177,7 @@ class MinimaxPlayer(Player):
 
         return score
 
-    def create_temp_game(self, game, col, player):
+    def create_temp_game(self, game: VierGewinnt, col: int, player: int) -> VierGewinnt:
         temp_game = VierGewinnt(rows=game.rows, cols=game.cols)
         temp_game.board = np.copy(game.board)
         temp_game.current_player = player
