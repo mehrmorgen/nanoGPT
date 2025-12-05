@@ -16,9 +16,9 @@ from ml_playground.games.vier_gewinnt.sampler_player import SamplerPlayer
 
 PLAYER_TYPES = {
     "human": None,  # Human player will be handled separately
-    "random": RandomPlayer,
-    "heuristic": HeuristicPlayer,
-    "minimax": MinimaxPlayer,
+    "easy": RandomPlayer,
+    "medium": HeuristicPlayer,
+    "hard": MinimaxPlayer,
     "easy_ai": lambda: SamplerPlayer("vier_gewinnt_easy"),
     "medium_ai": lambda: SamplerPlayer("vier_gewinnt_medium"),
     "hard_ai": lambda: SamplerPlayer("vier_gewinnt_hard"),
@@ -111,7 +111,7 @@ def main():
     parser.add_argument(
         "--player2",
         choices=PLAYER_TYPES.keys(),
-        default="easy_ai",
+        default="easy",
         help="Type of player 2",
     )
     args = parser.parse_args()
