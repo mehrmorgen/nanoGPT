@@ -50,12 +50,32 @@ def main():
     player1 = PLAYER_CLASSES[args.player1]()
     player2 = PLAYER_CLASSES[args.player2]()
 
+    seen_games: set[str] = set()
+    attempts = 0
+    max_attempts = max(args.num_games * 20, args.num_games + 10)
+
+    while len(seen_games) < args.num_games:
+        if attempts >= max_attempts:
+            raise RuntimeError(
+                "Unable to generate the requested number of unique games. "
+                "The selected players may be too deterministic for this quota."
+            )
+
+        winner, move_history = play_game(player1, player2)
+        record = f"{winner}:{','.join(map(str, move_history))}"
+        attempts += 1
+
+        seen_games.add(record)
+
+        if attempts % 10 == 0 or attempts == args.num_games:
+            print(
+                f"Collected {len(seen_games)}/{args.num_games} unique games "
+                f"after {attempts} simulations"
+            )
+
     with open(args.output_file, "w") as f:
-        for i in range(args.num_games):
-            winner, move_history = play_game(player1, player2)
-            f.write(f"{winner}:{','.join(map(str, move_history))}\n")
-            if (i + 1) % 10 == 0:
-                print(f"Played {i + 1}/{args.num_games} games")
+        for record in seen_games:
+            f.write(record + "\n")
 
 
 if __name__ == "__main__":
