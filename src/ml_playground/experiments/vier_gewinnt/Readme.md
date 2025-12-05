@@ -30,19 +30,39 @@ vier_gewinnt/
    uv run cli prepare vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
 
-1. **Train the model:**
+1. **Train:**
 
    ```bash
    uv run cli train vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
 
-1. **Sample from the model:**
+1. **Sample:**
 
    ```bash
    uv run cli sample vier_gewinnt --exp-config src/ml_playground/experiments/vier_gewinnt/config.easy.toml
    ```
 
-   Replace `config.easy.toml` with `config.medium.toml` or `config.hard.toml` to target the other difficulty presets.
+## Playing the game locally
+
+- As a script:
+
+  ```bash
+  uv run python src/ml_playground/experiments/vier_gewinnt/play.py --player1 easy --player2 hard
+  ```
+
+- As a module (preferred for PYTHONPATH):
+
+  ```bash
+  uv run python -m ml_playground.experiments.vier_gewinnt.play --player1 easy --player2 hard
+  ```
+
+Player types: `human`, `easy` (random), `medium` (heuristic), `hard` (minimax), plus `easy_ai` / `medium_ai` / `hard_ai` to use sampler checkpoints.
+
+## Configuration files
+
+- `config.toml`: Default configuration shared across training and sampling.
+- `config.easy.toml`, `config.medium.toml`, `config.hard.toml`: Difficulty-specific overrides.
+- `test_config.toml`: Lightweight config used in tests.
 
 ## Player Algorithms
 

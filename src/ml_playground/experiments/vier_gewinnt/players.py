@@ -1,0 +1,181 @@
+from __future__ import annotations
+
+import random
+from typing import Optional, Tuple
+
+import numpy as np
+
+from .engine import VierGewinnt
+
+
+class Player:
+    def get_move(self, game: VierGewinnt) -> int:
+        raise NotImplementedError
+
+
+class RandomPlayer(Player):
+    def get_move(self, game: VierGewinnt) -> int:
+        return random.choice(game.get_valid_moves())
+
+
+class HeuristicPlayer(Player):
+    def get_move(self, game: VierGewinnt) -> int:
+        valid_moves = game.get_valid_moves()
+
+        # Prioritize winning moves
+        for move in valid_moves:
+            if self.is_winning_move(game, move, game.current_player):
+                return move
+
+        # Block opponent's winning moves
+        opponent = 3 - game.current_player
+        for move in valid_moves:
+            if self.is_winning_move(game, move, opponent):
+                return move
+
+        return random.choice(valid_moves)
+
+    def is_winning_move(self, game: VierGewinnt, col: int, player: int) -> bool:
+        temp_game = VierGewinnt(rows=game.rows, cols=game.cols)
+        temp_game.board = np.copy(game.board)
+        temp_game.current_player = player
+
+        try:
+            temp_game.make_move(col)
+        except ValueError:
+            return False
+        return temp_game.check_win(player)
+
+
+class MinimaxPlayer(Player):
+    def __init__(self, depth: int = 4) -> None:
+        self.depth = depth
+        self.player_id: Optional[int] = None
+
+    def get_move(self, game: VierGewinnt) -> int:
+        self.player_id = game.current_player
+        _, move = self.minimax(game, self.depth, True, -np.inf, np.inf)
+        if move is None:
+            return random.choice(game.get_valid_moves())
+        return move
+
+    def _require_player_id(self) -> int:
+        if self.player_id is None:
+            raise ValueError("player_id must be set before calling minimax")
+        return self.player_id
+
+    def minimax(
+        self,
+        game: VierGewinnt,
+        depth: int,
+        maximizing_player: bool,
+        alpha: float,
+        beta: float,
+    ) -> Tuple[float, Optional[int]]:
+        valid_moves = game.get_valid_moves()
+
+        is_terminal = game.check_win(1) or game.check_win(2) or game.is_full()
+        if depth == 0 or is_terminal:
+            return self.evaluate_board(game), None
+
+        if maximizing_player:
+            max_eval = -np.inf
+            best_move = None
+            for move in valid_moves:
+                player = self._require_player_id()
+                new_game = self.create_temp_game(game, move, player)
+                eval_score, _ = self.minimax(new_game, depth - 1, False, alpha, beta)
+                if eval_score > max_eval:
+                    max_eval = eval_score
+                    best_move = move
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break
+            return max_eval, best_move
+        else:
+            min_eval = np.inf
+            best_move = None
+            for move in valid_moves:
+                player = 3 - self._require_player_id()
+                new_game = self.create_temp_game(game, move, player)
+                eval_score, _ = self.minimax(new_game, depth - 1, True, alpha, beta)
+                if eval_score < min_eval:
+                    min_eval = eval_score
+                    best_move = move
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break
+            return min_eval, best_move
+
+    def evaluate_board(self, game: VierGewinnt) -> int:
+        if self.player_id is None:
+            return 0
+
+        if game.check_win(self.player_id):
+            return 100000
+        if game.check_win(3 - self.player_id):
+            return -100000
+
+        score = 0
+        score += self.score_position(game, self.player_id)
+        score -= self.score_position(game, 3 - self.player_id)
+
+        return score
+
+    def score_position(self, game: VierGewinnt, player: int) -> int:
+        score = 0
+        board = game.board
+        rows, cols = game.rows, game.cols
+
+        # Horizontal
+        for r in range(rows):
+            row_array = [int(i) for i in list(board[r, :])]
+            for c in range(cols - 3):
+                window = row_array[c : c + 4]
+                score += self.evaluate_window(window, player)
+
+        # Vertical
+        for c in range(cols):
+            col_array = [int(i) for i in list(board[:, c])]
+            for r in range(rows - 3):
+                window = col_array[r : r + 4]
+                score += self.evaluate_window(window, player)
+
+        # Positive diagonal
+        for r in range(rows - 3):
+            for c in range(cols - 3):
+                window = [board[r + i][c + i] for i in range(4)]
+                score += self.evaluate_window(window, player)
+
+        # Negative diagonal
+        for r in range(3, rows):
+            for c in range(cols - 3):
+                window = [board[r - i][c + i] for i in range(4)]
+                score += self.evaluate_window(window, player)
+
+        return score
+
+    def evaluate_window(self, window: list[int], player: int) -> int:
+        score = 0
+        opponent = 3 - player
+        if window.count(player) == 4:
+            score += 100
+        elif window.count(player) == 3 and window.count(0) == 1:
+            score += 10
+        elif window.count(player) == 2 and window.count(0) == 2:
+            score += 5
+
+        if window.count(opponent) == 3 and window.count(0) == 1:
+            score -= 80
+        return score
+
+    def create_temp_game(self, game: VierGewinnt, col: int, player: int) -> VierGewinnt:
+        temp_game = VierGewinnt(rows=game.rows, cols=game.cols)
+        temp_game.board = np.copy(game.board)
+        temp_game.current_player = player
+        for r in range(temp_game.rows - 1, -1, -1):
+            if temp_game.board[r, col] == 0:
+                temp_game.board[r, col] = player
+                break
+        temp_game.current_player = 3 - player
+        return temp_game
