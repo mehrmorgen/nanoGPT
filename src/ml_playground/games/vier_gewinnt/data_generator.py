@@ -1,17 +1,26 @@
-import argparse
-from .engine import VierGewinnt
-from .players import RandomPlayer, HeuristicPlayer, MinimaxPlayer
+from __future__ import annotations
 
-PLAYER_CLASSES = {
+import argparse
+from typing import Dict, Tuple, List
+
+from .engine import VierGewinnt
+from .players import (
+    HeuristicPlayer,
+    MinimaxPlayer,
+    Player,
+    RandomPlayer,
+)
+
+PLAYER_CLASSES: Dict[str, type[Player]] = {
     "random": RandomPlayer,
     "heuristic": HeuristicPlayer,
     "minimax": MinimaxPlayer,
 }
 
 
-def play_game(player1, player2):
+def play_game(player1: Player, player2: Player) -> Tuple[int, List[int]]:
     game = VierGewinnt()
-    move_history = []
+    move_history: List[int] = []
 
     while True:
         player = player1 if game.current_player == 1 else player2
@@ -33,7 +42,7 @@ def play_game(player1, player2):
     return winner, move_history
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate training data for Vier Gewinnt."
     )

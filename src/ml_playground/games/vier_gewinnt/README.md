@@ -27,7 +27,7 @@ vier_gewinnt/
 ## Prerequisites
 
 1. Install the repository's UV environment (`uv run env-tasks setup`).
-2. Ensure the Vier Gewinnt experiment has prepared datasets and trained checkpoints if you plan to use the `*_ai` sampler players. See the linked experiment README for `uv run cli prepare`, `train`, and `sample` commands.
+1. Ensure the Vier Gewinnt experiment has prepared datasets and trained checkpoints if you plan to use the `*_ai` sampler players. See the linked experiment README for `uv run cli prepare`, `train`, and `sample` commands.
 
 ## Quick Start: Human vs AI
 
@@ -43,23 +43,23 @@ Notes:
 
 ### Available Player Types
 
-| Flag value  | Description |
-|-------------|-------------|
-| `human`     | Prompts on the command line for column numbers. |
-| `easy`      | Random player (uniform random moves). |
-| `medium`    | Heuristic player (win/block + center preference). |
-| `hard`      | Minimax player (depth=4, alpha-beta pruning). |
-| `easy_ai`   | GPT sampler backed by `experiments/vier_gewinnt_easy`. |
+| Flag value  | Description                                              |
+| ----------- | -------------------------------------------------------- |
+| `human`     | Prompts on the command line for column numbers.          |
+| `easy`      | Random player (uniform random moves).                    |
+| `medium`    | Heuristic player (win/block + center preference).        |
+| `hard`      | Minimax player (depth=4, alpha-beta pruning).            |
+| `easy_ai`   | GPT sampler backed by `experiments/vier_gewinnt_easy`.   |
 | `medium_ai` | GPT sampler backed by `experiments/vier_gewinnt_medium`. |
-| `hard_ai`   | GPT sampler backed by `experiments/vier_gewinnt_hard`. |
+| `hard_ai`   | GPT sampler backed by `experiments/vier_gewinnt_hard`.   |
 
 #### Player strategy details
 
 - **Random (`easy`)** – Samples uniformly from the currently valid columns; useful for smoke-testing the UI or creating high-variance datasets. Implementation lives in `players.RandomPlayer`.
 - **Heuristic (`medium`)** – Applies a short priority list inside `players.HeuristicPlayer`:
   1. If any move yields an immediate win, take it.
-  2. Otherwise, block the opponent’s winning move if one exists.
-  3. Fall back to a center-out preference order `[3, 2, 4, 1, 5, 0, 6]` to maximize board control.
+  1. Otherwise, block the opponent’s winning move if one exists.
+  1. Fall back to a center-out preference order `[3, 2, 4, 1, 5, 0, 6]` to maximize board control.
 - **Minimax (`hard`)** – Uses `players.MinimaxPlayer`, a depth-4 minimax search with alpha-beta pruning. The evaluator rewards center control and 2/3-in-a-row windows for the current player, heavily penalizing opponent threats and assigning ±100000 to terminal wins/losses. When no deterministic best move exists at the cutoff depth, it keeps the best-scoring candidate encountered.
 
 Example: play heuristic vs minimax, letting minimax start as Player 2:
@@ -79,21 +79,21 @@ uv run python -m ml_playground.games.vier_gewinnt.data_generator heuristic minim
 Arguments:
 
 1. `player1` – one of `random`, `heuristic`, `minimax`.
-2. `player2` – same choices as above.
-3. `num_games` – integer count of simulations.
-4. `output_file` – destination text file (each line `winner:col0,col1,...`).
+1. `player2` – same choices as above.
+1. `num_games` – integer count of simulations.
+1. `output_file` – destination text file (each line `winner:col0,col1,...`).
 
 ## Using GPT Sampler Players
 
 Sampler players load nanoGPT checkpoints from `src/ml_playground/experiments/<variant>/`. Ensure the corresponding experiment folder contains:
 
 1. `datasets/meta.pkl` (created by `uv run cli prepare ...`).
-2. `out/<variant>/ckpt_last_*.pt` (produced by `uv run cli train ...`).
+1. `out/<variant>/ckpt_last_*.pt` (produced by `uv run cli train ...`).
 
 Without these artifacts the sampler will raise `FileNotFoundError`. Re-run the experiment pipeline or point the sampler to a valid experiment directory.
 
 ## Troubleshooting
 
 1. **Import errors** – run commands via `uv run` to guarantee the environment and PYTHONPATH are consistent.
-2. **Sampler checkpoints missing** – revisit the experiment README to regenerate datasets/checkpoints for the chosen difficulty.
-3. **Model too slow on CPU** – set the `SamplerPlayer` `device` argument to `"cuda"` (if available) by editing `PLAYER_TYPES` or instantiating manually.
+1. **Sampler checkpoints missing** – revisit the experiment README to regenerate datasets/checkpoints for the chosen difficulty.
+1. **Model too slow on CPU** – set the `SamplerPlayer` `device` argument to `"cuda"` (if available) by editing `PLAYER_TYPES` or instantiating manually.

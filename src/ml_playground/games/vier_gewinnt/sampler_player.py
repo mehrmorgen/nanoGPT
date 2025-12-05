@@ -1,17 +1,23 @@
-import torch
-import numpy as np
-from pathlib import Path
-import sys
+from __future__ import annotations
 
-# Add project root to sys.path
-project_root = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(project_root))
+import logging
+import pathlib
+from pathlib import Path
+from typing import Callable, List, Tuple, Union, Optional, Type
+
+import numpy as np
+import torch
 
 from ml_playground.configuration.loading import load_full_experiment_config
-from ml_playground.models.core.model import GPT
 from ml_playground.core.tokenizer import CharTokenizer
 from ml_playground.games.vier_gewinnt.engine import VierGewinnt
 from ml_playground.games.vier_gewinnt.players import Player
+from ml_playground.models.core.model import GPT
+
+WINDOWS_PATH_CLASS: Optional[Type[Path]] = getattr(pathlib, "WindowsPath", None)
+
+project_root = Path(__file__).resolve().parents[4]
+SafeGlobal = Union[Callable[..., object], Tuple[Callable[..., object], str]]
 
 
 class SamplerPlayer(Player):
@@ -65,31 +71,20 @@ class SamplerPlayer(Player):
         model = GPT(updated_model_config, logger=train_cfg.logger)
         model.to(self.device)
 
-        # Load checkpoint
         checkpoint_dir = shared_cfg.train_out_dir
-        best_checkpoint_path = (
-            checkpoint_dir / "ckpt_best_00005000_0.086500.pt"
-        )  # This needs to be dynamic
+        checkpoint_path = self._resolve_checkpoint_path(checkpoint_dir)
 
-        # For now, let's just load the last checkpoint
-        last_checkpoint_path = checkpoint_dir / "ckpt_last_00005001.pt"
+        import torch.serialization
 
-        if last_checkpoint_path.exists():
-            import logging
-            import torch.serialization
-            import pathlib
+        safe_globals: List[SafeGlobal] = [logging.getLogger]
+        if WINDOWS_PATH_CLASS is not None:
+            safe_globals.append((lambda: WINDOWS_PATH_CLASS, "WindowsPath"))
 
-            torch.serialization.add_safe_globals(
-                [logging.getLogger, pathlib._local.WindowsPath]
-            )
-            checkpoint = torch.load(last_checkpoint_path, map_location=self.device)
-            state_dict = checkpoint["model"]
-            model.load_state_dict(state_dict)
-            print(f"Loaded model from {last_checkpoint_path}")
-        else:
-            raise FileNotFoundError(
-                f"No checkpoint found for {self.experiment_name} at {last_checkpoint_path}"
-            )
+        torch.serialization.add_safe_globals(safe_globals)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        state_dict = checkpoint["model"]
+        model.load_state_dict(state_dict)
+        print(f"Loaded model from {checkpoint_path}")
 
         model.eval()
         return model
@@ -113,6 +108,19 @@ class SamplerPlayer(Player):
         stoi = meta["stoi"]
         tokenizer = CharTokenizer(vocab=stoi)
         return tokenizer
+
+    def _resolve_checkpoint_path(self, checkpoint_dir: Path) -> Path:
+        best_candidates = sorted(checkpoint_dir.glob("ckpt_best_*.pt"))
+        if best_candidates:
+            return best_candidates[-1]
+
+        fallback = checkpoint_dir / "ckpt_last_00005001.pt"
+        if fallback.exists():
+            return fallback
+
+        raise FileNotFoundError(
+            f"No checkpoint found for {self.experiment_name} in {checkpoint_dir}"
+        )
 
     def get_move(self, game: VierGewinnt):
         valid_moves = game.get_valid_moves()
@@ -198,7 +206,7 @@ class SamplerPlayer(Player):
         filtered_probs = filtered_probs / filtered_probs.sum()  # Normalize
 
         # Sample a token index
-        next_token_idx = torch.multinomial(filtered_probs, num_samples=1).item()
+        next_token_idx = int(torch.multinomial(filtered_probs, num_samples=1).item())
 
         # Decode the token index back to a move
         predicted_char = self.tokenizer.itos[next_token_idx]

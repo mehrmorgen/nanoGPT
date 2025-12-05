@@ -12,7 +12,9 @@ from ml_playground.configuration.models import ExperimentConfig
 _PROJECT_HOME = Path(__file__).resolve().parent.parent.parent
 
 
-def cfg_path_for(experiment: str, exp_config: Optional[Path], variant: str | None = None) -> Path:
+def cfg_path_for(
+    experiment: str, exp_config: Optional[Path], variant: str | None = None
+) -> Path:
     """Return the canonical path to an experiment configuration file."""
     return get_cfg_path(experiment, exp_config, variant)
 

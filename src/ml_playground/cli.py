@@ -5,7 +5,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Callable, Optional, Tuple
+from typing import Annotated, Callable, Optional, Tuple
 
 import torch
 import typer
@@ -66,7 +66,9 @@ def _run_prepare_impl(
                 return
     except (ImportError, AttributeError, TypeError) as e:
         # Log debug but fall back to default pipeline
-        prepare_cfg.logger.debug(f"Could not load custom preparer for {experiment}: {e}")
+        prepare_cfg.logger.debug(
+            f"Could not load custom preparer for {experiment}: {e}"
+        )
         pass
 
     pipeline = create_pipeline(prepare_cfg, shared)
@@ -425,7 +427,9 @@ def prepare(
     experiment: ExperimentArg,
     variant: Annotated[
         Optional[str],
-        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+        typer.Argument(
+            help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"
+        ),
     ] = None,
     exp_config: Annotated[
         Path | None,
@@ -458,7 +462,9 @@ def train(
     experiment: ExperimentArg,
     variant: Annotated[
         Optional[str],
-        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+        typer.Argument(
+            help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"
+        ),
     ] = None,
     exp_config: Annotated[
         Path | None,
@@ -487,7 +493,9 @@ def sample(
     experiment: ExperimentArg,
     variant: Annotated[
         Optional[str],
-        typer.Argument(help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"),
+        typer.Argument(
+            help="Optional configuration variant (e.g. 'easy' for config.easy.toml)"
+        ),
     ] = None,
     exp_config: Annotated[
         Path | None,

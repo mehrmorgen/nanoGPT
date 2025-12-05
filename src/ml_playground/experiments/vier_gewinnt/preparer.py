@@ -22,7 +22,9 @@ class Preparer:
         self.output_dir = output_dir
 
     def prepare(
-        self, cfg: Optional[PreparerConfig] = None, shared: Optional[SharedConfig] = None
+        self,
+        cfg: Optional[PreparerConfig] = None,
+        shared: Optional[SharedConfig] = None,
     ) -> None:
         if cfg and shared:
             input_path = cfg.raw_text_path
@@ -89,9 +91,15 @@ class Preparer:
         train_ids, val_ids, meta, tokenizer = prepare_with_tokenizer(
             full_text, tokenizer, split=0.9
         )
-        
+
         # Ensure we use a dummy data config or None to default filenames
-        write_bin_and_meta(output_path, train_ids, val_ids, meta)
+        write_bin_and_meta(
+            output_path,
+            train_ids,
+            val_ids,
+            meta,
+            logger=logging.getLogger(__name__),
+        )
         logging.info(f"Wrote binaries and meta to {output_path}")
 
 

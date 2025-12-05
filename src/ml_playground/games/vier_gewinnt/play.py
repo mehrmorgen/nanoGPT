@@ -1,18 +1,12 @@
 import argparse
-import sys
-from pathlib import Path
 
-# Add project root to sys.path
-project_root = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(project_root))
-
-from ml_playground.games.vier_gewinnt.engine import VierGewinnt
-from ml_playground.games.vier_gewinnt.players import (
+from .engine import VierGewinnt
+from .players import (
     RandomPlayer,
     HeuristicPlayer,
     MinimaxPlayer,
 )
-from ml_playground.games.vier_gewinnt.sampler_player import SamplerPlayer
+from .sampler_player import SamplerPlayer
 
 PLAYER_TYPES = {
     "human": None,  # Human player will be handled separately

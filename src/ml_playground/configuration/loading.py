@@ -34,7 +34,9 @@ class ExperimentPayload(TypedDict, total=False):
     sample: TomlMapping
 
 
-def get_cfg_path(experiment: str, exp_config: Path | None, variant: str | None = None) -> Path:
+def get_cfg_path(
+    experiment: str, exp_config: Path | None, variant: str | None = None
+) -> Path:
     if exp_config:
         return exp_config
     filename = f"config.{variant}.toml" if variant else "config.toml"

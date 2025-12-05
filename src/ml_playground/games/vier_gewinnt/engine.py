@@ -1,14 +1,16 @@
 from __future__ import annotations
+
 import numpy as np
+from numpy.typing import NDArray
 
 
 class VierGewinnt:
     def __init__(self, rows: int = 6, cols: int = 7) -> None:
         self.rows = rows
         self.cols = cols
-        self.board = np.zeros((rows, cols), dtype=int)
+        self.board: NDArray[np.int_] = np.zeros((rows, cols), dtype=int)
         self.current_player = 1
-        self.move_history = []
+        self.move_history: list[int] = []
 
     def make_move(self, col: int) -> int:
         if col < 0 or col >= self.cols or self.board[0, col] != 0:

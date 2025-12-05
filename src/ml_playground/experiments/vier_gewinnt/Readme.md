@@ -49,17 +49,20 @@ vier_gewinnt/
 The experiment includes several AI implementations for data generation and interactive play:
 
 ### Random Player
+
 - **Algorithm**: Uniformly selects a random column from the set of currently valid moves.
 - **Usage**: Serves as a baseline or for generating high-variance noise in datasets.
 
 ### Heuristic Player
+
 - **Algorithm**: Rule-based decision making with the following priority:
   1. **Win Immediately**: If a move results in a win, take it.
-  2. **Block Opponent**: If the opponent can win on their next turn, block that column.
-  3. **Center Preference**: If no critical moves exist, prioritize columns in the order `[3, 2, 4, 1, 5, 0, 6]` (center-out).
-  4. **Fallback**: If preferred columns are full, choose randomly among valid moves.
+  1. **Block Opponent**: If the opponent can win on their next turn, block that column.
+  1. **Center Preference**: If no critical moves exist, prioritize columns in the order `[3, 2, 4, 1, 5, 0, 6]` (center-out).
+  1. **Fallback**: If preferred columns are full, choose randomly among valid moves.
 
 ### Minimax Player
+
 - **Algorithm**: Depth-limited Minimax search (default depth=4) with Alpha-Beta pruning.
 - **Evaluation Function**:
   - **Terminal States**: +/- 100,000 points for a win/loss.
@@ -70,4 +73,3 @@ The experiment includes several AI implementations for data generation and inter
       - 3-in-a-row (Self): +5 points
       - 2-in-a-row (Self): +2 points
       - 3-in-a-row (Opponent): -4 points (penalty for leaving threats open)
-
