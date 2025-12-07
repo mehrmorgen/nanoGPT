@@ -7,15 +7,10 @@ from typing_extensions import Annotated
 
 # Import shared utilities
 from ml_playground.tools.cli.state import state
-from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.tools.cli.helpers import (
     get_testing_tools,
-    handle_tool_result,
     OrderedGroup,
-)
-from ml_playground.tools.core.errors import (
-    ToolExecutionError,
-    ToolConfigurationError,
+    run_tool_command,
 )
 
 # Create testing app
@@ -33,41 +28,31 @@ def _invoke_tests(
     pattern: str | None,
     extra_args: list[str],
 ) -> None:
-    try:
-        tools = get_testing_tools()
-        args = list(extra_args)
-        if pattern:
-            args.extend(["-k", pattern])
+    tools = get_testing_tools()
+    args = list(extra_args)
+    if pattern:
+        args.extend(["-k", pattern])
 
-        # Map test directories to method names
-        suite_map = {
-            "tests/unit": "unit",
-            "tests/property": "property_tests",
-            "tests/regression": "regression",
-            "tests/integration": "integration",
-            "tests/e2e": "e2e",
-            "tests/acceptance": "acceptance",
-        }
-        method_name = suite_map.get(test_dir)
-        if method_name is None:
-            raise Exception(f"Unsupported test suite: {test_dir}")
+    # Map test directories to method names
+    suite_map = {
+        "tests/unit": "unit",
+        "tests/property": "property_tests",
+        "tests/regression": "regression",
+        "tests/integration": "integration",
+        "tests/e2e": "e2e",
+        "tests/acceptance": "acceptance",
+    }
+    method_name = suite_map.get(test_dir)
+    if method_name is None:
+        raise Exception(f"Unsupported test suite: {test_dir}")
 
-        suite_fn = getattr(tools, method_name)
-        result = suite_fn(
-            args, learning_mode=state.learning_mode, verbosity_level=state.verbosity
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="test",
-                command="run_tests",
-                stderr=f"Error running tests in {test_dir}: {e}",
-            )
-        )
+    suite_fn = getattr(tools, method_name)
+    run_tool_command(
+        suite_fn,
+        args,
+        learning_mode=state.learning_mode,
+        verbosity_level=state.verbosity,
+    )
 
 
 @test_app.command("acceptance")
@@ -87,25 +72,13 @@ def test_all(
     ] = None,
 ) -> None:
     """Run all tests."""
-    try:
-        tools = get_testing_tools()
-        result = tools.all_tests(
-            args or [],
-            learning_mode=state.learning_mode,
-            verbosity_level=state.verbosity,
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="test",
-                command="all",
-                stderr=f"Error running all tests: {e}",
-            )
-        )
+    tools = get_testing_tools()
+    run_tool_command(
+        tools.all_tests,
+        args or [],
+        learning_mode=state.learning_mode,
+        verbosity_level=state.verbosity,
+    )
 
 
 @test_app.command("clean")
@@ -115,25 +88,13 @@ def test_clean(
     ] = None,
 ) -> None:
     """Clean test artifacts and caches."""
-    try:
-        tools = get_testing_tools()
-        result = tools.clean(
-            args or [],
-            learning_mode=state.learning_mode,
-            verbosity_level=state.verbosity,
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="test",
-                command="clean",
-                stderr=f"Error cleaning test artifacts: {e}",
-            )
-        )
+    tools = get_testing_tools()
+    run_tool_command(
+        tools.clean,
+        args or [],
+        learning_mode=state.learning_mode,
+        verbosity_level=state.verbosity,
+    )
 
 
 @test_app.command("coverage")
@@ -159,7 +120,8 @@ def test_coverage(
 ) -> None:
     """Run coverage analysis."""
     tools = get_testing_tools()
-    result = tools.coverage(
+    run_tool_command(
+        tools.coverage,
         args or [],
         line_threshold=line_threshold or 0.0,
         branch_threshold=branch_threshold or 0.0,
@@ -168,7 +130,6 @@ def test_coverage(
         verbosity_level=state.verbosity,
         force_regen=force_regen,
     )
-    handle_tool_result(result)
 
 
 @test_app.command("e2e")

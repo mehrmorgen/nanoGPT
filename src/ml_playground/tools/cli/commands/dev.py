@@ -6,17 +6,11 @@ from typing import List, Optional
 import typer
 from typing_extensions import Annotated
 
-from ml_playground.tools.core.errors import (
-    ToolExecutionError,
-    ToolConfigurationError,
-)
-from ml_playground.tools.core.interfaces import ToolResult
-
 # Import shared utilities
 from ml_playground.tools.cli.helpers import (
     get_dev_tools,
-    handle_tool_result,
     OrderedGroup,
+    run_tool_command,
 )
 
 # Create dev app
@@ -39,33 +33,20 @@ def dev_batch_review(
     ] = None,
 ) -> None:
     """Perform batch review operations for AI consumption."""
-    try:
-        tools = get_dev_tools()
-        result = tools.batch_review(output_format=output_format)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="batch-review",
-                stderr=f"Error performing batch review: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.batch_review,
+        output_format=output_format,
+    )
 
 
 @dev_app.command("cleanup-ignored-tracked")
 def dev_cleanup_ignored_tracked() -> None:
     """Clean up Git-ignored files that are still tracked."""
-    try:
-        tools = get_dev_tools()
-        result = tools.cleanup_ignored_tracked()
-        handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.cleanup_ignored_tracked,
+    )
 
 
 @dev_app.command("kill-port")
@@ -73,13 +54,11 @@ def dev_kill_port(
     port: Annotated[int, typer.Argument(help="Port number to kill processes on")],
 ) -> None:
     """Kill processes running on a specific port."""
-    try:
-        tools = get_dev_tools()
-        result = tools.kill_port(port=port)
-        handle_tool_result(result)
-    except ToolExecutionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.kill_port,
+        port=port,
+    )
 
 
 @dev_app.command("review-bulk-reply")
@@ -96,25 +75,13 @@ def dev_review_bulk_reply(
     ] = "origin",
 ) -> None:
     """Bulk reply to review threads from a JSON file."""
-    try:
-        tools = get_dev_tools()
-        result = tools.review_bulk_reply(
-            pr_number=pr_number,
-            replies_file=replies_file,
-            remote=remote,
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="review-bulk-reply",
-                stderr=f"Error bulk replying to reviews: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.review_bulk_reply,
+        pr_number=pr_number,
+        replies_file=replies_file,
+        remote=remote,
+    )
 
 
 @dev_app.command("review-delete")
@@ -131,25 +98,13 @@ def dev_review_delete(
     ] = "origin",
 ) -> None:
     """Delete review comments from a JSON file."""
-    try:
-        tools = get_dev_tools()
-        result = tools.review_delete(
-            pr_number=pr_number,
-            comments_file=comments_file,
-            remote=remote,
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="review-delete",
-                stderr=f"Error deleting review comments: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.review_delete,
+        pr_number=pr_number,
+        comments_file=comments_file,
+        remote=remote,
+    )
 
 
 @dev_app.command("review-list")
@@ -166,26 +121,14 @@ def dev_review_list(
     ] = "origin",
 ) -> None:
     """List review threads for a pull request."""
-    try:
-        tools = get_dev_tools()
-        result = tools.review_list(
-            pr_number=pr_number,
-            unreplied=unreplied,
-            unresolved=unresolved,
-            remote=remote,
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="review-list",
-                stderr=f"Error listing review threads: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.review_list,
+        pr_number=pr_number,
+        unreplied=unreplied,
+        unresolved=unresolved,
+        remote=remote,
+    )
 
 
 @dev_app.command("setup-ai-guidelines")
@@ -198,21 +141,12 @@ def dev_setup_ai_guidelines(
     ] = False,
 ) -> None:
     """Set up AI development guidelines for a specific tool."""
-    try:
-        tools = get_dev_tools()
-        result = tools.setup_ai_guidelines(tool=tool, dry_run=dry_run)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="setup-ai-guidelines",
-                stderr=f"Error setting up AI guidelines: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.setup_ai_guidelines,
+        tool=tool,
+        dry_run=dry_run,
+    )
 
 
 @dev_app.command("workflow-status")
@@ -226,18 +160,8 @@ def dev_workflow_status(
     ] = None,
 ) -> None:
     """Get current workflow status for AI decision-making."""
-    try:
-        tools = get_dev_tools()
-        result = tools.workflow_status(output_format=output_format)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="dev",
-                command="workflow-status",
-                stderr=f"Error getting workflow status: {e}",
-            )
-        )
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.workflow_status,
+        output_format=output_format,
+    )

@@ -7,15 +7,10 @@ import typer
 from typing_extensions import Annotated
 
 # Import shared utilities
-from ml_playground.tools.core.interfaces import ToolResult
-from ml_playground.tools.core.errors import (
-    ToolExecutionError,
-    ToolConfigurationError,
-)
 from ml_playground.tools.cli.helpers import (
     get_environment_tools,
-    handle_tool_result,
     OrderedGroup,
+    run_tool_command,
 )
 
 # Create environment app
@@ -38,21 +33,13 @@ def env_ai_guidelines(
     ] = None,
 ) -> None:
     """Set up AI guideline symlinks for the requested tool."""
-    try:
-        tools = get_environment_tools()
-        result = tools.ai_guidelines(args or [], tool=tool, dry_run=dry_run)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="ai-guidelines",
-                stderr=f"Error setting up AI guidelines: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.ai_guidelines,
+        args or [],
+        tool=tool,
+        dry_run=dry_run,
+    )
 
 
 @env_app.command("clean")
@@ -62,21 +49,11 @@ def env_clean(
     ] = None,
 ) -> None:
     """Remove caches and temporary build artifacts."""
-    try:
-        tools = get_environment_tools()
-        result = tools.clean(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="clean",
-                stderr=f"Error cleaning environment: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.clean,
+        args or [],
+    )
 
 
 @env_app.command("gguf-help")
@@ -86,21 +63,11 @@ def env_gguf_help(
     ] = None,
 ) -> None:
     """Show llama.cpp GGUF conversion help."""
-    try:
-        tools = get_environment_tools()
-        result = tools.gguf_help(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="gguf-help",
-                stderr=f"Error showing GGUF help: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.gguf_help,
+        args or [],
+    )
 
 
 @env_app.command("info")
@@ -110,23 +77,11 @@ def env_info(
     ] = None,
 ) -> None:
     """Show environment information."""
-    try:
-        tools = get_environment_tools()
-        result = tools.info(
-            args or [],
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="info",
-                stderr=f"Error getting environment info: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.info,
+        args or [],
+    )
 
 
 @env_app.command("setup")
@@ -139,21 +94,12 @@ def env_setup(
     ] = None,
 ) -> None:
     """Create a fresh uv-managed virtual environment and install all dependencies."""
-    try:
-        tools = get_environment_tools()
-        result = tools.setup(clear=clear, args=args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="setup",
-                stderr=f"Error setting up environment: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.setup,
+        clear=clear,
+        args=args or [],
+    )
 
 
 @env_app.command("sync")
@@ -177,23 +123,14 @@ def env_sync(
     ] = None,
 ) -> None:
     """Sync dependencies using uv."""
-    try:
-        tools = get_environment_tools()
-        result = tools.sync(
-            args or [], groups=groups or [], all_groups=all_groups, frozen=frozen
-        )
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="sync",
-                stderr=f"Error syncing environment: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.sync,
+        args or [],
+        groups=groups or [],
+        all_groups=all_groups,
+        frozen=frozen,
+    )
 
 
 @env_app.command("tensorboard")
@@ -222,21 +159,14 @@ def env_tensorboard(
     ] = None,
 ) -> None:
     """Start TensorBoard server."""
-    try:
-        tools = get_environment_tools()
-        result = tools.tensorboard(args or [], logdir=logdir, port=port, host=host)
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="tensorboard",
-                stderr=f"Error starting TensorBoard: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.tensorboard,
+        args or [],
+        logdir=logdir,
+        port=port,
+        host=host,
+    )
 
 
 @env_app.command("verify")
@@ -246,18 +176,8 @@ def env_verify(
     ] = None,
 ) -> None:
     """Ensure the project package imports correctly."""
-    try:
-        tools = get_environment_tools()
-        result = tools.verify(args or [])
-        handle_tool_result(result)
-    except (ToolExecutionError, ToolConfigurationError) as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="env",
-                command="verify",
-                stderr=f"Error verifying environment: {e}",
-            )
-        )
+    tools = get_environment_tools()
+    run_tool_command(
+        tools.verify,
+        args or [],
+    )

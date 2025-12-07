@@ -7,8 +7,8 @@ from typing_extensions import Annotated
 
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.tools.cli.helpers import (
-    handle_tool_result,
     OrderedGroup,
+    run_tool_command,
 )
 
 # Create analysis app
@@ -30,7 +30,7 @@ def run_lit(
     from ml_playground.tools.analysis.lit_integration import run_server_bundestag_char
     import logging
 
-    try:
+    def _run_lit_command():
         logger = logging.getLogger("ml_playground.tools.analysis.lit")
         run_server_bundestag_char(
             host=host,
@@ -38,27 +38,16 @@ def run_lit(
             open_browser=open_browser,
             logger=logger,
         )
-        handle_tool_result(
-            ToolResult.create(
-                success=True,
-                exit_code=0,
-                namespace="tools",
-                category="analysis",
-                command="lit",
-                stdout="LIT server stopped",
-            )
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="tools",
+            category="analysis",
+            command="lit",
+            stdout="LIT server stopped",
         )
-    except Exception as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="analysis",
-                command="lit",
-                stderr=f"LIT server error: {e}",
-            )
-        )
+
+    run_tool_command(_run_lit_command)
 
 
 @analysis_app.command("sample-quality")
@@ -71,27 +60,16 @@ def sample_quality(
         format_analysis,
     )
 
-    try:
+    def _analyze_sample_command():
         analysis = analyze_sample_file(file_path)
         output = format_analysis(analysis)
-        handle_tool_result(
-            ToolResult.create(
-                success=True,
-                exit_code=0,
-                namespace="tools",
-                category="analysis",
-                command="sample-quality",
-                stdout=output,
-            )
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="tools",
+            category="analysis",
+            command="sample-quality",
+            stdout=output,
         )
-    except Exception as e:
-        handle_tool_result(
-            ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="tools",
-                category="analysis",
-                command="sample-quality",
-                stderr=f"Sample analysis failed: {e}",
-            )
-        )
+
+    run_tool_command(_analyze_sample_command)
