@@ -56,11 +56,35 @@ uv run ml-playground analyze bundestag_char --exp-config path/to/config.toml
 
 When run with no subcommand, the CLI prints a short welcome message and full help (due to `no_args_is_help=True`) and exits with code 0.
 
-### Exit behaviour
+### Exit behaviour & message standards
 
-- Missing config file passed via `--exp-config` → logged error and exit code `2`.
-- Keyboard interrupt during a command → friendly "Operation cancelled by user" message and exit code `1`.
-- Unexpected exceptions in the CLI runner → summarized error and exit code `1`.
+The runtime CLI follows consistent patterns for user-facing messages and exit codes:
+
+#### Exit codes
+- `0` – Success (command completed successfully)
+- `1` – General error (unexpected exceptions, keyboard interrupts, command failures)
+- `2` – Configuration error (missing/invalid config files)
+
+#### Message formatting
+- **Success messages**: Written to stdout via `typer.echo(result.stdout)`
+- **Error messages**: Written to stderr via `typer.echo(result.stderr, err=True)`
+- **Learning mode**: Uses standardized emoji prefixes:
+  - 📚 Learning Mode explanations
+  - 💡 Best practices
+  - 🔗 Related concepts
+
+#### Error handling patterns
+- Missing config file via `--exp-config` → logged error and exit code `2`
+- Keyboard interrupt → "Operation cancelled by user" message and exit code `1`
+- Command failures → error details to stderr and exit code from `ToolResult.exit_code`
+- All commands use the same `handle_tool_result()` function for consistent behavior
+
+#### Consistency with tools CLI
+The runtime CLI follows the same patterns as the tools CLI:
+- Shared `ToolResult` handling with stdout/stderr separation
+- Learning mode formatting with consistent emoji prefixes
+- Exit code conventions (0=success, 1=error, 2=config)
+- Standardized error message propagation
 
 ## Related tests
 
