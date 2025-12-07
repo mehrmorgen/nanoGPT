@@ -146,3 +146,25 @@ def main_entry(
     except Exception as exc:
         echo_func(f"Runtime CLI execution failed: {exc}", err=True)
         raise typer.Exit(1) from exc
+
+
+def get_cli_help_summary() -> str:
+    """Get a formatted help summary for the runtime CLI."""
+    return """
+Runtime CLI - ML model training and inference
+
+Available commands:
+  prepare    Prepare datasets and configurations
+  train       Train models
+  sample      Generate samples from trained models
+  analyze     Analyze model performance and outputs
+
+Global options:
+  --exp-config PATH     Path to experiment configuration file
+  --learning-mode       Enable learning mode with contextual help
+  --verbosity {0,1,2}   Output verbosity level
+  --dry-run            Show what would be executed without running
+  --project-root PATH   Project root directory
+
+Use 'uv run ml-playground <command> --help' for detailed command help.
+"""
