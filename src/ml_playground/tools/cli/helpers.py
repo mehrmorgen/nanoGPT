@@ -1,9 +1,10 @@
 """Shared helper functions for the tools CLI system."""
 
 from pathlib import Path
-from typing import cast
+from typing import Any, Callable, cast
 
 import click
+import typer
 import typer.core
 
 from ml_playground.tools.ci.ci import CITools
@@ -16,6 +17,10 @@ from ml_playground.tools.dev.dev import DevTools
 from ml_playground.tools.environment.environment import EnvironmentTools
 from ml_playground.tools.quality.quality import QualityTools
 from ml_playground.tools.testing.testing import TestingTools
+from ml_playground.tools.core.errors import (
+    ToolExecutionError,
+    ToolConfigurationError,
+)
 
 
 class OrderedGroup(typer.core.TyperGroup):
@@ -64,6 +69,36 @@ def handle_tool_result(result: ToolResult) -> None:
     """Handle tool result using current dependencies."""
     handler = get_tools_dependencies().result_handler
     handler(result)
+
+
+def run_tool_command(
+    command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+) -> None:
+    """Execute a tool command with standardized error handling.
+
+    This helper eliminates repetitive try/except patterns in CLI commands
+    by wrapping command execution and handling common error types.
+
+    Args:
+        command_func: Function that returns a ToolResult when called
+        *args: Positional arguments to pass to command_func
+        **kwargs: Keyword arguments to pass to command_func
+    """
+    try:
+        result: ToolResult = command_func(*args, **kwargs)
+        handle_tool_result(result)
+    except typer.Exit:
+        raise
+    except (ToolExecutionError, ToolConfigurationError) as e:
+        error_result = ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace="tools",
+            category="error",
+            command="generic",
+            stderr=str(e),
+        )
+        handle_tool_result(error_result)
 
 
 def _ensure_active_config() -> ToolsConfig:
