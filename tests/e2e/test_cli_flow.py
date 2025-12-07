@@ -11,9 +11,6 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.skip(
-    reason="E2E flow failing with IndexError in subprocess, pending debug"
-)
 def test_e2e_bundestag_char_flow(tmp_path: Path) -> None:
     """Verify prepare -> train -> sample flow using bundestag_char experiment via CLI."""
     # Arrange: Create input data and config override
@@ -78,6 +75,8 @@ max_iters = 0
 start = "\\n"
 num_samples = 1
 max_new_tokens = 10
+temperature = 0.9
+top_k = 50
 """
     config_path = tmp_path / "test_config.toml"
     config_path.write_text(config_content, encoding="utf-8")
