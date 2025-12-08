@@ -38,12 +38,23 @@ src/ml_playground/tools/cli/
 uv run tools [GLOBAL_OPTIONS] <CATEGORY> <COMMAND> [COMMAND_OPTIONS]
 ```
 
-### Global options
+### Global options & top-level behavior
 - `--exp-config PATH`: Path to experiment configuration file
 - `--learning-mode`: Enable learning mode with contextual help
 - `--verbosity {0,1,2}`: Output verbosity level (0=minimal, 1=standard, 2=comprehensive)
 - `--dry-run`: Show what would be executed without running
 - `--project-root PATH`: Project root directory (auto-detected if not specified)
+
+Top-level behavior:
+- Calling `uv run tools` with no subcommand prints a short welcome message and
+  full help for the tools CLI and exits with code `2` (usage error).
+- Calling `uv run tools` with global options but no subcommand (for example,
+  `uv run tools --dry-run`) shows the same friendly welcome + full help and
+  exits with code `2`.
+- Commands that expect positional arguments (for example,
+  `uv run tools learn explain <category.command>`) will print an error about the
+  missing argument followed by full help for that command and exit with code
+  `2` when the argument is omitted.
 
 ### Common usage examples
 ```bash
@@ -84,7 +95,8 @@ Learning mode provides contextual information about:
 
 - **Success (0)**: Command completed successfully
 - **Error (1)**: Command failed due to validation, configuration, or execution errors
-- **Usage (2)**: Invalid command-line arguments or missing required options
+- **Usage (2)**: Invalid command-line arguments, missing required options or
+  positional arguments, or invoking the CLI without a subcommand.
 
 All errors are printed to stderr with clear, actionable messages. In learning mode, additional context is provided for error conditions.
 

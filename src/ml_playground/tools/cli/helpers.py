@@ -89,14 +89,14 @@ def run_tool_command(
         handle_tool_result(result)
     except typer.Exit:
         raise
-    except (ToolExecutionError, ToolConfigurationError) as e:
+    except (ToolExecutionError, ToolConfigurationError) as exc:
         error_result = ToolResult.create(
             success=False,
             exit_code=1,
             namespace="tools",
-            category="error",
-            command="generic",
-            stderr=str(e),
+            category="utils",
+            command="generic-error",
+            stderr=str(exc),
         )
         handle_tool_result(error_result)
 

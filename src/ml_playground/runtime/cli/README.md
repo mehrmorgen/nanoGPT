@@ -48,13 +48,18 @@ uv run ml-playground sample bundestag_char --exp-config path/to/config.toml
 uv run ml-playground analyze bundestag_char --exp-config path/to/config.toml
 ```
 
-### Global options
+### Global options & top-level behavior
 
 - `--exp-config PATH` – experiment-specific TOML override; replaces the experiment's `config.toml` while still merging `default_config.toml` first.
 - `--learning-mode / --no-learning-mode` – enable or disable educational explanations for ML workflow operations.
 - `--verbosity, -v` – learning-mode verbosity: `0=minimal`, `1=standard`, `2=comprehensive`.
 
-When run with no subcommand, the CLI prints a short welcome message and full help (due to `no_args_is_help=True`) and exits with code 0.
+Top-level behavior:
+- Calling `uv run ml-playground` with no subcommand prints a short welcome message
+  followed by full help and exits with code `2` (usage error).
+- Calling `uv run ml-playground <command>` without the required `EXPERIMENT`
+  argument prints an error about the missing experiment followed by the full
+  help for that command and exits with code `2`.
 
 ### Exit behaviour & message standards
 
@@ -63,7 +68,8 @@ The runtime CLI follows consistent patterns for user-facing messages and exit co
 #### Exit codes
 - `0` – Success (command completed successfully)
 - `1` – General error (unexpected exceptions, keyboard interrupts, command failures)
-- `2` – Configuration error (missing/invalid config files)
+- `2` – Configuration or usage error (missing/invalid config files, missing
+  required arguments, or top-level invocation without a workflow command)
 
 #### Message formatting
 - **Success messages**: Written to stdout via `typer.echo(result.stdout)`

@@ -801,7 +801,9 @@ def test_global_options_no_subcommand(tmp_path: Path) -> None:
             echo_func=lambda msg, err=False: messages.append((msg, err)),
         )
 
-    assert exc.value.exit_code == 0
+    # No subcommand is treated as a usage error (exit code 2) while still
+    # showing a friendly welcome banner and full help output.
+    assert exc.value.exit_code == 2
     assert ctx.obj is not None and ctx.obj["learning_mode"] is True
     assert any("Welcome" in msg for msg, _ in messages)
     assert help_called

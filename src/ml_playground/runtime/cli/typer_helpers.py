@@ -17,7 +17,7 @@ def complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
 EXPERIMENT_HELP = "Experiment name (directory in src/ml_playground/experiments)"
 
 ExperimentArg = Annotated[
-    str,
+    str | None,
     typer.Argument(
         help=EXPERIMENT_HELP,
         autocompletion=complete_experiments,

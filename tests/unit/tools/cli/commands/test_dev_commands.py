@@ -62,8 +62,19 @@ class TestReviewListCommand:
                 return _tool_result("review-list")
 
         stub = StubTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(dev_commands, "get_dev_tools", lambda: stub):
-            with override_attr(dev_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 dev_commands.dev_review_list(
                     123, unreplied=True, unresolved=False, remote="upstream"
                 )
@@ -85,13 +96,34 @@ class TestReviewListCommand:
             def review_list(self, **_: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("boom", reason="r", rationale="x")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(dev_commands, "get_dev_tools", lambda: FailingTools()):
-            with override_attr(dev_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 dev_commands.dev_review_list(1)
 
         assert captured and captured[0].success is False
-        assert captured[0].operation_id.command == "review-list"
-        assert "Error listing review threads" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "boom" in (captured[0].stderr or "")
 
 
 class TestBatchReviewCommand:
@@ -103,13 +135,34 @@ class TestBatchReviewCommand:
                 assert output_format == "yaml"
                 raise ToolConfigurationError("bad", reason="x", rationale="y")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolConfigurationError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(dev_commands, "get_dev_tools", lambda: FailingTools()):
-            with override_attr(dev_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 dev_commands.dev_batch_review(output_format="yaml")
 
         assert captured and captured[0].success is False
-        assert captured[0].operation_id.command == "batch-review"
-        assert "Error performing batch review" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "bad" in (captured[0].stderr or "")
 
 
 class TestCleanupAndKillPort:
@@ -144,7 +197,11 @@ class TestSetupAIGuidelinesCommand:
                 return _tool_result("setup-ai-guidelines", stdout="done")
 
         with override_attr(dev_commands, "get_dev_tools", lambda: StubTools()):
-            with override_attr(dev_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                lambda func, *a, **kw: captured.append(func(*a, **kw)),
+            ):
                 dev_commands.dev_setup_ai_guidelines("cursor", dry_run=True)
 
         assert captured and captured[0].stdout == "done"

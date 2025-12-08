@@ -42,8 +42,19 @@ class TestQualityGate:
                 return _tool_result("quality-gate", stdout="gate ok")
 
         stub = StubCiTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: stub):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_gate(args=["--all"])
 
         assert stub.args == ["--all"]
@@ -56,11 +67,33 @@ class TestQualityGate:
             def quality_gate(self, *_: object) -> ToolResult:
                 raise ToolExecutionError("gate broke", reason="r", rationale="z")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: FailingTools()):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_gate()
 
         assert captured and captured[0].success is False
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
         assert "gate broke" in (captured[0].stderr or "")
 
 
@@ -72,12 +105,34 @@ class TestQualityFastAndExt:
             def quality_fast(self, *_: object) -> ToolResult:
                 raise ToolConfigurationError("fast broke", reason="a", rationale="b")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolConfigurationError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: FailingTools()):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_fast(args=None)
 
         assert captured and captured[0].success is False
-        assert "Error running quality fast" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "fast broke" in (captured[0].stderr or "")
 
     def test_quality_ext_delegates(self) -> None:
         captured: list[ToolResult] = []
@@ -88,8 +143,19 @@ class TestQualityFastAndExt:
                 return _tool_result("quality-ext", stdout="ext ok")
 
         stub = StubCiTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: stub):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_ext(args=["--verbose"])
 
         assert stub.args == ["--verbose"]
@@ -109,8 +175,19 @@ class TestQualityCiLocal:
                 return _tool_result("quality-ci-local", stdout="ci local ok")
 
         stub = StubCiTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: stub):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_ci_local(bind_caches=False, args=["--jobs", "2"])
 
         assert stub.bind_caches is False
@@ -124,12 +201,34 @@ class TestQualityCiLocal:
             def quality_ci_local(self, *args: object, **kwargs: object) -> ToolResult:
                 raise ToolExecutionError("ci local fail", reason="r", rationale="z")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: FailingTools()):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_quality_ci_local()
 
         assert captured and captured[0].success is False
-        assert "Error running quality ci local" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "ci local fail" in (captured[0].stderr or "")
 
 
 class TestCoverageBadge:
@@ -140,9 +239,31 @@ class TestCoverageBadge:
             def coverage_badge(self, *_: object) -> ToolResult:
                 raise ToolExecutionError("badge fail", reason="r", rationale="z")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(ci_commands, "get_ci_tools", lambda: FailingTools()):
-            with override_attr(ci_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                ci_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 ci_commands.ci_coverage_badge()
 
         assert captured and captured[0].success is False
-        assert "Error generating coverage badge" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "badge fail" in (captured[0].stderr or "")

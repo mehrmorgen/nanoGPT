@@ -520,8 +520,18 @@ def test_tools_cli_main_sets_dry_run_env(tmp_path: Path) -> None:
     # Import locally to avoid circulars
     import ml_playground.tools.cli.main as cli
 
-    # Call main without overriding project_root to use repository pyproject
-    cli.main(learning_mode=False, verbosity=1, dry_run=True, project_root=None)
+    # Call main without overriding project_root to use repository pyproject.
+    # The tools CLI callback now expects a context object; provide a minimal
+    # stub with an invoked_subcommand so the no-subcommand error path is not
+    # triggered during these tests.
+    ctx = SimpleNamespace(invoked_subcommand="version")  # type: ignore[assignment]
+    cli.main(
+        ctx,
+        learning_mode=False,
+        verbosity=1,
+        dry_run=True,
+        project_root=None,
+    )
     # Verify env var toggled
     assert os.environ.get("ML_PLAYGROUND_TOOLS_DRY_RUN") == "1"
 
@@ -531,7 +541,14 @@ def test_tools_cli_get_dev_tools(tmp_path: Path) -> None:
     from ml_playground.tools.cli.helpers import get_dev_tools
 
     # Initialize state using repository root config
-    cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
+    ctx = SimpleNamespace(invoked_subcommand="version")  # type: ignore[assignment]
+    cli.main(
+        ctx,
+        learning_mode=False,
+        verbosity=0,
+        dry_run=False,
+        project_root=None,
+    )
     tools = get_dev_tools()
     from ml_playground.tools.dev.dev import DevTools as DevToolsClass
 

@@ -101,7 +101,8 @@ def _apply_global_options(
         help_text = getattr(context, "get_help", lambda: "")()
         if help_text:
             echo(help_text, err=True)
-        raise typer.Exit(0)
+        # Treat this as an argument error (exit code 2) for consistency
+        raise typer.Exit(2)
 
 
 @app.callback()

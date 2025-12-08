@@ -51,8 +51,24 @@ def _select_override_callable(
     return None
 
 
-def prepare(ctx: typer.Context, experiment: ExperimentArg) -> None:
+def _ensure_experiment_provided(ctx: typer.Context, experiment: ExperimentArg) -> str:
+    """Ensure an experiment argument is provided; otherwise show help and exit.
+
+    This converts the optional ExperimentArg into a concrete str for command logic
+    while providing a consistent "error + full help" experience when the argument
+    is missing.
+    """
+    if experiment is None:
+        typer.echo("Missing argument 'EXPERIMENT'.", err=True)
+        typer.echo("", err=True)
+        typer.echo(ctx.get_help(), err=True)
+        raise typer.Exit(2)
+    return experiment
+
+
+def prepare(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     """Prepare data for an experiment."""
+    experiment_name = _ensure_experiment_provided(ctx, experiment)
     exp_config_path = extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
@@ -71,7 +87,7 @@ def prepare(ctx: typer.Context, experiment: ExperimentArg) -> None:
     )
 
     run_prepare_command(
-        experiment,
+        experiment_name,
         exp_config_path,
         deps=deps_override or deps,
         learning_engine=learning_engine,
@@ -81,8 +97,9 @@ def prepare(ctx: typer.Context, experiment: ExperimentArg) -> None:
     )
 
 
-def train(ctx: typer.Context, experiment: ExperimentArg) -> None:
+def train(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     """Train a model for an experiment."""
+    experiment_name = _ensure_experiment_provided(ctx, experiment)
     exp_config_path = extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
@@ -99,7 +116,7 @@ def train(ctx: typer.Context, experiment: ExperimentArg) -> None:
     )
 
     run_train_command(
-        experiment,
+        experiment_name,
         exp_config_path,
         deps=deps_override or deps,
         learning_engine=learning_engine,
@@ -109,8 +126,9 @@ def train(ctx: typer.Context, experiment: ExperimentArg) -> None:
     )
 
 
-def sample(ctx: typer.Context, experiment: ExperimentArg) -> None:
+def sample(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     """Sample from a trained model."""
+    experiment_name = _ensure_experiment_provided(ctx, experiment)
     exp_config_path = extract_exp_config(ctx)
     deps = get_cli_dependencies()
 
@@ -127,7 +145,7 @@ def sample(ctx: typer.Context, experiment: ExperimentArg) -> None:
     )
 
     run_sample_command(
-        experiment,
+        experiment_name,
         exp_config_path,
         deps=deps_override or deps,
         learning_engine=learning_engine,
@@ -139,12 +157,13 @@ def sample(ctx: typer.Context, experiment: ExperimentArg) -> None:
 
 def analyze(
     ctx: typer.Context,
-    experiment: ExperimentArg,
+    experiment: ExperimentArg = None,
     host: str = typer.Option("127.0.0.1"),
     port: int = typer.Option(8050),
     open_browser: bool = typer.Option(True),
 ) -> None:
     """Run analysis for an experiment."""
+    experiment_name = _ensure_experiment_provided(ctx, experiment)
     from ml_playground.runtime.cli.runners import run_analyze
 
     learning_mode, verbosity, overrides = prepare_learning_context(ctx)
@@ -162,7 +181,7 @@ def analyze(
     analysis_runner_fn = analysis_runner or run_analyze
 
     result = analysis_runner_fn(
-        experiment,
+        experiment_name,
         host,
         port,
         open_browser,

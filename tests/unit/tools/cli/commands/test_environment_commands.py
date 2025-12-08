@@ -44,8 +44,19 @@ class TestEnvSetupCommand:
                 return _tool_result("setup", stdout="done")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_setup(clear=True, args=["--verbose"])
 
         assert stub.args == ["--verbose"]
@@ -59,14 +70,36 @@ class TestEnvSetupCommand:
             def setup(self, args: List[str], clear: bool = False) -> ToolResult:
                 raise ToolExecutionError("setup failed", reason="x", rationale="y")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             env_commands, "get_environment_tools", lambda: FailingEnvTools()
         ):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_setup(args=[])
 
         assert captured and captured[0].success is False
-        assert "Error setting up environment" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "setup failed" in (captured[0].stderr or "")
 
 
 class TestEnvSyncCommand:
@@ -89,8 +122,19 @@ class TestEnvSyncCommand:
                 return _tool_result("sync")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_sync(
                     groups=["dev"], all_groups=False, frozen=True, args=["--upgrade"]
                 )
@@ -112,8 +156,19 @@ class TestEnvVerifyAndInfoCommands:
                 return _tool_result("verify", stdout="verified")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_verify(args=["--quiet"])
 
         assert stub.args == ["--quiet"]
@@ -128,8 +183,19 @@ class TestEnvVerifyAndInfoCommands:
                 return _tool_result("info", stdout="info")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_info(args=[])
 
         assert stub.args == []
@@ -144,14 +210,36 @@ class TestEnvCleanCommand:
             def clean(self, args: List[str]) -> ToolResult:
                 raise ToolConfigurationError("bad config", reason="r", rationale="z")
 
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolConfigurationError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             env_commands, "get_environment_tools", lambda: FailingEnvTools()
         ):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_clean()
 
         assert captured and captured[0].success is False
-        assert "Error cleaning environment" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "bad config" in (captured[0].stderr or "")
 
 
 class TestEnvAiGuidelinesCommand:
@@ -168,8 +256,19 @@ class TestEnvAiGuidelinesCommand:
                 return _tool_result("ai-guidelines")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_ai_guidelines(
                     "cursor", dry_run=True, args=["--verbose"]
                 )
@@ -200,8 +299,19 @@ class TestEnvTensorboardCommand:
                 return _tool_result("tensorboard")
 
         stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(env_commands, "get_environment_tools", lambda: stub):
-            with override_attr(env_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 env_commands.env_tensorboard(
                     logdir=tmp_path,
                     port=7777,

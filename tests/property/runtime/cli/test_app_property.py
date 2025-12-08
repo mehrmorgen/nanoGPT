@@ -186,7 +186,9 @@ def test_apply_global_options_no_subcommand_shows_help(
             echo_func=echo_func,
         )
 
-    assert exc_info.value.exit_code == 0
+    # No subcommand is treated as a usage error (exit code 2) while still
+    # showing a friendly welcome banner and full help output.
+    assert exc_info.value.exit_code == 2
     assert any("Welcome to ML Playground runtime CLI!" in msg for msg in messages)
     assert any("No workflow command was provided" in msg for msg in messages)
     assert any("Mock help text" in msg for msg in messages)
@@ -304,7 +306,9 @@ def test_apply_global_options_context_getter_type_error_fallback() -> None:
             echo_func=echo_func,
         )
 
-    assert exc_info.value.exit_code == 0
+    # No subcommand is treated as a usage error (exit code 2) while still
+    # showing a friendly welcome banner and full help output.
+    assert exc_info.value.exit_code == 2
     # We should have attempted the silent=True call once.
     assert calls == [(True,)]
     # And then produced the welcome/help messages from the fallback context.

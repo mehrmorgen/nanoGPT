@@ -190,18 +190,28 @@ def learn_commands(
 
 @learn_app.command("explain")
 def learn_explain(
+    ctx: typer.Context,
     command: Annotated[
-        str, typer.Argument(help="Command in format 'category.command'")
-    ],
+        str | None,
+        typer.Argument(help="Command in format 'category.command'"),
+    ] = None,
 ) -> None:
     """Explain a specific command with best practices."""
     try:
-        if "." not in command:
+        if command is None:
+            typer.echo("Missing argument 'COMMAND'.", err=True)
+            typer.echo("", err=True)
+            typer.echo(ctx.get_help(), err=True)
+            raise typer.Exit(2)
+
+        command_value = command
+
+        if "." not in command_value:
             typer.echo("❌ Command must be in format 'category.command'", err=True)
             typer.echo("Example: tools learn explain quality.lint")
             raise typer.Exit(1)
 
-        category, cmd_name = command.split(".", 1)
+        category, cmd_name = command_value.split(".", 1)
         command_info = get_command_info()
 
         if category not in command_info:
@@ -218,7 +228,7 @@ def learn_explain(
 
         description = cat_commands[cmd_name]
 
-        typer.echo(f"\n🔧 Command: {command}")
+        typer.echo(f"\n🔧 Command: {command_value}")
         typer.echo("=" * 50)
         typer.echo(f"\n📝 Description: {description}")
 
@@ -385,8 +395,9 @@ app.add_typer(analysis_app, name="analysis")
 app.add_typer(learn_app, name="learn")
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     learning_mode: Annotated[
         Optional[bool],
         typer.Option(
@@ -443,6 +454,19 @@ def main(
         os.environ["ML_PLAYGROUND_TOOLS_DRY_RUN"] = "1"
     else:
         os.environ.pop("ML_PLAYGROUND_TOOLS_DRY_RUN", None)
+
+    # If no subcommand was provided (with or without global options), use a
+    # friendly welcome style and then show full help, similar to the runtime CLI.
+    if ctx.invoked_subcommand is None:
+        typer.echo("Welcome to ML Playground tools CLI!", err=True)
+        typer.echo(
+            "No tools command was provided. Try `uv run tools test` or `uv run tools quality lint`.",
+            err=True,
+        )
+        typer.echo("", err=True)
+        typer.echo(ctx.get_help(), err=True)
+        # Treat this as an argument error (exit code 2) for consistency
+        raise typer.Exit(2)
 
 
 @app.command("version")

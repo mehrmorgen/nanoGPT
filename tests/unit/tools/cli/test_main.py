@@ -7,6 +7,7 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Optional
+from types import SimpleNamespace
 from collections.abc import Generator
 
 import pytest
@@ -1127,8 +1128,12 @@ class TestDevCommandFailures:
         assert result.exit_code == 0
         failure = captured[-1]
         assert failure.success is False
-        assert failure.operation_id.command == "review-list"
-        assert "Error listing review threads" in (failure.stderr or "")
+        # Errors are funneled through a generic tools error operation id; assert
+        # on the category/command pair instead of the original method name.
+        assert failure.operation_id.category == "utils"
+        assert failure.operation_id.command == "generic-error"
+        # run_tool_command now forwards the underlying error message directly.
+        assert "boom" in (failure.stderr or "")
 
     def test_dev_batch_review_handles_configuration_error(self) -> None:
         """Configuration errors should surface via result handler."""
@@ -1153,8 +1158,9 @@ class TestDevCommandFailures:
         assert cli_result.exit_code == 0
         failure = captured[-1]
         assert failure.success is False
-        assert failure.operation_id.command == "batch-review"
-        assert "Error performing batch review" in (failure.stderr or "")
+        assert failure.operation_id.category == "utils"
+        assert failure.operation_id.command == "generic-error"
+        assert "bad config" in (failure.stderr or "")
 
     def test_dev_batch_review_success_propagates_result(self) -> None:
         """Successful batch review should reach the injected result handler."""
@@ -1249,7 +1255,9 @@ class TestMainCallbackBehavior:
         with override_attr(tools_cli, "get_tools_dependencies", fake_get_deps):
             with override_attr(tools_cli, "load_config_with_error_handling", fake_load):
                 with override_env("ML_PLAYGROUND_TOOLS_DRY_RUN", None):
+                    ctx = SimpleNamespace(invoked_subcommand="version")  # type: ignore[assignment]
                     tools_cli.main(
+                        ctx,
                         learning_mode=True,
                         verbosity=2,
                         dry_run=True,
@@ -1279,7 +1287,9 @@ class TestMainCallbackBehavior:
         with override_attr(tools_cli, "get_tools_dependencies", fake_get_deps):
             with override_attr(tools_cli, "load_config_with_error_handling", fake_load):
                 with override_env("ML_PLAYGROUND_TOOLS_DRY_RUN", "1"):
+                    ctx = SimpleNamespace(invoked_subcommand="version")  # type: ignore[assignment]
                     tools_cli.main(
+                        ctx,
                         learning_mode=False,
                         verbosity=None,
                         dry_run=False,

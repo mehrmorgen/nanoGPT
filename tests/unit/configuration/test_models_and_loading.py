@@ -32,12 +32,12 @@ class ExperimentConfigTestHarness(config_models.ExperimentConfig):
     def resolve_paths(
         cls, data: Any, *, context: Mapping[str, Any] | None = None
     ) -> Any:
+        # Context is not used by the underlying validator; it currently only
+        # depends on the shared.config_path field within the data mapping.
         del context
-        descriptor = getattr(config_models.ExperimentConfig, "_resolve_paths")
-        validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
-            None, config_models.ExperimentConfig
-        )
-        return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
+        # Call the actual model validator directly, matching its current
+        # signature `(cls, data: Any) -> Any`.
+        return config_models.ExperimentConfig._resolve_paths(data)  # pyright: ignore[reportPrivateUsage]
 
 
 class SharedConfigTestHarness(config_models.SharedConfig):
@@ -47,12 +47,10 @@ class SharedConfigTestHarness(config_models.SharedConfig):
     def resolve_paths(
         cls, data: Any, *, context: Mapping[str, Any] | None = None
     ) -> Any:
+        # Context is not used by the underlying validator; resolution is based
+        # solely on the provided config_path field.
         del context
-        descriptor = getattr(config_models.SharedConfig, "_resolve_shared_paths")
-        validator = descriptor.__get__(  # pyright: ignore[reportPrivateUsage]
-            None, config_models.SharedConfig
-        )
-        return validator(data)  # pyright: ignore[reportGeneralTypeIssues]
+        return config_models.SharedConfig._resolve_shared_paths(data)  # pyright: ignore[reportPrivateUsage]
 
 
 def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:

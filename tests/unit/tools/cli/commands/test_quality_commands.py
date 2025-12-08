@@ -50,8 +50,19 @@ class TestQualityLint:
                 return _tool_result("lint", stdout="lint ok")
 
         stub = StubQualityTools()
+
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(quality_commands, "get_quality_tools", lambda: stub):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 quality_commands.quality_lint(args=["--fix"])
 
         assert stub.args == ["--fix"]
@@ -66,14 +77,36 @@ class TestQualityLint:
             def lint(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("lint failed", reason="x", rationale="y")
 
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             quality_commands, "get_quality_tools", lambda: FailingTools()
         ):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 quality_commands.quality_lint()
 
         assert captured and captured[0].success is False
-        assert "Error running lint" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "lint failed" in (captured[0].stderr or "")
 
 
 class TestQualityFormat:
@@ -94,14 +127,36 @@ class TestQualityFormat:
             def format(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolConfigurationError("bad format", reason="r", rationale="z")
 
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolConfigurationError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             quality_commands, "get_quality_tools", lambda: FailingTools()
         ):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 quality_commands.quality_format()
 
         assert captured and captured[0].success is False
-        assert "Error running format" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "bad format" in (captured[0].stderr or "")
 
 
 class TestQualityLintCheckAndDeadcode:
@@ -112,14 +167,36 @@ class TestQualityLintCheckAndDeadcode:
             def lint_check(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("boom", reason="fail", rationale="test")
 
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             quality_commands, "get_quality_tools", lambda: FailingTools()
         ):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 quality_commands.quality_lint_check()
 
         assert captured and captured[0].success is False
-        assert "Error running lint-check" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert "boom" in (captured[0].stderr or "")
 
     def test_quality_deadcode_delegates(self) -> None:
         captured: list[ToolResult] = []
@@ -138,8 +215,19 @@ class TestQualityLintCheckAndDeadcode:
                 return _tool_result("deadcode", stdout="dead ok")
 
         stub = StubQualityTools()
+
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
         with override_attr(quality_commands, "get_quality_tools", lambda: stub):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 quality_commands.quality_deadcode(args=["--min-confidence", "80"])
 
         assert stub.args == ["--min-confidence", "80"]
@@ -174,11 +262,33 @@ class TestQualityTypecheckers:
                     return _fail
                 raise AttributeError(name)
 
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            try:
+                result = command_func(*args, **kwargs)
+            except ToolExecutionError as e:  # type: ignore[unused-ignore]
+                result = ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace="tools",
+                    category="utils",
+                    command="generic-error",
+                    stderr=str(e),
+                )
+            captured.append(result)
+
         with override_attr(
             quality_commands, "get_quality_tools", lambda: FailingTools()
         ):
-            with override_attr(quality_commands, "handle_tool_result", captured.append):
+            with override_attr(
+                quality_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
                 command(args=None)
 
         assert captured and captured[0].success is False
-        assert f"Error running {method}" in (captured[0].stderr or "")
+        assert captured[0].operation_id.category == "utils"
+        assert captured[0].operation_id.command == "generic-error"
+        assert f"{method} failed" in (captured[0].stderr or "")
