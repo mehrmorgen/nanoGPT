@@ -2,16 +2,15 @@
 
 ![Line Coverage](docs/assets/coverage-lines.svg)
 
-<details>
-<summary>Related documentation</summary>
+## Related documentation
 
-- [Developer Guidelines](.dev-guidelines/README.md) – Entry point for setup, development workflow, and policies.
-- [Documentation Guidelines](.dev-guidelines/DOCUMENTATION.md) – Standards for docs structure and formatting.
+- [Developer Guidelines](.dev-guidelines/README.md) – Entry point for setup,
+  development workflow, and policies.
+- [Documentation Guidelines](.dev-guidelines/DOCUMENTATION.md) – Standards for
+  docs structure and formatting.
 
-</details>
-
-This module provides a single, one-way interface to prepare data, train, and
-sample. It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
+This module provides a single, one-way interface to prepare data, train,
+and sample. It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 ## Documentation abstraction policy
 
@@ -49,7 +48,8 @@ uv run tools ci quality-gate
 
 ## Developer Workflow
 
-See [.dev-guidelines/README.md](.dev-guidelines/README.md) for comprehensive details on:
+See [.dev-guidelines/README.md](.dev-guidelines/README.md) for comprehensive
+details on:
 
 - Quality tooling (mandatory before commit)
 - TDD and commit policies
@@ -57,11 +57,15 @@ See [.dev-guidelines/README.md](.dev-guidelines/README.md) for comprehensive det
 
 ## Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI:
+  `uv run cli <command>`.
 - Refer to each experiment's `README.md` for specific instructions.
 
 ## Notes
 
-- **Configuration**: Defined via TOML dataclasses under `src/ml_playground/configuration/`.
-- **Framework Utilities**: See [docs/framework_utilities.md](docs/framework_utilities.md).
-- **Mutation Testing**: See `.dev-guidelines/README.md`.
+- **Configuration**: Defined via TOML dataclasses under
+  `src/ml_playground/configuration/`.
+- **Framework Utilities**:
+  See [docs/framework_utilities.md](docs/framework_utilities.md).
+- **Mutation Testing**:
+  See `.dev-guidelines/README.md`.
