@@ -8,9 +8,6 @@ import sys
 from pathlib import Path
 
 
-import pytest
-
-
 def test_e2e_bundestag_char_flow(tmp_path: Path) -> None:
     """Verify prepare -> train -> sample flow using bundestag_char experiment via CLI."""
     # Arrange: Create input data and config override
