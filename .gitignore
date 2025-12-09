@@ -31,8 +31,6 @@ out/
 coverage.xml
 # Allow documentation under docs/coverage while keeping raw coverage outputs ignored
 coverage/
-!docs/coverage/
-!docs/coverage/*.md
 htmlcov/
 
 # Centralized caches (preferred location)
@@ -73,12 +71,9 @@ scripts/llama_cpp/llama-quantize
 .windsurf/
 .junie/
 .aiassistant/
-.github
-!.github/workflows
 .vscode
 .idea
-.kiro/steering
+.kiro/
+!.kiro/steering
 # Local developer resources
-.ldres/*
-!.ldres/
-!.ldres/tv-tasks.md
+.ldres
