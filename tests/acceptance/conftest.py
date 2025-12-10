@@ -30,9 +30,6 @@ def run_cli(
         env = os.environ.copy()
         # Ensure src is in PYTHONPATH so uv run can find the package even if not installed in editable mode
         env["PYTHONPATH"] = f"{project_root / 'src'}:{env.get('PYTHONPATH', '')}"
-        # Force wide terminal to prevent wrapping/truncation in Rich output
-        env["COLUMNS"] = "200"
-        env["LINES"] = "40"
         return subprocess.run(
             ["uv", "run", command, *args],
             cwd=project_root,
