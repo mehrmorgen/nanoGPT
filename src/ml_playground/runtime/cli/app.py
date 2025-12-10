@@ -15,7 +15,8 @@ app = typer.Typer(
     help=(
         "ML Playground CLI: prepare data, train models, sample outputs, and export models.\n"
         "This CLI loads and validates TOML configs and injects the resulting configuration\n"
-        "objects into experiment code. Experiments must not read TOML directly."
+        "objects into experiment code. Use --exp-config to point to an experiment-specific\n"
+        "config TOML; experiments must not read TOML directly."
     ),
 )
 
