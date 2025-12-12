@@ -27,16 +27,13 @@ def run_cli(
     project_root: Path,
 ) -> Generator[Callable[..., subprocess.CompletedProcess[str]], None, None]:
     def _run(command: str, *args: str) -> subprocess.CompletedProcess[str]:
-        env = os.environ.copy()
-        # Ensure src is in PYTHONPATH so uv run can find the package even if not installed in editable mode
-        env["PYTHONPATH"] = f"{project_root / 'src'}:{env.get('PYTHONPATH', '')}"
         return subprocess.run(
             ["uv", "run", command, *args],
             cwd=project_root,
             capture_output=True,
             text=True,
             check=False,
-            env=env,
+            env=os.environ.copy(),
         )
 
     yield _run

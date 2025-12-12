@@ -8,8 +8,10 @@ from typing import Callable, Optional
 import typer
 
 from ml_playground.tools.ci.ci import CITools
+from ml_playground.tools.cli.state import state
 from ml_playground.tools.core.config import load_tools_config, ToolsConfig
 from ml_playground.tools.core.interfaces import ToolResult
+from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.dev.dev import DevTools
 from ml_playground.tools.environment.environment import EnvironmentTools
 from ml_playground.tools.quality.quality import QualityTools
@@ -18,10 +20,24 @@ from ml_playground.tools.testing.testing import TestingTools
 
 def default_tool_result_handler(result: ToolResult) -> None:
     """Default handler for tool results that outputs to CLI and exits on failure."""
-    if result.stdout:
-        typer.echo(result.stdout)
-    if result.stderr:
-        typer.echo(result.stderr, err=True)
+    # When learning mode is enabled, format output using the shared
+    # LearningModeEngine so that educational content attached to the
+    # ToolResult is surfaced consistently.
+    if state.learning_mode:
+        try:
+            verbosity = VerbosityLevel(state.verbosity)
+        except ValueError:
+            # Fall back to STANDARD if an unexpected verbosity value is present.
+            verbosity = VerbosityLevel.STANDARD
+
+        engine = LearningModeEngine(verbosity)
+        formatted_output = engine.format_output(result, learning_enabled=True)
+        typer.echo(formatted_output)
+    else:
+        if result.stdout:
+            typer.echo(result.stdout)
+        if result.stderr:
+            typer.echo(result.stderr, err=True)
     if not result.success:
         raise typer.Exit(result.exit_code)
 
