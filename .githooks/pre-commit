@@ -3,6 +3,11 @@
 
 set -euo pipefail
 
+# Python 3.13 may skip "hidden" *.pth files (leading underscore) in site-packages,
+# which can break editable installs that rely on such .pth files to add `src/`.
+# Ensure local sources are importable for uv-run tool entrypoints during hooks.
+export PYTHONPATH="${PYTHONPATH:-}:$(pwd)/src"
+
 # Hard enforcement BEFORE pre-commit's isolated staging: scan working tree tests/ for mocks
 if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
   if [ -n "$files" ]; then

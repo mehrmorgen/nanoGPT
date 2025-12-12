@@ -66,7 +66,7 @@ def generate_tokens(
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)
         else:
             logits = logits / temperature
-            if top_k is not None:
+            if top_k is not None and top_k > 0:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float("inf")
             probs = F.softmax(logits, dim=-1)
