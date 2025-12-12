@@ -97,6 +97,27 @@ _EXPERIMENT_NAMES = st.text(
 )
 
 
+_KNOWN_TOP_LEVEL = {
+    "prepare",
+    "train",
+    "sample",
+    "analyze",
+    "--help",
+    "-h",
+}
+
+
+_INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
+_UNKNOWN_COMMAND_LIST = [
+    token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
+]
+_UNKNOWN_COMMANDS = (
+    st.sampled_from(_UNKNOWN_COMMAND_LIST)
+    if _UNKNOWN_COMMAND_LIST
+    else st.just("unknown-command")
+)
+
+
 def test_run_or_exit_keyboard_interrupt_logs_message(
     caplog: LogCaptureFixture,
 ) -> None:
@@ -110,6 +131,18 @@ def test_run_or_exit_keyboard_interrupt_logs_message(
         run_or_exit(_raise_keyboard_interrupt, keyboard_interrupt_msg="Interrupted")
 
     assert "Interrupted" in caplog.messages
+
+
+@given(command=_UNKNOWN_COMMANDS)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_reports_unknown_commands(command: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [command])
+    assert result.exit_code != 0
+    stream = (result.stderr or result.stdout).lower()
+    assert (
+        "no such command" in stream or "unknown command" in stream or "usage:" in stream
+    )
 
 
 def test_extract_exp_config_handles_missing_and_present_context() -> None:
