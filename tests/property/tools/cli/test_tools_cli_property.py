@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Iterator, Sequence, cast
+from typing import Iterator, Sequence
 
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
-import pytest
 import typer
 import ml_playground.tools.core.config as core_config
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
-from click import Command
 from click.testing import CliRunner, Result
 from typer.main import get_command
 
@@ -49,7 +47,7 @@ def _load_preconfigured_tools_config() -> ToolsConfig:
 
 
 PRELOADED_CONFIG: ToolsConfig = _load_preconfigured_tools_config()
-CLICK_APP = cast(Command, get_command(tools_cli.app))
+CLICK_APP = get_command(tools_cli.app)
 
 
 def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
@@ -172,6 +170,24 @@ INVALID_TOKEN_STRATEGY = (
 )
 
 
+_NON_INT_TEXT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=12,
+)
+
+
+_NON_BOOL_TEXT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=12,
+).filter(lambda value: value.lower() not in {"true", "false", "1", "0"})
+
+
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 @example(flags=[])
 @settings(max_examples=50, deadline=None, derandomize=True)
@@ -256,6 +272,48 @@ def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> 
     assert result.exit_code != 0
     error_stream = result.stderr or result.stdout
     assert "Invalid value for '--verbosity'" in error_stream or "Usage:" in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
+@example(flags=[], bad_port="not-a-number")
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_lit_rejects_non_int_port(flags: list[str], bad_port: str) -> None:
+    args = [*flags, "analysis", "lit", "--port", bad_port]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout
+    assert "Invalid value for '--port'" in error_stream or "Usage:" in error_stream
+    assert "Traceback" not in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
+@example(flags=[], bad_bool="maybe")
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_lit_rejects_invalid_open_browser_value(
+    flags: list[str], bad_bool: str
+) -> None:
+    args = [*flags, "analysis", "lit", f"--open-browser={bad_bool}"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout
+    assert (
+        "Invalid value for" in error_stream
+        or "does not take a value" in error_stream
+        or "Usage:" in error_stream
+    )
+    assert "Traceback" not in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@example(flags=[])
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_sample_quality_requires_file_argument(flags: list[str]) -> None:
+    args = [*flags, "analysis", "sample-quality"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout
+    assert "Missing argument" in error_stream or "Usage:" in error_stream
+    assert "Traceback" not in error_stream
 
 
 @given(
@@ -475,10 +533,13 @@ def test_main_entry_handles_keyboard_interrupt(_: None) -> None:
         _stack_override_attr(stack, tools_cli, "app", fake_app)
         _stack_override_attr(stack, tools_cli.typer, "echo", fake_echo)
 
-        with pytest.raises(typer.Exit) as exc:
+        exit_code: int | None = None
+        try:
             tools_cli.main_entry()
+        except typer.Exit as exc:
+            exit_code = exc.exit_code
 
-    assert exc.value.exit_code == 1
+    assert exit_code == 1
     assert echoed and echoed[-1][1] is True
     assert "Operation cancelled" in echoed[-1][0]
 
@@ -502,8 +563,11 @@ def test_main_entry_handles_generic_exception(reason: str) -> None:
         _stack_override_attr(stack, tools_cli, "app", fake_app)
         _stack_override_attr(stack, tools_cli.typer, "echo", fake_echo)
 
-        with pytest.raises(typer.Exit) as exc:
+        exit_code: int | None = None
+        try:
             tools_cli.main_entry()
+        except typer.Exit as exc:
+            exit_code = exc.exit_code
 
-    assert exc.value.exit_code == 1
+    assert exit_code == 1
     assert any(reason in msg for msg in echoed)

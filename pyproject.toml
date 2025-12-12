@@ -80,11 +80,8 @@ HYPOTHESIS_STORAGE_DIRECTORY = ".cache/hypothesis"
 
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ml_playground"]
-include = [
-    "src/ml_playground",
-    "src/ml_playground/**",
-]
+packages = ["ml_playground"]
+force-include = { "src/ml_playground" = "ml_playground" }
 
 # No additional files to force-include
 
