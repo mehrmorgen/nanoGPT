@@ -47,7 +47,7 @@ class CategoryInfo(TypedDict):
 app = typer.Typer(
     name="tools",
     help="ML Playground unified development tools",
-    no_args_is_help=True,
+    no_args_is_help=False,
     rich_markup_mode="rich",
     cls=OrderedGroup,
 )

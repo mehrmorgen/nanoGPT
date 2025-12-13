@@ -194,6 +194,12 @@ _NON_BOOL_TEXT = st.text(
 def test_cli_without_subcommand_shows_guidance(flags: list[str]) -> None:
     result = _invoke_cli(flags)
     assert result.exit_code == 2
+    output = (result.stdout or "") + (result.stderr or "") + (result.output or "")
+    lowered = output.lower()
+    assert "welcome to ml playground tools cli" in lowered
+    assert "no tools command was provided" in lowered
+    assert "try `uv run tools test`" in output or "try" in lowered
+    assert "traceback" not in lowered
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, group_path=GROUP_PREFIX_STRATEGY)
