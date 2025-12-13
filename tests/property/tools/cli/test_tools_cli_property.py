@@ -572,8 +572,16 @@ def test_learn_best_practices_rejects_unknown_category(
     args = [*flags, "learn", "best-practices", "--category", category]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    error_stream = result.stderr or result.stdout
-    assert "Unknown category" in error_stream
+    _assert_tools_cli_error(result, "unknown category")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_learn_best_practices_requires_category_value(flags: list[str]) -> None:
+    args = [*flags, "learn", "best-practices", "--category"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
