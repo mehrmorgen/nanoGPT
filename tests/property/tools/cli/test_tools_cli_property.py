@@ -339,6 +339,40 @@ def test_analysis_lit_rejects_non_int_port(flags: list[str], bad_port: str) -> N
     assert "Traceback" not in error_stream
 
 
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    opt=st.sampled_from(["--port", "--host"]),
+)
+@example(flags=[], opt="--port")
+@example(flags=["--dry-run"], opt="--host")
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_lit_requires_option_values(flags: list[str], opt: str) -> None:
+    args = [*flags, "analysis", "lit", opt]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout
+    lowered = error_stream.lower()
+    assert (
+        "usage:" in lowered or "requires an argument" in lowered or "missing" in lowered
+    )
+    assert "traceback" not in lowered
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
+@example(flags=[], bad_port="not-a-number")
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_lit_rejects_non_int_port_equals_form(
+    flags: list[str], bad_port: str
+) -> None:
+    args = [*flags, "analysis", "lit", f"--port={bad_port}"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout
+    lowered = error_stream.lower()
+    assert "invalid value" in lowered or "usage:" in lowered
+    assert "traceback" not in lowered
+
+
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
 @example(flags=[], bad_bool="maybe")
 @settings(max_examples=40, deadline=None, derandomize=True)
