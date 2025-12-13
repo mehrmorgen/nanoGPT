@@ -61,7 +61,27 @@ def sample_quality(
     )
 
     def _analyze_sample_command():
-        analysis = analyze_sample_file(file_path)
+        try:
+            analysis = analyze_sample_file(file_path)
+        except FileNotFoundError:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="analysis",
+                command="sample-quality",
+                stderr=f"Sample file not found: {file_path}",
+            )
+        except OSError as exc:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="analysis",
+                command="sample-quality",
+                stderr=f"Failed to read sample file: {file_path} ({exc.__class__.__name__})",
+            )
+
         output = format_analysis(analysis)
         return ToolResult.create(
             success=True,

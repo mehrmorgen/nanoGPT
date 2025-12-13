@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Iterator, Sequence
 
 import hypothesis.strategies as st
-from hypothesis import example, given, settings
+from hypothesis import assume, example, given, settings
 import typer
 import ml_playground.tools.core.config as core_config
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
@@ -401,6 +401,26 @@ def test_analysis_sample_quality_requires_file_argument(flags: list[str]) -> Non
     error_stream = result.stderr or result.stdout
     assert "Missing argument" in error_stream or "Usage:" in error_stream
     assert "Traceback" not in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=st.text(min_size=1, max_size=50))
+@example(flags=[], missing_name="definitely-missing-sample.txt")
+@settings(max_examples=40, deadline=None, derandomize=True)
+def test_analysis_sample_quality_missing_file_has_stable_error(
+    flags: list[str],
+    missing_name: str,
+) -> None:
+    missing_path = PROJECT_ROOT / ".pbt-missing" / missing_name
+    assume(not missing_path.exists())
+
+    args = [*flags, "analysis", "sample-quality", str(missing_path)]
+    result = _invoke_cli(args)
+
+    assert result.exit_code != 0
+    error_stream = result.stderr or result.stdout or result.output
+    lowered = error_stream.lower()
+    assert "sample file not found" in lowered
+    assert "traceback" not in lowered
 
 
 @given(

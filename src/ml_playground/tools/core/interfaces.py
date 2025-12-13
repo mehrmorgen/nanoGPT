@@ -62,6 +62,7 @@ class OperationId(BaseModel):
                 "quality",
                 "test",
                 "env",
+                "analysis",
                 "agentic",
                 "dev",
                 "utils",
