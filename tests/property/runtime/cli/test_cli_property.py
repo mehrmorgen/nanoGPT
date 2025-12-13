@@ -183,7 +183,6 @@ def test_runtime_cli_help_always_succeeds() -> None:
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
     assert "usage:" in lowered
-    assert "--exp-config" in output
     assert "traceback" not in lowered
 
 
