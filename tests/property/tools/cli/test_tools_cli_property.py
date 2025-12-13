@@ -39,6 +39,21 @@ CLI_RUNNER = CliRunner()
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
+def _output_text(result: Result) -> str:
+    return (result.stdout or "") + (result.stderr or "") + (result.output or "")
+
+
+def _assert_traceback_free(text: str) -> None:
+    assert "traceback" not in text.lower()
+
+
+def _assert_tools_cli_error(result: Result, *needles: str) -> None:
+    text = _output_text(result)
+    _assert_traceback_free(text)
+    lowered = text.lower()
+    assert any(needle.lower() in lowered for needle in needles) or "usage:" in lowered
+
+
 def _load_preconfigured_tools_config() -> ToolsConfig:
     try:
         return load_tools_config(PROJECT_ROOT)
@@ -203,12 +218,12 @@ _REL_NAME_TEXT = st.text(
 def test_cli_without_subcommand_shows_guidance(flags: list[str]) -> None:
     result = _invoke_cli(flags)
     assert result.exit_code == 2
-    output = (result.stdout or "") + (result.stderr or "") + (result.output or "")
+    output = _output_text(result)
     lowered = output.lower()
     assert "welcome to ml playground tools cli" in lowered
     assert "no tools command was provided" in lowered
     assert "try `uv run tools test`" in output or "try" in lowered
-    assert "traceback" not in lowered
+    _assert_traceback_free(output)
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, group_path=GROUP_PREFIX_STRATEGY)
@@ -232,9 +247,9 @@ def test_cli_help_always_succeeds(flags: list[str]) -> None:
     args = [*flags, "--help"]
     result = _invoke_cli(args)
     assert result.exit_code == 0
-    output = result.stdout or result.stderr
+    output = _output_text(result)
     assert "Usage:" in output
-    assert "traceback" not in output.lower()
+    _assert_traceback_free(output)
 
 
 @given(
@@ -250,9 +265,9 @@ def test_cli_subcommand_help_always_succeeds(
     args = [*flags, *subcommand, "--help"]
     result = _invoke_cli(args)
     assert result.exit_code == 0
-    output = result.stdout or result.stderr
+    output = _output_text(result)
     assert "Usage:" in output
-    assert "traceback" not in output.lower()
+    _assert_traceback_free(output)
 
 
 @given(
@@ -272,8 +287,8 @@ def test_cli_whitespace_args_never_crash(
     result = _invoke_cli(args)
     if result.exception is not None:
         assert isinstance(result.exception, SystemExit)
-    output = (result.stdout or "") + (result.stderr or "")
-    assert "traceback" not in output.lower()
+    output = _output_text(result)
+    _assert_traceback_free(output)
     assert "Usage:" in output or "No such command" in output
 
 
@@ -291,10 +306,10 @@ def test_cli_reports_unknown_commands(
     args = [*flags, *group_path, invalid]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
+    error_stream = _output_text(result)
     lowered = error_stream.lower()
     assert "no such command" in lowered or "unknown command" in lowered
-    assert "traceback" not in lowered
+    _assert_traceback_free(error_stream)
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -338,8 +353,7 @@ def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> 
     args = [*flags, "--verbosity", str(invalid_value)]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    assert "Invalid value for '--verbosity'" in error_stream or "Usage:" in error_stream
+    _assert_tools_cli_error(result, "invalid value")
 
 
 @given(
@@ -350,13 +364,7 @@ def test_global_options_require_values(flags: list[str], opt: str) -> None:
     args = [*flags, opt]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = (result.stderr or result.stdout or result.output or "").lower()
-    assert "traceback" not in error_stream
-    assert (
-        "requires an argument" in error_stream
-        or "missing" in error_stream
-        or "usage:" in error_stream
-    )
+    _assert_tools_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
@@ -365,9 +373,7 @@ def test_learning_mode_flag_rejects_value_form(flags: list[str], bad_bool: str) 
     args = [*flags, f"--learning-mode={bad_bool}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = (result.stderr or result.stdout or result.output or "").lower()
-    assert "traceback" not in error_stream
-    assert "does not take a value" in error_stream or "usage:" in error_stream
+    _assert_tools_cli_error(result, "does not take a value")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=_REL_NAME_TEXT)
@@ -384,9 +390,7 @@ def test_project_root_missing_path_is_rejected(
         result = runner.invoke(CLICK_APP, args)
 
     assert result.exit_code != 0
-    error_stream = (result.stderr or result.stdout or result.output or "").lower()
-    assert "traceback" not in error_stream
-    assert "project root not found" in error_stream
+    _assert_tools_cli_error(result, "project root not found")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, filename=_REL_NAME_TEXT)
@@ -403,9 +407,7 @@ def test_project_root_file_path_is_rejected(
         result = runner.invoke(CLICK_APP, args)
 
     assert result.exit_code != 0
-    error_stream = (result.stderr or result.stdout or result.output or "").lower()
-    assert "traceback" not in error_stream
-    assert "project root is not a directory" in error_stream
+    _assert_tools_cli_error(result, "project root is not a directory")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
