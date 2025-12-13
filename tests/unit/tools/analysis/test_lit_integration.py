@@ -8,7 +8,7 @@ import importlib
 import sys
 from contextlib import contextmanager
 from types import ModuleType, SimpleNamespace
-from typing import Any, Dict, Iterable, Iterator, Mapping, cast
+from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, cast
 
 import pytest
 
@@ -159,6 +159,74 @@ def test_run_server_bundestag_char_invokes_server_factory() -> None:
     assert "echo_model" in models
 
 
+def test_run_server_bundestag_char_exercises_dataset_and_model_contracts() -> None:
+    with install_fake_lit_modules() as server_state:
+        integration.run_server_bundestag_char(
+            host="127.0.0.1",
+            port=0,
+            open_browser=False,
+        )
+
+    datasets = cast(Mapping[str, object], server_state["datasets"])
+    models = cast(Mapping[str, object], server_state["models"])
+
+    dataset = datasets["bundestag_char_sample"]
+    model = models["echo_model"]
+
+    spec = cast(Callable[[], dict[str, object]], getattr(dataset, "spec"))
+    assert "text" in spec()
+
+    length = cast(Callable[[], int], getattr(dataset, "__len__"))
+    assert length() > 0
+
+    iterator = cast(
+        Callable[[], Iterable[Mapping[str, object]]], getattr(dataset, "__iter__")
+    )
+    examples = list(iterator())
+    assert examples
+
+    input_spec = cast(Callable[[], dict[str, object]], getattr(model, "input_spec"))
+    output_spec = cast(Callable[[], dict[str, object]], getattr(model, "output_spec"))
+    assert "text" in input_spec()
+    assert "generated" in output_spec()
+
+    predict = cast(
+        Callable[[Iterable[Mapping[str, object]]], list[Mapping[str, object]]],
+        getattr(model, "predict"),
+    )
+    out = predict(examples[:2])
+    assert out
+    assert "generated" in out[0]
+
+
+def test_run_server_bundestag_char_errors_when_no_serve_available() -> None:
+    with install_fake_lit_modules():
+        original_import = integration._import_lit_server
+
+        class ServerWithoutServe:
+            def __init__(
+                self, _models: Mapping[str, object], _datasets: Mapping[str, object]
+            ) -> None:
+                pass
+
+        class ServerModuleNoServe(ModuleType):
+            Server = ServerWithoutServe  # type: ignore[assignment]
+
+        try:
+            integration._import_lit_server = lambda: ServerModuleNoServe(
+                "lit_nlp.server"
+            )
+            with pytest.raises(
+                RuntimeError,
+                match=r"neither app\.serve\(\) nor module serve\(\) available",
+            ):
+                integration.run_server_bundestag_char(
+                    host="127.0.0.1", port=0, open_browser=False
+                )
+        finally:
+            integration._import_lit_server = original_import
+
+
 def test_parse_cli_args_returns_expected_defaults() -> None:
     """Test parse cli args returns expected defaults."""
     host, port, open_browser = integration._parse_cli_args([])
@@ -221,6 +289,46 @@ def test_load_lit_components_raises_when_lit_unavailable() -> None:
         importlib.import_module = original_import_module  # type: ignore[assignment]
 
 
+def test_import_lit_server_formats_message_when_lit_nlp_unimportable() -> None:
+    original_import_module = importlib.import_module
+
+    def fake_import_module(name: str, *args: object, **kwargs: object) -> ModuleType:
+        if name in {"lit_nlp.dev_server", "lit_nlp.server"}:
+            raise ModuleNotFoundError(f"missing {name}")
+        if name == "lit_nlp":
+            raise ImportError("lit_nlp not available")
+        return original_import_module(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    try:
+        importlib.import_module = fake_import_module  # type: ignore[assignment]
+        with pytest.raises(RuntimeError) as exc_info:
+            integration._import_lit_server()
+        message = str(exc_info.value)  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownArgumentType]
+        assert "lit-nlp not importable" in message
+        assert "Tried: lit_nlp.dev_server, lit_nlp.server" in message
+    finally:
+        importlib.import_module = original_import_module  # type: ignore[assignment]
+
+
+def test_parse_cli_args_coerces_non_bool_open_browser() -> None:
+    original = argparse.ArgumentParser.parse_args
+
+    def fake_parse_args(  # type: ignore[override]
+        self: argparse.ArgumentParser, _argv: Any | None = None
+    ) -> SimpleNamespace:
+        return SimpleNamespace(host="127.0.0.1", port=5432, open_browser="yes")
+
+    try:
+        argparse.ArgumentParser.parse_args = fake_parse_args  # type: ignore[assignment]
+        host, port, open_browser = integration._parse_cli_args([])
+    finally:
+        argparse.ArgumentParser.parse_args = original  # type: ignore[assignment]
+
+    assert host == "127.0.0.1"
+    assert port == 5432
+    assert open_browser is True
+
+
 def test_import_lit_server_raises_when_no_server_module() -> None:
     """_import_lit_server should fail cleanly when no server module is importable.
 
@@ -254,8 +362,7 @@ def test_import_lit_server_raises_when_no_server_module() -> None:
     finally:
         importlib.import_module = original_import_module  # type: ignore[assignment]
 
-    assert isinstance(excinfo.value, RuntimeError)
-    message = str(excinfo.value)
+    message = str(excinfo.value)  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownArgumentType]
     assert "Unable to import LIT server module" in message
     assert "detected lit-nlp version: 1.2.3" in message
     assert "Last error:" in message
