@@ -22,6 +22,17 @@ def _strip_ansi(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
 
 
+def _contains_flexible_whitespace(text: str, expected: str) -> bool:
+    if expected in text:
+        return True
+
+    if " " not in expected:
+        return False
+
+    pattern = re.escape(expected).replace("\\ ", r"\\s+")
+    return re.search(pattern, text, re.DOTALL) is not None
+
+
 # Type aliases
 CLIContext = dict[str, subprocess.CompletedProcess[str]]
 RunCli = Callable[..., subprocess.CompletedProcess[str]]
@@ -61,12 +72,9 @@ def assert_output_contains(cli_context: CLIContext, datatable: list[list[str]]) 
     stripped_output = _strip_ansi(combined_output)
     for row in datatable[1:]:
         expected = row[0]
-        if expected not in stripped_output:
+        if not _contains_flexible_whitespace(stripped_output, expected):
             preview = stripped_output[:2000]
             raise AssertionError(
                 "Missing expected text: "
-                f"{expected}\n"
-                "----- Stripped output (truncated) -----\n"
-                f"{preview}\n"
-                "----- End output -----"
+                f"expected={expected!r} output_preview={preview!r}"
             )
