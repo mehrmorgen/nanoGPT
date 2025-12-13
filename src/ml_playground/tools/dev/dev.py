@@ -15,6 +15,7 @@ from .ai_guidelines import run_setup_ai_guidelines
 from .review import run_review_list, run_review_bulk_reply, run_review_delete
 from .hygiene import run_cleanup_ignored_tracked, run_kill_port
 from .status import run_dev_batch_review, run_dev_workflow_status
+from .github_actions import run_github_actions
 
 
 # Module-level default runner removed in favor of direct instantiation in __init__
@@ -115,6 +116,27 @@ class DevTools:
             config=self.config,
             root_path=self.root_path,
             output_format=output_format,
+        )
+
+    def gha(
+        self,
+        *,
+        limit: int = 10,
+        run_id: int | None = None,
+        latest: bool = False,
+        log_failed: bool = False,
+        remote: str = "origin",
+        repo: str | None = None,
+    ) -> ToolResult:
+        return run_github_actions(
+            root_path=self.root_path,
+            subprocess_runner=self.subprocess_runner,
+            limit=limit,
+            run_id=run_id,
+            latest=latest,
+            log_failed=log_failed,
+            remote=remote,
+            repo=repo,
         )
 
     # ------------------------------------------------------------------

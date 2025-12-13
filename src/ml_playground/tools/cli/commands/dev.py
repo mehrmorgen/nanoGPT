@@ -165,3 +165,57 @@ def dev_workflow_status(
         tools.workflow_status,
         output_format=output_format,
     )
+
+
+@dev_app.command("gha")
+def dev_github_actions(
+    limit: Annotated[
+        int, typer.Option("--limit", "-L", help="Number of runs to list")
+    ] = 10,
+    run_id: Annotated[
+        int | None,
+        typer.Option(
+            "--run-id",
+            help="Optional run id to inspect (enables gh run view)",
+        ),
+    ] = None,
+    latest: Annotated[
+        bool,
+        typer.Option(
+            "--latest",
+            help="Inspect the latest run (enables gh run view without --run-id)",
+        ),
+    ] = False,
+    log_failed: Annotated[
+        bool,
+        typer.Option(
+            "--log-failed",
+            help="When --run-id is provided, show failed job logs",
+        ),
+    ] = False,
+    remote: Annotated[
+        str,
+        typer.Option(
+            "--remote",
+            help="Git remote name for owner/repo inference",
+        ),
+    ] = "origin",
+    repo: Annotated[
+        str | None,
+        typer.Option(
+            "--repo",
+            help="Override owner/repo (defaults to inferred repo)",
+        ),
+    ] = None,
+) -> None:
+    """Query GitHub Actions workflow runs via gh."""
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.gha,
+        limit=limit,
+        run_id=run_id,
+        latest=latest,
+        log_failed=log_failed,
+        remote=remote,
+        repo=repo,
+    )

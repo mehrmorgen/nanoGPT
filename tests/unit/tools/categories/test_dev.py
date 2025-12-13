@@ -19,7 +19,7 @@ from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from tests.unit.tools.fakes import FakeSubprocessRunner
 
 
-@pytest.fixture()
+@pytest.fixture
 def dev_tools(tmp_path: Path) -> tuple[dev.DevTools, FakeSubprocessRunner]:
     runner = FakeSubprocessRunner()
     tools = dev.DevTools(
@@ -259,6 +259,41 @@ def test_kill_port_kills_each_pid_via_di(
     finally:
         hygiene_module._pids_by_port = original_pids
         hygiene_module._kill_pid = original_kill
+
+
+def test_gha_lists_runs_and_can_show_logs(
+    dev_tools: tuple[dev.DevTools, FakeSubprocessRunner],
+) -> None:
+    tools, runner = dev_tools
+
+    runner.set_results(
+        [
+            _make_result("git-remote", stdout="git@github.com:owner/repo.git\n"),
+            _make_result("gha", stdout="run list output\n"),
+            _make_result("gha", stdout="123\n"),
+            _make_result("gha", stdout="run view output\n"),
+        ]
+    )
+
+    result = tools.gha(limit=2, latest=True, log_failed=True)
+
+    assert result.success is True
+    assert "gh run list" in result.stdout
+    assert "gh run view" in result.stdout
+    calls = runner.calls
+    assert calls[0].get("command", [])[:4] == ["git", "remote", "get-url", "origin"]
+    assert calls[1].get("command", [])[:6] == [
+        "gh",
+        "run",
+        "list",
+        "--repo",
+        "owner/repo",
+        "-L",
+    ]
+    assert calls[2].get("command", [])[:4] == ["gh", "run", "list", "--repo"]
+    assert "--json" in (calls[2].get("command", []) or [])
+    assert calls[3].get("command", [])[:4] == ["gh", "run", "view", "123"]
+    assert "--log-failed" in (calls[3].get("command", []) or [])
 
 
 def test_kill_port_with_no_pids(
