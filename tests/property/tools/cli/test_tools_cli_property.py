@@ -655,6 +655,35 @@ def test_learn_explain_rejects_unknown_target(
     _assert_tools_cli_error(result, "unknown", "not found")
 
 
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
+@example(flags=[], bad_value="not-a-number")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_dev_gha_rejects_non_int_limit(flags: list[str], bad_value: str) -> None:
+    args = [*flags, "dev", "gha", "--limit", bad_value]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "invalid value")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
+@example(flags=[], bad_value="not-a-number")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_dev_gha_rejects_non_int_run_id(flags: list[str], bad_value: str) -> None:
+    args = [*flags, "dev", "gha", "--run-id", bad_value]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "invalid value")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, opt=st.sampled_from(["--limit", "--run-id"]))
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_dev_gha_requires_option_values(flags: list[str], opt: str) -> None:
+    args = [*flags, "dev", "gha", opt]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "requires an argument", "missing")
+
+
 # --- Command execution coverage ------------------------------------------------
 
 
