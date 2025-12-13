@@ -607,8 +607,36 @@ def test_learn_explain_rejects_invalid_format(flags: list[str], bad_value: str) 
     args = [*flags, "learn", "explain", assume_value]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    error_stream = result.stderr or result.stdout
-    assert "Command must be in format" in error_stream
+    _assert_tools_cli_error(result, "command must be in format")
+
+
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    unknown_category=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+        ),
+        min_size=1,
+        max_size=12,
+    ).filter(lambda value: value not in COMMAND_INFO),
+    unknown_command=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+        ),
+        min_size=1,
+        max_size=12,
+    ),
+)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learn_explain_rejects_unknown_target(
+    flags: list[str],
+    unknown_category: str,
+    unknown_command: str,
+) -> None:
+    args = [*flags, "learn", "explain", f"{unknown_category}.{unknown_command}"]
+    result = _invoke_cli(args)
+    assert result.exit_code == 1
+    _assert_tools_cli_error(result, "unknown", "not found")
 
 
 # --- Command execution coverage ------------------------------------------------
