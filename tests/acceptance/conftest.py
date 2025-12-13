@@ -14,15 +14,15 @@ from typing import Callable, Generator
 import pytest
 
 # Apply the 'acceptance' marker to every test in this package
-pytestmark = pytest.mark.acceptance
+pytestmark = getattr(pytest.mark, "acceptance")
 
 
-@pytest.fixture()
+@pytest.fixture
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-@pytest.fixture()
+@pytest.fixture
 def run_cli(
     project_root: Path,
 ) -> Generator[Callable[..., subprocess.CompletedProcess[str]], None, None]:
