@@ -146,6 +146,24 @@ _NON_BOOL_TEXT = st.text(
 ).filter(lambda value: value.lower() not in {"true", "false", "1", "0"})
 
 
+def _output_text(result: object) -> str:
+    stdout = getattr(result, "stdout", None) or ""
+    stderr = getattr(result, "stderr", None) or ""
+    output = getattr(result, "output", None) or ""
+    return f"{stdout}{stderr}{output}"
+
+
+def _assert_traceback_free(text: str) -> None:
+    assert "traceback" not in text.lower()
+
+
+def _assert_runtime_cli_error(result: object, *needles: str) -> None:
+    text = _output_text(result)
+    _assert_traceback_free(text)
+    lowered = text.lower()
+    assert any(needle.lower() in lowered for needle in needles) or "usage:" in lowered
+
+
 _INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
 _UNKNOWN_COMMAND_LIST = [
     token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
@@ -198,9 +216,9 @@ def test_runtime_cli_help_always_succeeds() -> None:
 def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["-h"])
-    output = (result.stdout or "") + (result.stderr or "")
+    output = _output_text(result)
     lowered = output.lower()
-    assert "traceback" not in lowered
+    _assert_traceback_free(output)
     assert result.exit_code != 0 or "usage:" in lowered
 
 
@@ -210,26 +228,14 @@ def test_runtime_cli_rejects_invalid_learning_mode_value(bad_value: str) -> None
     runner = CliRunner()
     result = runner.invoke(app, [f"--learning-mode={bad_value}"])
     assert result.exit_code != 0
-    output = (result.stdout or "") + (result.stderr or "")
-    lowered = output.lower()
-    assert "traceback" not in lowered
-    assert (
-        "invalid value" in lowered
-        or "does not take a value" in lowered
-        or "usage:" in lowered
-    )
+    _assert_runtime_cli_error(result, "invalid value", "does not take a value")
 
 
 def test_runtime_cli_rejects_missing_exp_config_value() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--exp-config"])
     assert result.exit_code != 0
-    output = (result.stdout or "") + (result.stderr or "")
-    lowered = output.lower()
-    assert "traceback" not in lowered
-    assert (
-        "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
-    )
+    _assert_runtime_cli_error(result, "requires an argument", "missing")
 
 
 @given(subcommand=st.sampled_from(_KNOWN_SUBCOMMANDS))
@@ -274,21 +280,14 @@ def test_runtime_cli_rejects_invalid_verbosity_range(bad_value: int) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity", str(bad_value)])
     assert result.exit_code != 0
-    stream = ((result.stderr or result.stdout) or "").lower()
-    assert "traceback" not in stream
-    assert "invalid value" in stream or "usage:" in stream
+    _assert_runtime_cli_error(result, "invalid value")
 
 
 def test_runtime_cli_rejects_missing_verbosity_value() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity"])
     assert result.exit_code != 0
-    output = (result.stdout or "") + (result.stderr or "")
-    lowered = output.lower()
-    assert "traceback" not in lowered
-    assert (
-        "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
-    )
+    _assert_runtime_cli_error(result, "requires an argument", "missing")
 
 
 @given(
@@ -299,9 +298,9 @@ def test_runtime_cli_rejects_invalid_verbosity_equals_form(bad_value: int) -> No
     runner = CliRunner()
     result = runner.invoke(app, [f"--verbosity={bad_value}"])
     assert result.exit_code != 0
-    output = (result.stdout or "") + (result.stderr or "")
+    output = _output_text(result)
     lowered = output.lower()
-    assert "traceback" not in lowered
+    _assert_traceback_free(output)
     assert "invalid value" in lowered or "usage:" in lowered
 
 
@@ -311,8 +310,8 @@ def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity", bad_value])
     assert result.exit_code != 0
-    stream = ((result.stderr or result.stdout) or "").lower()
-    assert "traceback" not in stream
+    stream = _output_text(result).lower()
+    _assert_traceback_free(stream)
     assert "invalid value" in stream or "usage:" in stream
 
 
