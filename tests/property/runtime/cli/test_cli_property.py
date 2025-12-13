@@ -265,6 +265,20 @@ def test_runtime_cli_analyze_requires_experiment_argument() -> None:
     assert "traceback" not in lowered
 
 
+@given(subcommand=st.sampled_from(["prepare", "train", "sample"]))
+@settings(max_examples=12, deadline=None, derandomize=True)
+def test_runtime_cli_commands_require_experiment_argument(subcommand: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [subcommand])
+    assert result.exit_code == 2
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "missing argument" in lowered
+    assert "experiment" in lowered
+    assert "usage:" in lowered
+    assert "traceback" not in lowered
+
+
 @given(bad_port=_NON_INT_TEXT)
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
