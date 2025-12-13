@@ -210,6 +210,58 @@ def test_cli_groups_render_help(flags: list[str], group_path: tuple[str, ...]) -
         assert group_path[-1] in output
 
 
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@example(flags=[])
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_cli_help_always_succeeds(flags: list[str]) -> None:
+    args = [*flags, "--help"]
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    output = result.stdout or result.stderr
+    assert "Usage:" in output
+    assert "traceback" not in output.lower()
+
+
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    subcommand=GROUP_PREFIX_STRATEGY,
+)
+@example(flags=[], subcommand=("quality",))
+@example(flags=["--learning-mode"], subcommand=("analysis",))
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_cli_subcommand_help_always_succeeds(
+    flags: list[str], subcommand: tuple[str, ...]
+) -> None:
+    args = [*flags, *subcommand, "--help"]
+    result = _invoke_cli(args)
+    assert result.exit_code == 0
+    output = result.stdout or result.stderr
+    assert "Usage:" in output
+    assert "traceback" not in output.lower()
+
+
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    whitespace=st.lists(
+        st.sampled_from([" ", "  ", "\t", "\n"]),
+        min_size=1,
+        max_size=3,
+    ),
+)
+@example(flags=[], whitespace=[" "])
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_cli_whitespace_args_never_crash(
+    flags: list[str], whitespace: list[str]
+) -> None:
+    args = [*flags, *whitespace]
+    result = _invoke_cli(args)
+    if result.exception is not None:
+        assert isinstance(result.exception, SystemExit)
+    output = (result.stdout or "") + (result.stderr or "")
+    assert "traceback" not in output.lower()
+    assert "Usage:" in output or "No such command" in output
+
+
 @given(
     flags=GLOBAL_FLAGS_STRATEGY,
     group_path=GROUP_PREFIX_STRATEGY,
