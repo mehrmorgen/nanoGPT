@@ -333,6 +333,34 @@ def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> 
     assert "Invalid value for '--verbosity'" in error_stream or "Usage:" in error_stream
 
 
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY, opt=st.sampled_from(["--verbosity", "--project-root"])
+)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_global_options_require_values(flags: list[str], opt: str) -> None:
+    args = [*flags, opt]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = (result.stderr or result.stdout or result.output or "").lower()
+    assert "traceback" not in error_stream
+    assert (
+        "requires an argument" in error_stream
+        or "missing" in error_stream
+        or "usage:" in error_stream
+    )
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_learning_mode_flag_rejects_value_form(flags: list[str], bad_bool: str) -> None:
+    args = [*flags, f"--learning-mode={bad_bool}"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    error_stream = (result.stderr or result.stdout or result.output or "").lower()
+    assert "traceback" not in error_stream
+    assert "does not take a value" in error_stream or "usage:" in error_stream
+
+
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
 @example(flags=[], bad_port="not-a-number")
 @settings(max_examples=40, deadline=None, derandomize=True)
