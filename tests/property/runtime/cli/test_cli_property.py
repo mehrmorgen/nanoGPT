@@ -344,6 +344,20 @@ def test_runtime_cli_analyze_rejects_invalid_open_browser_value(bad_bool: str) -
     )
 
 
+@given(opt=st.sampled_from(["--host", "--port"]))
+@settings(max_examples=10, deadline=None, derandomize=True)
+def test_runtime_cli_analyze_requires_option_values(opt: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["analyze", "dummy", opt])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert (
+        "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
+    )
+
+
 @given(name=_PATH_TOKEN)
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> None:
