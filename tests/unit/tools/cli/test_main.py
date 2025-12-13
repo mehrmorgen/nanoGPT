@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 
 import ml_playground.tools.cli.main as tools_cli
 import ml_playground.tools.analysis.lit_integration as lit_integration
+import ml_playground.tools.analysis.sample_quality as sample_quality
 from ml_playground.tools.cli.dependencies import ToolsDependencies
 from ml_playground.tools.cli.helpers import (
     get_quality_tools,
@@ -306,6 +307,54 @@ class TestCLIBasics:
         assert results[-1].success is True
         assert results[-1].exit_code == 0
         assert results[-1].stdout == "LIT server stopped"
+
+    def test_analysis_sample_quality_executes_command_body(
+        self, tmp_path: Path
+    ) -> None:
+        results: list[ToolResult] = []
+
+        def fake_analyze_sample_file(_file_path: Path) -> object:
+            return object()
+
+        def fake_format_analysis(_analysis: object) -> str:
+            return "ok"
+
+        def fake_load_tools_config(_project_root: Path | None = None) -> ToolsConfig:
+            return ToolsConfig()
+
+        def capture_result(result: ToolResult) -> None:
+            results.append(result)
+
+        sample_file = tmp_path / "sample.txt"
+        sample_file.write_text("hello", encoding="utf-8")
+
+        deps = _deps(load_config=fake_load_tools_config, result_handler=capture_result)
+        with (
+            override_tools_dependencies(deps),
+            override_attr(
+                sample_quality,
+                "analyze_sample_file",
+                fake_analyze_sample_file,
+            ),
+            override_attr(sample_quality, "format_analysis", fake_format_analysis),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                tools_cli.app,
+                [
+                    "--project-root",
+                    str(tmp_path),
+                    "analysis",
+                    "sample-quality",
+                    str(sample_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert results, "Expected at least one ToolResult"
+        assert results[-1].success is True
+        assert results[-1].exit_code == 0
+        assert results[-1].stdout == "ok"
 
     def test_main_uses_config_defaults_when_not_overridden(
         self, tmp_path: Path
