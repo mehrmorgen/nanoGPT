@@ -119,6 +119,15 @@ _PATH_TOKEN = st.text(
 )
 
 
+_REL_SEGMENT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=12,
+)
+
+
 _INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
 _UNKNOWN_COMMAND_LIST = [
     token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
@@ -241,6 +250,48 @@ def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
         result = runner.invoke(
             app,
             ["--exp-config", str(config_path), "prepare", "nonexistent"],
+        )
+
+    error_stream = (result.stderr or result.stdout) or ""
+    assert "Config file not found" not in error_stream
+
+
+@given(filename=_REL_SEGMENT)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_missing_exp_config_relative_path_is_stable(
+    filename: str,
+) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        rel_path = Path(f"{filename}.toml")
+        result = runner.invoke(
+            app,
+            ["--exp-config", str(rel_path), "prepare", "nonexistent"],
+        )
+
+    assert result.exit_code == 2
+    error_stream = (result.stderr or result.stdout) or ""
+    assert "Config file not found" in error_stream
+    assert "Traceback" not in error_stream
+
+
+@given(dirname=_REL_SEGMENT, filename=_REL_SEGMENT)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_exp_config_normalizes_dotdot_paths(
+    dirname: str,
+    filename: str,
+) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        base = Path(dirname)
+        base.mkdir(parents=True, exist_ok=True)
+        config_path = base / f"{filename}.toml"
+        config_path.write_text("\n", encoding="utf-8")
+
+        rel_with_dotdot = Path(dirname) / ".." / dirname / f"{filename}.toml"
+        result = runner.invoke(
+            app,
+            ["--exp-config", str(rel_with_dotdot), "prepare", "nonexistent"],
         )
 
     error_stream = (result.stderr or result.stdout) or ""
