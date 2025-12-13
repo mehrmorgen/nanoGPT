@@ -16,6 +16,7 @@ import typer
 from typer.testing import CliRunner
 
 import ml_playground.tools.cli.main as tools_cli
+import ml_playground.tools.analysis.lit_integration as lit_integration
 from ml_playground.tools.cli.dependencies import ToolsDependencies
 from ml_playground.tools.cli.helpers import (
     get_quality_tools,
@@ -256,6 +257,55 @@ class TestCLIBasics:
         assert "Unexpected error loading configuration" in (
             result.stderr or result.stdout
         )
+
+    def test_analysis_lit_executes_command_body(self, tmp_path: Path) -> None:
+        received: dict[str, object] = {}
+        results: list[ToolResult] = []
+
+        def fake_run_server_bundestag_char(
+            *, host: str, port: int, open_browser: bool, logger: object
+        ) -> None:
+            received["host"] = host
+            received["port"] = port
+            received["open_browser"] = open_browser
+            received["logger"] = logger
+
+        def fake_load_tools_config(_project_root: Path | None = None) -> ToolsConfig:
+            return ToolsConfig()
+
+        def capture_result(result: ToolResult) -> None:
+            results.append(result)
+
+        deps = _deps(load_config=fake_load_tools_config, result_handler=capture_result)
+        with (
+            override_tools_dependencies(deps),
+            override_attr(
+                lit_integration,
+                "run_server_bundestag_char",
+                fake_run_server_bundestag_char,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                tools_cli.app,
+                [
+                    "--project-root",
+                    str(tmp_path),
+                    "analysis",
+                    "lit",
+                    "--port",
+                    "0",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert received["host"] == "127.0.0.1"
+        assert received["port"] == 0
+        assert received["open_browser"] is False
+        assert results, "Expected at least one ToolResult"
+        assert results[-1].success is True
+        assert results[-1].exit_code == 0
+        assert results[-1].stdout == "LIT server stopped"
 
     def test_main_uses_config_defaults_when_not_overridden(
         self, tmp_path: Path
