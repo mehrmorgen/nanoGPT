@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Callable, Generator
+from collections.abc import Callable, Iterator
 
 import pytest
 
@@ -25,7 +25,7 @@ def project_root() -> Path:
 @pytest.fixture
 def run_cli(
     project_root: Path,
-) -> Generator[Callable[..., subprocess.CompletedProcess[str]], None, None]:
+) -> Iterator[Callable[..., subprocess.CompletedProcess[str]]]:
     def _run(command: str, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["uv", "run", command, *args],
