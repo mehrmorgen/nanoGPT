@@ -137,6 +137,15 @@ _NON_INT_TEXT = st.text(
 )
 
 
+_NON_BOOL_TEXT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=12,
+).filter(lambda value: value.lower() not in {"true", "false", "1", "0"})
+
+
 _INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
 _UNKNOWN_COMMAND_LIST = [
     token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
@@ -193,6 +202,34 @@ def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
     lowered = output.lower()
     assert "traceback" not in lowered
     assert result.exit_code != 0 or "usage:" in lowered
+
+
+@given(bad_value=_NON_BOOL_TEXT)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_runtime_cli_rejects_invalid_learning_mode_value(bad_value: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [f"--learning-mode={bad_value}"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert (
+        "invalid value" in lowered
+        or "does not take a value" in lowered
+        or "usage:" in lowered
+    )
+
+
+def test_runtime_cli_rejects_missing_exp_config_value() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--exp-config"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert (
+        "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
+    )
 
 
 @given(subcommand=st.sampled_from(_KNOWN_SUBCOMMANDS))
