@@ -27,6 +27,14 @@ def load_config_with_error_handling(
         if project_root is None and state.config is not None:
             return
 
+        if project_root is not None:
+            if not project_root.exists():
+                typer.echo(f"Project root not found: {project_root}", err=True)
+                raise typer.Exit(2)
+            if not project_root.is_dir():
+                typer.echo(f"Project root is not a directory: {project_root}", err=True)
+                raise typer.Exit(2)
+
         target_root = project_root if project_root is not None else state.project_root
 
         loaded_config = dependencies.load_config(target_root)

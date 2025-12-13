@@ -188,6 +188,15 @@ _NON_BOOL_TEXT = st.text(
 ).filter(lambda value: value.lower() not in {"true", "false", "1", "0"})
 
 
+_REL_NAME_TEXT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=40,
+).filter(lambda value: value not in {".", ".."})
+
+
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 @example(flags=[])
 @settings(max_examples=50, deadline=None, derandomize=True)
@@ -359,6 +368,44 @@ def test_learning_mode_flag_rejects_value_form(flags: list[str], bad_bool: str) 
     error_stream = (result.stderr or result.stdout or result.output or "").lower()
     assert "traceback" not in error_stream
     assert "does not take a value" in error_stream or "usage:" in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=_REL_NAME_TEXT)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_project_root_missing_path_is_rejected(
+    flags: list[str],
+    missing_name: str,
+) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        missing_path = Path(".pbt-missing") / missing_name
+        assume(not missing_path.exists())
+        args = [*flags, "--project-root", str(missing_path), "version"]
+        result = runner.invoke(CLICK_APP, args)
+
+    assert result.exit_code != 0
+    error_stream = (result.stderr or result.stdout or result.output or "").lower()
+    assert "traceback" not in error_stream
+    assert "project root not found" in error_stream
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, filename=_REL_NAME_TEXT)
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_project_root_file_path_is_rejected(
+    flags: list[str],
+    filename: str,
+) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        file_path = Path(f"{filename}.txt")
+        file_path.write_text("x", encoding="utf-8")
+        args = [*flags, "--project-root", str(file_path), "version"]
+        result = runner.invoke(CLICK_APP, args)
+
+    assert result.exit_code != 0
+    error_stream = (result.stderr or result.stdout or result.output or "").lower()
+    assert "traceback" not in error_stream
+    assert "project root is not a directory" in error_stream
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
