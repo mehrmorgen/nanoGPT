@@ -4,7 +4,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Any, Callable, Dict, List, cast
+from typing import Callable, cast
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -23,7 +23,7 @@ def _strip_ansi(text: str) -> str:
 
 
 # Type aliases
-CLIContext = Dict[str, Any]
+CLIContext = dict[str, subprocess.CompletedProcess[str]]
 RunCli = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -54,7 +54,7 @@ def assert_exit_code(cli_context: CLIContext, expected: int) -> None:
 
 
 @then("the output contains:")
-def assert_output_contains(cli_context: CLIContext, datatable: List[List[str]]) -> None:
+def assert_output_contains(cli_context: CLIContext, datatable: list[list[str]]) -> None:
     result = cast(subprocess.CompletedProcess[str], cli_context.get("result"))
     assert result is not None, "CLI result missing from context"
     combined_output = (result.stdout or "") + (result.stderr or "")

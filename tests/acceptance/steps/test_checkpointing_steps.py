@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import time
+from typing import Any
 
 import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
@@ -52,7 +53,7 @@ def _save_checkpoint(
     metric: float,
     iter_num: int,
     is_best: bool,
-):
+) -> None:
     """Helper to save a checkpoint with consistent parameters."""
     manager.save_checkpoint(
         ckpt,
@@ -87,7 +88,7 @@ def checkpoint_retention_policy(
 
 
 @when(parsers.parse("{count:d} checkpoints are saved sequentially"))
-def save_checkpoints_sequentially(manager: CheckpointManager, count: int):
+def save_checkpoints_sequentially(manager: CheckpointManager, count: int) -> None:
     assert manager is not None, "CheckpointManager required"
     assert count > 0, f"count must be positive, got {count}"
     for i in range(count):
@@ -97,17 +98,22 @@ def save_checkpoints_sequentially(manager: CheckpointManager, count: int):
 
 
 @when("checkpoints are saved with the following metrics:")
-def save_checkpoints_with_metrics(manager: CheckpointManager, datatable):
+def save_checkpoints_with_metrics(
+    manager: CheckpointManager, datatable: list[list[object]]
+) -> None:
     assert manager is not None, "CheckpointManager required"
     assert datatable, "Expected datatable with metrics data"
     assert len(datatable) >= 2, "Expected header row + data rows in datatable"
 
     headers = datatable[0]
     rows = datatable[1:]
-    metrics_table = [dict(zip(headers, row)) for row in rows]
+    metrics_table: list[dict[object, object]] = [
+        dict(zip(headers, row)) for row in rows
+    ]
 
     for i, row in enumerate(metrics_table):
-        metric = float(row["metric"])
+        metric_obj: Any = row["metric"]
+        metric = float(metric_obj)
         ckpt = _dummy_checkpoint(i, metric)
         _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, i, True)
         time.sleep(0.01)
@@ -129,7 +135,7 @@ def reinitialize_checkpoint_manager(manager: CheckpointManager) -> CheckpointMan
 @when(
     parsers.parse("an evaluation step produces improvement at iteration {iter_num:d}")
 )
-def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
+def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int) -> None:
     assert manager is not None, "CheckpointManager required"
     assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
     metric = 0.5 if iter_num == 0 else 0.4
