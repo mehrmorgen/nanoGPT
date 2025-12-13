@@ -107,6 +107,15 @@ _KNOWN_TOP_LEVEL = {
 }
 
 
+_PATH_TOKEN = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=20,
+)
+
+
 _INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
 _UNKNOWN_COMMAND_LIST = [
     token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
@@ -143,6 +152,41 @@ def test_runtime_cli_reports_unknown_commands(command: str) -> None:
     assert (
         "no such command" in stream or "unknown command" in stream or "usage:" in stream
     )
+
+
+@given(name=_PATH_TOKEN)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> None:
+    runner = CliRunner()
+    with TemporaryDirectory() as tmpdir:
+        missing = Path(tmpdir) / f"{name}.toml"
+        result = runner.invoke(
+            app,
+            ["--exp-config", str(missing), "prepare", "nonexistent"],
+        )
+
+    assert result.exit_code == 2
+    error_stream = (result.stderr or result.stdout) or ""
+    assert "Config file not found" in error_stream
+    assert "Traceback" not in error_stream
+
+
+@given(name=_PATH_TOKEN)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
+    name: str,
+) -> None:
+    runner = CliRunner()
+    with TemporaryDirectory() as tmpdir:
+        config_path = Path(tmpdir) / f"{name}.toml"
+        config_path.write_text("\n", encoding="utf-8")
+        result = runner.invoke(
+            app,
+            ["--exp-config", str(config_path), "prepare", "nonexistent"],
+        )
+
+    error_stream = (result.stderr or result.stdout) or ""
+    assert "Config file not found" not in error_stream
 
 
 def test_extract_exp_config_handles_missing_and_present_context() -> None:
