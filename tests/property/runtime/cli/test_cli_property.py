@@ -107,6 +107,9 @@ _KNOWN_TOP_LEVEL = {
 }
 
 
+_KNOWN_SUBCOMMANDS = ("prepare", "train", "sample", "analyze")
+
+
 _PATH_TOKEN = st.text(
     alphabet=st.characters(
         whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
@@ -153,6 +156,60 @@ def test_runtime_cli_reports_unknown_commands(command: str) -> None:
         "no such command" in stream or "unknown command" in stream or "usage:" in stream
     )
     assert "traceback" not in stream
+
+
+def test_runtime_cli_help_always_succeeds() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "usage:" in lowered
+    assert "--exp-config" in output
+    assert "traceback" not in lowered
+
+
+def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["-h"])
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert result.exit_code != 0 or "usage:" in lowered
+
+
+@given(subcommand=st.sampled_from(_KNOWN_SUBCOMMANDS))
+@settings(max_examples=10, deadline=None, derandomize=True)
+def test_runtime_cli_subcommand_help_always_succeeds(subcommand: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [subcommand, "--help"])
+    assert result.exit_code == 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "usage:" in lowered
+    assert "traceback" not in lowered
+
+
+@given(
+    whitespace=st.lists(
+        st.sampled_from([" ", "  ", "\t", "\n"]),
+        min_size=1,
+        max_size=3,
+    )
+)
+@example(whitespace=[" "])
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_runtime_cli_whitespace_args_never_show_traceback(
+    whitespace: list[str],
+) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, whitespace)
+    if result.exception is not None:
+        assert isinstance(result.exception, SystemExit)
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert "usage:" in lowered or "no such command" in lowered
 
 
 @given(name=_PATH_TOKEN)
