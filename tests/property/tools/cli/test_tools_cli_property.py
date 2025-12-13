@@ -417,9 +417,7 @@ def test_analysis_lit_rejects_non_int_port(flags: list[str], bad_port: str) -> N
     args = [*flags, "analysis", "lit", "--port", bad_port]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    assert "Invalid value for '--port'" in error_stream or "Usage:" in error_stream
-    assert "Traceback" not in error_stream
+    _assert_tools_cli_error(result, "invalid value", "usage:")
 
 
 @given(
@@ -433,12 +431,7 @@ def test_analysis_lit_requires_option_values(flags: list[str], opt: str) -> None
     args = [*flags, "analysis", "lit", opt]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    lowered = error_stream.lower()
-    assert (
-        "usage:" in lowered or "requires an argument" in lowered or "missing" in lowered
-    )
-    assert "traceback" not in lowered
+    _assert_tools_cli_error(result, "requires an argument", "missing", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
@@ -450,10 +443,7 @@ def test_analysis_lit_rejects_non_int_port_equals_form(
     args = [*flags, "analysis", "lit", f"--port={bad_port}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    lowered = error_stream.lower()
-    assert "invalid value" in lowered or "usage:" in lowered
-    assert "traceback" not in lowered
+    _assert_tools_cli_error(result, "invalid value", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
@@ -465,13 +455,7 @@ def test_analysis_lit_rejects_invalid_open_browser_value(
     args = [*flags, "analysis", "lit", f"--open-browser={bad_bool}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    assert (
-        "Invalid value for" in error_stream
-        or "does not take a value" in error_stream
-        or "Usage:" in error_stream
-    )
-    assert "Traceback" not in error_stream
+    _assert_tools_cli_error(result, "invalid value", "does not take a value", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
