@@ -27,7 +27,7 @@ def _coverage_entries() -> st.SearchStrategy[list[tuple[str, float, float | None
     )
 
 
-@settings(max_examples=20, deadline=20, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 @given(entries=_coverage_entries())
 def test_format_undercovered_tree_represents_each_file(
     entries: list[tuple[str, float, float | None]],

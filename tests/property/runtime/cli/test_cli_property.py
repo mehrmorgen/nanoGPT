@@ -253,6 +253,46 @@ def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
     assert "invalid value" in stream or "usage:" in stream
 
 
+def test_runtime_cli_analyze_requires_experiment_argument() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["analyze"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "missing argument" in lowered
+    assert "experiment" in lowered
+    assert "usage:" in lowered
+    assert "traceback" not in lowered
+
+
+@given(bad_port=_NON_INT_TEXT)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["analyze", "dummy", "--port", bad_port])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert "invalid value" in lowered or "usage:" in lowered
+
+
+@given(bad_bool=_NON_INT_TEXT)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_analyze_rejects_invalid_open_browser_value(bad_bool: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["analyze", "dummy", f"--open-browser={bad_bool}"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert (
+        "invalid value" in lowered
+        or "does not take a value" in lowered
+        or "usage:" in lowered
+    )
+
+
 @given(name=_PATH_TOKEN)
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> None:
