@@ -146,6 +146,30 @@ _NON_BOOL_TEXT = st.text(
 ).filter(lambda value: value.lower() not in {"true", "false", "1", "0"})
 
 
+_UNKNOWN_OPTION_NAME = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=16,
+).filter(
+    lambda value: (
+        value.lower()
+        not in {
+            "help",
+            "h",
+            "exp-config",
+            "learning-mode",
+            "verbosity",
+            "host",
+            "port",
+            "open-browser",
+            "no-open-browser",
+        }
+    )
+)
+
+
 def _output_text(result: object) -> str:
     stdout = getattr(result, "stdout", None) or ""
     stderr = getattr(result, "stderr", None) or ""
@@ -381,6 +405,22 @@ def test_runtime_cli_analyze_requires_option_values(opt: str) -> None:
     assert (
         "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
     )
+
+
+@given(
+    subcommand=st.sampled_from(["prepare", "train", "analyze"]),
+    option=_UNKNOWN_OPTION_NAME,
+)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_rejects_unknown_options(
+    subcommand: str,
+    option: str,
+) -> None:
+    runner = CliRunner()
+    args = [subcommand, "dummy", f"--{option}"]
+    result = runner.invoke(app, args)
+    assert result.exit_code != 0
+    _assert_runtime_cli_error(result, "no such option")
 
 
 @given(name=_PATH_TOKEN)
