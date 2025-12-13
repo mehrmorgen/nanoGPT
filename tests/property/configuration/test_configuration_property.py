@@ -11,7 +11,6 @@ from typing import Any, cast
 import hypothesis.strategies as st
 from hypothesis import given, settings
 import pytest
-import tomllib
 
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
@@ -183,6 +182,30 @@ class TestMergeMappings:
         result = merge_mappings({}, override)
         assert result == override
 
+    @given(base=dict_strategy(), override=dict_strategy())
+    @settings(max_examples=30, deadline=None)
+    def test_merge_does_not_mutate_inputs(
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> None:
+        """merge_mappings must not mutate its input mappings."""
+        base_snapshot = _normalize(base)
+        override_snapshot = _normalize(override)
+
+        _ = merge_mappings(base, override)
+
+        assert _normalize(base) == base_snapshot
+        assert _normalize(override) == override_snapshot
+
+    @given(base=dict_strategy(), override=dict_strategy())
+    @settings(max_examples=30, deadline=None)
+    def test_merge_override_only_limits_top_level_keys(
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> None:
+        """override_only=True should only include keys present in override."""
+        result = merge_mappings(base, override, override_only=True)
+
+        assert set(result.keys()) == set(override.keys())
+
 
 class TestTomlReading:
     """Property-based tests for TOML reading functionality."""
@@ -223,8 +246,11 @@ class TestTomlReading:
                 f.close()
                 path = Path(f.name)
                 if content.strip():
-                    with pytest.raises((Exception, tomllib.TOMLDecodeError)):
+                    with pytest.raises(Exception) as exc_info:
                         config_loading.read_toml_dict(path)
+
+                    # read_toml_dict should surface the filename for stable UX
+                    assert path.name in str(exc_info.value)
             finally:
                 Path(f.name).unlink(missing_ok=True)
 
