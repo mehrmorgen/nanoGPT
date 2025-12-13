@@ -10,7 +10,6 @@ from typing import Any, cast
 
 import hypothesis.strategies as st
 from hypothesis import given, settings
-import pytest
 
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
@@ -207,6 +206,47 @@ class TestMergeMappings:
         assert set(result.keys()) == set(override.keys())
 
 
+def _flat_mapping_strategy() -> st.SearchStrategy[dict[str, object]]:
+    keys = st.text(
+        min_size=1,
+        max_size=12,
+        alphabet=st.characters(
+            whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+        ),
+    )
+    values: st.SearchStrategy[object] = st.one_of(
+        st.none(),
+        st.booleans(),
+        st.integers(min_value=-100, max_value=100),
+        st.text(max_size=20),
+    )
+    return st.dictionaries(keys=keys, values=values, max_size=10)
+
+
+@given(
+    defaults=_flat_mapping_strategy(),
+    exp_file=_flat_mapping_strategy(),
+    overrides=_flat_mapping_strategy(),
+)
+@settings(max_examples=50, deadline=None)
+def test_merge_precedence_defaults_file_overrides(
+    defaults: dict[str, object],
+    exp_file: dict[str, object],
+    overrides: dict[str, object],
+) -> None:
+    merged = merge_mappings(defaults, exp_file)
+    merged = merge_mappings(merged, overrides)
+
+    all_keys = set(defaults) | set(exp_file) | set(overrides)
+    for key in all_keys:
+        if key in overrides:
+            assert merged[key] == overrides[key]
+        elif key in exp_file:
+            assert merged[key] == exp_file[key]
+        else:
+            assert merged[key] == defaults[key]
+
+
 class TestTomlReading:
     """Property-based tests for TOML reading functionality."""
 
@@ -246,11 +286,15 @@ class TestTomlReading:
                 f.close()
                 path = Path(f.name)
                 if content.strip():
-                    with pytest.raises(Exception) as exc_info:
+                    try:
                         config_loading.read_toml_dict(path)
-
-                    # read_toml_dict should surface the filename for stable UX
-                    assert path.name in str(exc_info.value)
+                    except Exception as exc:
+                        # read_toml_dict should surface the filename for stable UX
+                        message = str(exc)
+                        assert path.name in message
+                        assert "Traceback" not in message
+                    else:
+                        raise AssertionError("Expected invalid TOML to raise")
             finally:
                 Path(f.name).unlink(missing_ok=True)
 
