@@ -128,6 +128,15 @@ _REL_SEGMENT = st.text(
 )
 
 
+_NON_INT_TEXT = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=12,
+)
+
+
 _INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
 _UNKNOWN_COMMAND_LIST = [
     token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
@@ -219,6 +228,30 @@ def test_runtime_cli_whitespace_args_never_show_traceback(
     lowered = output.lower()
     assert "traceback" not in lowered
     assert "usage:" in lowered or "no such command" in lowered
+
+
+@given(
+    bad_value=st.integers(min_value=-5, max_value=5).filter(lambda v: v < 0 or v > 2)
+)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_runtime_cli_rejects_invalid_verbosity_range(bad_value: int) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--verbosity", str(bad_value)])
+    assert result.exit_code != 0
+    stream = ((result.stderr or result.stdout) or "").lower()
+    assert "traceback" not in stream
+    assert "invalid value" in stream or "usage:" in stream
+
+
+@given(bad_value=_NON_INT_TEXT)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--verbosity", bad_value])
+    assert result.exit_code != 0
+    stream = ((result.stderr or result.stdout) or "").lower()
+    assert "traceback" not in stream
+    assert "invalid value" in stream or "usage:" in stream
 
 
 @given(name=_PATH_TOKEN)
