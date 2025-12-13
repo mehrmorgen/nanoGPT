@@ -684,6 +684,47 @@ def test_dev_gha_requires_option_values(flags: list[str], opt: str) -> None:
     _assert_tools_cli_error(result, "requires an argument", "missing")
 
 
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
+@example(flags=[], bad_value="not-a-number")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_dev_kill_port_rejects_non_int_port(flags: list[str], bad_value: str) -> None:
+    args = [*flags, "dev", "kill-port", bad_value]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "invalid value")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_dev_kill_port_requires_port_argument(flags: list[str]) -> None:
+    args = [*flags, "dev", "kill-port"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "missing argument", "usage:")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
+@example(flags=[], bad_value="not-a-number")
+@settings(max_examples=30, deadline=None, derandomize=True)
+def test_dev_review_bulk_reply_rejects_non_int_pr_number(
+    flags: list[str],
+    bad_value: str,
+) -> None:
+    args = [*flags, "dev", "review-bulk-reply", bad_value, "--replies", "replies.json"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "invalid value")
+
+
+@given(flags=GLOBAL_FLAGS_STRATEGY)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_dev_review_bulk_reply_requires_replies_value(flags: list[str]) -> None:
+    args = [*flags, "dev", "review-bulk-reply", "1", "--replies"]
+    result = _invoke_cli(args)
+    assert result.exit_code != 0
+    _assert_tools_cli_error(result, "requires an argument", "missing")
+
+
 # --- Command execution coverage ------------------------------------------------
 
 
