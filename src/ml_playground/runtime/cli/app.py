@@ -53,11 +53,17 @@ def _apply_global_options(
 
     echo: EchoFunc = echo_func if echo_func is not None else _default_echo
 
-    if exp_config is not None and not exp_config.exists():
-        msg = f"Config file not found: {exp_config}"
-        logger.error(msg)
-        echo(msg, err=True)
-        raise typer.Exit(2)
+    if exp_config is not None:
+        if not exp_config.exists():
+            msg = f"Config file not found: {exp_config}"
+            logger.error(msg)
+            echo(msg, err=True)
+            raise typer.Exit(2)
+        if not exp_config.is_file():
+            msg = f"Config path is not a file: {exp_config}"
+            logger.error(msg)
+            echo(msg, err=True)
+            raise typer.Exit(2)
 
     root_logger = logging.getLogger()
     if not root_logger.handlers:
