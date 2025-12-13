@@ -93,6 +93,19 @@ def _tool_result_strategy() -> st.SearchStrategy[tuple[ToolResult, VerbosityLeve
     return namespace.flatmap(_for_namespace)
 
 
+def _sentinel_text(prefix: str) -> st.SearchStrategy[str]:
+    def _attach(suffix: str) -> str:
+        return f"{prefix}{suffix}"
+
+    return st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="-_"
+        ),
+        min_size=1,
+        max_size=20,
+    ).map(_attach)
+
+
 @settings(max_examples=80, deadline=None, derandomize=True)
 @given(data=_tool_result_strategy(), learning_enabled=st.booleans())
 def test_format_output_always_returns_non_empty_header(
@@ -161,3 +174,50 @@ def test_format_output_learning_sections_gated(
         assert "Explanation:" not in text
         assert "Best practices:" not in text
         assert "Related concepts:" not in text
+
+
+@settings(max_examples=80, deadline=None, derandomize=True)
+@given(
+    learning_info=st.builds(
+        LearningInfo,
+        commands_executed=st.lists(_sentinel_text("LEARN_SENTINEL:cmd:"), max_size=3),
+        explanations=st.lists(_sentinel_text("LEARN_SENTINEL:exp:"), max_size=3),
+        best_practices=st.lists(_sentinel_text("LEARN_SENTINEL:bp:"), max_size=3),
+        related_concepts=st.lists(_sentinel_text("LEARN_SENTINEL:rc:"), max_size=3),
+    ).filter(
+        lambda li: bool(
+            li.commands_executed
+            or li.explanations
+            or li.best_practices
+            or li.related_concepts
+        )
+    ),
+    verbosity=st.sampled_from(
+        [VerbosityLevel.MINIMAL, VerbosityLevel.STANDARD, VerbosityLevel.COMPREHENSIVE]
+    ),
+    ok=st.booleans(),
+    code=st.integers(min_value=0, max_value=255),
+)
+def test_format_output_learning_mode_controls_learning_content_emission(
+    learning_info: LearningInfo,
+    verbosity: VerbosityLevel,
+    ok: bool,
+    code: int,
+) -> None:
+    result = ToolResult.create(
+        success=ok,
+        exit_code=code,
+        namespace="tools",
+        category="ci",
+        command="lint",
+        stdout="",
+        stderr="",
+        learning_info=learning_info,
+    )
+    engine = LearningModeEngine(verbosity)
+
+    disabled = engine.format_output(result, learning_enabled=False)
+    assert "LEARN_SENTINEL:" not in disabled
+
+    enabled = engine.format_output(result, learning_enabled=True)
+    assert "LEARN_SENTINEL:" in enabled
