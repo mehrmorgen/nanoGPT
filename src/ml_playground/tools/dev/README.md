@@ -20,6 +20,12 @@ uv run tools dev review-list <pr>
 # Bulk reply to reviews
 uv run tools dev review-bulk-reply <pr> --replies replies.json
 
+# List recent GitHub Actions runs (requires GitHub CLI: `gh`)
+uv run tools dev gha --limit 10
+
+# Inspect the latest run and show failed logs
+uv run tools dev gha --latest --log-failed
+
 # Check workflow status
 uv run tools dev workflow-status
 
@@ -35,6 +41,7 @@ src/ml_playground/tools/dev/
 ├── ai_guidelines.py     # AI guideline setup
 ├── batch_review.py      # batch review helpers
 ├── dev.py               # main DevTools class
+├── github_actions.py    # GitHub Actions helper (wraps `gh run list/view`)
 ├── hygiene.py           # cleanup tools
 ├── review.py            # GitHub review automation
 ├── status.py            # simple status checks
