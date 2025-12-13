@@ -279,6 +279,32 @@ def test_runtime_cli_rejects_invalid_verbosity_range(bad_value: int) -> None:
     assert "invalid value" in stream or "usage:" in stream
 
 
+def test_runtime_cli_rejects_missing_verbosity_value() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--verbosity"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert (
+        "requires an argument" in lowered or "missing" in lowered or "usage:" in lowered
+    )
+
+
+@given(
+    bad_value=st.integers(min_value=-5, max_value=5).filter(lambda v: v < 0 or v > 2)
+)
+@settings(max_examples=20, deadline=None, derandomize=True)
+def test_runtime_cli_rejects_invalid_verbosity_equals_form(bad_value: int) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [f"--verbosity={bad_value}"])
+    assert result.exit_code != 0
+    output = (result.stdout or "") + (result.stderr or "")
+    lowered = output.lower()
+    assert "traceback" not in lowered
+    assert "invalid value" in lowered or "usage:" in lowered
+
+
 @given(bad_value=_NON_INT_TEXT)
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
