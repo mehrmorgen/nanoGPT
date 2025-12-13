@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
 import time
-from typing import Any
 
 import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
@@ -99,7 +98,7 @@ def save_checkpoints_sequentially(manager: CheckpointManager, count: int) -> Non
 
 @when("checkpoints are saved with the following metrics:")
 def save_checkpoints_with_metrics(
-    manager: CheckpointManager, datatable: list[list[object]]
+    manager: CheckpointManager, datatable: list[list[str]]
 ) -> None:
     assert manager is not None, "CheckpointManager required"
     assert datatable, "Expected datatable with metrics data"
@@ -107,13 +106,11 @@ def save_checkpoints_with_metrics(
 
     headers = datatable[0]
     rows = datatable[1:]
-    metrics_table: list[dict[object, object]] = [
-        dict(zip(headers, row)) for row in rows
-    ]
+    metrics_table: list[dict[str, str]] = [dict(zip(headers, row)) for row in rows]
 
     for i, row in enumerate(metrics_table):
-        metric_obj: Any = row["metric"]
-        metric = float(metric_obj)
+        metric_text = row["metric"]
+        metric = float(metric_text)
         ckpt = _dummy_checkpoint(i, metric)
         _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, i, True)
         time.sleep(0.01)
