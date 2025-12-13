@@ -481,9 +481,7 @@ def test_analysis_sample_quality_requires_file_argument(flags: list[str]) -> Non
     args = [*flags, "analysis", "sample-quality"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout
-    assert "Missing argument" in error_stream or "Usage:" in error_stream
-    assert "Traceback" not in error_stream
+    _assert_tools_cli_error(result, "missing argument")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=st.text(min_size=1, max_size=50))
@@ -500,10 +498,7 @@ def test_analysis_sample_quality_missing_file_has_stable_error(
     result = _invoke_cli(args)
 
     assert result.exit_code != 0
-    error_stream = result.stderr or result.stdout or result.output
-    lowered = error_stream.lower()
-    assert "sample file not found" in lowered
-    assert "traceback" not in lowered
+    _assert_tools_cli_error(result, "sample file not found")
 
 
 @given(
