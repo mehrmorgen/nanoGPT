@@ -27,9 +27,13 @@ configuration stays isolated.
 ```bash
 tests/property/
 ├── README.md                       # this file
-├── cli/                            # CLI-facing properties
+├── analysis/                       # analysis-focused properties
 ├── configuration/                  # TOML loading and config invariants
-└── data_pipeline/                  # data preparation/tokenization properties
+├── data_pipeline/                  # data preparation/tokenization properties
+├── runtime/                        # runtime CLI and runtime module properties
+├── sampling/                       # sampling-focused properties
+├── tools/                          # tools CLI and tool-module properties
+└── training/                       # training-focused properties
 ```
 
 ## Running
