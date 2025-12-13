@@ -152,6 +152,7 @@ def test_runtime_cli_reports_unknown_commands(command: str) -> None:
     assert (
         "no such command" in stream or "unknown command" in stream or "usage:" in stream
     )
+    assert "traceback" not in stream
 
 
 @given(name=_PATH_TOKEN)

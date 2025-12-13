@@ -227,6 +227,7 @@ def test_cli_reports_unknown_commands(
     error_stream = result.stderr or result.stdout
     lowered = error_stream.lower()
     assert "no such command" in lowered or "unknown command" in lowered
+    assert "traceback" not in lowered
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
