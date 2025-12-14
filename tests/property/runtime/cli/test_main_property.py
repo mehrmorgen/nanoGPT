@@ -6,7 +6,6 @@ using Hypothesis to discover edge cases in main function behavior.
 
 from __future__ import annotations
 
-from typing import Any
 from types import SimpleNamespace
 
 from hypothesis import given, settings
@@ -39,7 +38,13 @@ def argv_lists(draw: st.DrawFn) -> list[str]:
 def _fake_command(return_code: int = 0) -> SimpleNamespace:
     """Create a fake command object."""
     cmd = SimpleNamespace()
-    cmd.main = lambda args=None, standalone_mode=False: return_code
+
+    def _main(args: object = None, standalone_mode: bool = False) -> int:
+        _ = args
+        _ = standalone_mode
+        return return_code
+
+    cmd.main = _main
     return cmd
 
 
@@ -52,7 +57,12 @@ def test_main_returns_exit_code(argv: list[str] | None) -> None:
 
     # Patch get_command to return our fake
     original_get_command = main.get_command
-    main.get_command = lambda app: fake_cmd
+
+    def _get_command(app: object) -> SimpleNamespace:
+        _ = app
+        return fake_cmd
+
+    main.get_command = _get_command
 
     try:
         result = main.main(argv)
@@ -71,13 +81,14 @@ def test_main_calls_registry_and_command() -> None:
     registry_called = False
     get_command_called = False
 
-    def fake_registry():
+    def fake_registry() -> None:
         nonlocal registry_called
         registry_called = True
 
-    def fake_get_command(app):
+    def fake_get_command(app: object) -> SimpleNamespace:
         nonlocal get_command_called
         get_command_called = True
+        _ = app
         return fake_cmd
 
     # We need to patch at the module level where main() imports from
@@ -135,7 +146,7 @@ def test_main_entry_exception_handling(
             return None
 
     # Configure function arguments
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, object] = {}
     if has_custom_echo:
         kwargs["echo"] = echo_func
     if has_custom_runner:
@@ -209,7 +220,12 @@ def test_main_with_none_argv(call_count: int) -> None:
     fake_cmd = _fake_command(0)
 
     original_get_command = main.get_command
-    main.get_command = lambda app: fake_cmd
+
+    def _get_command(app: object) -> SimpleNamespace:
+        _ = app
+        return fake_cmd
+
+    main.get_command = _get_command
 
     try:
         for _ in range(call_count):
@@ -228,7 +244,12 @@ def test_main_standalone_mode_false() -> None:
     fake_cmd = _fake_command(0)
 
     original_get_command = main.get_command
-    main.get_command = lambda app: fake_cmd
+
+    def _get_command(app: object) -> SimpleNamespace:
+        _ = app
+        return fake_cmd
+
+    main.get_command = _get_command
 
     try:
         main.main(["prepare"])
