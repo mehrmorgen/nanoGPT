@@ -7,13 +7,17 @@ from typing import Iterator, Sequence
 import hypothesis.strategies as st
 from hypothesis import assume, example, given, settings
 import typer
-import ml_playground.tools.core.config as core_config
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
 from click.testing import CliRunner, Result
 from typer.main import get_command
 
 import ml_playground.tools.cli.main as tools_cli
+from ml_playground.tools.cli.dependencies import (
+    ToolsDependencies,
+    default_tools_dependencies,
+    override_tools_dependencies,
+)
 from ml_playground.tools.cli.state import state as cli_state
 from tests.property.tools._helpers import override_tools_with_deterministic_runner
 
@@ -70,13 +74,19 @@ def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
 
 
 @contextmanager
-def _stubbed_tools_config() -> Iterator[None]:
-    original_loader = core_config.load_tools_config
-    try:
-        core_config.load_tools_config = _load_tools_config_stub
+def _stubbed_tools_dependencies() -> Iterator[None]:
+    base_deps = default_tools_dependencies()
+    overridden = ToolsDependencies(
+        load_config=_load_tools_config_stub,
+        quality_factory=base_deps.quality_factory,
+        testing_factory=base_deps.testing_factory,
+        environment_factory=base_deps.environment_factory,
+        ci_factory=base_deps.ci_factory,
+        dev_factory=base_deps.dev_factory,
+        result_handler=base_deps.result_handler,
+    )
+    with override_tools_dependencies(overridden):
         yield
-    finally:
-        core_config.load_tools_config = original_loader
 
 
 def _collect_command_paths(
@@ -143,12 +153,16 @@ def _reset_cli_state() -> None:
     cli_state.project_root = PROJECT_ROOT
 
 
-def _invoke_cli(raw_args: Sequence[str]) -> Result:
-    with _stubbed_tools_config():
-        _reset_cli_state()
-        result = CLI_RUNNER.invoke(CLICK_APP, list(raw_args))
-        _reset_cli_state()
+def _invoke_cli_unisolated(raw_args: Sequence[str]) -> Result:
+    _reset_cli_state()
+    result = CLI_RUNNER.invoke(CLICK_APP, list(raw_args))
+    _reset_cli_state()
     return result
+
+
+def _invoke_cli(raw_args: Sequence[str]) -> Result:
+    with _stubbed_tools_dependencies():
+        return _invoke_cli_unisolated(raw_args)
 
 
 def _build_flags(
@@ -459,7 +473,6 @@ def test_analysis_lit_rejects_invalid_open_browser_value(
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
-@example(flags=[])
 @settings(max_examples=40, deadline=None, derandomize=True)
 def test_analysis_sample_quality_requires_file_argument(flags: list[str]) -> None:
     args = [*flags, "analysis", "sample-quality"]
@@ -475,7 +488,7 @@ def test_analysis_sample_quality_missing_file_has_stable_error(
     flags: list[str],
     missing_name: str,
 ) -> None:
-    missing_path = PROJECT_ROOT / ".pbt-missing" / missing_name
+    missing_path = Path(".pbt-missing") / missing_name
     assume(not missing_path.exists())
 
     args = [*flags, "analysis", "sample-quality", str(missing_path)]
@@ -654,7 +667,10 @@ def test_dev_gha_rejects_non_int_run_id(flags: list[str], bad_value: str) -> Non
     _assert_tools_cli_error(result, "invalid value")
 
 
-@given(flags=GLOBAL_FLAGS_STRATEGY, opt=st.sampled_from(["--limit", "--run-id"]))
+@given(
+    flags=GLOBAL_FLAGS_STRATEGY,
+    opt=st.sampled_from(["--limit", "--run-id"]),
+)
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_dev_gha_requires_option_values(flags: list[str], opt: str) -> None:
     args = [*flags, "dev", "gha", opt]
@@ -743,14 +759,14 @@ def _invoke_with_deterministic_runner(
     global_flags: list[str] | None = None,
     extra: list[str] | None = None,
 ) -> Result:
-    with override_tools_with_deterministic_runner():
+    with override_tools_with_deterministic_runner(load_config=_load_tools_config_stub):
         args: list[str] = []
         if global_flags:
             args.extend(global_flags)
         args.extend(command)
         if extra:
             args.extend(extra)
-        return _invoke_cli(args)
+        return _invoke_cli_unisolated(args)
 
 
 @given(command=COMMAND_EXECUTION_STRATEGY, flags=GLOBAL_FLAGS_STRATEGY)

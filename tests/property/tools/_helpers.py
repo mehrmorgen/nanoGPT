@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.cli.dependencies import (
     default_tools_dependencies,
     ToolsDependencies,
@@ -175,11 +176,17 @@ class DeterministicRunner:
 
 
 @contextmanager
-def override_tools_with_deterministic_runner() -> Iterator[DeterministicRunner]:
+def override_tools_with_deterministic_runner(
+    *,
+    load_config: Callable[[Path | None], ToolsConfig] | None = None,
+) -> Iterator[DeterministicRunner]:
     """Install a DeterministicRunner across all tool factories via dependency overrides."""
 
     runner = DeterministicRunner()
     base_deps = default_tools_dependencies()
+    active_load_config = (
+        load_config if load_config is not None else base_deps.load_config
+    )
 
     def _attach_runner(tool: Any) -> Any:
         if hasattr(tool, "subprocess_runner"):
@@ -196,7 +203,7 @@ def override_tools_with_deterministic_runner() -> Iterator[DeterministicRunner]:
         return _wrapped
 
     overridden = ToolsDependencies(
-        load_config=base_deps.load_config,
+        load_config=active_load_config,
         quality_factory=_wrap_factory(base_deps.quality_factory),
         testing_factory=_wrap_factory(base_deps.testing_factory),
         environment_factory=_wrap_factory(base_deps.environment_factory),
