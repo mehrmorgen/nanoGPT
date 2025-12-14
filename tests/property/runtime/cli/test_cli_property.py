@@ -245,6 +245,36 @@ def test_runtime_cli_help_always_succeeds() -> None:
     assert "traceback" not in lowered
 
 
+@given(
+    include_learning_mode=st.booleans(),
+    include_verbosity=st.booleans(),
+    verbosity=st.integers(min_value=0, max_value=2),
+)
+@example(include_learning_mode=False, include_verbosity=False, verbosity=1)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_no_subcommand_shows_welcome_and_help(
+    include_learning_mode: bool,
+    include_verbosity: bool,
+    verbosity: int,
+) -> None:
+    runner = CliRunner()
+    args: list[str] = []
+    if include_learning_mode:
+        args.append("--learning-mode")
+    if include_verbosity:
+        args.extend(["--verbosity", str(verbosity)])
+
+    result = runner.invoke(app, args)
+    assert result.exit_code == 2
+
+    output = _output_text(result)
+    lowered = output.lower()
+    _assert_traceback_free(output)
+    assert "welcome to ml playground runtime cli" in lowered
+    assert "no workflow command was provided" in lowered
+    assert "usage:" in lowered
+
+
 def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["-h"])
