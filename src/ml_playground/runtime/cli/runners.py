@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.runtime import helpers as rt_helpers
@@ -16,6 +16,7 @@ from ml_playground.runtime.cli.device import (
     global_device_setup as _default_device_setup,
 )
 from ml_playground.runtime.core.bootstrap import (
+    CLIDependencies,
     get_runtime_cli_dependencies as get_cli_dependencies,
 )
 from ml_playground.runtime.cli.result import handle_tool_result, run_or_exit
@@ -72,7 +73,7 @@ def run_prepare(
     experiment: str,
     prepare_cfg: PrepareConfigLike,
     config_path: Path,
-    shared: Any,
+    shared: object,
     learning_mode_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     *,
@@ -103,7 +104,7 @@ def run_train(
     experiment: str,
     train_cfg: TrainConfigLike,
     config_path: Path,
-    shared: Any,
+    shared: object,
     learning_mode_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     *,
@@ -134,7 +135,7 @@ def run_sample(
     experiment: str,
     sample_cfg: SampleConfigLike,
     config_path: Path,
-    shared: Any,
+    shared: object,
     learning_mode_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     *,
@@ -165,7 +166,7 @@ def run_prepare_command(
     experiment: str,
     exp_config_path: Path | None,
     *,
-    deps: Any | None = None,
+    deps: CLIDependencies | None = None,
     learning_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     result_handler: Callable[[ToolResult, bool], None] | None = None,
@@ -207,7 +208,7 @@ def run_train_command(
     experiment: str,
     exp_config_path: Path | None,
     *,
-    deps: Any | None = None,
+    deps: CLIDependencies | None = None,
     learning_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     result_handler: Callable[[ToolResult, bool], None] | None = None,
@@ -250,7 +251,7 @@ def run_sample_command(
     experiment: str,
     exp_config_path: Path | None,
     *,
-    deps: Any | None = None,
+    deps: CLIDependencies | None = None,
     learning_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     result_handler: Callable[[ToolResult, bool], None] | None = None,
@@ -345,7 +346,7 @@ def log_command_status(
 def run_train_cmd(
     experiment: str,
     exp_config_path: Path | None,
-    deps: Any | None = None,
+    deps: CLIDependencies | None = None,
     learning_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     result_handler: Callable[[ToolResult, bool], None] | None = None,
@@ -367,7 +368,7 @@ def run_train_cmd(
 def run_sample_cmd(
     experiment: str,
     exp_config_path: Path | None,
-    deps: Any | None = None,
+    deps: CLIDependencies | None = None,
     learning_engine: LearningModeEngine | None = None,
     learning_mode: bool = False,
     result_handler: Callable[[ToolResult, bool], None] | None = None,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Callable, Protocol, cast
+from typing import Annotated, Callable, Protocol, cast
 
 import click
 import typer
@@ -11,7 +11,8 @@ from . import commands
 from ml_playground.runtime.core.results import VerbosityLevel
 
 app = typer.Typer(
-    no_args_is_help=True,
+    invoke_without_command=True,
+    no_args_is_help=False,
     help=(
         "ML Playground CLI: prepare data, train models, sample outputs, and export models.\n"
         "This CLI loads and validates TOML configs and injects the resulting configuration\n"
@@ -29,7 +30,7 @@ class LoggerFactory(Protocol):
     def __call__(self, name: str) -> logging.Logger: ...
 
 
-ContextGetter = Callable[..., Any]
+ContextGetter = Callable[..., object]
 
 
 def _default_echo(message: str, *, err: bool = False) -> object:
@@ -74,7 +75,7 @@ def _apply_global_options(
     except (AttributeError, TypeError):
         return
 
-    ctx_dict = cast(dict[str, Any], ctx.obj)
+    ctx_dict = cast(dict[str, object], ctx.obj)
 
     verbosity_level = (
         verbosity
@@ -161,8 +162,8 @@ def global_options(
     context_getter = overrides.get("context_getter")
     echo_func = overrides.get("echo_func")
     logger_factory = overrides.get("logger_factory")
-    context_getter_cb = cast(
-        ContextGetter | None, context_getter if callable(context_getter) else None
+    context_getter_cb: ContextGetter | None = (
+        context_getter if callable(context_getter) else None
     )
     echo_cb = cast(EchoFunc | None, echo_func if callable(echo_func) else None)
     logger_factory_cb = cast(

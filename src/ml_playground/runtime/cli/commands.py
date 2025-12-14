@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, cast
+from typing import Callable, Mapping, cast
 
 import typer
 
 from ml_playground.runtime.core.bootstrap import (
+    CLIDependencies,
     get_runtime_cli_dependencies as get_cli_dependencies,
 )
 from ml_playground.runtime.cli.result import handle_tool_result
 from ml_playground.runtime.cli.runners import (
+    RunInvoker,
     run_prepare_command,
     run_sample_command,
     run_train_command,
@@ -24,7 +26,7 @@ from ml_playground.runtime.core.results import LearningModeEngine, ToolResult
 CallableResultHandler = Callable[[ToolResult, bool], None]
 
 
-OverridesMap = dict[str, Any]
+OverridesMap = dict[str, object]
 
 
 def _coerce_overrides(overrides: object) -> OverridesMap:
@@ -34,7 +36,7 @@ def _coerce_overrides(overrides: object) -> OverridesMap:
     return {}
 
 
-def _select_override_value(overrides: OverridesMap, *keys: str) -> Any | None:
+def _select_override_value(overrides: OverridesMap, *keys: str) -> object | None:
     for key in keys:
         if key in overrides:
             return overrides[key]
@@ -43,7 +45,7 @@ def _select_override_value(overrides: OverridesMap, *keys: str) -> Any | None:
 
 def _select_override_callable(
     overrides: OverridesMap, *keys: str
-) -> Callable[..., Any] | None:
+) -> Callable[..., object] | None:
     for key in keys:
         candidate = overrides.get(key)
         if callable(candidate):
@@ -76,14 +78,27 @@ def prepare(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     learning_engine = LearningModeEngine(verbosity) if learning_mode else None
 
     overrides_map = _coerce_overrides(overrides)
-    deps_override = _select_override_value(
+    deps_override_value = _select_override_value(
         overrides_map, "cli_deps_prepare", "cli_deps"
     )
-    run_invoker = _select_override_callable(
+    deps_override = (
+        deps_override_value
+        if isinstance(deps_override_value, CLIDependencies)
+        else None
+    )
+    run_invoker_value = _select_override_callable(
         overrides_map, "run_invoker_prepare", "run_invoker"
     )
-    result_handler = _select_override_callable(
+    result_handler_value = _select_override_callable(
         overrides_map, "result_handler_prepare", "result_handler"
+    )
+    run_invoker: RunInvoker | None = (
+        cast(RunInvoker, run_invoker_value) if callable(run_invoker_value) else None
+    )
+    result_handler: CallableResultHandler | None = (
+        cast(CallableResultHandler, result_handler_value)
+        if callable(result_handler_value)
+        else None
     )
 
     run_prepare_command(
@@ -92,8 +107,8 @@ def prepare(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
         deps=deps_override or deps,
         learning_engine=learning_engine,
         learning_mode=learning_mode,
-        run_invoker=run_invoker if callable(run_invoker) else None,
-        result_handler=result_handler if callable(result_handler) else None,
+        run_invoker=run_invoker,
+        result_handler=result_handler,
     )
 
 
@@ -107,12 +122,27 @@ def train(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     learning_engine = LearningModeEngine(verbosity) if learning_mode else None
 
     overrides_map = _coerce_overrides(overrides)
-    deps_override = _select_override_value(overrides_map, "cli_deps_train", "cli_deps")
-    run_invoker = _select_override_callable(
+    deps_override_value = _select_override_value(
+        overrides_map, "cli_deps_train", "cli_deps"
+    )
+    deps_override = (
+        deps_override_value
+        if isinstance(deps_override_value, CLIDependencies)
+        else None
+    )
+    run_invoker_value = _select_override_callable(
         overrides_map, "run_invoker_train", "run_invoker"
     )
-    result_handler = _select_override_callable(
+    result_handler_value = _select_override_callable(
         overrides_map, "result_handler_train", "result_handler"
+    )
+    run_invoker: RunInvoker | None = (
+        cast(RunInvoker, run_invoker_value) if callable(run_invoker_value) else None
+    )
+    result_handler: CallableResultHandler | None = (
+        cast(CallableResultHandler, result_handler_value)
+        if callable(result_handler_value)
+        else None
     )
 
     run_train_command(
@@ -121,8 +151,8 @@ def train(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
         deps=deps_override or deps,
         learning_engine=learning_engine,
         learning_mode=learning_mode,
-        run_invoker=run_invoker if callable(run_invoker) else None,
-        result_handler=result_handler if callable(result_handler) else None,
+        run_invoker=run_invoker,
+        result_handler=result_handler,
     )
 
 
@@ -136,12 +166,27 @@ def sample(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
     learning_engine = LearningModeEngine(verbosity) if learning_mode else None
 
     overrides_map = _coerce_overrides(overrides)
-    deps_override = _select_override_value(overrides_map, "cli_deps_sample", "cli_deps")
-    run_invoker = _select_override_callable(
+    deps_override_value = _select_override_value(
+        overrides_map, "cli_deps_sample", "cli_deps"
+    )
+    deps_override = (
+        deps_override_value
+        if isinstance(deps_override_value, CLIDependencies)
+        else None
+    )
+    run_invoker_value = _select_override_callable(
         overrides_map, "run_invoker_sample", "run_invoker"
     )
-    result_handler = _select_override_callable(
+    result_handler_value = _select_override_callable(
         overrides_map, "result_handler_sample", "result_handler"
+    )
+    run_invoker: RunInvoker | None = (
+        cast(RunInvoker, run_invoker_value) if callable(run_invoker_value) else None
+    )
+    result_handler: CallableResultHandler | None = (
+        cast(CallableResultHandler, result_handler_value)
+        if callable(result_handler_value)
+        else None
     )
 
     run_sample_command(
@@ -150,8 +195,8 @@ def sample(ctx: typer.Context, experiment: ExperimentArg = None) -> None:
         deps=deps_override or deps,
         learning_engine=learning_engine,
         learning_mode=learning_mode,
-        run_invoker=run_invoker if callable(run_invoker) else None,
-        result_handler=result_handler if callable(result_handler) else None,
+        run_invoker=run_invoker,
+        result_handler=result_handler,
     )
 
 
@@ -170,15 +215,21 @@ def analyze(
     learning_engine = LearningModeEngine(verbosity) if learning_mode else None
 
     overrides_map = _coerce_overrides(overrides)
-    handler = _select_override_callable(
+    handler_value = _select_override_callable(
         overrides_map, "result_handler_analyze", "result_handler"
     )
-    analysis_runner = _select_override_callable(overrides_map, "analysis_runner")
+    analysis_runner_value = _select_override_callable(overrides_map, "analysis_runner")
 
     result_handler_fn: CallableResultHandler = (
-        handler if callable(handler) else handle_tool_result
+        cast(CallableResultHandler, handler_value)
+        if callable(handler_value)
+        else handle_tool_result
     )
-    analysis_runner_fn = analysis_runner or run_analyze
+    analysis_runner_fn = (
+        cast(Callable[..., ToolResult], analysis_runner_value)
+        if callable(analysis_runner_value)
+        else run_analyze
+    )
 
     result = analysis_runner_fn(
         experiment_name,

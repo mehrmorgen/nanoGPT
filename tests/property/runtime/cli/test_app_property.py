@@ -363,7 +363,8 @@ def test_verbosity_enum_passthrough(
 
 def test_app_configuration() -> None:
     """Test that the Typer app is properly configured."""
-    assert app.info.no_args_is_help is True
+    assert app.info.no_args_is_help is False
+    assert app.info.invoke_without_command is True
     assert "ML Playground CLI" in app.info.help
     assert "prepare data" in app.info.help.lower()
 
