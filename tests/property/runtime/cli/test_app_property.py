@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Protocol
 
 import pytest
 import typer
@@ -18,6 +18,14 @@ from hypothesis import strategies as st
 
 from ml_playground.runtime.cli.app import global_options, app
 from ml_playground.runtime.core.results import VerbosityLevel
+
+
+class _EchoFunc(Protocol):
+    def __call__(self, message: str, *, err: bool = False) -> object: ...
+
+
+class _LoggerFactory(Protocol):
+    def __call__(self, name: str) -> logging.Logger: ...
 
 
 @st.composite
@@ -41,7 +49,7 @@ def verbosity_values(draw: st.DrawFn) -> int | VerbosityLevel:
         return draw(st.sampled_from(list(VerbosityLevel)))
 
 
-def _fake_context(**kwargs: Any) -> SimpleNamespace:
+def _fake_context(**kwargs: object) -> SimpleNamespace:
     """Create a fake Typer context with configurable attributes."""
     ctx = SimpleNamespace()
     ctx.obj = kwargs.get("obj", {})
@@ -64,7 +72,7 @@ def _fake_click_context(
     return ctx
 
 
-def _fake_echo() -> tuple[list[str], Any]:
+def _fake_echo() -> tuple[list[str], _EchoFunc]:
     """Create a fake echo function and capture messages."""
     messages: list[str] = []
 
@@ -74,7 +82,7 @@ def _fake_echo() -> tuple[list[str], Any]:
     return messages, echo_func
 
 
-def _fake_logger_factory() -> tuple[list[logging.LogRecord], Any]:
+def _fake_logger_factory() -> tuple[list[logging.LogRecord], _LoggerFactory]:
     """Create a fake logger factory and capture log records."""
     records: list[logging.LogRecord] = []
 
@@ -218,7 +226,7 @@ def test_global_options_with_custom_dependencies(
     if exp_config is not None and not exp_config.exists():
         exp_config = None
 
-    overrides: dict[str, Any] = {}
+    overrides: dict[str, object] = {}
 
     if has_echo_func:
         messages, echo_func = _fake_echo()
