@@ -143,7 +143,16 @@ def main_entry(
     except KeyboardInterrupt:
         echo_func("\nOperation cancelled by user", err=True)
         raise typer.Exit(1)
-    except Exception as exc:
+    except typer.Exit:
+        raise
+    except (
+        FileNotFoundError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
         echo_func(f"Runtime CLI execution failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 

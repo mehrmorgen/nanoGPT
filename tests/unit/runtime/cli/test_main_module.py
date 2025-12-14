@@ -109,6 +109,16 @@ def test_main_entry_uses_default_app_runner_when_not_provided() -> None:
     assert calls["runner"] == 1
 
 
+def test_main_entry_reraises_typer_exit() -> None:
+    def exiting_runner() -> None:
+        raise typer.Exit(2)
+
+    with pytest.raises(typer.Exit) as exc:
+        runtime_cli_main.main_entry(app_runner=exiting_runner)
+
+    assert exc.value.exit_code == 2
+
+
 def test_main_entry_uses_default_echo_on_exception() -> None:
     captured: list[tuple[str, bool]] = []
 
