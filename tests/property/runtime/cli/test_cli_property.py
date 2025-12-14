@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from typing import Any, ContextManager, cast
+from typing import ContextManager
 
 import hypothesis.strategies as st
 from hypothesis import HealthCheck, assume, example, given, settings
@@ -17,10 +17,18 @@ from typer.testing import CliRunner
 
 # Import pytest typing for fixtures
 try:
-    from _pytest.logging import LogCaptureFixture
+    from pytest import LogCaptureFixture
 except ImportError:
     # Fallback for older pytest versions
-    from typing import Any as LogCaptureFixture
+    from typing import Protocol
+
+    class LogCaptureFixture(Protocol):
+        messages: list[str]
+
+        def at_level(
+            self, level: int, logger: str | None = None
+        ) -> ContextManager[None]: ...
+
 
 from ml_playground.runtime.cli.main import (
     app,
@@ -59,7 +67,7 @@ class LoggerProbe:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    def _record(self, level: str, msg: str, *args: Any, **kwargs: Any) -> None:
+    def _record(self, level: str, msg: str, *args: object, **kwargs: object) -> None:
         if args:
             try:
                 msg = msg % args
@@ -68,20 +76,20 @@ class LoggerProbe:
         self.calls.append((level, str(msg)))
 
     def debug(
-        self, msg: str, *args: Any, **kwargs: Any
+        self, msg: str, *args: object, **kwargs: object
     ) -> None:  # pragma: no cover - unused
         self._record("debug", msg, *args)
 
-    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+    def info(self, msg: str, *args: object, **kwargs: object) -> None:
         self._record("info", msg, *args)
 
     def warning(
-        self, msg: str, *args: Any, **kwargs: Any
+        self, msg: str, *args: object, **kwargs: object
     ) -> None:  # pragma: no cover - unused
         self._record("warning", msg, *args)
 
     def error(
-        self, msg: str, *args: Any, **kwargs: Any
+        self, msg: str, *args: object, **kwargs: object
     ) -> None:  # pragma: no cover - unused
         self._record("error", msg, *args)
 
@@ -519,7 +527,8 @@ def test_runtime_cli_exp_config_normalizes_dotdot_paths(
 def test_extract_exp_config_handles_missing_and_present_context() -> None:
     """extract_exp_config should read the experiment path when available."""
 
-    ctx = cast(typer.Context, cast(Any, SimpleNamespace(obj=None)))
+    ctx = typer.Context(typer.main.get_command(app))
+    ctx.obj = None
     assert extract_exp_config(ctx) is None
 
     ctx.obj = {"exp_config": Path("/tmp/demo.toml")}
@@ -1069,7 +1078,7 @@ def test_analyze_command_invokes_override(
     host: str,
     port: int,
     open_browser: bool,
-    override_test_attr: Any,
+    override_test_attr: object,
     override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     """The CLI analyze command should delegate to the injected analysis runner."""
