@@ -846,11 +846,8 @@ def test_main_entry_handles_keyboard_interrupt(_: None) -> None:
 @given(reason=st.text(min_size=1, max_size=25))
 @settings(max_examples=10, deadline=None, derandomize=True)
 def test_main_entry_handles_generic_exception(reason: str) -> None:
-    class Boom(Exception):
-        pass
-
     def fake_app() -> None:
-        raise Boom(reason)
+        raise ValueError(reason)
 
     echoed: list[str] = []
 

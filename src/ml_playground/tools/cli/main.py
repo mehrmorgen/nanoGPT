@@ -515,8 +515,7 @@ def main_entry() -> None:
     except (ToolExecutionError, ToolConfigurationError) as e:
         typer.echo(f"Tool error: {e}", err=True)
         raise typer.Exit(1)
-    except Exception as e:
-        # Fallback for truly unexpected errors
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as e:
         typer.echo(f"Unexpected error: {e}", err=True)
         raise typer.Exit(1)
 
