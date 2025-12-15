@@ -60,7 +60,7 @@ Core development practices, quality standards, and workflow for ml_playground co
   Production code must only import packages from the default dependency group; development dependencies are forbidden.
 - **Explicit Error Contracts (Fail Fast).** All public functions must explicitly document the exceptions they raise.
   Catching broad exceptions (`except Exception:`, `except:`) is strictly forbidden.
- - **Do, dont ask, for obvious UX.** CLIs and tooling should not prompt users to run `--help` or perform simple follow-up
+ - **Do, don't ask, for obvious UX.** CLIs and tooling should not prompt users to run `--help` or perform simple follow-up
    actions that we can do automatically. When an error occurs and the next step is unambiguous (for example, showing
    help after invalid arguments), the tool should perform that step directly instead of asking the user to do it.
 
