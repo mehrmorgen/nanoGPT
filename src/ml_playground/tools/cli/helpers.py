@@ -1,7 +1,7 @@
 """Shared helper functions for the tools CLI system."""
 
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Callable, ParamSpec, cast
 
 import click
 import typer
@@ -21,6 +21,9 @@ from ml_playground.tools.core.errors import (
     ToolExecutionError,
     ToolConfigurationError,
 )
+
+
+P = ParamSpec("P")
 
 
 class OrderedGroup(typer.core.TyperGroup):
@@ -72,7 +75,7 @@ def handle_tool_result(result: ToolResult) -> None:
 
 
 def run_tool_command(
-    command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+    command_func: Callable[P, ToolResult], *args: P.args, **kwargs: P.kwargs
 ) -> None:
     """Execute a tool command with standardized error handling.
 
