@@ -67,6 +67,23 @@ def test_run_clean_egg_info_glob(tmp_path: Path) -> None:
     assert "my_pkg.egg-info" in result.stdout
 
 
+def test_run_clean_egg_info_glob_skips_nonexistent(tmp_path: Path) -> None:
+    config = ToolsConfig()
+    runner = FakeSubprocessRunner()
+    cache_dir = tmp_path / ".cache"
+
+    broken = tmp_path / "broken.egg-info"
+    try:
+        broken.symlink_to(tmp_path / "does-not-exist")
+    except OSError:
+        return
+
+    result = run_clean(config, tmp_path, cache_dir, [], runner)
+
+    assert result.success is True
+    assert broken.exists() is False
+
+
 def test_run_clean_pycache_recursive(tmp_path: Path) -> None:
     """Test recursive removal of __pycache__."""
     config = ToolsConfig()
@@ -90,6 +107,25 @@ def test_run_clean_pycache_recursive(tmp_path: Path) -> None:
     assert not pycache1.exists()
     assert not pycache2.exists()
     assert "Removed 2 __pycache__ directories" in result.stdout
+
+
+def test_run_clean_pycache_skips_nonexistent(tmp_path: Path) -> None:
+    config = ToolsConfig()
+    runner = FakeSubprocessRunner()
+    cache_dir = tmp_path / ".cache"
+
+    src = tmp_path / "src"
+    src.mkdir()
+    broken = src / "__pycache__"
+    try:
+        broken.symlink_to(tmp_path / "does-not-exist")
+    except OSError:
+        return
+
+    result = run_clean(config, tmp_path, cache_dir, [], runner)
+
+    assert result.success is True
+    assert broken.exists() is False
 
 
 def test_run_clean_file_targets(tmp_path: Path) -> None:
