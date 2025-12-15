@@ -631,3 +631,11 @@ def test_log_command_status_returns_when_dataset_dir_missing() -> None:
     )
 
     assert messages
+
+
+def test_global_options_returns_when_ctx_ensure_object_fails() -> None:
+    class FailingCtx:
+        def ensure_object(self, _type: object) -> None:
+            raise TypeError("boom")
+
+    global_options(FailingCtx())  # type: ignore[arg-type]
