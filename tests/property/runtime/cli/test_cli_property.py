@@ -515,10 +515,12 @@ def test_runtime_cli_missing_exp_config_relative_path_is_stable(
     assert "Traceback" not in error_stream
 
 
-def test_runtime_cli_directory_exp_config_is_rejected() -> None:
+@given(dirname=_REL_SEGMENT)
+@settings(max_examples=25, deadline=None, derandomize=True)
+def test_runtime_cli_directory_exp_config_is_rejected(dirname: str) -> None:
     runner = CliRunner()
     with TemporaryDirectory() as tmpdir:
-        config_dir = Path(tmpdir) / "config-dir"
+        config_dir = Path(tmpdir) / dirname
         config_dir.mkdir(parents=True)
         result = runner.invoke(
             app,
