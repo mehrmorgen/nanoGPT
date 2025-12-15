@@ -616,3 +616,18 @@ class TestFinalizeCommandResult:
         assert result.exit_code == 1
         assert result.stderr == ""
         assert calls == []
+
+
+def test_log_command_status_returns_when_dataset_dir_missing() -> None:
+    messages: list[str] = []
+
+    logger = SimpleNamespace(info=lambda msg: messages.append(msg))
+
+    cli_runners.log_command_status(
+        "tag",
+        shared=object(),
+        out_dir=None,
+        logger=logger,
+    )
+
+    assert messages
