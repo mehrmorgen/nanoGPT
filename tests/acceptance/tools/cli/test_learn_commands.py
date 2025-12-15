@@ -8,9 +8,10 @@ rather than content accuracy.
 from __future__ import annotations
 
 import subprocess
-import re
 
 import pytest
+
+from tests.acceptance.tools.cli import _helpers
 
 # Apply acceptance marker to all tests in this file
 pytestmark = pytest.mark.acceptance
@@ -18,38 +19,26 @@ pytestmark = pytest.mark.acceptance
 
 def assert_successful_exit(result: subprocess.CompletedProcess[str]) -> None:
     """Assert that command completed successfully."""
-    assert result.returncode == 0, (
-        f"Expected exit code 0, got {result.returncode}. stderr: {result.stderr}"
-    )
+    _helpers.assert_successful_exit(result)
 
 
 def assert_error_exit(result: subprocess.CompletedProcess[str]) -> None:
     """Assert that command failed with proper error exit code."""
-    assert result.returncode == 1, (
-        f"Expected exit code 1, got {result.returncode}. stdout: {result.stdout}"
-    )
+    _helpers.assert_error_exit(result)
 
 
 def assert_output_contains_pattern(
     result: subprocess.CompletedProcess[str], pattern: str
 ) -> None:
     """Assert that output contains a specific regex pattern."""
-    # Check both stdout and stderr for pattern with DOTALL flag to match across newlines
-    output = result.stdout + result.stderr
-    assert re.search(pattern, output, re.IGNORECASE | re.DOTALL), (
-        f"Pattern '{pattern}' not found in output: stdout={result.stdout}, stderr={result.stderr}"
-    )
+    _helpers.assert_output_contains_pattern(result, pattern)
 
 
 def assert_error_output_contains(
     result: subprocess.CompletedProcess[str], text: str
 ) -> None:
     """Assert that stderr contains specific error text."""
-    # Check both stdout and stderr for error text (CLI may use stdout for some errors)
-    output = result.stdout + result.stderr
-    assert text in output, (
-        f"Error text '{text}' not found in output: stdout={result.stdout}, stderr={result.stderr}"
-    )
+    _helpers.assert_error_output_contains(result, text)
 
 
 class TestLearnCommandsCLI:
