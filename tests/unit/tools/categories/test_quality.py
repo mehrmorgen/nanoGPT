@@ -139,6 +139,37 @@ class TestFormat:
         assert result.success is False
         assert "check err" in result.stderr
 
+    def test_check_failure_learning_mode(self, quality_tools, subprocess_runner):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="format"
+        )
+        subprocess_runner.set_results(
+            [create_failure_result(operation_id, 1, stderr="check err")]
+        )
+
+        result = quality_tools.format([], learning_mode=True, verbosity_level=2)
+
+        assert result.success is False
+        assert result.learning_info is not None
+        assert result.learning_info.commands_executed
+
+    def test_success_includes_check_stderr(self, quality_tools, subprocess_runner):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="format"
+        )
+        subprocess_runner.set_results(
+            [
+                create_success_result(operation_id, stderr="check warn"),
+                create_success_result(operation_id, "fmt ok"),
+            ]
+        )
+
+        result = quality_tools.format([])
+
+        assert result.success is True
+        assert "Ruff check --fix errors:" in result.stderr
+        assert "check warn" in result.stderr
+
     def test_format_failure(self, quality_tools, subprocess_runner):
         operation_id = OperationId(
             namespace="tools", category="quality", command="format"
