@@ -8,13 +8,17 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Protocol, cast
+from typing import Callable, Protocol, cast
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 import typer
 
 from ml_playground.runtime.cli import commands
+from ml_playground.runtime.core.bootstrap import (
+    CLIDependencies,
+    override_runtime_cli_dependencies,
+)
 from ml_playground.runtime.core.results import ToolResult, VerbosityLevel
 
 
@@ -86,6 +90,82 @@ def _fake_experiment_arg(name: str = "test_exp") -> str:
 def _fake_dependencies() -> SimpleNamespace:
     """Create fake CLI dependencies."""
     return SimpleNamespace()
+
+
+def _make_cli_deps(config_path: Path) -> CLIDependencies:
+    shared = SimpleNamespace(config_path=config_path)
+    exp = SimpleNamespace(
+        prepare=SimpleNamespace(),
+        train=SimpleNamespace(),
+        sample=SimpleNamespace(),
+        shared=shared,
+    )
+
+    def load_experiment(_: str, __: Path | None) -> object:
+        return exp
+
+    def ensure_train_prerequisites(_: object) -> None:
+        return None
+
+    def ensure_sample_prerequisites(_: object) -> None:
+        return None
+
+    def run_prepare(
+        experiment: str,
+        _prepare_cfg: object,
+        _config_path: Path,
+        _shared: object,
+        _learning_engine: object | None,
+    ) -> ToolResult:
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command=experiment,
+            stdout="ok",
+        )
+
+    def run_train(
+        experiment: str,
+        _train_cfg: object,
+        _config_path: Path,
+        _shared: object,
+        _learning_engine: object | None,
+    ) -> ToolResult:
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="train",
+            command=experiment,
+            stdout="ok",
+        )
+
+    def run_sample(
+        experiment: str,
+        _sample_cfg: object,
+        _config_path: Path,
+        _shared: object,
+        _learning_engine: object | None,
+    ) -> ToolResult:
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="sample",
+            command=experiment,
+            stdout="ok",
+        )
+
+    return CLIDependencies(
+        load_experiment=load_experiment,
+        ensure_train_prerequisites=ensure_train_prerequisites,
+        ensure_sample_prerequisites=ensure_sample_prerequisites,
+        run_prepare=run_prepare,
+        run_train=run_train,
+        run_sample=run_sample,
+    )
 
 
 @given(overrides=override_maps())
@@ -199,39 +279,31 @@ def test_prepare_command_uses_overrides(
     learning_mode: bool, verbosity: VerbosityLevel, overrides: dict[str, object]
 ) -> None:
     """Test prepare command correctly applies overrides."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg("prepare_test")
 
-    # Store original functions
-    original_funcs: dict[str, object] = {}
     fake_funcs = _fake_functions()
+    config_path = cast(Path, fake_funcs["extract_exp_config"](ctx))
+    deps = _make_cli_deps(config_path)
 
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
+    def _safe_invoker(action: Callable[[], None]) -> None:
+        action()
 
-    for func_name, fake_func in fake_funcs.items():
-        original_funcs[func_name] = getattr(commands_module, func_name)
-        setattr(commands_module, func_name, fake_func)
+    def _safe_handler(_: ToolResult, __: bool) -> None:
+        return None
 
-    try:
-        # Override the learning context to return our test values
-        def _learning_context(
-            ctx: typer.Context,
-        ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-            return learning_mode, verbosity, overrides
+    ctx.obj = {
+        "exp_config": config_path,
+        "learning_mode": learning_mode,
+        "verbosity": verbosity,
+        **overrides,
+        "cli_deps_prepare": deps,
+        "run_invoker_prepare": _safe_invoker,
+        "result_handler_prepare": _safe_handler,
+    }
 
-        setattr(commands_module, "prepare_learning_context", _learning_context)
-
-        # This should not raise an exception
+    with override_runtime_cli_dependencies(deps):
         commands.prepare(cast(typer.Context, ctx), experiment)
-
-        # The fact that it didn't crash means the override handling worked
-        # We can't easily verify the exact values without complex mocking
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
 
 
 @given(
@@ -244,36 +316,31 @@ def test_train_command_uses_overrides(
     learning_mode: bool, verbosity: VerbosityLevel, overrides: dict[str, object]
 ) -> None:
     """Test train command correctly applies overrides."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg("train_test")
 
-    # Store original functions
-    original_funcs: dict[str, object] = {}
     fake_funcs = _fake_functions()
+    config_path = cast(Path, fake_funcs["extract_exp_config"](ctx))
+    deps = _make_cli_deps(config_path)
 
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
+    def _safe_invoker(action: Callable[[], None]) -> None:
+        action()
 
-    for func_name, fake_func in fake_funcs.items():
-        original_funcs[func_name] = getattr(commands_module, func_name)
-        setattr(commands_module, func_name, fake_func)
+    def _safe_handler(_: ToolResult, __: bool) -> None:
+        return None
 
-    try:
-        # Override the learning context to return our test values
-        def _learning_context(
-            ctx: typer.Context,
-        ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-            return learning_mode, verbosity, overrides
+    ctx.obj = {
+        "exp_config": config_path,
+        "learning_mode": learning_mode,
+        "verbosity": verbosity,
+        **overrides,
+        "cli_deps_train": deps,
+        "run_invoker_train": _safe_invoker,
+        "result_handler_train": _safe_handler,
+    }
 
-        setattr(commands_module, "prepare_learning_context", _learning_context)
-
-        # This should not raise an exception
+    with override_runtime_cli_dependencies(deps):
         commands.train(cast(typer.Context, ctx), experiment)
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
 
 
 @given(
@@ -286,36 +353,31 @@ def test_sample_command_uses_overrides(
     learning_mode: bool, verbosity: VerbosityLevel, overrides: dict[str, object]
 ) -> None:
     """Test sample command correctly applies overrides."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg("sample_test")
 
-    # Store original functions
-    original_funcs: dict[str, object] = {}
     fake_funcs = _fake_functions()
+    config_path = cast(Path, fake_funcs["extract_exp_config"](ctx))
+    deps = _make_cli_deps(config_path)
 
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
+    def _safe_invoker(action: Callable[[], None]) -> None:
+        action()
 
-    for func_name, fake_func in fake_funcs.items():
-        original_funcs[func_name] = getattr(commands_module, func_name)
-        setattr(commands_module, func_name, fake_func)
+    def _safe_handler(_: ToolResult, __: bool) -> None:
+        return None
 
-    try:
-        # Override the learning context to return our test values
-        def _learning_context(
-            ctx: typer.Context,
-        ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-            return learning_mode, verbosity, overrides
+    ctx.obj = {
+        "exp_config": config_path,
+        "learning_mode": learning_mode,
+        "verbosity": verbosity,
+        **overrides,
+        "cli_deps_sample": deps,
+        "run_invoker_sample": _safe_invoker,
+        "result_handler_sample": _safe_handler,
+    }
 
-        setattr(commands_module, "prepare_learning_context", _learning_context)
-
-        # This should not raise an exception
+    with override_runtime_cli_dependencies(deps):
         commands.sample(cast(typer.Context, ctx), experiment)
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
 
 
 @given(
@@ -338,41 +400,42 @@ def test_analyze_command_uses_overrides(
     open_browser: bool,
 ) -> None:
     """Test analyze command correctly applies overrides."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg("analyze_test")
 
-    # Store original functions
-    original_funcs: dict[str, object] = {}
-    fake_funcs = _fake_functions()
+    def _analysis_runner(
+        experiment_name: str,
+        _host: str,
+        _port: int,
+        _open_browser: bool,
+        _learning_engine: object | None,
+    ) -> ToolResult:
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=experiment_name,
+            stdout="ok",
+        )
 
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
+    def _safe_handler(_: ToolResult, __: bool) -> None:
+        return None
 
-    for func_name, fake_func in fake_funcs.items():
-        original_funcs[func_name] = getattr(commands_module, func_name)
-        setattr(commands_module, func_name, fake_func)
+    ctx.obj = {
+        "learning_mode": learning_mode,
+        "verbosity": verbosity,
+        **overrides,
+        "analysis_runner": _analysis_runner,
+        "result_handler_analyze": _safe_handler,
+    }
 
-    try:
-        # Override the learning context to return our test values
-        def _learning_context(
-            ctx: typer.Context,
-        ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-            return learning_mode, verbosity, overrides
-
-        setattr(commands_module, "prepare_learning_context", _learning_context)
-
-        # This should not raise an exception
-        commands.analyze(cast(typer.Context, ctx), experiment, host, port, open_browser)
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
+    commands.analyze(cast(typer.Context, ctx), experiment, host, port, open_browser)
 
 
 def test_analyze_command_custom_overrides() -> None:
     """Test analyze command with custom runner and handler."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg("analyze_custom")
 
     custom_runner_called = False
@@ -387,102 +450,97 @@ def test_analyze_command_custom_overrides() -> None:
         nonlocal custom_handler_called
         custom_handler_called = True
 
-    overrides: dict[str, object] = {
+    ctx.obj = {
+        "learning_mode": True,
+        "verbosity": VerbosityLevel.STANDARD,
         "analysis_runner": custom_runner,
         "result_handler_analyze": custom_handler,
     }
 
-    # Store original functions
-    original_funcs: dict[str, object] = {}
-    fake_funcs = _fake_functions()
+    commands.analyze(cast(typer.Context, ctx), experiment)
 
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
-
-    for func_name, fake_func in fake_funcs.items():
-        original_funcs[func_name] = getattr(commands_module, func_name)
-        setattr(commands_module, func_name, fake_func)
-
-    try:
-        # Override the learning context to return our test values
-        def _learning_context(
-            ctx: typer.Context,
-        ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-            return (True, VerbosityLevel.STANDARD, overrides)
-
-        setattr(commands_module, "prepare_learning_context", _learning_context)
-
-        commands.analyze(cast(typer.Context, ctx), experiment)
-
-        # Verify custom functions were used
-        assert custom_runner_called
-        assert custom_handler_called
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
+    assert custom_runner_called
+    assert custom_handler_called
 
 
 def test_command_functions_extract_dependencies() -> None:
     """Test that all command functions properly extract dependencies."""
-    ctx = _fake_context()
+    ctx = _fake_context(obj={})
     experiment = _fake_experiment_arg()
-    overrides: dict[str, object] = {}
+    config_path = Path("/tmp/config.toml")
 
-    # Track function calls
-    extract_called = False
-    deps_called = False
-    learning_called = False
+    captured: dict[str, object] = {
+        "exp_config_path": None,
+        "learning_engine": None,
+        "learning_mode": None,
+    }
 
-    def track_extract(ctx: typer.Context) -> Path:
-        nonlocal extract_called
-        extract_called = True
-        return Path("/tmp/config.toml")
+    def load_experiment(_: str, exp_config_path: Path | None) -> object:
+        captured["exp_config_path"] = exp_config_path
+        shared = SimpleNamespace(config_path=config_path)
+        return SimpleNamespace(
+            prepare=SimpleNamespace(),
+            train=SimpleNamespace(),
+            sample=SimpleNamespace(),
+            shared=shared,
+        )
 
-    def track_deps() -> SimpleNamespace:
-        nonlocal deps_called
-        deps_called = True
-        return _fake_dependencies()
-
-    def track_learning(
-        ctx: typer.Context,
-    ) -> tuple[bool, VerbosityLevel, dict[str, object]]:
-        nonlocal learning_called
-        learning_called = True
-        return (False, VerbosityLevel.STANDARD, overrides)
-
-    # Store original functions
-    original_funcs: dict[str, object] = {}
-
-    # Patch functions at module level
-    import ml_playground.runtime.cli.commands as commands_module
-
-    original_funcs["extract_exp_config"] = commands_module.extract_exp_config
-    original_funcs["get_cli_dependencies"] = commands_module.get_cli_dependencies
-    original_funcs["prepare_learning_context"] = (
-        commands_module.prepare_learning_context
-    )
-    original_funcs["run_prepare_command"] = commands_module.run_prepare_command
-
-    commands_module.extract_exp_config = track_extract
-    commands_module.get_cli_dependencies = track_deps
-    commands_module.prepare_learning_context = track_learning
-
-    def _noop_run_prepare_command(*args: object, **kwargs: object) -> None:
+    def ensure_train_prerequisites(_: object) -> None:
         return None
 
-    commands_module.run_prepare_command = _noop_run_prepare_command  # type: ignore[assignment]
+    def ensure_sample_prerequisites(_: object) -> None:
+        return None
 
-    try:
+    def run_prepare(
+        experiment_name: str,
+        _prepare_cfg: object,
+        _cfg_path: Path,
+        _shared: object,
+        learning_engine: object | None,
+    ) -> ToolResult:
+        captured["learning_engine"] = learning_engine
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="prepare",
+            command=experiment_name,
+            stdout="ok",
+        )
+
+    def _unreachable_run(
+        *_args: object,
+        **_kwargs: object,
+    ) -> ToolResult:
+        raise RuntimeError("unexpected")
+
+    deps = CLIDependencies(
+        load_experiment=load_experiment,
+        ensure_train_prerequisites=ensure_train_prerequisites,
+        ensure_sample_prerequisites=ensure_sample_prerequisites,
+        run_prepare=run_prepare,
+        run_train=_unreachable_run,
+        run_sample=_unreachable_run,
+    )
+
+    def _safe_invoker(action: Callable[[], None]) -> None:
+        action()
+
+    def _safe_handler(_: ToolResult, learning_mode: bool) -> None:
+        captured["learning_mode"] = learning_mode
+
+    ctx.obj = {
+        "exp_config": config_path,
+        "learning_mode": True,
+        "verbosity": VerbosityLevel.STANDARD,
+        "cli_deps_prepare": deps,
+        "run_invoker_prepare": _safe_invoker,
+        "result_handler_prepare": _safe_handler,
+    }
+
+    with override_runtime_cli_dependencies(deps):
         commands.prepare(cast(typer.Context, ctx), experiment)
 
-        # Verify all dependencies were extracted
-        assert extract_called
-        assert deps_called
-        assert learning_called
-
-    finally:
-        # Restore original functions
-        for func_name, original_func in original_funcs.items():
-            setattr(commands_module, func_name, original_func)
+    assert captured["exp_config_path"] == config_path
+    assert captured["learning_engine"] is not None
+    assert captured["learning_mode"] is True
