@@ -1391,6 +1391,23 @@ class TestLearnCommands:
         assert result.exit_code == 1
         assert "Command must be in format" in (result.stderr or result.stdout)
 
+    def test_learn_explain_missing_command_shows_help(self) -> None:
+        result = self.runner.invoke(tools_cli.app, ["learn", "explain"])
+        assert result.exit_code == 2
+        combined = result.stderr or result.stdout
+        assert "Missing argument 'COMMAND'." in combined
+
+    def test_learn_commands_handles_internal_error(self) -> None:
+        with override_attr(
+            tools_cli,
+            "get_command_info",
+            lambda: (_ for _ in ()).throw(KeyError("boom")),
+        ):
+            result = self.runner.invoke(tools_cli.app, ["learn", "commands"])
+
+        assert result.exit_code == 1
+        assert "Error:" in (result.stderr or result.stdout)
+
     def test_learn_best_practices_category(self) -> None:
         result = self.runner.invoke(
             tools_cli.app,
@@ -1411,6 +1428,28 @@ class TestMainEntryErrorHandling:
                 tools_cli.main_entry()
 
         assert exc.value.exit_code == 1
+
+    def test_main_entry_reraises_typer_exit(self) -> None:
+        class RaisingApp:
+            def __call__(self) -> None:
+                raise typer.Exit(2)
+
+        with override_attr(tools_cli, "app", RaisingApp()):
+            with pytest.raises(typer.Exit) as exc:
+                tools_cli.main_entry()
+
+        assert exc.value.exit_code == 2
+
+    def test_main_entry_success_path(self) -> None:
+        calls: list[str] = []
+
+        def ok_app() -> None:
+            calls.append("ran")
+
+        with override_attr(tools_cli, "app", ok_app):
+            tools_cli.main_entry()
+
+        assert calls == ["ran"]
 
     def test_main_entry_handles_tool_errors(self) -> None:
         class RaisingApp:
