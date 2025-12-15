@@ -42,7 +42,7 @@ def run_setup(
     # Clear existing venv if requested
     if clear and venv_path.exists():
         try:
-            shutil.rmtree(venv_path, ignore_errors=True)
+            shutil.rmtree(venv_path)
             results.append("Removed existing virtual environment")
         except OSError as exc:
             raise EnvironmentSetupError(
