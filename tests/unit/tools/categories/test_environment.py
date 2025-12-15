@@ -166,6 +166,25 @@ class TestSetup:
         assert len(subprocess_runner.calls) == 1
         assert "uv failed" in (result.stderr or "")
 
+    def test_setup_git_hooks_worktree_read_text_oserror_falls_back(
+        self,
+        environment_tools: environment_module.EnvironmentTools,
+        root_path: Path,
+    ) -> None:
+        git_file = root_path / ".git"
+        git_file.write_text("gitdir: /missing", encoding="utf-8")
+        git_file.chmod(0o000)
+
+        operation_id = OperationId(namespace="tools", category="env", command="setup")
+        try:
+            result = environment_tools._setup_git_hooks(operation_id)
+        finally:
+            git_file.chmod(0o600)
+
+        assert result.success is False
+        assert result.exit_code == 1
+        assert "Failed to setup git hooks:" in (result.stderr or "")
+
 
 class TestSync:
     """Test dependency synchronization functionality."""
