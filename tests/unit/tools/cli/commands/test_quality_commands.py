@@ -159,12 +159,12 @@ class TestQualityFormat:
         assert "bad format" in (captured[0].stderr or "")
 
 
-class TestQualityLintCheckAndDeadcode:
-    def test_quality_lint_check_handles_generic_exception(self) -> None:
+class TestQualityLintAndDeadcode:
+    def test_quality_lint_handles_generic_exception(self) -> None:
         captured: list[ToolResult] = []
 
         class FailingTools:
-            def lint_check(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
+            def lint(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
                 raise ToolExecutionError("boom", reason="fail", rationale="test")
 
         def _capture_run_tool_command(
@@ -191,7 +191,7 @@ class TestQualityLintCheckAndDeadcode:
                 "run_tool_command",
                 _capture_run_tool_command,
             ):
-                quality_commands.quality_lint_check()
+                quality_commands.quality_lint()
 
         assert captured and captured[0].success is False
         assert captured[0].operation_id.category == "utils"

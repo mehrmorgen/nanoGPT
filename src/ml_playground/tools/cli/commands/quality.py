@@ -102,22 +102,6 @@ def quality_lint(
     )
 
 
-@quality_app.command("lint-check")
-def quality_lint_check(
-    args: Annotated[
-        Optional[List[str]], typer.Argument(help="Additional ruff arguments")
-    ] = None,
-) -> None:
-    """Run Ruff in check-only mode (alias for lint)."""
-    tools = get_quality_tools()
-    run_tool_command(
-        tools.lint_check,
-        args or [],
-        learning_mode=state.learning_mode,
-        verbosity_level=state.verbosity,
-    )
-
-
 @quality_app.command("mypy")
 def quality_mypy(
     args: Annotated[
