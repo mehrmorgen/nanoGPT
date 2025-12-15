@@ -138,3 +138,15 @@ def test_main_entry_uses_default_echo_on_exception() -> None:
         "Runtime CLI execution failed: default boom" in message and err
         for message, err in captured
     )
+
+
+def test_get_cli_help_summary_contains_expected_sections() -> None:
+    summary = runtime_cli_main.get_cli_help_summary()
+    assert "Runtime CLI" in summary
+    assert "Available commands:" in summary
+    assert "prepare" in summary
+    assert "train" in summary
+    assert "sample" in summary
+    assert "analyze" in summary
+    assert "Global options:" in summary
+    assert "--exp-config" in summary
