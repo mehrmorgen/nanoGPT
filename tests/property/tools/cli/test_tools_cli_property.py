@@ -403,8 +403,8 @@ def test_project_root_missing_path_is_rejected(
         args = [*flags, "--project-root", str(missing_path), "version"]
         result = runner.invoke(CLICK_APP, args)
 
-    assert result.exit_code != 0
-    _assert_tools_cli_error(result, "project root not found")
+    assert result.exit_code == 2
+    _assert_tools_cli_error(result, "project root not found", str(missing_path))
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, filename=_REL_NAME_TEXT)
@@ -420,8 +420,8 @@ def test_project_root_file_path_is_rejected(
         args = [*flags, "--project-root", str(file_path), "version"]
         result = runner.invoke(CLICK_APP, args)
 
-    assert result.exit_code != 0
-    _assert_tools_cli_error(result, "project root is not a directory")
+    assert result.exit_code == 2
+    _assert_tools_cli_error(result, "project root is not a directory", str(file_path))
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
