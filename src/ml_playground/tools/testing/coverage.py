@@ -173,6 +173,7 @@ def run_coverage_report(
     ]
 
     report_messages: list[str] = []
+    failure_messages: list[str] = []
     first_failure: ToolResult | None = None
 
     for command, description in commands:
@@ -231,20 +232,31 @@ def run_coverage_report(
             else:
                 if first_failure is None:
                     first_failure = result
+                failure_messages.append(
+                    f"Failed to generate {description}: {error_detail}"
+                )
                 break
 
     if first_failure and not report_messages:
-        return first_failure
+        return ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="\n".join(line for line in notes if line),
+            stderr="\n".join(failure_messages) or (first_failure.stderr or ""),
+            operation_id=operation_id,
+        )
 
     # Combine notes and report messages
     all_messages = notes + report_messages
     combined_output = "\n".join(line for line in all_messages if line)
 
+    success = bool(report_messages) and not failure_messages
+
     result = ToolResult(
-        success=bool(report_messages),
-        exit_code=0 if report_messages else 1,
+        success=success,
+        exit_code=0 if success else 1,
         stdout=combined_output,
-        stderr="",
+        stderr="\n".join(failure_messages),
         operation_id=operation_id,
     )
 

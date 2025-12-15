@@ -340,6 +340,57 @@ def test_run_coverage_report_lists_artifacts(
     assert "Generated XML report" in result.stdout
 
 
+def test_run_coverage_report_fails_when_any_report_format_fails(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    class JsonFailingRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:2] == ["coverage", "json"]:
+                return ToolResult(
+                    success=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="json failed",
+                    operation_id=operation_id,
+                )
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+    runner = JsonFailingRunner()
+    _prepare_cached_coverage(tmp_path)
+
+    result = coverage_module.run_coverage_report(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=False,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+    )
+
+    assert result.success is False
+    assert result.exit_code == 1
+    assert "Generated terminal report" in (result.stdout or "")
+    assert "Failed to generate JSON report" in (result.stderr or "")
+
+
 def test_run_coverage_report_handles_existing_json_without_regen(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
