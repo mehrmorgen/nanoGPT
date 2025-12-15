@@ -6,6 +6,7 @@ from typing import Any, Callable, Iterator, List
 
 import pytest
 import typer
+from typer.testing import CliRunner
 
 import ml_playground.tools.cli.commands.testing as testing_commands
 from ml_playground.tools.cli.state import state
@@ -145,6 +146,9 @@ class TestSuiteCommands:
     @pytest.mark.parametrize(
         ("command", "test_dir"),
         [
+            (testing_commands.test_acceptance, "tests/acceptance"),
+            (testing_commands.test_e2e, "tests/e2e"),
+            (testing_commands.test_integration, "tests/integration"),
             (testing_commands.test_unit, "tests/unit"),
             (testing_commands.test_property, "tests/property"),
             (testing_commands.test_regression, "tests/regression"),
@@ -172,6 +176,36 @@ class TestSuiteCommands:
         assert invoke_dir == test_dir
         assert pattern == "slow"
         assert extra_args == ["-k", "slow"]
+
+
+class TestSuiteCommandsViaCliRunner:
+    @pytest.mark.parametrize(
+        ("command", "expected_dir"),
+        [
+            (["acceptance"], "tests/acceptance"),
+            (["e2e"], "tests/e2e"),
+            (["integration"], "tests/integration"),
+        ],
+    )
+    def test_cli_invocation_hits_wrapper(
+        self, command: list[str], expected_dir: str
+    ) -> None:
+        recorded: list[str] = []
+
+        def _fake_invoke(
+            _ctx: typer.Context,
+            test_dir: str,
+            _pattern: str | None,
+            _extra_args: list[str],
+        ) -> None:
+            recorded.append(test_dir)
+
+        with override_attr(testing_commands, "_invoke_tests", _fake_invoke):
+            runner = CliRunner()
+            result = runner.invoke(testing_commands.test_app, command)
+
+        assert result.exit_code == 0
+        assert recorded == [expected_dir]
 
 
 class TestInvokeTests:

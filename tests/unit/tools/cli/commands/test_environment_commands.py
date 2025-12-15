@@ -201,6 +201,33 @@ class TestEnvVerifyAndInfoCommands:
         assert stub.args == []
         assert captured and captured[0].stdout == "info"
 
+    def test_env_gguf_help_delegates(self) -> None:
+        captured: list[ToolResult] = []
+
+        class StubEnvTools:
+            def gguf_help(self, args: List[str]) -> ToolResult:
+                self.args = args
+                return _tool_result("gguf-help", stdout="help")
+
+        stub = StubEnvTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
+        with override_attr(env_commands, "get_environment_tools", lambda: stub):
+            with override_attr(
+                env_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
+                env_commands.env_gguf_help(args=["--verbose"])
+
+        assert stub.args == ["--verbose"]
+        assert captured and captured[0].stdout == "help"
+
 
 class TestEnvCleanCommand:
     def test_env_clean_handles_configuration_error(self) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
@@ -206,3 +207,158 @@ class TestSetupAIGuidelinesCommand:
 
         assert captured and captured[0].stdout == "done"
         assert captured[0].success is True
+
+
+class TestReviewDeleteCommand:
+    def test_review_delete_delegates_to_tools(self, tmp_path: Path) -> None:
+        captured: list[ToolResult] = []
+
+        class StubTools:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def review_delete(
+                self,
+                *,
+                pr_number: int,
+                comments_file: Path,
+                remote: str,
+            ) -> ToolResult:
+                self.calls.append(
+                    {
+                        "pr_number": pr_number,
+                        "comments_file": comments_file,
+                        "remote": remote,
+                    }
+                )
+                return _tool_result("review-delete")
+
+        comments_file = tmp_path / "comments.json"
+        comments_file.write_text("[]", encoding="utf-8")
+
+        stub = StubTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
+        with override_attr(dev_commands, "get_dev_tools", lambda: stub):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
+                dev_commands.dev_review_delete(
+                    7,
+                    comments_file=comments_file,
+                    remote="origin",
+                )
+
+        assert stub.calls == [
+            {
+                "pr_number": 7,
+                "comments_file": comments_file,
+                "remote": "origin",
+            }
+        ]
+        assert captured and captured[0].operation_id.command == "review-delete"
+
+
+class TestWorkflowStatusCommand:
+    def test_workflow_status_delegates_to_tools(self) -> None:
+        captured: list[ToolResult] = []
+
+        class StubTools:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def workflow_status(self, *, output_format: str) -> ToolResult:
+                self.calls.append({"output_format": output_format})
+                return _tool_result("workflow-status")
+
+        stub = StubTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
+        with override_attr(dev_commands, "get_dev_tools", lambda: stub):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
+                dev_commands.dev_workflow_status(output_format="yaml")
+
+        assert stub.calls == [{"output_format": "yaml"}]
+        assert captured and captured[0].operation_id.command == "workflow-status"
+
+
+class TestGithubActionsCommand:
+    def test_gha_delegates_to_tools(self) -> None:
+        captured: list[ToolResult] = []
+
+        class StubTools:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def gha(
+                self,
+                *,
+                limit: int,
+                run_id: int | None,
+                latest: bool,
+                log_failed: bool,
+                remote: str,
+                repo: str | None,
+            ) -> ToolResult:
+                self.calls.append(
+                    {
+                        "limit": limit,
+                        "run_id": run_id,
+                        "latest": latest,
+                        "log_failed": log_failed,
+                        "remote": remote,
+                        "repo": repo,
+                    }
+                )
+                return _tool_result("gha")
+
+        stub = StubTools()
+
+        def _capture_run_tool_command(
+            command_func: Any, *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
+        with override_attr(dev_commands, "get_dev_tools", lambda: stub):
+            with override_attr(
+                dev_commands,
+                "run_tool_command",
+                _capture_run_tool_command,
+            ):
+                dev_commands.dev_github_actions(
+                    limit=3,
+                    run_id=123,
+                    latest=False,
+                    log_failed=True,
+                    remote="origin",
+                    repo="owner/repo",
+                )
+
+        assert stub.calls == [
+            {
+                "limit": 3,
+                "run_id": 123,
+                "latest": False,
+                "log_failed": True,
+                "remote": "origin",
+                "repo": "owner/repo",
+            }
+        ]
+        assert captured and captured[0].operation_id.command == "gha"
