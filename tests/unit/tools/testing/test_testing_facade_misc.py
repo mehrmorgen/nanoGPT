@@ -152,6 +152,17 @@ def test_regression_learning_mode_attaches_info(
     assert result.learning_info.commands_executed or result.learning_info.explanations
 
 
+def test_regression_without_learning_mode_has_no_learning_info(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+    result = tools.regression(["-q"])
+    assert result.success is True
+    assert result.learning_info is not None
+    assert result.learning_info.commands_executed == []
+    assert result.learning_info.explanations == []
+
+
 def test_all_tests_learning_mode_attaches_info(
     cfg: ToolsConfig, tmp_path: Path
 ) -> None:
