@@ -179,6 +179,20 @@ def test_clean_learning_mode_includes_explanation(
     assert any("Cleaning" in part for part in result.learning_info.explanations)
 
 
+def test_clean_removes_file_artifacts(cfg: ToolsConfig, tmp_path: Path) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+
+    tools.cache_dir.mkdir(parents=True, exist_ok=True)
+    file_target = tools.cache_dir / "coverage"
+    file_target.write_text("not a dir", encoding="utf-8")
+
+    result = tools.clean([])
+
+    assert result.success is True
+    assert file_target.exists() is False
+    assert "coverage" in result.stdout
+
+
 def test_mutation_run_stops_on_first_failing_step(
     cfg: ToolsConfig, tmp_path: Path
 ) -> None:
@@ -222,4 +236,45 @@ def test_mutation_run_wraps_unexpected_exceptions(
 
     assert result.success is False
     assert result.exit_code == 1
-    assert "Mutation reset failed: boom" in result.stderr
+    assert "Mutation reset failed: boom" in (result.stderr or "")
+
+
+def test_mutation_run_aggregates_stderr_without_stdout(
+    cfg: ToolsConfig, tmp_path: Path
+) -> None:
+    tools = _TestingTools(cfg, tmp_path, FakeSubprocessRunner())
+
+    def ok_with_warning(_args: list[str]) -> ToolResult:
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="",
+            stderr="warn",
+            operation_id=OperationId(
+                namespace="tools", category="test", command="mutation-reset"
+            ),
+        )
+
+    def ok(_args: list[str]) -> ToolResult:
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="ok",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="test", command="mutation-step"
+            ),
+        )
+
+    with (
+        override_attr(tools, "mutation_reset", ok_with_warning),
+        override_attr(tools, "mutation_summary", ok),
+        override_attr(tools, "mutation_init", ok),
+        override_attr(tools, "mutation_exec", ok),
+        override_attr(tools, "mutation_report", ok),
+    ):
+        result = tools.mutation_run([])
+
+    assert result.success is True
+    assert "Mutation reset warnings:" in (result.stderr or "")
+    assert "warn" in (result.stderr or "")
