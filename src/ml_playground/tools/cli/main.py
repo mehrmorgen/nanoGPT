@@ -239,7 +239,9 @@ def learn_explain(
             if "lint" in cmd_name:
                 typer.echo("   • Run lint before committing changes")
                 typer.echo("   • Use --fix to auto-fix fixable issues")
-                typer.echo("   • Configure .ruff.toml for project-specific rules")
+                typer.echo(
+                    "   • Configure Ruff in pyproject.toml for project-specific rules"
+                )
             elif "format" in cmd_name:
                 typer.echo("   • Format before committing changes")
                 typer.echo("   • Use pre-commit hooks to enforce formatting")
@@ -257,7 +259,9 @@ def learn_explain(
             elif "unit" in cmd_name:
                 typer.echo("   • Test one thing per test")
                 typer.echo("   • Use descriptive test names")
-                typer.echo("   • Mock external dependencies")
+                typer.echo(
+                    "   • Use dependency injection and fakes for external dependencies"
+                )
 
         elif category == "env":
             if "setup" in cmd_name:
@@ -271,7 +275,9 @@ def learn_explain(
                 "   • Code quality standards • Pre-commit hooks • CI/CD integration"
             )
         elif category == "test":
-            typer.echo("   • Test-driven development • Mocking • Coverage analysis")
+            typer.echo(
+                "   • Test-driven development • Dependency injection • Fakes • Coverage analysis"
+            )
         elif category == "env":
             typer.echo(
                 "   • Virtual environments • Dependency management • Reproducibility"
@@ -323,7 +329,9 @@ def learn_best_practices(
                 typer.echo("   • Write tests before fixing bugs (TDD)")
                 typer.echo("   • Test behavior, not implementation")
                 typer.echo("   • Use descriptive test names and docstrings")
-                typer.echo("   • Mock external dependencies")
+                typer.echo(
+                    "   • Use dependency injection and fakes for external dependencies"
+                )
                 typer.echo("   • Aim for high coverage of business logic")
 
             elif category == "env":
