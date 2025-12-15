@@ -233,7 +233,7 @@ class TestCommandRunners:
             caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["prepare", "shakespeare"])
-            assert result.exit_code == 0
+            assert result.exit_code == 1
             assert "Data preparation cancelled" in caplog.messages[-1]
 
     def test_train_keyboard_interrupt_handled(
@@ -262,7 +262,7 @@ class TestCommandRunners:
             caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["train", "shakespeare"])
-            assert result.exit_code == 0
+            assert result.exit_code == 1
             assert "Training cancelled" in caplog.messages[-1]
 
     def test_sample_keyboard_interrupt_handled(
@@ -291,7 +291,7 @@ class TestCommandRunners:
             caplog.at_level(logging.INFO, logger="ml_playground.runtime.cli"),
         ):
             result = runner.invoke(app, ["sample", "shakespeare"])
-            assert result.exit_code == 0
+            assert result.exit_code == 1
             assert "Sampling cancelled" in caplog.messages[-1]
 
     def test_prepare_domain_exception_exits_with_code_1(
@@ -590,6 +590,7 @@ class TestFinalizeCommandResult:
         )
 
         assert not result.success
+        assert result.exit_code == 1
         assert result.stderr == "Training cancelled."
         assert calls and calls[0][0] is result and calls[0][1] is True
 
@@ -612,5 +613,6 @@ class TestFinalizeCommandResult:
         )
 
         assert not result.success
+        assert result.exit_code == 1
         assert result.stderr == ""
         assert calls == []

@@ -56,7 +56,7 @@ def _finalize_command_result(
 
     fallback = ToolResult.create(
         success=False,
-        exit_code=0,
+        exit_code=1,
         namespace="ml",
         category=category,
         command=command,
@@ -199,7 +199,7 @@ def run_prepare_command(
         command=experiment,
         handler=handler,
         learning_mode=learning_mode,
-        call_handler_on_cancel=result_handler is not None,
+        call_handler_on_cancel=True,
         cancel_message=cancel_message.strip(),
     )
 
@@ -242,7 +242,7 @@ def run_train_command(
         command=experiment,
         handler=handler,
         learning_mode=learning_mode,
-        call_handler_on_cancel=result_handler is not None,
+        call_handler_on_cancel=True,
         cancel_message=cancel_message.strip(),
     )
 
@@ -285,7 +285,7 @@ def run_sample_command(
         command=experiment,
         handler=handler,
         learning_mode=learning_mode,
-        call_handler_on_cancel=result_handler is not None,
+        call_handler_on_cancel=True,
         cancel_message=cancel_message.strip(),
     )
 
