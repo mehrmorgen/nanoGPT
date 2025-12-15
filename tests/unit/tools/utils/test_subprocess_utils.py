@@ -14,6 +14,7 @@ from ml_playground.tools.core.interfaces import OperationId, ToolResult
 import ml_playground.tools.utils.subprocess_utils as subprocess_utils
 from ml_playground.tools.utils.subprocess_utils import (
     RealSubprocessRunner,
+    SubprocessRunner,
     format_command,
     validate_command_available,
 )
@@ -192,6 +193,22 @@ class TestRealSubprocessRunner:
         assert result.success is True
         assert result.exit_code == 0
         assert result.stdout.strip() == "ok"
+
+    def test_run_subprocess_string_cwd_and_env_merge(self, tmp_path: Path) -> None:
+        runner = RealSubprocessRunner()
+        operation_id = OperationId(
+            namespace="tools", category="test", command="real-env"
+        )
+
+        result = runner.run_subprocess(
+            [sys.executable, "-c", "import os; print(os.environ.get('TEST_VAR', ''))"],
+            cwd=str(tmp_path),
+            env={"TEST_VAR": "abc"},
+            operation_id=operation_id,
+        )
+
+        assert result.success is True
+        assert result.stdout.strip() == "abc"
 
     def test_run_subprocess_without_capture(self) -> None:
         runner = RealSubprocessRunner()
@@ -413,3 +430,22 @@ class TestValidateCommandAvailable:
         """Test detection of unavailable command."""
         result = validate_command_available("nonexistent-command-12345")
         assert result is False
+
+
+def test_subprocess_runner_protocol_stubs_execute() -> None:
+    operation_id = OperationId(namespace="tools", category="test", command="proto")
+
+    assert (
+        SubprocessRunner.run_subprocess(object(), ["echo"], operation_id=operation_id)
+        is None
+    )
+    assert (
+        SubprocessRunner.run_uv_command(object(), ["python"], operation_id=operation_id)
+        is None
+    )
+    assert (
+        SubprocessRunner.run_pytest_command(
+            object(), ["tests/unit"], operation_id=operation_id
+        )
+        is None
+    )
