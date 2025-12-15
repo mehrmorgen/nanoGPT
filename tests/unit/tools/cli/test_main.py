@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 import ml_playground.tools.cli.main as tools_cli
 import ml_playground.tools.analysis.lit_integration as lit_integration
 import ml_playground.tools.analysis.sample_quality as sample_quality
+import ml_playground.tools.cli.dependencies as tools_cli_dependencies
 from ml_playground.tools.cli.dependencies import ToolsDependencies
 from ml_playground.tools.cli.helpers import (
     get_quality_tools,
@@ -1433,7 +1434,43 @@ class TestMainEntryErrorHandling:
 
         assert exc.value.exit_code == 1
 
-    # Additional CLI command routing tests live in TestEnvironmentCommands/TestQuality... classes
+
+def test_default_tool_result_handler_uses_verbosity_fallback_when_invalid() -> None:
+    captured: list[str] = []
+
+    class StubEngine:
+        def __init__(self, verbosity: object) -> None:
+            assert verbosity == tools_cli_dependencies.VerbosityLevel.STANDARD
+
+        def format_output(self, _result: object, *, learning_enabled: bool) -> str:
+            assert learning_enabled is True
+            return "formatted"
+
+    with (
+        override_attr(tools_cli_dependencies, "LearningModeEngine", StubEngine),
+        override_attr(
+            tools_cli_dependencies.typer,
+            "echo",
+            lambda msg, *, err=False: captured.append(str(msg)),
+        ),
+        override_attr(tools_cli.state, "learning_mode", True),
+        override_attr(tools_cli.state, "verbosity", 999),
+    ):
+        tools_cli_dependencies.default_tool_result_handler(
+            ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="tools",
+                category="quality",
+                command="lint",
+                stdout="ok",
+            )
+        )
+
+    assert captured == ["formatted"]
+
+
+# Additional CLI command routing tests live in TestEnvironmentCommands/TestQuality... classes
 
 
 class TestCoverageCommands:
