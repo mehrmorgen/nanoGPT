@@ -262,10 +262,16 @@ class TestInvokeTests:
         assert captured[0].operation_id.command == "generic-error"
         assert "Error running tests in tests/unit" in (captured[0].stderr or "")
 
-    def test_invoke_tests_raises_on_unknown_suite(self) -> None:
+    def test_invoke_tests_exits_on_unknown_suite(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         ctx = _make_context()
-        with pytest.raises(Exception):
+        with pytest.raises(typer.Exit) as exc_info:
             testing_commands._invoke_tests(ctx, "tests/unknown", None, [])
+
+        assert exc_info.value.exit_code == 1
+        output = capsys.readouterr()
+        assert "Unsupported test suite: tests/unknown" in (output.err or output.out)
 
 
 class TestAllAndCleanCommands:

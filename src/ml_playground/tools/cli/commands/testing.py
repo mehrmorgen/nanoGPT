@@ -44,7 +44,8 @@ def _invoke_tests(
     }
     method_name = suite_map.get(test_dir)
     if method_name is None:
-        raise Exception(f"Unsupported test suite: {test_dir}")
+        typer.echo(f"❌ Unsupported test suite: {test_dir}", err=True)
+        raise typer.Exit(1)
 
     suite_fn = getattr(tools, method_name)
     run_tool_command(
