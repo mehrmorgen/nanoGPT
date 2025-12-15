@@ -94,6 +94,19 @@ class TestLint:
         assert result.learning_info.commands_executed
         assert "ruff" in result.learning_info.commands_executed[0]
 
+    def test_lint_check_alias(self, quality_tools, subprocess_runner):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="lint"
+        )
+        subprocess_runner.set_results([create_success_result(operation_id, "lint ok")])
+
+        result = quality_tools.lint_check([])
+
+        assert result.success is True
+        command = subprocess_runner.calls[0]["command"]
+        assert command[0:2] == ["uv", "run"]
+        assert "ruff" in command
+
 
 class TestFormat:
     def test_success(self, quality_tools, subprocess_runner):
