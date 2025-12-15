@@ -19,6 +19,11 @@ from ml_playground.tools.cli.dependencies import (
     override_tools_dependencies,
 )
 from ml_playground.tools.cli.state import state as cli_state
+from tests.property.cli_invariants import (
+    assert_cli_error,
+    assert_traceback_free,
+    output_text,
+)
 from tests.property.tools._helpers import override_tools_with_deterministic_runner
 
 _MISSING = object()
@@ -41,21 +46,6 @@ def _stack_override_attr(
 
 CLI_RUNNER = CliRunner()
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-
-
-def _output_text(result: Result) -> str:
-    return (result.stdout or "") + (result.stderr or "") + (result.output or "")
-
-
-def _assert_traceback_free(text: str) -> None:
-    assert "traceback" not in text.lower()
-
-
-def _assert_tools_cli_error(result: Result, *needles: str) -> None:
-    text = _output_text(result)
-    _assert_traceback_free(text)
-    lowered = text.lower()
-    assert any(needle.lower() in lowered for needle in needles) or "usage:" in lowered
 
 
 def _load_preconfigured_tools_config() -> ToolsConfig:
@@ -232,12 +222,12 @@ _REL_NAME_TEXT = st.text(
 def test_cli_without_subcommand_shows_guidance(flags: list[str]) -> None:
     result = _invoke_cli(flags)
     assert result.exit_code == 2
-    output = _output_text(result)
+    output = output_text(result)
     lowered = output.lower()
     assert "welcome to ml playground tools cli" in lowered
     assert "no tools command was provided" in lowered
     assert "try `uv run tools test`" in output or "try" in lowered
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, group_path=GROUP_PREFIX_STRATEGY)
@@ -261,9 +251,9 @@ def test_cli_help_always_succeeds(flags: list[str]) -> None:
     args = [*flags, "--help"]
     result = _invoke_cli(args)
     assert result.exit_code == 0
-    output = _output_text(result)
+    output = output_text(result)
     assert "Usage:" in output
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
 
 
 @given(
@@ -273,15 +263,15 @@ def test_cli_help_always_succeeds(flags: list[str]) -> None:
 @example(flags=[], subcommand=("quality",))
 @example(flags=["--learning-mode"], subcommand=("analysis",))
 @settings(max_examples=30, deadline=None, derandomize=True)
-def test_cli_subcommand_help_always_succeeds(
+def test_cli_subcommands_render_help(
     flags: list[str], subcommand: tuple[str, ...]
 ) -> None:
     args = [*flags, *subcommand, "--help"]
     result = _invoke_cli(args)
     assert result.exit_code == 0
-    output = _output_text(result)
+    output = output_text(result)
     assert "Usage:" in output
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
 
 
 @given(
@@ -294,15 +284,13 @@ def test_cli_subcommand_help_always_succeeds(
 )
 @example(flags=[], whitespace=[" "])
 @settings(max_examples=30, deadline=None, derandomize=True)
-def test_cli_whitespace_args_never_crash(
-    flags: list[str], whitespace: list[str]
-) -> None:
+def test_cli_rejects_empty_input(flags: list[str], whitespace: list[str]) -> None:
     args = [*flags, *whitespace]
     result = _invoke_cli(args)
     if result.exception is not None:
         assert isinstance(result.exception, SystemExit)
-    output = _output_text(result)
-    _assert_traceback_free(output)
+    output = output_text(result)
+    assert_traceback_free(output)
     assert "Usage:" in output or "No such command" in output
 
 
@@ -314,16 +302,16 @@ def test_cli_whitespace_args_never_crash(
 @example(flags=[], group_path=("quality",), invalid="totally-unknown")
 @example(flags=["--no-learning-mode"], group_path=("env",), invalid="bogus")
 @settings(max_examples=50, deadline=None, derandomize=True)
-def test_cli_reports_unknown_commands(
+def test_cli_rejects_invalid_command_token(
     flags: list[str], group_path: tuple[str, ...], invalid: str
 ) -> None:
     args = [*flags, *group_path, invalid]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    error_stream = _output_text(result)
+    error_stream = output_text(result)
     lowered = error_stream.lower()
     assert "no such command" in lowered or "unknown command" in lowered
-    _assert_traceback_free(error_stream)
+    assert_traceback_free(error_stream)
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -367,7 +355,7 @@ def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> 
     args = [*flags, "--verbosity", str(invalid_value)]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 @given(
@@ -378,7 +366,7 @@ def test_global_options_require_values(flags: list[str], opt: str) -> None:
     args = [*flags, opt]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
@@ -387,7 +375,7 @@ def test_learning_mode_flag_rejects_value_form(flags: list[str], bad_bool: str) 
     args = [*flags, f"--learning-mode={bad_bool}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "does not take a value")
+    assert_cli_error(result, "does not take a value")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=_REL_NAME_TEXT)
@@ -404,7 +392,7 @@ def test_project_root_missing_path_is_rejected(
         result = runner.invoke(CLICK_APP, args)
 
     assert result.exit_code == 2
-    _assert_tools_cli_error(result, "project root not found", str(missing_path))
+    assert_cli_error(result, "project root not found", str(missing_path))
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, filename=_REL_NAME_TEXT)
@@ -421,7 +409,7 @@ def test_project_root_file_path_is_rejected(
         result = runner.invoke(CLICK_APP, args)
 
     assert result.exit_code == 2
-    _assert_tools_cli_error(result, "project root is not a directory", str(file_path))
+    assert_cli_error(result, "project root is not a directory", str(file_path))
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
@@ -431,7 +419,7 @@ def test_analysis_lit_rejects_non_int_port(flags: list[str], bad_port: str) -> N
     args = [*flags, "analysis", "lit", "--port", bad_port]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value", "usage:")
+    assert_cli_error(result, "invalid value", "usage:")
 
 
 @given(
@@ -445,7 +433,7 @@ def test_analysis_lit_requires_option_values(flags: list[str], opt: str) -> None
     args = [*flags, "analysis", "lit", opt]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing", "usage:")
+    assert_cli_error(result, "requires an argument", "missing", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_port=_NON_INT_TEXT)
@@ -457,7 +445,7 @@ def test_analysis_lit_rejects_non_int_port_equals_form(
     args = [*flags, "analysis", "lit", f"--port={bad_port}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value", "usage:")
+    assert_cli_error(result, "invalid value", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_bool=_NON_BOOL_TEXT)
@@ -469,7 +457,7 @@ def test_analysis_lit_rejects_invalid_open_browser_value(
     args = [*flags, "analysis", "lit", f"--open-browser={bad_bool}"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value", "does not take a value", "usage:")
+    assert_cli_error(result, "invalid value", "does not take a value", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -478,10 +466,10 @@ def test_analysis_sample_quality_requires_file_argument(flags: list[str]) -> Non
     args = [*flags, "analysis", "sample-quality"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "missing argument")
+    assert_cli_error(result, "missing argument")
 
 
-@given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=st.text(min_size=1, max_size=50))
+@given(flags=GLOBAL_FLAGS_STRATEGY, missing_name=_REL_NAME_TEXT)
 @example(flags=[], missing_name="definitely-missing-sample.txt")
 @settings(max_examples=40, deadline=None, derandomize=True)
 def test_analysis_sample_quality_missing_file_has_stable_error(
@@ -495,7 +483,7 @@ def test_analysis_sample_quality_missing_file_has_stable_error(
     result = _invoke_cli(args)
 
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "sample file not found")
+    assert_cli_error(result, "sample file not found")
 
 
 @given(
@@ -527,7 +515,7 @@ def test_learn_commands_reject_unknown_categories(
     args = [*flags, "learn", "commands", "--category", category]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    _assert_tools_cli_error(result, "unknown category")
+    assert_cli_error(result, "unknown category")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -536,7 +524,7 @@ def test_learn_commands_requires_category_value(flags: list[str]) -> None:
     args = [*flags, "learn", "commands", "--category"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, detailed=st.booleans())
@@ -572,7 +560,7 @@ def test_learn_best_practices_rejects_unknown_category(
     args = [*flags, "learn", "best-practices", "--category", category]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    _assert_tools_cli_error(result, "unknown category")
+    assert_cli_error(result, "unknown category")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -581,7 +569,7 @@ def test_learn_best_practices_requires_category_value(flags: list[str]) -> None:
     args = [*flags, "learn", "best-practices", "--category"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -615,7 +603,7 @@ def test_learn_explain_rejects_invalid_format(flags: list[str], bad_value: str) 
     args = [*flags, "learn", "explain", assume_value]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    _assert_tools_cli_error(result, "command must be in format")
+    assert_cli_error(result, "command must be in format")
 
 
 @given(
@@ -644,7 +632,7 @@ def test_learn_explain_rejects_unknown_target(
     args = [*flags, "learn", "explain", f"{unknown_category}.{unknown_command}"]
     result = _invoke_cli(args)
     assert result.exit_code == 1
-    _assert_tools_cli_error(result, "unknown", "not found")
+    assert_cli_error(result, "unknown", "not found")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
@@ -654,7 +642,7 @@ def test_dev_gha_rejects_non_int_limit(flags: list[str], bad_value: str) -> None
     args = [*flags, "dev", "gha", "--limit", bad_value]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
@@ -664,7 +652,7 @@ def test_dev_gha_rejects_non_int_run_id(flags: list[str], bad_value: str) -> Non
     args = [*flags, "dev", "gha", "--run-id", bad_value]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 @given(
@@ -676,7 +664,7 @@ def test_dev_gha_requires_option_values(flags: list[str], opt: str) -> None:
     args = [*flags, "dev", "gha", opt]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
@@ -686,7 +674,7 @@ def test_dev_kill_port_rejects_non_int_port(flags: list[str], bad_value: str) ->
     args = [*flags, "dev", "kill-port", bad_value]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -695,7 +683,7 @@ def test_dev_kill_port_requires_port_argument(flags: list[str]) -> None:
     args = [*flags, "dev", "kill-port"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "missing argument", "usage:")
+    assert_cli_error(result, "missing argument", "usage:")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, bad_value=_NON_INT_TEXT)
@@ -708,7 +696,7 @@ def test_dev_review_bulk_reply_rejects_non_int_pr_number(
     args = [*flags, "dev", "review-bulk-reply", bad_value, "--replies", "replies.json"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
@@ -717,7 +705,7 @@ def test_dev_review_bulk_reply_requires_replies_value(flags: list[str]) -> None:
     args = [*flags, "dev", "review-bulk-reply", "1", "--replies"]
     result = _invoke_cli(args)
     assert result.exit_code != 0
-    _assert_tools_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 # --- Command execution coverage ------------------------------------------------

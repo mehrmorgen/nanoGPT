@@ -7,28 +7,13 @@ from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from typing import ContextManager
+from typing import ContextManager, Protocol
 
 import hypothesis.strategies as st
 from hypothesis import HealthCheck, assume, example, given, settings
 import pytest
 import typer
 from typer.testing import CliRunner
-
-# Import pytest typing for fixtures
-try:
-    from pytest import LogCaptureFixture
-except ImportError:
-    # Fallback for older pytest versions
-    from typing import Protocol
-
-    class LogCaptureFixture(Protocol):
-        messages: list[str]
-
-        def at_level(
-            self, level: int, logger: str | None = None
-        ) -> ContextManager[None]: ...
-
 
 from ml_playground.runtime.cli.main import (
     app,
@@ -59,6 +44,19 @@ from ml_playground.runtime.core.results import (
     ToolResult,
     VerbosityLevel,
 )
+from tests.property.cli_invariants import (
+    assert_cli_error,
+    assert_traceback_free,
+    output_text,
+)
+
+
+class LogCaptureFixture(Protocol):
+    messages: list[str]
+
+    def at_level(
+        self, level: int, logger: str | None = None
+    ) -> ContextManager[None]: ...
 
 
 class LoggerProbe:
@@ -178,35 +176,6 @@ _UNKNOWN_OPTION_NAME = st.text(
 )
 
 
-def _output_text(result: object) -> str:
-    stdout = getattr(result, "stdout", None) or ""
-    stderr = getattr(result, "stderr", None) or ""
-    output = getattr(result, "output", None) or ""
-    return f"{stdout}{stderr}{output}"
-
-
-def _assert_traceback_free(text: str) -> None:
-    assert "traceback" not in text.lower()
-
-
-def _assert_runtime_cli_error(result: object, *needles: str) -> None:
-    text = _output_text(result)
-    _assert_traceback_free(text)
-    lowered = text.lower()
-    assert any(needle.lower() in lowered for needle in needles) or "usage:" in lowered
-
-
-_INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
-_UNKNOWN_COMMAND_LIST = [
-    token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
-]
-_UNKNOWN_COMMANDS = (
-    st.sampled_from(_UNKNOWN_COMMAND_LIST)
-    if _UNKNOWN_COMMAND_LIST
-    else st.just("unknown-command")
-)
-
-
 def test_run_or_exit_keyboard_interrupt_logs_message(
     caplog: LogCaptureFixture,
 ) -> None:
@@ -220,6 +189,17 @@ def test_run_or_exit_keyboard_interrupt_logs_message(
         run_or_exit(_raise_keyboard_interrupt, keyboard_interrupt_msg="Interrupted")
 
     assert "Interrupted" in caplog.messages
+
+
+_INVALID_TOKEN_POOL = [f"invalid-token-{index}" for index in range(200)]
+_UNKNOWN_COMMAND_LIST = [
+    token for token in _INVALID_TOKEN_POOL if token not in _KNOWN_TOP_LEVEL
+]
+_UNKNOWN_COMMANDS = (
+    st.sampled_from(_UNKNOWN_COMMAND_LIST)
+    if _UNKNOWN_COMMAND_LIST
+    else st.just("unknown-command")
+)
 
 
 @given(command=_UNKNOWN_COMMANDS)
@@ -267,9 +247,9 @@ def test_runtime_cli_no_subcommand_shows_welcome_and_help(
     result = runner.invoke(app, args)
     assert result.exit_code == 2
 
-    output = _output_text(result)
+    output = output_text(result)
     lowered = output.lower()
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
     assert "welcome to ml playground runtime cli" in lowered
     assert "no workflow command was provided" in lowered
     assert "usage:" in lowered
@@ -278,9 +258,9 @@ def test_runtime_cli_no_subcommand_shows_welcome_and_help(
 def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["-h"])
-    output = _output_text(result)
+    output = output_text(result)
     lowered = output.lower()
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
     assert result.exit_code != 0 or "usage:" in lowered
 
 
@@ -290,14 +270,14 @@ def test_runtime_cli_rejects_invalid_learning_mode_value(bad_value: str) -> None
     runner = CliRunner()
     result = runner.invoke(app, [f"--learning-mode={bad_value}"])
     assert result.exit_code != 0
-    _assert_runtime_cli_error(result, "invalid value", "does not take a value")
+    assert_cli_error(result, "invalid value", "does not take a value")
 
 
 def test_runtime_cli_rejects_missing_exp_config_value() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--exp-config"])
     assert result.exit_code != 0
-    _assert_runtime_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(subcommand=st.sampled_from(_KNOWN_SUBCOMMANDS))
@@ -342,14 +322,14 @@ def test_runtime_cli_rejects_invalid_verbosity_range(bad_value: int) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity", str(bad_value)])
     assert result.exit_code != 0
-    _assert_runtime_cli_error(result, "invalid value")
+    assert_cli_error(result, "invalid value")
 
 
 def test_runtime_cli_rejects_missing_verbosity_value() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity"])
     assert result.exit_code != 0
-    _assert_runtime_cli_error(result, "requires an argument", "missing")
+    assert_cli_error(result, "requires an argument", "missing")
 
 
 @given(
@@ -360,9 +340,9 @@ def test_runtime_cli_rejects_invalid_verbosity_equals_form(bad_value: int) -> No
     runner = CliRunner()
     result = runner.invoke(app, [f"--verbosity={bad_value}"])
     assert result.exit_code != 0
-    output = _output_text(result)
+    output = output_text(result)
     lowered = output.lower()
-    _assert_traceback_free(output)
+    assert_traceback_free(output)
     assert "invalid value" in lowered or "usage:" in lowered
 
 
@@ -372,8 +352,8 @@ def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--verbosity", bad_value])
     assert result.exit_code != 0
-    stream = _output_text(result).lower()
-    _assert_traceback_free(stream)
+    stream = output_text(result).lower()
+    assert_traceback_free(stream)
     assert "invalid value" in stream or "usage:" in stream
 
 
@@ -458,7 +438,7 @@ def test_runtime_cli_rejects_unknown_options(
     args = [subcommand, "dummy", f"--{option}"]
     result = runner.invoke(app, args)
     assert result.exit_code != 0
-    _assert_runtime_cli_error(result, "no such option")
+    assert_cli_error(result, "no such option")
 
 
 @given(name=_PATH_TOKEN)
