@@ -9,6 +9,7 @@ from ml_playground.configuration.models import (
     ModelConfig,
 )
 from ml_playground.models.core.model import GPT
+from ml_playground.models.core.config import build_gpt_config
 
 
 def _make_model() -> GPT:
@@ -94,6 +95,20 @@ def test_from_pretrained_raises_not_implemented() -> None:
     """from_pretrained should raise NotImplementedError."""
     with pytest.raises(NotImplementedError, match="from_pretrained is not supported"):
         GPT.from_pretrained()
+
+
+def test_build_gpt_config_requires_vocab_size() -> None:
+    cfg = ModelConfig(
+        n_layer=1,
+        n_head=1,
+        n_embd=4,
+        block_size=4,
+        dropout=0.0,
+        vocab_size=None,
+    )
+
+    with pytest.raises(ValueError, match="ModelConfig.vocab_size must be set"):
+        build_gpt_config(cfg)
 
 
 def test_configure_optimizers_calls_helper() -> None:
