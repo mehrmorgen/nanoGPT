@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
-from ml_playground.tools.core.interfaces import LearningInfo, OperationId, ToolResult
+from ml_playground.tools.core.interfaces import (
+    LearningInfo,
+    OperationId,
+    ToolInterface,
+    ToolResult,
+)
 
 
 class TestOperationId:
@@ -39,6 +46,10 @@ class TestOperationId:
             OperationId(namespace="ml", category="invalid", command="step")
 
         assert "Invalid ml category" in str(excinfo.value)
+
+    def test_operation_id_validate_category_ml_branch_is_executed(self) -> None:
+        info = SimpleNamespace(data={"namespace": "ml"})
+        assert OperationId.validate_category("prepare", info) == "prepare"
 
 
 class TestToolResult:
@@ -100,3 +111,20 @@ class TestLearningInfo:
         assert info.explanations == ["Runs unit tests"]
         assert info.best_practices == ["Write fast tests"]
         assert info.related_concepts == ["TDD"]
+
+
+class TestToolInterfaceProtocol:
+    def test_protocol_placeholders_are_callable(self) -> None:
+        obj = object()
+
+        assert ToolInterface.category.fget(obj) is None  # type: ignore[union-attr]
+        assert ToolInterface.command.fget(obj) is None  # type: ignore[union-attr]
+        assert ToolInterface.description.fget(obj) is None  # type: ignore[union-attr]
+        assert (
+            ToolInterface.execute(
+                obj, [], learning_mode=False, verbosity_level=0, dry_run=False
+            )
+            is None
+        )
+        assert ToolInterface.get_help(obj) is None
+        assert ToolInterface.validate_args(obj, []) is None
