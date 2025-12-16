@@ -169,6 +169,43 @@ class TestLearningModeEngine:
         # Should still provide context even for unknown commands
         assert "Context: Testing unknown command" in result.explanations
 
+    def test_explain_command_minimal_unknown_has_no_explanations(self):
+        engine = LearningModeEngine(VerbosityLevel.MINIMAL)
+
+        result = engine.explain_command(
+            command="unknown",
+            context="Some context",
+            category="test",
+            executed_commands=[],
+        )
+
+        assert result.explanations == []
+
+    def test_explain_command_comprehensive_unknown_includes_context(self):
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+
+        result = engine.explain_command(
+            command="unknown",
+            context="Some context",
+            category="test",
+            executed_commands=[],
+        )
+
+        assert result.explanations == ["Context: Some context"]
+
+    def test_explain_command_invalid_verbosity_falls_back_to_context(self):
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        setattr(engine, "verbosity", 999)
+
+        result = engine.explain_command(
+            command="unknown",
+            context="Some context",
+            category="test",
+            executed_commands=[],
+        )
+
+        assert result.explanations == ["Context: Some context"]
+
     def test_explain_command_defaults_executed_commands(self):
         engine = LearningModeEngine(VerbosityLevel.STANDARD)
 
