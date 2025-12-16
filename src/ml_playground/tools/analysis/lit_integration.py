@@ -10,11 +10,11 @@ import logging
 from ml_playground.core.logging_protocol import LoggerLike
 
 
-class _LitServer(Protocol):
+class _LitServer(Protocol):  # pragma: no cover - structural protocol
     def serve(self, *, port: int, host: str, open_browser: bool) -> None: ...
 
 
-class _LitServerModule(Protocol):
+class _LitServerModule(Protocol):  # pragma: no cover - structural protocol
     def Server(
         self,
         models: Mapping[str, LitModel],
@@ -22,7 +22,7 @@ class _LitServerModule(Protocol):
     ) -> _LitServer: ...
 
 
-class LitDataset(Protocol):
+class LitDataset(Protocol):  # pragma: no cover - structural protocol
     def spec(self) -> dict[str, object]: ...
 
     def __len__(self) -> int: ...
@@ -30,7 +30,7 @@ class LitDataset(Protocol):
     def __iter__(self) -> Iterable[Mapping[str, object]]: ...
 
 
-class LitModel(Protocol):
+class LitModel(Protocol):  # pragma: no cover - structural protocol
     def input_spec(self) -> dict[str, object]: ...
 
     def output_spec(self) -> dict[str, object]: ...
@@ -40,7 +40,7 @@ class LitModel(Protocol):
     ) -> list[Mapping[str, object]]: ...
 
 
-class LitTypesModule(Protocol):
+class LitTypesModule(Protocol):  # pragma: no cover - structural protocol
     def TextSegment(self) -> object: ...
 
 
