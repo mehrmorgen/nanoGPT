@@ -9,7 +9,7 @@ from ml_playground.configuration.models import (
     ModelConfig,
 )
 from ml_playground.models.core.model import GPT
-from ml_playground.models.core.config import build_gpt_config
+from ml_playground.models.core.config import GPTConfig, build_gpt_config
 
 
 def _make_model() -> GPT:
@@ -33,6 +33,35 @@ def test_gpt_init_creates_model_with_correct_config() -> None:
     assert model.config.n_head == 1
     assert model.config.n_embd == 4
     assert model.config.vocab_size == 50
+
+
+def test_gpt_init_requires_vocab_size() -> None:
+    cfg = GPTConfig(
+        n_layer=1,
+        n_head=1,
+        n_embd=4,
+        block_size=4,
+        vocab_size=0,
+        dropout=0.0,
+    )
+
+    with pytest.raises(ValueError, match="GPTConfig.vocab_size must be set"):
+        GPT(cfg, logger=None)
+
+
+def test_gpt_init_without_logger_does_not_fail() -> None:
+    cfg = ModelConfig(
+        n_layer=1,
+        n_head=1,
+        n_embd=4,
+        block_size=4,
+        dropout=0.0,
+        vocab_size=50,
+    )
+
+    model = GPT(cfg, logger=None)
+
+    assert model.logger is None
 
 
 def test_gpt_forward_produces_correct_output_shape() -> None:
@@ -70,6 +99,16 @@ def test_forward_without_targets_returns_none_loss() -> None:
     assert loss is None
 
 
+def test_forward_raises_when_sequence_exceeds_block_size() -> None:
+    model = _make_model()
+    model.eval()
+
+    idx = torch.randint(0, model.config.vocab_size, (1, model.config.block_size + 1))
+
+    with pytest.raises(ValueError, match="Cannot forward sequence of length"):
+        model(idx)
+
+
 def test_crop_block_size_raises_on_increase() -> None:
     """crop_block_size should raise ValueError when trying to increase block_size."""
     model = _make_model()
@@ -89,6 +128,15 @@ def test_crop_block_size_updates_config_and_embeddings() -> None:
 
     assert model.config.block_size == new_block_size
     assert model.position_embeddings.num_embeddings == new_block_size
+
+
+def test_get_num_params_non_embedding_false_keeps_embeddings() -> None:
+    model = _make_model()
+
+    total_with_embeddings = model.get_num_params(non_embedding=False)
+    total_without_embeddings = model.get_num_params(non_embedding=True)
+
+    assert total_with_embeddings >= total_without_embeddings
 
 
 def test_from_pretrained_raises_not_implemented() -> None:
