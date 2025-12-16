@@ -1095,6 +1095,37 @@ def test_combine_coverage_fragments_success_without_creating_file(
     assert result is None
 
 
+def test_combine_coverage_fragments_does_not_duplicate_executed_commands(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_dir = _coverage_dir(tmp_path)
+    (coverage_dir / "coverage.sqlite.123").write_bytes(b"frag")
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    combine_cmd = [
+        "coverage",
+        "combine",
+        f"--data-file={coverage_dir / 'coverage.sqlite'}",
+    ]
+    formatted = coverage_module._format_command(combine_cmd)
+    executed = [formatted]
+
+    result, combined = coverage_module._combine_coverage_fragments(
+        env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+        subprocess_runner=CoverageRunner(),
+        root_path=tmp_path,
+        cache_dir=cache_dir,
+        operation_id=op_id,
+        executed_commands=executed,
+    )
+
+    assert combined is True
+    assert result is None
+    assert executed == [formatted]
+
+
 def test_run_coverage_test_for_data_returns_fallback_failure(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
@@ -1162,6 +1193,262 @@ def test_run_coverage_test_for_data_returns_fallback_failure(
     assert isinstance(result, ToolResult)
     assert result.success is False
     assert notes
+
+
+def test_run_coverage_test_for_data_does_not_duplicate_tool_invocation(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    runner = CoverageRunner()
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+
+    invocation = coverage_helpers.format_tool_invocation("coverage", [])
+    executed_commands = [invocation]
+
+    result, notes = coverage_module._run_coverage_test_for_data(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=False,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+        executed_commands=executed_commands,
+    )
+
+    assert result is None
+    assert notes
+    assert executed_commands == [invocation]
+
+
+def test_generate_coverage_via_pytest_verbose_includes_stderr(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+
+    class NoisyPytestRunner(CoverageRunner):
+        def run_pytest_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+        ) -> ToolResult:
+            if env and "COVERAGE_FILE" in env:
+                Path(env["COVERAGE_FILE"]).parent.mkdir(parents=True, exist_ok=True)
+                Path(env["COVERAGE_FILE"]).write_bytes(b"pytest-coverage")
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="PASSED\nreal line",
+                stderr="warning line",
+                operation_id=operation_id,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    executed_commands: list[str] = []
+
+    result, notes = coverage_module._generate_coverage_via_pytest(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=NoisyPytestRunner(),
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+        executed_commands=executed_commands,
+    )
+
+    assert result is None
+    assert any("warning line" in note for note in notes)
+
+
+def test_generate_coverage_via_pytest_does_not_duplicate_pytest_command(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    executed_commands: list[str] = []
+
+    pytest_cmd = coverage_module._format_command(
+        ["pytest", "tests/unit", "tests/property"]
+    )
+    executed_commands.append(pytest_cmd)
+
+    runner = CoverageRunner()
+    result, notes = coverage_module._generate_coverage_via_pytest(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=False,
+        subprocess_runner=runner,
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+        executed_commands=executed_commands,
+    )
+
+    assert result is None
+    assert notes
+    assert executed_commands[0] == pytest_cmd
+
+
+def test_ensure_coverage_data_notes_combined_fragments(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_file = _coverage_dir(tmp_path) / "coverage.sqlite"
+
+    _write_matching_manifest(tmp_path)
+
+    call_count = 0
+
+    def fake_combine(**kwargs: Any) -> tuple[ToolResult | None, bool]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return None, False
+        env = cast(dict[str, str], kwargs.get("env"))
+        Path(env["COVERAGE_FILE"]).write_bytes(b"combined")
+        return None, True
+
+    def fake_generate(**_: Any) -> tuple[ToolResult | None, list[str]]:  # type: ignore[override]
+        return None, ["generated"]
+
+    with override_attr(coverage_module, "_combine_coverage_fragments", fake_combine):
+        with override_attr(
+            coverage_module, "_run_coverage_test_for_data", fake_generate
+        ):
+            executed, notes, env = coverage_module._ensure_coverage_data(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                verbose=False,
+                subprocess_runner=CoverageRunner(),
+                cache_dir=cache_dir,
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="coverage-report"
+                ),
+                learning_mode=False,
+                verbosity_level=1,
+                force_regen=True,
+            )
+
+    assert coverage_file.exists()
+    assert any("Combined coverage fragments" in note for note in notes)
+    assert env["COVERAGE_FILE"]
+    assert executed == []
+
+
+def test_run_coverage_report_does_not_duplicate_executed_command(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    _prepare_cached_coverage(tmp_path)
+    runner = CoverageRunner()
+
+    coverage_file = _coverage_dir(tmp_path) / "coverage.sqlite"
+    env = {"COVERAGE_FILE": str(coverage_file)}
+
+    pre = coverage_module._format_command(["coverage", "report", "-m"])
+
+    def fake_ensure(**_: object) -> tuple[list[str], list[str], dict[str, str]]:  # type: ignore[override]
+        return [pre], [], env
+
+    with override_attr(coverage_module, "_ensure_coverage_data", fake_ensure):
+        result = coverage_module.run_coverage_report(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            verbose=False,
+            subprocess_runner=runner,
+            cache_dir=_cache_dir(tmp_path),
+        )
+
+    assert result.success is True
+    assert runner.uv_calls
+
+
+def test_run_coverage_threshold_skips_branch_threshold_from_config(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    runner = CoverageRunner()
+    cache_dir = _cache_dir(tmp_path)
+    coverage_path = _prepare_cached_coverage(tmp_path)
+
+    formatted_json_cmd = coverage_module._format_command(
+        ["coverage", "json", "-o", str(_coverage_dir(tmp_path) / "coverage.json")]
+    )
+
+    def fake_ensure(**_: object) -> tuple[list[str], list[str], dict[str, str]]:  # type: ignore[override]
+        return [formatted_json_cmd], [], {"COVERAGE_FILE": str(coverage_path)}
+
+    with override_attr(coverage_module, "_ensure_coverage_data", fake_ensure):
+        result = coverage_module.run_coverage_threshold(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            line_threshold=0.0,
+            branch_threshold=50.0,
+            verbose=False,
+            subprocess_runner=runner,
+            cache_dir=cache_dir,
+            force_regen=False,
+        )
+
+    assert result.success is True
+
+
+def test_run_coverage_learning_info_merge_handles_missing_parts(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    runner = CoverageRunner()
+    cache_dir = _cache_dir(tmp_path)
+    coverage_file = _coverage_dir(tmp_path) / "coverage.sqlite"
+    coverage_file.write_bytes(b"coverage")
+
+    report = ToolResult(
+        success=True,
+        exit_code=0,
+        stdout="report",
+        stderr="",
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage-report"
+        ),
+    )
+    report.learning_info = None  # type: ignore[assignment]
+
+    threshold = ToolResult(
+        success=True,
+        exit_code=0,
+        stdout="threshold",
+        stderr="",
+        operation_id=OperationId(
+            namespace="tools", category="test", command="coverage-threshold"
+        ),
+    )
+    threshold.learning_info = None  # type: ignore[assignment]
+
+    with override_attr(coverage_module, "run_coverage_report", lambda **_: report):
+        with override_attr(
+            coverage_module, "run_coverage_threshold", lambda **_: threshold
+        ):
+            result = coverage_module.run_coverage(
+                config=config,
+                root_path=tmp_path,
+                args=[],
+                verbose=False,
+                learning_mode=True,
+                verbosity_level=1,
+                force_regen=False,
+                subprocess_runner=runner,
+                cache_dir=cache_dir,
+            )
+
+    assert result.success is True
+    assert result.learning_info is not None
 
 
 def test_generate_coverage_via_pytest_records_stderr_and_returns_failure(
