@@ -47,6 +47,18 @@ def test_configure_optimizers_uses_default_factory_and_logs() -> None:
     assert any("non-decayed parameter tensors" in msg for msg in logger.messages)
 
 
+def test_adamwfactory_protocol_stub_can_be_called() -> None:
+    result = optimization._AdamWFactory.__call__(
+        object(),
+        [],
+        lr=0.01,
+        betas=(0.9, 0.95),
+        fused=None,
+    )
+
+    assert result is None
+
+
 def test_configure_optimizers_accepts_custom_factory() -> None:
     """Test configure optimizers accepts custom factory."""
     model = _make_tiny_model()
