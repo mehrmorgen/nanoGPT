@@ -977,6 +977,39 @@ def test_run_coverage_test_cleans_up_fragments(
     )
 
 
+def test_run_coverage_test_skips_unlink_for_main_file_name_branch(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_dir = cache_dir / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
+    (coverage_dir / "coverage.sqlite.1").write_text("frag", encoding="utf-8")
+
+    original_glob = coverage_module.Path.glob
+
+    def fake_glob(self: Path, pattern: str):  # type: ignore[no-untyped-def]
+        if pattern == "coverage.sqlite.*":
+            return iter(
+                [
+                    self / "coverage.sqlite",
+                    self / "coverage.sqlite.1",
+                ]
+            )
+        return original_glob(self, pattern)
+
+    with override_attr(coverage_module.Path, "glob", fake_glob):
+        result = coverage_module.run_coverage_test(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            subprocess_runner=CoverageRunner(),
+            cache_dir=cache_dir,
+        )
+
+    assert result.success is True
+
+
 def test_clean_pytest_output_drops_status_noise() -> None:
     raw = "\n".join(
         [
@@ -1221,6 +1254,43 @@ def test_run_coverage_test_for_data_does_not_duplicate_tool_invocation(
     assert executed_commands == [invocation]
 
 
+def test_run_coverage_test_for_data_verbose_without_extra_output(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_file = _coverage_dir(tmp_path) / "coverage.sqlite"
+    coverage_file.write_bytes(b"coverage")
+
+    def fake_run_coverage_test(**_: object) -> ToolResult:  # type: ignore[override]
+        return ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage-test"
+            ),
+        )
+
+    with override_attr(coverage_module, "run_coverage_test", fake_run_coverage_test):
+        result, notes = coverage_module._run_coverage_test_for_data(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            verbose=True,
+            subprocess_runner=CoverageRunner(),
+            cache_dir=cache_dir,
+            operation_id=OperationId(
+                namespace="tools", category="test", command="coverage"
+            ),
+            executed_commands=[],
+        )
+
+    assert result is None
+    assert notes == ["Automatically ran coverage to generate coverage data."]
+
+
 def test_generate_coverage_via_pytest_verbose_includes_stderr(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
@@ -1263,6 +1333,51 @@ def test_generate_coverage_via_pytest_verbose_includes_stderr(
 
     assert result is None
     assert any("warning line" in note for note in notes)
+
+
+def test_generate_coverage_via_pytest_verbose_without_extra_output(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+
+    class QuietPytestRunner(CoverageRunner):
+        def run_pytest_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+        ) -> ToolResult:
+            if env and "COVERAGE_FILE" in env:
+                coverage_path = Path(env["COVERAGE_FILE"])
+                coverage_path.parent.mkdir(parents=True, exist_ok=True)
+                coverage_path.write_bytes(b"pytest-coverage")
+            return ToolResult(
+                success=True,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                operation_id=operation_id,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    result, notes = coverage_module._generate_coverage_via_pytest(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=QuietPytestRunner(),
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+        executed_commands=[],
+    )
+
+    assert result is None
+    assert notes == [
+        "Coverage pipeline generated no data; reran pytest to create coverage artifacts."
+    ]
 
 
 def test_generate_coverage_via_pytest_does_not_duplicate_pytest_command(
