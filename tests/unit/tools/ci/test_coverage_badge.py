@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List
+from typing import Iterator, List
 
 import pytest
 
+import ml_playground.tools.ci.ci as ci_module
 from ml_playground.tools.ci.ci import CITools
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
@@ -14,6 +16,16 @@ from tests.unit.tools.fakes import (
     create_failure_result,
     create_success_result,
 )
+
+
+@contextmanager
+def _override_attr(obj: object, name: str, value: object) -> Iterator[None]:
+    original = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, original)
 
 
 @pytest.fixture()
@@ -145,3 +157,78 @@ def test_coverage_badge_respects_output_dir(tmp_path: Path) -> None:
     expected_badge = (tmp_path / config.ci.badge_output_dir / "coverage.svg").resolve()
     assert expected_badge.exists()
     assert "88.2% coverage" in (result.stdout or "")
+
+
+def test_coverage_badge_color_threshold_yellow(tmp_path: Path) -> None:
+    tools = CITools(ToolsConfig(), tmp_path, subprocess_runner=FakeSubprocessRunner())
+    tools.cache_dir = tmp_path / ".cache"
+
+    coverage_dir = tools.cache_dir / "coverage"
+    coverage_dir.mkdir(parents=True)
+    (coverage_dir / "coverage.json").write_text(
+        '{"totals": {"percent_covered": 65.0}}', encoding="utf-8"
+    )
+
+    result = tools.coverage_badge([])
+
+    assert result.success is True
+    badge = (tmp_path / tools.config.ci.badge_output_dir / "coverage.svg").resolve()
+    assert "yellow" in badge.read_text(encoding="utf-8")
+
+
+def test_coverage_badge_color_threshold_red(tmp_path: Path) -> None:
+    tools = CITools(ToolsConfig(), tmp_path, subprocess_runner=FakeSubprocessRunner())
+    tools.cache_dir = tmp_path / ".cache"
+
+    coverage_dir = tools.cache_dir / "coverage"
+    coverage_dir.mkdir(parents=True)
+    (coverage_dir / "coverage.json").write_text(
+        '{"totals": {"percent_covered": 55.0}}', encoding="utf-8"
+    )
+
+    result = tools.coverage_badge([])
+
+    assert result.success is True
+    badge = (tmp_path / tools.config.ci.badge_output_dir / "coverage.svg").resolve()
+    assert "red" in badge.read_text(encoding="utf-8")
+
+
+def test_quality_fast_aggregates_stderr_warnings(
+    ci_tools: tuple[CITools, FakeSubprocessRunner],
+) -> None:
+    tools, runner = ci_tools
+    op_id = OperationId(namespace="tools", category="ci", command="quality-fast")
+    runner.set_results(
+        [
+            create_success_result(op_id, stdout="", stderr="warn"),
+            create_success_result(op_id, stdout="formatted", stderr=""),
+            create_success_result(op_id, stdout="", stderr=""),
+        ]
+    )
+
+    result = tools.quality_fast([])
+
+    assert result.success is True
+    assert "ruff warnings:\nwarn" in (result.stderr or "")
+    assert "ruff-format:\nformatted" in (result.stdout or "")
+
+
+def test_quality_ci_local_without_cache_binds(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+    tools = CITools(ToolsConfig(), tmp_path, subprocess_runner=runner)
+
+    class _Completed:
+        def __init__(self) -> None:
+            self.returncode = 0
+            self.stdout = "ok"
+            self.stderr = ""
+
+    def fake_run(*args: object, **kwargs: object) -> _Completed:  # type: ignore[no-untyped-def]
+        cmd = kwargs.get("args") if "args" in kwargs else (args[0] if args else [])
+        assert "--bind" not in list(cmd)
+        return _Completed()
+
+    with _override_attr(ci_module.subprocess, "run", fake_run):
+        result = tools.quality_ci_local([], bind_caches=False)
+
+    assert result.success is True
