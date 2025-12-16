@@ -229,6 +229,7 @@ def _make_runtime_hooks(
     sampler_factory: Callable[[Any, Any], Any] | None = None,
     device_setup: Callable[[str, str, int], None] | None = None,
     log_status: Callable[[str, Any, Path, LoggerLike], None] | None = None,
+    resolve_seed: Callable[[str, Any, int], int | None] | None = None,
 ) -> runtime_runners.RuntimeRunHooks:
     return runtime_runners.RuntimeRunHooks(
         pipeline_factory=pipeline_factory
@@ -239,6 +240,7 @@ def _make_runtime_hooks(
         or (lambda cfg, shared: SimpleNamespace(run=lambda: None)),
         device_setup=device_setup or (lambda *_: None),
         log_status=log_status or (lambda *_: None),
+        resolve_seed=resolve_seed,
     )
 
 
@@ -394,6 +396,36 @@ def test_run_train_impl_missing_runtime(tmp_path: Path) -> None:
     assert cfg.logger.errors
 
 
+def test_run_train_impl_uses_original_seed_when_resolver_returns_non_int(
+    tmp_path: Path,
+) -> None:
+    shared = _make_shared(tmp_path)
+    logger = DummyLogger()
+    runtime = _make_runtime(device="cpu", dtype="float32", seed=123)
+    cfg = SimpleNamespace(logger=logger, runtime=runtime)
+
+    captured: list[int] = []
+
+    def device_setup(_device: str, _dtype: str, seed: int) -> None:
+        captured.append(seed)
+
+    def resolver(_phase: str, _shared: Any, _seed: int) -> int | None:
+        return None
+
+    hooks = _make_runtime_hooks(
+        trainer_factory=lambda *_: SimpleNamespace(run=lambda: None),
+        device_setup=device_setup,
+        resolve_seed=resolver,
+    )
+
+    result = runtime_runners.run_train_impl(
+        "demo", cfg, shared.config_path, shared, None, hooks=hooks
+    )
+
+    assert result.success
+    assert captured == [123]
+
+
 def test_run_sample_impl_success(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path)
     logger = DummyLogger()
@@ -464,6 +496,36 @@ def test_run_sample_impl_missing_runtime(tmp_path: Path) -> None:
     assert result.success is False
     assert "missing" in result.stderr
     assert cfg.logger.errors
+
+
+def test_run_sample_impl_uses_original_seed_when_resolver_returns_non_int(
+    tmp_path: Path,
+) -> None:
+    shared = _make_shared(tmp_path)
+    logger = DummyLogger()
+    runtime = _make_runtime(device="cpu", dtype="float32", seed=456)
+    cfg = SimpleNamespace(logger=logger, runtime=runtime)
+
+    captured: list[int] = []
+
+    def device_setup(_device: str, _dtype: str, seed: int) -> None:
+        captured.append(seed)
+
+    def resolver(_phase: str, _shared: Any, _seed: int) -> int | None:
+        return None
+
+    hooks = _make_runtime_hooks(
+        sampler_factory=lambda *_: SimpleNamespace(run=lambda: None),
+        device_setup=device_setup,
+        resolve_seed=resolver,
+    )
+
+    result = runtime_runners.run_sample_impl(
+        "demo", cfg, shared.config_path, shared, None, hooks=hooks
+    )
+
+    assert result.success
+    assert captured == [456]
 
 
 # ---------------------------------------------------------------------------
