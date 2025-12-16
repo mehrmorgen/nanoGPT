@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import textwrap
 from pathlib import Path
+from typing import Generator
 
 import pytest
 
@@ -15,6 +17,18 @@ from ml_playground.tools.core.config import (
     load_tools_config,
     get_tool_config,
 )
+
+
+@contextmanager
+def _override_attr(
+    obj: object, name: str, value: object
+) -> Generator[None, None, None]:
+    original = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, original)
 
 
 def test_tools_config_defaults() -> None:
@@ -65,6 +79,25 @@ def test_tools_config_default_verbosity_validation() -> None:
     assert "Verbosity level must be 0, 1, or 2" in str(excinfo.value)
 
 
+def test_find_project_root_finds_pyproject(tmp_path: Path) -> None:
+    project_root = tmp_path / "repo"
+    nested = project_root / "a" / "b"
+    nested.mkdir(parents=True)
+
+    (project_root / "pyproject.toml").write_text("[tool.ml_playground.tools]\n")
+
+    with _override_attr(config_module.Path, "cwd", staticmethod(lambda: nested)):
+        assert config_module._find_project_root() == project_root
+
+
+def test_find_project_root_fallbacks_to_cwd_when_missing(tmp_path: Path) -> None:
+    nested = tmp_path / "no_pyproject" / "a" / "b"
+    nested.mkdir(parents=True)
+
+    with _override_attr(config_module.Path, "cwd", staticmethod(lambda: nested)):
+        assert config_module._find_project_root() == nested
+
+
 def test_load_tools_config_success(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
@@ -100,6 +133,33 @@ def test_load_tools_config_invalid_toml(tmp_path: Path) -> None:
     with pytest.raises(ToolConfigurationError) as exc:
         load_tools_config(project_root=tmp_path)
     assert "Invalid TOML" in str(exc.value)
+
+
+def test_load_tools_config_wraps_oserror(tmp_path: Path) -> None:
+    def boom(_project_root: Path) -> dict[str, object]:
+        raise OSError("boom")
+
+    with _override_attr(config_module, "_load_pyproject_toml", boom):
+        with pytest.raises(ToolConfigurationError) as exc:
+            load_tools_config(project_root=tmp_path)
+
+    assert "Failed to load pyproject.toml" in str(exc.value)
+
+
+def test_load_tools_config_wraps_validation_error(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        textwrap.dedent(
+            """
+            [tool.ml_playground.tools]
+            default_verbosity = 5
+            """
+        ).strip()
+    )
+
+    with pytest.raises(ToolConfigurationError) as exc:
+        load_tools_config(project_root=tmp_path)
+    assert "Invalid tools configuration" in str(exc.value)
 
 
 def test_get_tool_config_returns_specific_category(tmp_path: Path) -> None:
