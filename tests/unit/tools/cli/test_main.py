@@ -1386,6 +1386,16 @@ class TestLearnCommands:
         assert result.exit_code == 0
         assert "Command: quality.lint" in result.stdout
 
+    def test_learn_explain_unknown_command_in_category(self) -> None:
+        result = self.runner.invoke(
+            tools_cli.app,
+            ["learn", "explain", "quality.not-a-command"],
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown command" in (result.stderr or "")
+        assert "Available commands" in result.stdout
+
     def test_learn_explain_invalid_format(self) -> None:
         result = self.runner.invoke(tools_cli.app, ["learn", "explain", "invalid"])
         assert result.exit_code == 1
@@ -1408,6 +1418,20 @@ class TestLearnCommands:
         assert result.exit_code == 1
         assert "Error:" in (result.stderr or result.stdout)
 
+    def test_learn_explain_handles_internal_error(self) -> None:
+        with override_attr(
+            tools_cli,
+            "get_command_info",
+            lambda: (_ for _ in ()).throw(KeyError("boom")),
+        ):
+            result = self.runner.invoke(
+                tools_cli.app,
+                ["learn", "explain", "quality.lint"],
+            )
+
+        assert result.exit_code == 1
+        assert "Error:" in (result.stderr or result.stdout)
+
     def test_learn_best_practices_category(self) -> None:
         result = self.runner.invoke(
             tools_cli.app,
@@ -1415,6 +1439,17 @@ class TestLearnCommands:
         )
         assert result.exit_code == 0
         assert "CI/CD Best Practices" in result.stdout
+
+    def test_learn_best_practices_handles_internal_error(self) -> None:
+        with override_attr(
+            tools_cli,
+            "get_command_info",
+            lambda: (_ for _ in ()).throw(KeyError("boom")),
+        ):
+            result = self.runner.invoke(tools_cli.app, ["learn", "best-practices"])
+
+        assert result.exit_code == 1
+        assert "Error:" in (result.stderr or result.stdout)
 
 
 class TestMainEntryErrorHandling:
