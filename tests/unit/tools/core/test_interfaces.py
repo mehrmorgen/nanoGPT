@@ -51,6 +51,10 @@ class TestOperationId:
         info = SimpleNamespace(data={"namespace": "ml"})
         assert OperationId.validate_category("prepare", info) == "prepare"
 
+    def test_operation_id_validate_category_allows_missing_namespace(self) -> None:
+        info = SimpleNamespace(data=None)
+        assert OperationId.validate_category("ci", info) == "ci"
+
 
 class TestToolResult:
     """Tests covering `ToolResult` factory behavior."""
