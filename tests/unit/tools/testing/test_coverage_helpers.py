@@ -41,6 +41,20 @@ def test_clean_pytest_output_filters_progress_lines() -> None:
     assert "summary line" in cleaned
 
 
+def test_clean_pytest_output_filters_blank_and_xdist_lines() -> None:
+    raw = """
+
+    bringing up nodes...
+    test session starts
+    .
+    """.strip("\n")
+
+    cleaned = helpers.clean_pytest_output(raw)
+
+    assert "bringing up nodes" not in cleaned
+    assert "test session starts" in cleaned
+
+
 def test_collect_undercovered_files_uses_display_values() -> None:
     coverage_data = {
         "files": {
@@ -64,6 +78,49 @@ def test_collect_undercovered_files_uses_display_values() -> None:
 
     entries = helpers.collect_undercovered_files(coverage_data)
     assert entries == [("pkg/module.py", 87.5, 75.0)]
+
+
+def test_collect_undercovered_files_skips_invalid_or_missing_percent() -> None:
+    coverage_data = {
+        "files": {
+            "pkg/bad_display.py": {
+                "summary": {
+                    "percent_covered": None,
+                    "percent_covered_display": "not-a-float",
+                }
+            },
+            "pkg/missing_percent.py": {"summary": {}},
+        }
+    }
+
+    assert helpers.collect_undercovered_files(coverage_data) == []
+
+
+def test_collect_undercovered_files_branch_percent_handles_errors() -> None:
+    coverage_data = {
+        "files": {
+            "pkg/type_error.py": {
+                "summary": {
+                    "percent_covered": 50.0,
+                    "num_branches": 2,
+                    "covered_branches": None,
+                }
+            },
+            "pkg/zero_division.py": {
+                "summary": {
+                    "percent_covered": 50.0,
+                    "num_branches": 1,
+                    "covered_branches": 0,
+                }
+            },
+        }
+    }
+
+    entries = helpers.collect_undercovered_files(coverage_data)
+    assert entries == [
+        ("pkg/type_error.py", 50.0, None),
+        ("pkg/zero_division.py", 50.0, 0.0),
+    ]
 
 
 def test_format_undercovered_tree_outputs_hierarchy() -> None:
