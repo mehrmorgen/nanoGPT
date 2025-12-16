@@ -153,6 +153,49 @@ def test_load_config_with_error_handling_updates_state_when_loading(
     assert state.verbosity == cfg.default_verbosity
 
 
+def test_load_config_with_error_handling_does_not_override_explicit_learning_mode(
+    tmp_path: Path, _reset_cli_state: None
+) -> None:
+    cfg = _FakeConfig(
+        learning_mode_default=True,
+        default_verbosity=2,
+    )
+
+    state.learning_mode = False
+    state.mark_learning_mode_explicit(True)
+
+    class TrackingDeps:
+        def load_config(self, root: Path | None) -> ToolsConfig:
+            assert root == tmp_path
+            return cfg  # type: ignore[return-value]
+
+        def quality_factory(self, config: ToolsConfig, project_root: Path) -> Any:
+            return None
+
+        def testing_factory(self, config: ToolsConfig, project_root: Path) -> Any:
+            return None
+
+        def environment_factory(self, config: ToolsConfig, project_root: Path) -> Any:
+            return None
+
+        def ci_factory(self, config: ToolsConfig, project_root: Path) -> Any:
+            return None
+
+        def dev_factory(self, config: ToolsConfig) -> Any:
+            return None
+
+        def result_handler(self, result: Any) -> None:
+            pass
+
+    load_config_with_error_handling(project_root=tmp_path, deps=TrackingDeps())  # type: ignore[arg-type]
+
+    assert state.config is cfg  # pyright: ignore[reportAttributeAccessIssue]
+    assert state.project_root == tmp_path
+    assert state.learning_mode is False
+    assert state.learning_mode_set is True
+    assert state.verbosity == cfg.default_verbosity
+
+
 def test_load_config_with_error_handling_reuses_cached_config(
     _reset_cli_state: None,
 ) -> None:
