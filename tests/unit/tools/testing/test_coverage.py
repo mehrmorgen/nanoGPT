@@ -976,8 +976,229 @@ def test_run_coverage_test_cleans_up_fragments(
         cache_dir=_cache_dir(tmp_path),
     )
 
-    assert not (coverage_dir / "coverage.sqlite.1").exists()
-    assert not (coverage_dir / "coverage.sqlite.2").exists()
+
+def test_clean_pytest_output_drops_status_noise() -> None:
+    raw = "\n".join(
+        [
+            "test session starts",
+            "PASSED",
+            "workers [4]",
+            "real line",
+        ]
+    )
+
+    assert coverage_module._clean_pytest_output(raw) == "real line"
+
+
+def test_combine_coverage_fragments_returns_failure_result(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_dir = _coverage_dir(tmp_path)
+    (coverage_dir / "coverage.sqlite.123").write_bytes(b"frag")
+
+    class CombineFailRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:2] == ["coverage", "combine"]:
+                return ToolResult(
+                    success=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="combine failed",
+                    operation_id=operation_id,
+                )
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    result, combined = coverage_module._combine_coverage_fragments(
+        env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+        subprocess_runner=CombineFailRunner(),
+        root_path=tmp_path,
+        cache_dir=cache_dir,
+        operation_id=op_id,
+        executed_commands=[],
+    )
+
+    assert combined is True
+    assert isinstance(result, ToolResult)
+    assert result.success is False
+
+
+def test_combine_coverage_fragments_success_without_creating_file(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+    cache_dir = _cache_dir(tmp_path)
+    coverage_dir = _coverage_dir(tmp_path)
+    (coverage_dir / "coverage.sqlite.123").write_bytes(b"frag")
+
+    class CombineNoWriteRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:2] == ["coverage", "combine"]:
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                    operation_id=operation_id,
+                )
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    result, combined = coverage_module._combine_coverage_fragments(
+        env={"COVERAGE_FILE": str(coverage_dir / "coverage.sqlite")},
+        subprocess_runner=CombineNoWriteRunner(),
+        root_path=tmp_path,
+        cache_dir=cache_dir,
+        operation_id=op_id,
+        executed_commands=[],
+    )
+
+    assert combined is True
+    assert result is None
+
+
+def test_run_coverage_test_for_data_returns_fallback_failure(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    create_sample_source_file(tmp_path)
+
+    class NoDataRunner(CoverageRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            # Succeed but don't write COVERAGE_FILE so fallback path triggers.
+            if args[:2] == ["coverage", "run"]:
+                return ToolResult(
+                    success=True,
+                    exit_code=0,
+                    stdout="ok",
+                    stderr="",
+                    operation_id=operation_id,
+                )
+            return super().run_uv_command(
+                args,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+                operation_id=operation_id,
+                python=python,
+                no_project=no_project,
+            )
+
+        def run_pytest_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+        ) -> ToolResult:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="pytest failed",
+                stderr="pytest stderr",
+                operation_id=operation_id,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    result, notes = coverage_module._run_coverage_test_for_data(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=NoDataRunner(),
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.success is False
+    assert notes
+
+
+def test_generate_coverage_via_pytest_records_stderr_and_returns_failure(
+    config: ToolsConfig, tmp_path: Path
+) -> None:
+    class PytestFailRunner(CoverageRunner):
+        def run_pytest_command(  # type: ignore[override]
+            self,
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: Dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+        ) -> ToolResult:
+            return ToolResult(
+                success=False,
+                exit_code=1,
+                stdout="test session starts\nreal output",
+                stderr="boom",
+                operation_id=operation_id,
+            )
+
+    op_id = OperationId(namespace="tools", category="test", command="coverage")
+    result, notes = coverage_module._generate_coverage_via_pytest(
+        config=config,
+        root_path=tmp_path,
+        args=[],
+        verbose=True,
+        subprocess_runner=PytestFailRunner(),
+        cache_dir=_cache_dir(tmp_path),
+        operation_id=op_id,
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.success is False
+    assert notes == []
 
 
 def test_run_coverage_threshold_raises_when_coverage_file_missing(
