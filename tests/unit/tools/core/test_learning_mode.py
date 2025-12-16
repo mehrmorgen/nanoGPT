@@ -169,6 +169,18 @@ class TestLearningModeEngine:
         # Should still provide context even for unknown commands
         assert "Context: Testing unknown command" in result.explanations
 
+    def test_explain_command_defaults_executed_commands(self):
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+
+        result = engine.explain_command(
+            command="unit",
+            context="Running unit tests",
+            category="test",
+            executed_commands=None,
+        )
+
+        assert result.commands_executed == []
+
     def test_format_output_success_no_learning(self):
         """Test output formatting for successful result without learning mode."""
         engine = LearningModeEngine()
