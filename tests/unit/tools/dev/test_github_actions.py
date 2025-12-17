@@ -222,3 +222,138 @@ def test_infer_repo_all_fail_raises_tool_execution_error(tmp_path: Path) -> None
             remote="origin",
             repo=None,
         )
+
+
+def test_run_github_actions_bails_on_run_list_failure(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha-infer-repo"),
+            stdout="https://github.com/owner/repo.git\n",
+        )
+    )
+    run_list_error = _fail(
+        op=OperationId(namespace="tools", category="dev", command="gha"),
+        stderr="gh error",
+    )
+    runner.add_result(run_list_error)
+
+    result = run_github_actions(
+        root_path=tmp_path,
+        subprocess_runner=runner,
+        limit=3,
+        run_id=None,
+        latest=False,
+        log_failed=False,
+        remote="origin",
+        repo=None,
+    )
+
+    assert result is run_list_error
+    assert runner.calls[1]["command"][:3] == ["gh", "run", "list"]
+
+
+def test_run_github_actions_latest_query_failure_passthrough(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha-infer-repo"),
+            stdout="https://github.com/owner/repo.git\n",
+        )
+    )
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha"),
+            stdout="runs\n",
+        )
+    )
+    latest_error = _fail(
+        op=OperationId(namespace="tools", category="dev", command="gha"),
+        stderr="latest failed",
+    )
+    runner.add_result(latest_error)
+
+    result = run_github_actions(
+        root_path=tmp_path,
+        subprocess_runner=runner,
+        limit=5,
+        run_id=None,
+        latest=True,
+        log_failed=False,
+        remote="origin",
+        repo=None,
+    )
+
+    assert result is latest_error
+    assert runner.calls[2]["command"][:3] == ["gh", "run", "list"]
+    assert "--json" in runner.calls[2]["command"]
+
+
+def test_run_github_actions_value_error_returns_structured_error(
+    tmp_path: Path,
+) -> None:
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha-infer-repo"),
+            stdout="notgithub\n",
+        )
+    )
+
+    result = run_github_actions(
+        root_path=tmp_path,
+        subprocess_runner=runner,
+        limit=1,
+        run_id=None,
+        latest=False,
+        log_failed=False,
+        remote="origin",
+        repo=None,
+    )
+
+    assert result.success is False
+    assert result.exit_code == 1
+    assert "Failed to query GitHub Actions via gh" in (result.stderr or "")
+
+
+def test_run_github_actions_with_explicit_run_id_skips_latest(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha-infer-repo"),
+            stdout="https://github.com/owner/repo.git\n",
+        )
+    )
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha"),
+            stdout="runs\n",
+        )
+    )
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha"),
+            stdout="view\n",
+        )
+    )
+
+    result = run_github_actions(
+        root_path=tmp_path,
+        subprocess_runner=runner,
+        limit=2,
+        run_id=42,
+        latest=True,
+        log_failed=False,
+        remote="origin",
+        repo=None,
+    )
+
+    assert result.success is True
+    assert "view" in (result.stdout or "")
+    assert len(runner.calls) == 3
+    assert runner.calls[1]["command"][1:3] == ["run", "list"]
+    assert runner.calls[2]["command"][:4] == ["gh", "run", "view", "42"]

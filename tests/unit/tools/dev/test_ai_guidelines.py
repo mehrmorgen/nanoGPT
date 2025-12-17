@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
+from ml_playground.tools.dev import ai_guidelines
 from ml_playground.tools.dev.ai_guidelines import (
     TOOL_MAP,
     SetupResult,
@@ -146,3 +149,80 @@ def test_run_setup_ai_guidelines_dry_run_reports_git_and_ai_ignore(
     assert any("[dry-run]" in line for line in result.logs)
     assert any("git    '.github/' ignored" in line for line in result.logs)
     assert any("WARNING: ai     '.github/' is excluded" in line for line in result.logs)
+
+
+def test_run_setup_ai_guidelines_handles_exists_oserror(tmp_path: Path) -> None:
+    """Path.exists raising OSError should be tolerated during setup."""
+
+    base_dir = tmp_path / ".dev-guidelines"
+    readme = base_dir / "README.md"
+    original_exists = ai_guidelines.Path.exists
+
+    def flaky_exists(self: Path, *, follow_symlinks: bool = True) -> bool:
+        if self in {base_dir, readme}:
+            raise OSError("fs failure")
+        return original_exists(self, follow_symlinks=follow_symlinks)
+
+    ai_guidelines.Path.exists = flaky_exists  # type: ignore[assignment]
+    try:
+        result = run_setup_ai_guidelines("codex", project_dir=tmp_path, dry_run=True)
+    finally:
+        ai_guidelines.Path.exists = original_exists  # type: ignore[assignment]
+
+    assert result.success is True
+    assert any("[dry-run] mkdir -p" in line for line in result.logs)
+    assert any("[dry-run] touch" in line for line in result.logs)
+
+
+def test_run_setup_ai_guidelines_windows_junction_failure(tmp_path: Path) -> None:
+    """Windows junction creation failures should be surfaced as errors."""
+
+    base_dir = tmp_path / ".dev-guidelines"
+    readme_dir = base_dir / "README.md"
+    readme_dir.mkdir(parents=True)
+    github_dir = tmp_path / ".github"
+    github_dir.mkdir()
+
+    original_os = ai_guidelines.os
+    fake_os = SimpleNamespace(
+        name="nt",
+        path=os.path,
+        sep=os.sep,
+        link=os.link,
+    )
+
+    original_subprocess_run = ai_guidelines.subprocess.run
+
+    def fake_run(cmd: list[str], *, capture_output: bool, text: bool):  # type: ignore[override]
+        return SimpleNamespace(returncode=1, stderr="junction failed")
+
+    ai_guidelines.os = fake_os  # type: ignore[assignment]
+    ai_guidelines.subprocess.run = fake_run  # type: ignore[assignment]
+    try:
+        result = run_setup_ai_guidelines("copilot", project_dir=tmp_path, dry_run=False)
+    finally:
+        ai_guidelines.os = original_os  # type: ignore[assignment]
+        ai_guidelines.subprocess.run = original_subprocess_run  # type: ignore[assignment]
+
+    assert result.success is False
+    assert result.error is not None
+    assert "failed to create junction" in result.error
+
+
+def test_run_setup_ai_guidelines_non_empty_directory_rejected(tmp_path: Path) -> None:
+    """Non-empty directories at primary path should raise a structured error."""
+
+    base_dir = tmp_path / ".dev-guidelines"
+    readme = base_dir / "README.md"
+    base_dir.mkdir()
+    readme.touch()
+
+    primary_path = tmp_path / "AGENTS.md"
+    primary_path.mkdir()
+    (primary_path / "stale.txt").write_text("data", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("codex", project_dir=tmp_path, dry_run=False)
+
+    assert result.success is False
+    assert result.error is not None
+    assert "Cannot replace non-empty directory" in result.error

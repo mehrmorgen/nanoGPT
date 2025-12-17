@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+import psutil
 from contextlib import contextmanager
 from types import SimpleNamespace, ModuleType
 from typing import Callable, Iterator
@@ -413,3 +414,41 @@ def test_pids_by_port_handles_individual_connection_exceptions() -> None:
         _restore_psutil(original)
 
     assert result == [42]  # Should only include the good connections with port 8000
+
+
+def test_pids_by_port_process_iter_fallback_success() -> None:
+    """Process iteration fallback should collect PIDs when net_connections fails."""
+    fake_psutil = ModuleType("psutil")
+    fake_psutil.Error = psutil.Error  # type: ignore[attr-defined]
+
+    def net_connections(kind: str):  # type: ignore[override]
+        raise fake_psutil.Error("net connections blocked")  # type: ignore[attr-defined]
+
+    class FakeProc:
+        def __init__(self, pid: int, ports: list[int]):
+            self.pid = pid
+            self._ports = ports
+
+        def net_connections(self, kind: str):  # type: ignore[override]
+            assert kind == "inet"
+            return [
+                SimpleNamespace(laddr=SimpleNamespace(port=p), pid=self.pid)
+                for p in self._ports
+            ]
+
+    procs = [FakeProc(10, [7000]), FakeProc(11, [9000, 8000])]
+
+    def process_iter(attrs=None):  # type: ignore[override]
+        assert attrs == ["pid"]
+        return procs
+
+    fake_psutil.net_connections = net_connections  # type: ignore[attr-defined]
+    fake_psutil.process_iter = process_iter  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._pids_by_port(8000)
+    finally:
+        _restore_psutil(original)
+
+    assert result == [11]

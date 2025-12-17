@@ -1,4 +1,5 @@
 from __future__ import annotations
+# pyright: reportPrivateUsage=false
 
 import json
 import sys
@@ -118,6 +119,79 @@ def test_run_quality_batch_behavior_via_public_api(tmp_path: Path) -> None:
     finally:
         batch_review_module.QualityTools = original_quality
         batch_review_module.TestingTools = original_testing
+
+
+def test_run_batch_review_handles_deadcode_exception(tmp_path: Path) -> None:
+    """Deadcode errors should be captured with error status."""
+
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def lint(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="lint",
+                success=True,
+                stdout="lint ok",
+            )
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="quality",
+                command="typecheck",
+                success=True,
+                stdout="typecheck ok",
+            )
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            raise ValueError("deadcode failed")
+
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:  # noqa: D401, ANN401
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="unit",
+                success=True,
+                stdout="1 passed",
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="1 passed",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 100% 100%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+    batch_review_module.QualityTools = StubQualityTools
+    batch_review_module.TestingTools = StubTestingTools
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+    finally:
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
+
+    payload = json.loads(result.stdout)
+    deadcode = payload["quality_checks"]["deadcode"]
+    assert deadcode["status"] == "error"
+    assert "deadcode failed" in deadcode["error"]
+    assert payload["overall_status"]["success"] is False
 
 
 def test_quality_error_handling_via_public_api(tmp_path: Path) -> None:
