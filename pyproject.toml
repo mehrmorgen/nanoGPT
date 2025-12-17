@@ -78,6 +78,10 @@ UV_CACHE_DIR = ".cache/uv"
 HYPOTHESIS_DATABASE_DIRECTORY = ".cache/hypothesis"
 HYPOTHESIS_STORAGE_DIRECTORY = ".cache/hypothesis"
 
+[tool.ml_playground.coverage.thresholds]
+line_threshold = 96.0
+branch_threshold = 91.0
+
 
 [tool.hatch.build.targets.wheel]
 packages = ["ml_playground"]
@@ -257,13 +261,8 @@ omit = [
 ]
 skip_covered = false
 # Align with CI gate threshold for unit+property suites  
-fail_under = 86.0
+fail_under = 96.0
 precision = 2
-
-# Custom coverage thresholds for CI
-[tool.ml_playground.coverage.thresholds]
-line_threshold = 92.5
-branch_threshold = 84.0
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

@@ -112,6 +112,35 @@ def test_run_github_actions_repo_from_git_remote_latest_view_success(
     ]
 
 
+def test_run_github_actions_propagates_view_failure(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        _ok(
+            op=OperationId(namespace="tools", category="dev", command="gha"),
+            stdout="RUNS\n",
+        )
+    )
+    view_fail = _fail(
+        op=OperationId(namespace="tools", category="dev", command="gha"),
+        stderr="view failed",
+    )
+    runner.add_result(view_fail)
+
+    result = run_github_actions(
+        root_path=tmp_path,
+        subprocess_runner=runner,
+        limit=10,
+        run_id=123,
+        latest=False,
+        log_failed=False,
+        remote="origin",
+        repo="owner/repo",
+    )
+
+    assert result is view_fail
+
+
 def test_run_github_actions_latest_id_parse_failure_is_stable(tmp_path: Path) -> None:
     runner = FakeSubprocessRunner()
 

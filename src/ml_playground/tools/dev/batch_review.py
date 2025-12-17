@@ -97,11 +97,7 @@ def _run_quality_batch(
         }
         if not lint_result.success:
             overall_success = False
-            issues_count = results["lint"]["issues"]
-            if isinstance(issues_count, list):
-                total_issues += len(issues_count)
-            else:
-                total_issues += int(issues_count)
+            total_issues += int(results["lint"]["issues"])
     except (
         ToolExecutionError,
         ToolTimeoutError,
@@ -125,11 +121,7 @@ def _run_quality_batch(
         }
         if not typecheck_result.success:
             overall_success = False
-            errors_count = results["typecheck"]["errors"]
-            if isinstance(errors_count, list):
-                total_issues += len(errors_count)
-            else:
-                total_issues += int(errors_count)
+            total_issues += int(results["typecheck"]["errors"])
     except (
         ToolExecutionError,
         ToolTimeoutError,
@@ -153,11 +145,7 @@ def _run_quality_batch(
         }
         if not deadcode_result.success:
             overall_success = False
-            unused_count = results["deadcode"]["unused_items"]
-            if isinstance(unused_count, list):
-                total_issues += len(unused_count)
-            else:
-                total_issues += int(unused_count)
+            total_issues += int(results["deadcode"]["unused_items"])
     except (
         ToolExecutionError,
         ToolTimeoutError,

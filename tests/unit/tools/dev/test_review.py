@@ -19,6 +19,220 @@ from ml_playground.tools.dev.review import (
 from tests.unit.tools.fakes import FakeSubprocessRunner
 
 
+def test_run_review_bulk_reply_reraises_tool_execution_error(tmp_path: Path) -> None:
+    class ExplodingReview:
+        def infer_repo(self, remote: str) -> tuple[str, str]:
+            raise ToolExecutionError("boom", reason="fail", rationale="test")
+
+    def factory() -> object:
+        return ExplodingReview()
+
+    with pytest.raises(ToolExecutionError, match="boom"):
+        run_review_bulk_reply(
+            pr_number=1,
+            replies_file=tmp_path / "replies.json",
+            remote="origin",
+            subprocess_runner=FakeSubprocessRunner(),
+            root_path=tmp_path,
+            review_module_factory=factory,
+        )
+
+
+def test_run_review_delete_reraises_tool_execution_error(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+    # git remote fails
+    runner.add_result(
+        ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-infer-repo"
+            ),
+        )
+    )
+    # gh repo view fails -> infer_repo raises ToolExecutionError
+    runner.add_result(
+        ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr="no gh",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-infer-repo"
+            ),
+        )
+    )
+
+    comments_file = tmp_path / "comments.json"
+    comments_file.write_text("[]")
+
+    with pytest.raises(ToolExecutionError, match="Failed to infer repository"):
+        run_review_delete(1, comments_file, "origin", runner, tmp_path)
+
+
+def test_run_review_delete_skips_unknown_targets(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="https://github.com/owner/repo.git\n",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-infer-repo"
+            ),
+        )
+    )
+
+    payload: dict[str, object] = {
+        "data": {
+            "viewer": {"login": "me"},
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [
+                            {
+                                "id": "TH1",
+                                "comments": {
+                                    "nodes": [
+                                        {
+                                            "author": {"login": "me"},
+                                            "body": "body",
+                                            "url": "http://c/1",
+                                            "id": "C1",
+                                            "databaseId": 99,
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    }
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=json.dumps(payload),
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-fetch"
+            ),
+        )
+    )
+
+    comments_file = tmp_path / "comments.json"
+    comments_file.write_text('["UNKNOWN"]')
+
+    result = run_review_delete(7, comments_file, "origin", runner, tmp_path)
+    assert result.success is True
+    assert "deleted 0 comments" in result.stdout
+
+
+def test_render_threads_formats_empty_and_multiline_bodies(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+    threads = [
+        ReviewThread(
+            id="TH",
+            url="http://t",
+            is_resolved=False,
+            comments=[
+                ReviewComment(
+                    author="me",
+                    viewer_did_author=True,
+                    body="",
+                    url="http://c",
+                    id="CID",
+                ),
+                ReviewComment(
+                    author="them",
+                    viewer_did_author=False,
+                    body="line1\nline2",
+                    url="http://c2",
+                    id="CID2",
+                ),
+            ],
+        )
+    ]
+
+    lines = review.render_threads(
+        threads,
+        apply_filters=review.apply_filters,
+        unreplied=False,
+        unresolved=False,
+        viewer="me",
+    )
+
+    assert any("(viewer)" in line for line in lines)
+    assert any("<no content>" in line for line in lines)
+    assert any("line2" in line for line in lines)
+
+
+def test_render_threads_no_matches_message(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+    lines = review.render_threads(
+        [],
+        apply_filters=review.apply_filters,
+        unreplied=False,
+        unresolved=False,
+        viewer=None,
+    )
+    assert lines == ["No matching review threads found."]
+
+
+def test_bulk_reply_handles_empty_replies_and_http_fragment_lookup(
+    tmp_path: Path,
+) -> None:
+    runner = FakeSubprocessRunner()
+    review = ReviewModule(runner, tmp_path)
+
+    fetch = ReviewFetchResult(
+        viewer="me",
+        threads=[
+            ReviewThread(
+                id="TH_1",
+                url="http://t",
+                is_resolved=False,
+                comments=[
+                    ReviewComment(
+                        author="me",
+                        viewer_did_author=True,
+                        body="b",
+                        url="",
+                        id="CID",
+                    )
+                ],
+            )
+        ],
+    )
+
+    review.bulk_reply(fetch=fetch, replies={})
+    assert runner.calls == []
+
+    # Unknown key should be skipped
+    review.bulk_reply(fetch=fetch, replies={"http://x#NOPE": "body"})
+    assert runner.calls == []
+
+    # http fragment fallback resolves to comment id -> thread id
+    runner.add_result(
+        ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr="nope",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-reply-gql"
+            ),
+        )
+    )
+    with pytest.raises(ToolExecutionError, match="Failed to send reply"):
+        review.bulk_reply(fetch=fetch, replies={"http://x#CID": "body"})
+
+
 def test_infer_repo_git_remote_success(tmp_path: Path) -> None:
     runner = FakeSubprocessRunner()
     runner.add_result(

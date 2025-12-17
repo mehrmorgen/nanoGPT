@@ -253,8 +253,6 @@ def run_setup_ai_guidelines(
                 base = relative_path.rstrip("/")
                 if base and not base.endswith("/"):
                     candidates.add(f"{base}/")
-                elif not base:
-                    candidates.add("/")
             ignored = False
             matched_pattern: str | None = None
             with gitignore.open("r", encoding="utf-8") as handle:

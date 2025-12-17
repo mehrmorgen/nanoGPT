@@ -8,7 +8,11 @@ from types import ModuleType
 from typing import Any
 
 from ml_playground.tools.core.config import ToolsConfig
-from ml_playground.tools.core.errors import ToolExecutionError
+from ml_playground.tools.core.errors import (
+    ToolConfigurationError,
+    ToolExecutionError,
+    ToolTimeoutError,
+)
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.dev import workflow_status as ws
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner
@@ -346,6 +350,45 @@ def test_run_quality_batch_handles_failures_and_errors(tmp_path: Path) -> None:
     assert summary["overall"]["total_issues"] > 0
 
 
+def test_run_quality_batch_lint_and_typecheck_exceptions(tmp_path: Path) -> None:
+    """Lint and typecheck exceptions should be captured as errors."""
+
+    class _QualityToolsExceptions:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> Any:
+            raise ToolTimeoutError("lint timeout", reason="timeout", rationale="test")
+
+        def typecheck(self, _args: list[str]) -> Any:
+            raise ToolConfigurationError(
+                "bad config", reason="invalid", rationale="test"
+            )
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+    module_name = "ml_playground.tools.quality.quality"
+    original_module = sys.modules.get(module_name)
+    stub_module = ModuleType(module_name)
+    stub_module.QualityTools = _QualityToolsExceptions  # type: ignore[attr-defined]
+    sys.modules[module_name] = stub_module
+    try:
+        summary = ws._run_quality_batch(
+            _minimal_tools_config(), tmp_path, _StubRunner()
+        )
+    finally:
+        if original_module is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = original_module
+
+    assert summary["lint"]["status"] == "error"
+    assert summary["typecheck"]["status"] == "error"
+    assert summary["deadcode"]["status"] == "passed"
+    assert summary["overall"]["status"] == "failed"
+
+
 def test_run_test_batch_simple_handles_failures_and_exceptions(
     tmp_path: Path,
 ) -> None:
@@ -376,12 +419,46 @@ def test_run_test_batch_simple_handles_failures_and_exceptions(
         results = ws._run_test_batch_simple(cfg, tmp_path, runner)
     finally:
         ws.TestingTools = original  # type: ignore[assignment]
-
     assert results["unit"]["status"] == "failed"
     assert results["overall"]["status"] == "failed"
     assert results["unit"]["count"] == 2
     assert results["unit"]["duration"] == "0.50s"
     assert results["integration"]["status"] == "error"
+
+
+def test_run_test_batch_simple_successful_paths(tmp_path: Path) -> None:
+    """Successful unit+integration runs should aggregate counts and durations."""
+    cfg = _minimal_tools_config()
+    runner = _StubRunner()
+
+    class _HappyTestingTools:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def unit(self, args: list[str]) -> _FakeToolResult:
+            assert "-q" in args
+            return _FakeToolResult(
+                success=True, exit_code=0, stdout="2 passed in 0.20s", stderr=""
+            )
+
+        def integration(self, args: list[str]) -> _FakeToolResult:
+            assert "-q" in args
+            return _FakeToolResult(
+                success=True, exit_code=0, stdout="3 passed in 0.30s", stderr=""
+            )
+
+    original = ws.TestingTools
+    ws.TestingTools = _HappyTestingTools  # type: ignore[assignment]
+    try:
+        results = ws._run_test_batch_simple(cfg, tmp_path, runner)
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]
+
+    assert results["overall"]["status"] == "passed"
+    assert results["overall"]["total_tests"] == 5
+    assert results["unit"]["count"] == 2
+    assert results["integration"]["count"] == 3
+    assert results["integration"]["duration"] == "0.30s"
 
 
 def test_format_status_text_output_lists_sections() -> None:
@@ -409,6 +486,22 @@ def test_format_status_text_output_lists_sections() -> None:
     assert "Tests:" in text
     assert "Coverage:" in text
     assert "Blocking issues" in text
+
+
+def test_format_status_text_output_handles_missing_coverage() -> None:
+    """Coverage status not available should render status string."""
+    text = ws._format_status_text_output(
+        {
+            "timestamp": "2024-01-01T00:00:00",
+            "git_status": {"current_branch": "dev", "status": "dirty"},
+            "quality_status": {"overall_status": "failed"},
+            "test_status": {"overall_status": "unknown", "total_tests": 0},
+            "coverage_status": {"status": "not_available"},
+            "readiness": {"ready_for_merge": False, "blocking_issues": []},
+        }
+    )
+
+    assert "Coverage: not_available" in text
 
 
 def test_workflow_status_handles_structured_failures_vs_typed_exceptions(
@@ -693,13 +786,22 @@ def test_run_workflow_status_text_output(tmp_path: Path) -> None:
     orig_cov = ws._get_coverage_status
     orig_git = ws._get_git_status
 
-    ws._get_quality_status = lambda *args: {"overall_status": "passed"}  # type: ignore
-    ws._get_test_status = lambda *args: {"overall_status": "passed", "total_tests": 5}  # type: ignore
-    ws._get_coverage_status = lambda *args: {
-        "status": "available",
-        "line_percentage": 80.0,
-    }  # type: ignore
-    ws._get_git_status = lambda *args: {"status": "clean", "current_branch": "main"}  # type: ignore
+    def _quality_status(*_: Any, **__: Any) -> dict[str, object]:
+        return {"overall_status": "passed"}
+
+    def _test_status(*_: Any, **__: Any) -> dict[str, object]:
+        return {"overall_status": "passed", "total_tests": 5}
+
+    def _coverage_status(*_: Any, **__: Any) -> dict[str, object]:
+        return {"status": "available", "line_percentage": 80.0}
+
+    def _git_status(*_: Any, **__: Any) -> dict[str, object]:
+        return {"status": "clean", "current_branch": "main"}
+
+    ws._get_quality_status = _quality_status  # type: ignore[assignment]
+    ws._get_test_status = _test_status  # type: ignore[assignment]
+    ws._get_coverage_status = _coverage_status  # type: ignore[assignment]
+    ws._get_git_status = _git_status  # type: ignore[assignment]
 
     try:
         result = ws.run_workflow_status(
@@ -732,7 +834,9 @@ def test_run_workflow_status_default_runner(tmp_path: Path) -> None:
                 exit_code=0,
                 stdout="mock",
                 stderr="",
-                operation_id=OperationId("test", "test", "test"),
+                operation_id=OperationId(
+                    namespace="tools", category="test", command="test"
+                ),
             )
 
     import ml_playground.tools.utils.subprocess_utils as subprocess_utils

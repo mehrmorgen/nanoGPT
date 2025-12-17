@@ -194,6 +194,147 @@ def test_run_batch_review_handles_deadcode_exception(tmp_path: Path) -> None:
     assert payload["overall_status"]["success"] is False
 
 
+def test_deadcode_failed_counts_unused_items_in_total_issues(tmp_path: Path) -> None:
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        def lint(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(category="quality", command="lint", success=True)
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(category="quality", command="typecheck", success=True)
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(
+                category="quality",
+                command="deadcode",
+                success=False,
+                stdout="unused_one\nunused_two\n",
+            )
+
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test", command="unit", success=True, stdout="1 passed in 0.1s"
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=True,
+                stdout="1 passed in 0.1s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 100% 100%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+    batch_review_module.QualityTools = StubQualityTools
+    batch_review_module.TestingTools = StubTestingTools
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+    finally:
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
+
+    payload = json.loads(result.stdout)
+    quality = payload["quality_checks"]
+    assert quality["deadcode"]["status"] == "failed"
+    assert quality["deadcode"]["unused_items"] == 2
+    assert quality["overall"]["total_issues"] == 2
+
+
+def test_integration_failed_marks_overall_failed(tmp_path: Path) -> None:
+    class StubQualityTools:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        def lint(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(category="quality", command="lint", success=True)
+
+        def typecheck(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(category="quality", command="typecheck", success=True)
+
+        def deadcode(self, args: list[str]) -> ToolResult:
+            assert args == []
+            return _tool_result(category="quality", command="deadcode", success=True)
+
+    class StubTestingTools:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        def unit(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test", command="unit", success=True, stdout="1 passed in 0.1s"
+            )
+
+        def integration(self, args: list[str]) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="integration",
+                success=False,
+                stdout="0 passed in 0.1s",
+            )
+
+        def coverage_report(self, args: list[str], verbose: bool = False) -> ToolResult:
+            return _tool_result(
+                category="test",
+                command="coverage-report",
+                success=True,
+                stdout="TOTAL 100% 100%",
+            )
+
+    original_quality = batch_review_module.QualityTools
+    original_testing = batch_review_module.TestingTools
+    batch_review_module.QualityTools = StubQualityTools
+    batch_review_module.TestingTools = StubTestingTools
+    try:
+        result = batch_review_module.run_batch_review(
+            ToolsConfig(), tmp_path, output_format="json"
+        )
+    finally:
+        batch_review_module.QualityTools = original_quality
+        batch_review_module.TestingTools = original_testing
+
+    payload = json.loads(result.stdout)
+    assert payload["test_summary"]["integration"]["status"] == "failed"
+    assert payload["overall_status"]["success"] is False
+
+
+def test_format_text_output_skips_non_dict_entries() -> None:
+    text = batch_review_module._format_text_output(
+        {
+            "timestamp": "2024-01-01T00:00:00",
+            "quality_checks": {"lint": {"status": "passed"}, "meta": "noop"},
+            "test_summary": {"unit": {"status": "passed"}, "extra": 1},
+            "overall_status": {"success": True, "ready_for_merge": True},
+        }
+    )
+
+    assert "lint" in text
+    assert "meta" not in text
+    assert "unit" in text
+    assert "extra" not in text
+
+
 def test_quality_error_handling_via_public_api(tmp_path: Path) -> None:
     """Quality tool exceptions should surface as error entries via public API."""
     from ml_playground.tools.core.errors import ToolExecutionError

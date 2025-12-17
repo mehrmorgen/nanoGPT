@@ -355,6 +355,55 @@ def test_kill_pid_returns_true_on_success() -> None:
     assert result is True
 
 
+def test_kill_pid_kills_after_timeout() -> None:
+    """Cover TimeoutExpired path where terminate doesn't exit and kill is used."""
+    fake_psutil = ModuleType("psutil")
+
+    class TimeoutExpired(Exception):
+        pass
+
+    class Process:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+            self.terminated = False
+            self.killed = False
+            self.wait_calls = 0
+
+        def terminate(self) -> None:  # type: ignore[override]
+            self.terminated = True
+
+        def wait(self, timeout: float) -> None:  # type: ignore[override]
+            assert timeout == 1.0
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise TimeoutExpired("timeout")
+            return
+
+        def kill(self) -> None:  # type: ignore[override]
+            self.killed = True
+
+    proc = Process(123)
+
+    def ProcessFactory(pid: int) -> Process:  # type: ignore[override]
+        assert pid == 123
+        return proc
+
+    fake_psutil.Process = ProcessFactory  # type: ignore[attr-defined]
+    fake_psutil.TimeoutExpired = TimeoutExpired  # type: ignore[attr-defined]
+    fake_psutil.NoSuchProcess = TimeoutExpired  # type: ignore[attr-defined]
+    fake_psutil.AccessDenied = TimeoutExpired  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._kill_pid(123)
+    finally:
+        _restore_psutil(original)
+
+    assert result is True
+    assert proc.terminated is True
+    assert proc.killed is True
+
+
 def test_pids_by_port_falls_back_to_empty_list_on_complete_failure() -> None:
     """Test the final fallback when both net_connections and process_iter fail."""
     fake_psutil = ModuleType("psutil")
@@ -437,6 +486,43 @@ def test_pids_by_port_process_iter_fallback_success() -> None:
             ]
 
     procs = [FakeProc(10, [7000]), FakeProc(11, [9000, 8000])]
+
+    def process_iter(attrs=None):  # type: ignore[override]
+        assert attrs == ["pid"]
+        return procs
+
+    fake_psutil.net_connections = net_connections  # type: ignore[attr-defined]
+    fake_psutil.process_iter = process_iter  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._pids_by_port(8000)
+    finally:
+        _restore_psutil(original)
+
+    assert result == [11]
+
+
+def test_pids_by_port_process_iter_skips_proc_errors() -> None:
+    fake_psutil = ModuleType("psutil")
+    fake_psutil.Error = psutil.Error  # type: ignore[attr-defined]
+
+    def net_connections(kind: str):  # type: ignore[override]
+        raise fake_psutil.Error("net connections blocked")  # type: ignore[attr-defined]
+
+    class FakeProc:
+        def __init__(self, pid: int, ports: list[int], fail: bool = False) -> None:
+            self.pid = pid
+            self._ports = ports
+            self._fail = fail
+
+        def net_connections(self, kind: str):  # type: ignore[override]
+            assert kind == "inet"
+            if self._fail:
+                raise OSError("proc error")
+            return [SimpleNamespace(laddr=SimpleNamespace(port=p)) for p in self._ports]
+
+    procs = [FakeProc(10, [8000], fail=True), FakeProc(11, [8000], fail=False)]
 
     def process_iter(attrs=None):  # type: ignore[override]
         assert attrs == ["pid"]

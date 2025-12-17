@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Iterable, Callable, cast
+from typing import Any, Mapping, Iterable, Callable, cast
 
 from dataclasses import dataclass
 
@@ -38,43 +38,6 @@ class ReviewFetchResult:
     viewer: str | None
 
 
-class _ReviewModuleProtocol(Protocol):
-    def infer_repo(self, remote: str) -> tuple[str, str]: ...
-
-    def fetch_review_threads(
-        self, owner: str, repo: str, pr_number: int
-    ) -> ReviewFetchResult: ...
-
-    def apply_filters(
-        self,
-        threads: Iterable[ReviewThread],
-        *,
-        unreplied: bool,
-        unresolved: bool,
-        viewer: str | None,
-    ) -> list[ReviewThread]: ...
-
-    def render_threads(
-        self,
-        threads: Iterable[ReviewThread],
-        *,
-        apply_filters: Callable[..., list[ReviewThread]],
-        unreplied: bool,
-        unresolved: bool,
-        viewer: str | None,
-    ) -> list[str]: ...
-
-    def load_replies(self, replies_file: Path) -> dict[str, str]: ...
-
-    def bulk_reply(
-        self, *, fetch: ReviewFetchResult, replies: dict[str, str]
-    ) -> None: ...
-
-    def load_comment_targets(self, path: Path) -> list[str]: ...
-
-    def comment_lookup(self, fetch: ReviewFetchResult) -> dict[str, str]: ...
-
-
 def run_review_list(
     pr_number: int,
     remote: str,
@@ -92,11 +55,12 @@ def run_review_list(
             root_path=root_path,
             review_module_factory=review_module_factory,
         )
-        owner, repo = review.infer_repo(remote)
-        fetch_result = review.fetch_review_threads(owner, repo, pr_number)
-        output_lines = review.render_threads(
+        review_any = cast(Any, review)
+        owner, repo = review_any.infer_repo(remote)
+        fetch_result = review_any.fetch_review_threads(owner, repo, pr_number)
+        output_lines = review_any.render_threads(
             fetch_result.threads,
-            apply_filters=review.apply_filters,
+            apply_filters=review_any.apply_filters,
             unreplied=unreplied,
             unresolved=unresolved,
             viewer=getattr(fetch_result, "viewer", None),
@@ -140,10 +104,11 @@ def run_review_bulk_reply(
             root_path=root_path,
             review_module_factory=review_module_factory,
         )
-        owner, repo = review.infer_repo(remote)
-        fetch_result = review.fetch_review_threads(owner, repo, pr_number)
-        replies = review.load_replies(replies_file)
-        review.bulk_reply(fetch=fetch_result, replies=replies)
+        review_any = cast(Any, review)
+        owner, repo = review_any.infer_repo(remote)
+        fetch_result = review_any.fetch_review_threads(owner, repo, pr_number)
+        replies = review_any.load_replies(replies_file)
+        review_any.bulk_reply(fetch=fetch_result, replies=replies)
         return ToolResult.create(
             success=True,
             exit_code=0,
@@ -603,7 +568,7 @@ def _resolve_review_module(
     subprocess_runner: SubprocessRunner,
     root_path: Path,
     review_module_factory: Callable[[], object] | None,
-) -> _ReviewModuleProtocol:
+) -> object:
     if review_module_factory is not None:
-        return cast(_ReviewModuleProtocol, review_module_factory())
+        return review_module_factory()
     return ReviewModule(subprocess_runner, root_path)
