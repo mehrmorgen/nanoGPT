@@ -101,7 +101,7 @@ def test_infer_repo_all_fail(tmp_path: Path) -> None:
 
 def test_fetch_review_threads_success(tmp_path: Path) -> None:
     runner = FakeSubprocessRunner()
-    data = {
+    data: dict[str, object] = {
         "data": {
             "viewer": {"login": "me"},
             "repository": {
@@ -163,7 +163,7 @@ def test_run_review_list_success(tmp_path: Path) -> None:
         )
     )
     # 2. fetch threads
-    data = {
+    data: dict[str, object] = {
         "data": {
             "viewer": {"login": "me"},
             "repository": {"pullRequest": {"reviewThreads": {"nodes": []}}},
@@ -379,3 +379,144 @@ def test_run_review_delete_success(tmp_path: Path) -> None:
 
     assert result.success is True
     assert "deleted 1 comments" in result.stdout
+
+
+def test_run_review_bulk_reply_value_error(tmp_path: Path) -> None:
+    """ValueError during bulk reply should return error ToolResult."""
+
+    class StubReview:
+        def infer_repo(self, remote: str) -> tuple[str, str]:
+            assert remote == "origin"
+            return "o", "r"
+
+        def fetch_review_threads(self, owner: str, repo: str, pr_number: int) -> object:
+            assert (owner, repo, pr_number) == ("o", "r", 5)
+            return object()
+
+        def load_replies(self, replies_file: Path) -> dict[str, str]:
+            assert replies_file.name == "replies.json"
+            return {"id": "body"}
+
+        def bulk_reply(self, *, fetch: object, replies: dict[str, str]) -> None:
+            raise ValueError("boom")
+
+    def factory() -> object:
+        return StubReview()
+
+    result = run_review_bulk_reply(
+        pr_number=5,
+        replies_file=tmp_path / "replies.json",
+        remote="origin",
+        subprocess_runner=FakeSubprocessRunner(),
+        root_path=tmp_path,
+        review_module_factory=factory,
+    )
+
+    assert result.success is False
+    assert "Failed to send bulk replies" in (result.stderr or "")
+
+
+def test_run_review_delete_returns_failed_deletion(tmp_path: Path) -> None:
+    """run_review_delete should propagate deletion failure."""
+    runner = FakeSubprocessRunner()
+
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="https://github.com/owner/repo.git\n",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-infer-repo"
+            ),
+        )
+    )
+    payload: dict[str, object] = {
+        "data": {
+            "viewer": {"login": "me"},
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [
+                            {
+                                "id": "TH1",
+                                "comments": {
+                                    "nodes": [
+                                        {
+                                            "author": {"login": "me"},
+                                            "body": "body",
+                                            "url": "http://c/1#frag",
+                                            "id": "C1",
+                                            "databaseId": 99,
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    }
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=json.dumps(payload),
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-fetch"
+            ),
+        )
+    )
+    deletion_fail = ToolResult(
+        success=False,
+        exit_code=1,
+        stdout="",
+        stderr="delete failed",
+        operation_id=OperationId(namespace="tools", category="dev", command="review"),
+    )
+    runner.add_result(deletion_fail)
+
+    comments_file = tmp_path / "comments.json"
+    comments_file.write_text('["C1"]')
+
+    result = run_review_delete(
+        pr_number=7,
+        comments_file=comments_file,
+        remote="origin",
+        subprocess_runner=runner,
+        root_path=tmp_path,
+    )
+
+    assert result is deletion_fail
+
+
+def test_comment_lookup_maps_all_identifiers(tmp_path: Path) -> None:
+    """comment_lookup should map id, url fragment, and database_id."""
+    runner = FakeSubprocessRunner()
+    review = ReviewModule(runner, tmp_path)
+
+    thread = ReviewThread(
+        id="TH",
+        url="http://url/path",
+        is_resolved=False,
+        comments=[
+            ReviewComment(
+                author="me",
+                viewer_did_author=True,
+                body="b",
+                url="http://url/path#frag",
+                id="CID",
+                database_id=123,
+                created_at="2023-01-01",
+            )
+        ],
+    )
+
+    mapping = review.comment_lookup(ReviewFetchResult(viewer="me", threads=[thread]))
+
+    assert mapping["CID"] == "CID"
+    assert mapping["http://url/path#frag"] == "CID"
+    assert mapping["frag"] == "CID"
+    assert mapping["123"] == "CID"
