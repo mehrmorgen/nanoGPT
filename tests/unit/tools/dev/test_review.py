@@ -16,6 +16,7 @@ from ml_playground.tools.dev.review import (
     run_review_list,
     run_review_bulk_reply,
     run_review_delete,
+    run_review_resolve,
 )
 from tests.unit.tools.fakes import FakeSubprocessRunner
 
@@ -130,6 +131,135 @@ def test_run_review_delete_skips_unknown_targets(tmp_path: Path) -> None:
     comments_file.write_text('["UNKNOWN"]')
 
     result = run_review_delete(7, comments_file, "origin", runner, tmp_path)
+    assert result.success is True
+
+
+def test_bulk_resolve_executes_graphql_mutation(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+
+    # resolve call
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=json.dumps(
+                {"data": {"resolveReviewThread": {"thread": {"id": "TH1"}}}}
+            ),
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-resolve-gql"
+            ),
+        )
+    )
+
+    review = ReviewModule(runner, tmp_path)
+    fetch = ReviewFetchResult(
+        threads=[
+            ReviewThread(
+                id="TH1",
+                url="http://t",
+                is_resolved=False,
+                comments=[
+                    ReviewComment(
+                        author="a",
+                        viewer_did_author=False,
+                        body="b",
+                        url="http://example#comment-1",
+                        id="C_1",
+                        database_id=None,
+                        created_at=None,
+                    )
+                ],
+            )
+        ],
+        viewer=None,
+    )
+
+    review.bulk_resolve(fetch=fetch, targets=["http://example#comment-1"])
+
+    assert runner.calls
+    cmd = runner.calls[0]["command"]
+    assert cmd[:3] == ["gh", "api", "graphql"]
+
+
+def test_run_review_resolve_happy_path(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="https://github.com/owner/repo.git\n",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-infer-repo"
+            ),
+        )
+    )
+
+    payload: dict[str, object] = {
+        "data": {
+            "viewer": {"login": "me"},
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [
+                            {
+                                "id": "TH1",
+                                "isResolved": False,
+                                "comments": {
+                                    "nodes": [
+                                        {
+                                            "author": {"login": "me"},
+                                            "body": "body",
+                                            "url": "http://c/1",
+                                            "id": "C1",
+                                            "databaseId": 99,
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    }
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=json.dumps(payload),
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-fetch"
+            ),
+        )
+    )
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout=json.dumps(
+                {"data": {"resolveReviewThread": {"thread": {"id": "TH1"}}}}
+            ),
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-resolve-gql"
+            ),
+        )
+    )
+
+    threads_file = tmp_path / "threads.json"
+    threads_file.write_text('["http://c/1"]', encoding="utf-8")
+
+    result = run_review_resolve(
+        pr_number=1,
+        threads_file=threads_file,
+        remote="origin",
+        subprocess_runner=runner,
+        root_path=tmp_path,
+    )
+
     assert result.success is True
 
 

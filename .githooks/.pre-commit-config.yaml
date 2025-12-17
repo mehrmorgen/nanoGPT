@@ -45,6 +45,7 @@ repos:
     args: [-c, "uv run pytest tests/acceptance tests/e2e tests/integration tests/regression"]
     language: system
     pass_filenames: false
+    stages: [manual]
   - id: basedpyright
     name: basedpyright (strict)
     entry: uv

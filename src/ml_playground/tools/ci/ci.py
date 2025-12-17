@@ -57,9 +57,9 @@ class CITools:
     def quality_gate(self, args: List[str]) -> ToolResult:
         """Run the pre-commit quality gate only.
 
-        Pre-commit now includes regression, integration, acceptance and e2e tests,
-        as well as coverage threshold. Therefore, this gate defers entirely to
-        pre-commit and surfaces a clear, structured summary.
+        This gate defers entirely to pre-commit (formatting, linting, typing,
+        and coverage hooks) and surfaces a clear, structured summary. Full
+        acceptance/e2e/integration/regression suites should run in CI.
 
         Args:
             args: Additional pre-commit arguments

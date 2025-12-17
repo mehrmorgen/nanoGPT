@@ -12,7 +12,12 @@ from ..utils.subprocess_utils import (
     RealSubprocessRunner,
 )
 from .ai_guidelines import run_setup_ai_guidelines
-from .review import run_review_list, run_review_bulk_reply, run_review_delete
+from .review import (
+    run_review_list,
+    run_review_bulk_reply,
+    run_review_delete,
+    run_review_resolve,
+)
 from .hygiene import run_cleanup_ignored_tracked, run_kill_port
 from .status import run_dev_batch_review, run_dev_workflow_status
 from .github_actions import run_github_actions
@@ -78,6 +83,19 @@ class DevTools:
         return run_review_delete(
             pr_number=pr_number,
             comments_file=comments_file,
+            remote=remote,
+            subprocess_runner=self.subprocess_runner,
+            root_path=self.root_path,
+            review_module_factory=self._review_module_factory,
+        )
+
+    def review_resolve(
+        self, pr_number: int, threads_file: Path, remote: str = "origin"
+    ) -> ToolResult:
+        """Resolve GitHub PR review threads."""
+        return run_review_resolve(
+            pr_number=pr_number,
+            threads_file=threads_file,
             remote=remote,
             subprocess_runner=self.subprocess_runner,
             root_path=self.root_path,

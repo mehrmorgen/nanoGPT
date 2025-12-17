@@ -107,6 +107,30 @@ def dev_review_delete(
     )
 
 
+@dev_app.command("review-resolve")
+def dev_review_resolve(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number")],
+    threads_file: Annotated[
+        Path,
+        typer.Option(
+            "--threads",
+            help="JSON file with list of thread/comment IDs/URLs to resolve",
+        ),
+    ],
+    remote: Annotated[
+        str, typer.Option("--remote", help="Git remote name for owner/repo inference")
+    ] = "origin",
+) -> None:
+    """Resolve review threads from a JSON file."""
+    tools = get_dev_tools()
+    run_tool_command(
+        tools.review_resolve,
+        pr_number=pr_number,
+        threads_file=threads_file,
+        remote=remote,
+    )
+
+
 @dev_app.command("review-list")
 def dev_review_list(
     pr_number: Annotated[int, typer.Argument(help="Pull request number")],

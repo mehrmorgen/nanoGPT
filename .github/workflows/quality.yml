@@ -63,6 +63,8 @@ jobs:
           du -sh .venv || true
       - run: uv sync --frozen --group dev
       - run: uv run tools --no-learning-mode ci quality-gate
+      - name: Run full test suites (acceptance/e2e/integration/regression)
+        run: uv run pytest tests/acceptance tests/e2e tests/integration tests/regression
       - name: Prune uv cache
         run: |
           uv cache prune --ci

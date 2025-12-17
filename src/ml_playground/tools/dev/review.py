@@ -190,6 +190,50 @@ def run_review_delete(
         )
 
 
+def run_review_resolve(
+    pr_number: int,
+    threads_file: Path,
+    remote: str,
+    subprocess_runner: SubprocessRunner,
+    root_path: Path,
+    review_module_factory: Callable[[], object] | None = None,
+) -> ToolResult:
+    """Resolve GitHub PR review threads."""
+    operation_id = OperationId(
+        namespace="tools", category="dev", command="review-resolve"
+    )
+    try:
+        review = _resolve_review_module(
+            subprocess_runner=subprocess_runner,
+            root_path=root_path,
+            review_module_factory=review_module_factory,
+        )
+        review_any = cast(Any, review)
+        owner, repo = review_any.infer_repo(remote)
+        fetch_result = review_any.fetch_review_threads(owner, repo, pr_number)
+        targets = review_any.load_comment_targets(threads_file)
+        review_any.bulk_resolve(fetch=fetch_result, targets=targets)
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stdout=f"Successfully resolved review threads for PR #{pr_number}",
+        )
+    except ToolExecutionError:
+        raise
+    except (OSError, ValueError) as exc:
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stderr=f"Failed to resolve review threads: {exc}",
+        )
+
+
 class ReviewModule:
     """Review module for GitHub PR operations."""
 
@@ -516,6 +560,49 @@ class ReviewModule:
                     rationale=(
                         "Ensure your GitHub token has permission to comment on the PR "
                         "and that the comment identifier matches an existing thread."
+                    ),
+                )
+
+    def bulk_resolve(self, *, fetch: Any, targets: list[str]) -> None:
+        """Resolve review threads identified by URL/ID keys."""
+        lookup = self.thread_lookup(fetch)
+        if not targets:
+            return
+        mutation = (
+            "mutation($threadId:ID!){"
+            " resolveReviewThread(input:{threadId:$threadId}){"
+            "  thread { id isResolved }"
+            " }"
+            "}"
+        )
+        for key in targets:
+            thread_id = lookup.get(key)
+            if thread_id is None and key.startswith("http"):
+                thread_id = lookup.get(key.split("#")[-1])
+            if thread_id is None:
+                continue
+            args = [
+                "gh",
+                "api",
+                "graphql",
+                "-f",
+                f"query={mutation}",
+                "-F",
+                f"threadId={thread_id}",
+            ]
+            result = self._exec(
+                args,
+                operation_id=OperationId(
+                    namespace="tools", category="dev", command="review-resolve-gql"
+                ),
+            )
+            if not result.success:
+                raise ToolExecutionError(
+                    "Failed to resolve review thread",
+                    reason=result.stderr or result.stdout or "gh api graphql failed",
+                    rationale=(
+                        "Ensure your GitHub token has permission to resolve threads on the PR "
+                        "and that the provided identifier matches an existing thread."
                     ),
                 )
 
