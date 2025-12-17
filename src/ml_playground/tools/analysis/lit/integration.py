@@ -6,52 +6,12 @@ import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import Protocol, cast, override
+from typing import Any, cast
 
 WSGIApp = Callable[..., Iterable[bytes]]
 
 
-class LitDataset(Protocol):
-    def spec(self) -> dict[str, object]: ...
-
-    def __len__(self) -> int: ...
-
-    def __iter__(self) -> Iterable[Mapping[str, object]]: ...
-
-
-class LitDatasetModule(Protocol):
-    Dataset: type[LitDataset]
-
-
-class LitModel(Protocol):
-    def input_spec(self) -> dict[str, object]: ...
-
-    def output_spec(self) -> dict[str, object]: ...
-
-    def predict(
-        self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
-    ) -> list[Mapping[str, object]]: ...
-
-
-class LitModelModule(Protocol):
-    Model: type[LitModel]
-
-
-class LitTypesModule(Protocol):
-    def TextSegment(self) -> object: ...
-
-
-class LitApp(Protocol):
-    def serve(self, *, port: int, host: str, open_browser: bool) -> None: ...
-
-
-class LitServerModule(Protocol):
-    def serve(
-        self, app: object, *, port: int, host: str, open_browser: bool
-    ) -> None: ...
-
-
-def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
+def _load_lit_components() -> tuple[ModuleType, ModuleType, ModuleType]:
     try:
         importlib.import_module("lit_nlp.api")
     except ImportError as exc:
@@ -62,18 +22,10 @@ def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesMo
         )
         raise RuntimeError(message) from exc
 
-    dataset_mod = cast(LitDatasetModule, importlib.import_module("lit_nlp.api.dataset"))
-    model_mod = cast(LitModelModule, importlib.import_module("lit_nlp.api.model"))
-    types_mod = cast(LitTypesModule, importlib.import_module("lit_nlp.api.types"))
+    dataset_mod = importlib.import_module("lit_nlp.api.dataset")
+    model_mod = importlib.import_module("lit_nlp.api.model")
+    types_mod = importlib.import_module("lit_nlp.api.types")
     return dataset_mod, model_mod, types_mod
-
-
-class LitServerFactory(Protocol):
-    def __call__(
-        self,
-        models: dict[str, LitModel],
-        datasets: dict[str, LitDataset],
-    ) -> object: ...
 
 
 def _import_lit_server() -> ModuleType:
@@ -157,38 +109,35 @@ def run_server_bundestag_char(
         # Non-fatal; keep embedded samples
         pass
 
-    class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
+    dataset_base_any = cast(type[Any], dataset_base)
+    model_base_any = cast(type[Any], model_base)
+
+    class BundestagTextDataset(dataset_base_any):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):
             self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
 
-        @override
         def spec(self) -> dict[str, object]:
             return {"text": text_segment_factory()}
 
-        @override
         def __len__(self) -> int:
             return len(self._examples)
 
-        @override
         def __iter__(self):
             return iter(self._examples)
 
-    class EchoModel(model_base):  # type: ignore[valid-type, misc]
+    class EchoModel(model_base_any):  # type: ignore[valid-type, misc]
         """Trivial model that returns the input text as generated output.
 
         Serves as a PoC to exercise LIT views for text data without trained weights.
         """
 
-        @override
         def input_spec(self) -> dict[str, object]:
             return {"text": text_segment_factory()}
 
-        @override
         def output_spec(self) -> dict[str, object]:
             # Use TextSegment for broad compatibility; some LIT versions also have GeneratedText.
             return {"generated": text_segment_factory()}
 
-        @override
         def predict(
             self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
         ) -> list[Mapping[str, object]]:
@@ -200,17 +149,16 @@ def run_server_bundestag_char(
                 outs.append({"generated": gen})
             return outs
 
-    datasets: dict[str, LitDataset] = {
+    datasets: dict[str, object] = {
         "bundestag_char_sample": BundestagTextDataset(samples)
     }
-    models: dict[str, LitModel] = {"echo_model": EchoModel()}
+    models: dict[str, object] = {"echo_model": EchoModel()}
 
     try:
         server_factory_obj = getattr(server_module, "Server", None)
         if not callable(server_factory_obj):
             raise RuntimeError("LIT server module does not expose a Server factory")
-        server_factory = cast(LitServerFactory, server_factory_obj)
-        app = server_factory(models, datasets)
+        app = server_factory_obj(models, datasets)
     except (
         TypeError,
         AttributeError,
@@ -229,15 +177,13 @@ def run_server_bundestag_char(
     # Use standard serve method
     app_serve = getattr(app, "serve", None)
     if callable(app_serve):
-        cast(LitApp, app).serve(port=port, host=host, open_browser=open_browser)
+        app_serve(port=port, host=host, open_browser=open_browser)
         return
 
     # Fallback: module-level serve if app.serve is missing (older API)
     module_serve = getattr(server_module, "serve", None)
     if callable(module_serve):
-        cast(LitServerModule, server_module).serve(
-            app, port=port, host=host, open_browser=open_browser
-        )
+        module_serve(app, port=port, host=host, open_browser=open_browser)
         return
 
     raise RuntimeError(

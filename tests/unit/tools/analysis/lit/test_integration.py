@@ -78,9 +78,9 @@ def test_load_lit_components_uses_expected_modules() -> None:
 
 
 def test_protocol_placeholders_have_expected_shape() -> None:
-    """Concrete stubs should satisfy the structural protocol contracts."""
+    """Concrete stubs should provide the callable surface used by the integration."""
 
-    class DummyDataset(integration.LitDataset):  # type: ignore[misc]
+    class DummyDataset:
         def __init__(self) -> None:
             self.examples: list[dict[str, object]] = [{"text": "hi"}]
 
@@ -93,7 +93,7 @@ def test_protocol_placeholders_have_expected_shape() -> None:
         def __iter__(self) -> Iterator[Mapping[str, object]]:
             return iter(self.examples)
 
-    class DummyModel(integration.LitModel):  # type: ignore[misc]
+    class DummyModel:
         def input_spec(self) -> dict[str, object]:
             return {"text": "segment"}
 
@@ -105,56 +105,22 @@ def test_protocol_placeholders_have_expected_shape() -> None:
         ) -> list[Mapping[str, object]]:
             return [{"generated": "ok"}]
 
-    class DummyTypes(integration.LitTypesModule):  # type: ignore[misc]
-        def TextSegment(self) -> object:  # noqa: N802
-            return "segment"
-
-    class DummyApp(integration.LitApp):  # type: ignore[misc]
+    class DummyApp:
         def serve(self, *, port: int, host: str, open_browser: bool) -> None:
             self.called = (port, host, open_browser)
 
-    class DummyServerModule(integration.LitServerModule):  # type: ignore[misc]
-        def serve(
-            self, app: object, *, port: int, host: str, open_browser: bool
-        ) -> None:
-            cast(integration.LitApp, app).serve(
-                port=port, host=host, open_browser=open_browser
-            )
-
-    class DummyServerFactory(integration.LitServerFactory):  # type: ignore[misc]
-        def __call__(
-            self,
-            models: Mapping[str, integration.LitModel],
-            datasets: Mapping[str, integration.LitDataset],
-        ):
-            return {"models": models, "datasets": datasets}
-
     ds = DummyDataset()
     model = DummyModel()
-    types = DummyTypes()
     app = DummyApp()
-    server_module = DummyServerModule()
-    factory = DummyServerFactory()
 
     assert ds.spec()["text"] == "segment"
     assert len(ds) == 1
     assert list(ds)[0]["text"] == "hi"
 
-    assert "text" in model.input_spec()
-    assert "generated" in model.output_spec()
     assert model.predict([{"text": "x"}])[0]["generated"] == "ok"
-
-    assert types.TextSegment() == "segment"
 
     app.serve(port=0, host="127.0.0.1", open_browser=False)
     assert getattr(app, "called") == (0, "127.0.0.1", False)
-
-    server_module.serve(app, port=1, host="0.0.0.0", open_browser=True)
-    assert getattr(app, "called") == (1, "0.0.0.0", True)
-
-    built = factory({"m": model}, {"d": ds})
-    assert built["models"]["m"] is model
-    assert built["datasets"]["d"] is ds
 
 
 def test_load_lit_components_requires_lit_dependencies() -> None:

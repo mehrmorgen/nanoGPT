@@ -1,47 +1,14 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any, Protocol, cast
+from types import ModuleType
+from typing import Any, cast
 
 import logging
 
 from ml_playground.core.logging_protocol import LoggerLike
-
-
-class _LitServer(Protocol):  # pragma: no cover - structural protocol
-    def serve(self, *, port: int, host: str, open_browser: bool) -> None: ...
-
-
-class _LitServerModule(Protocol):  # pragma: no cover - structural protocol
-    def Server(
-        self,
-        models: Mapping[str, LitModel],
-        datasets: Mapping[str, LitDataset],
-    ) -> _LitServer: ...
-
-
-class LitDataset(Protocol):  # pragma: no cover - structural protocol
-    def spec(self) -> dict[str, object]: ...
-
-    def __len__(self) -> int: ...
-
-    def __iter__(self) -> Iterable[Mapping[str, object]]: ...
-
-
-class LitModel(Protocol):  # pragma: no cover - structural protocol
-    def input_spec(self) -> dict[str, object]: ...
-
-    def output_spec(self) -> dict[str, object]: ...
-
-    def predict(
-        self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
-    ) -> list[Mapping[str, object]]: ...
-
-
-class LitTypesModule(Protocol):  # pragma: no cover - structural protocol
-    def TextSegment(self) -> object: ...
 
 
 def run_server_bundestag_char(
@@ -56,11 +23,11 @@ def run_server_bundestag_char(
     demonstrate the LIT UI without requiring trained checkpoints.
     """
 
-    def _import_lit_server() -> _LitServerModule:
+    def _import_lit_server() -> ModuleType:
         try:
             from lit_nlp import server  # type: ignore[import]
 
-            return cast(_LitServerModule, server)
+            return cast(ModuleType, server)
         except ImportError as err:
             raise RuntimeError(
                 "LIT server import failed. Ensure lit-nlp is installed and compatible. "
@@ -76,7 +43,7 @@ def run_server_bundestag_char(
         lit_server = _import_lit_server()
         dataset_base = cast(type[Any], lit_dataset.Dataset)
         model_base = cast(type[Any], lit_model.Model)
-        types_module = cast(LitTypesModule, lit_types)
+        types_module = cast(ModuleType, lit_types)
     except ImportError as e:
         raise RuntimeError(
             f"LIT dependencies not available: {e}. Install lit-nlp with: uv add lit-nlp"
@@ -113,7 +80,9 @@ def run_server_bundestag_char(
         # Non-fatal; keep embedded samples
         pass
 
-    text_segment_factory = types_module.TextSegment
+    text_segment_factory = cast(
+        Callable[[], object], getattr(types_module, "TextSegment")
+    )
 
     class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):
@@ -158,7 +127,8 @@ def run_server_bundestag_char(
     models = {"echo_model": EchoModel()}
 
     try:
-        app = lit_server.Server(models, datasets)
+        server_factory = getattr(lit_server, "Server")
+        app = server_factory(models, datasets)
     except Exception as e:
         raise RuntimeError(f"Failed to build LIT app: {e}") from e
 
@@ -169,7 +139,8 @@ def run_server_bundestag_char(
     sys.stdout.flush()
 
     try:
-        app.serve(port=port, host=host, open_browser=open_browser)
+        serve = getattr(app, "serve")
+        serve(port=port, host=host, open_browser=open_browser)
     except AttributeError as exc:
         raise RuntimeError(
             "Installed LIT server does not expose a serve(...) method. "
