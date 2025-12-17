@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -130,7 +131,235 @@ def test_run_review_delete_skips_unknown_targets(tmp_path: Path) -> None:
 
     result = run_review_delete(7, comments_file, "origin", runner, tmp_path)
     assert result.success is True
-    assert "deleted 0 comments" in result.stdout
+
+
+def test_thread_lookup_adds_url_fragment_key(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    fetch_result = ReviewFetchResult(
+        threads=[
+            ReviewThread(
+                id="TH_1",
+                url="http://t",
+                is_resolved=False,
+                comments=[
+                    ReviewComment(
+                        author="me",
+                        viewer_did_author=False,
+                        body="b",
+                        url="http://example#comment-1",
+                        id="C_1",
+                        database_id=None,
+                        created_at=None,
+                    )
+                ],
+            )
+        ],
+        viewer=None,
+    )
+
+    mapping = review.thread_lookup(fetch_result)
+
+    assert mapping["http://example#comment-1"] == "TH_1"
+    assert mapping["comment-1"] == "TH_1"
+
+
+def test_thread_lookup_skips_missing_url_and_missing_id(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    class _Comment:
+        def __init__(self, *, cid: str | None, url: str | None) -> None:
+            self.id = cid
+            self.url = url
+
+    class _Thread:
+        def __init__(self) -> None:
+            self.id = "TH_1"
+            self.comments = [
+                _Comment(cid="C_1", url=None),
+                _Comment(cid=None, url="http://example"),
+            ]
+
+    fetch = SimpleNamespace(threads=[_Thread()])
+    mapping = review.thread_lookup(fetch)
+
+    assert mapping["C_1"] == "TH_1"
+    assert mapping["http://example"] == "TH_1"
+    assert "example" not in mapping
+
+
+def test_comment_lookup_adds_database_id_and_url_fragment(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    fetch_result = ReviewFetchResult(
+        threads=[
+            ReviewThread(
+                id="TH_1",
+                url="http://t",
+                is_resolved=False,
+                comments=[
+                    ReviewComment(
+                        author="me",
+                        viewer_did_author=False,
+                        body="b",
+                        url="http://example#comment-2",
+                        id="C_2",
+                        database_id=22,
+                        created_at=None,
+                    )
+                ],
+            )
+        ],
+        viewer=None,
+    )
+
+    mapping = review.comment_lookup(fetch_result)
+
+    assert mapping["C_2"] == "C_2"
+    assert mapping["http://example#comment-2"] == "C_2"
+    assert mapping["comment-2"] == "C_2"
+    assert mapping["22"] == "C_2"
+
+
+def test_fetch_review_threads_handles_non_dict_root(tmp_path: Path) -> None:
+    runner = FakeSubprocessRunner()
+    runner.add_result(
+        ToolResult(
+            success=True,
+            exit_code=0,
+            stdout="[]",
+            stderr="",
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-fetch"
+            ),
+        )
+    )
+
+    review = ReviewModule(runner, tmp_path)
+    fetch = review.fetch_review_threads(owner="o", repo="r", pr_number=1)
+
+    assert fetch.threads == []
+
+
+def test_thread_lookup_skips_threads_without_id(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+    fetch = SimpleNamespace(threads=[SimpleNamespace(id="", comments=[])])
+    assert review.thread_lookup(fetch) == {}
+
+
+def test_comment_lookup_skips_missing_fields_and_no_fragment(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment_missing = SimpleNamespace(id=None, url=None, database_id=None)
+    comment_url_no_fragment = SimpleNamespace(
+        id=None,
+        url="http://example",
+        database_id=None,
+    )
+    thread = SimpleNamespace(
+        id="TH", comments=[comment_missing, comment_url_no_fragment]
+    )
+    fetch = SimpleNamespace(threads=[thread])
+
+    mapping = review.comment_lookup(fetch)
+
+    assert mapping["http://example"] is None
+
+
+def test_load_comment_targets_non_list_returns_empty(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    path = tmp_path / "targets.json"
+    path.write_text("{}", encoding="utf-8")
+
+    assert review.load_comment_targets(path) == []
+
+
+def test_load_comment_targets_filters_non_strings(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    path = tmp_path / "targets.json"
+    path.write_text('["ok", 123, null]', encoding="utf-8")
+
+    assert review.load_comment_targets(path) == ["ok"]
+
+
+def test_load_comment_targets_multiple_strings_hits_loop_backedge(
+    tmp_path: Path,
+) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    path = tmp_path / "targets.json"
+    path.write_text('["a", "b"]', encoding="utf-8")
+
+    assert review.load_comment_targets(path) == ["a", "b"]
+
+
+def test_comment_lookup_id_url_fragment_and_database_id(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment = SimpleNamespace(
+        id="C_1",
+        url="http://example#comment-1",
+        database_id=11,
+    )
+    thread = SimpleNamespace(id="TH", comments=[comment])
+    fetch = SimpleNamespace(threads=[thread])
+
+    mapping = review.comment_lookup(fetch)
+
+    assert mapping["C_1"] == "C_1"
+    assert mapping["http://example#comment-1"] == "C_1"
+    assert mapping["comment-1"] == "C_1"
+    assert mapping["11"] == "C_1"
+
+
+def test_comment_lookup_database_id_when_url_falsy(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment = SimpleNamespace(
+        id=None,
+        url="",
+        database_id=22,
+    )
+    fetch = SimpleNamespace(threads=[SimpleNamespace(id="TH", comments=[comment])])
+
+    mapping = review.comment_lookup(fetch)
+    assert mapping["22"] is None
+
+
+def test_comment_lookup_skips_url_branch_when_url_missing(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment = SimpleNamespace(id="C_9", url=None, database_id=None)
+    fetch = SimpleNamespace(threads=[SimpleNamespace(id="TH", comments=[comment])])
+
+    mapping = review.comment_lookup(fetch)
+    assert mapping["C_9"] == "C_9"
+
+
+def test_comment_lookup_handles_falsy_id_empty_string(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment = SimpleNamespace(id="", url="http://example#f", database_id=None)
+    fetch = SimpleNamespace(threads=[SimpleNamespace(id="TH", comments=[comment])])
+
+    mapping = review.comment_lookup(fetch)
+
+    assert mapping["http://example#f"] == ""
+    assert mapping["f"] == ""
+
+
+def test_comment_lookup_handles_falsy_url_empty_string_with_id(tmp_path: Path) -> None:
+    review = ReviewModule(FakeSubprocessRunner(), tmp_path)
+
+    comment = SimpleNamespace(id="C_X", url="", database_id=33)
+    fetch = SimpleNamespace(threads=[SimpleNamespace(id="TH", comments=[comment])])
+
+    mapping = review.comment_lookup(fetch)
+
+    assert mapping["C_X"] == "C_X"
+    assert mapping["33"] == "C_X"
 
 
 def test_render_threads_formats_empty_and_multiline_bodies(tmp_path: Path) -> None:

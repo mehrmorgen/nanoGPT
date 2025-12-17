@@ -324,9 +324,8 @@ class ReviewModule:
         def _as_dict(obj: Any) -> dict[str, Any]:
             result: dict[str, Any] = {}
             if isinstance(obj, dict):
-                for k, v in cast(Mapping[Any, Any], obj).items():
-                    if isinstance(k, str):
-                        result[k] = v
+                for k, v in cast(Mapping[str, Any], obj).items():
+                    result[k] = v
             return result
 
         def _as_list(obj: Any) -> list[Any]:

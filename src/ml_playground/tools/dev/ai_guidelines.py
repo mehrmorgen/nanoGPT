@@ -251,8 +251,7 @@ def run_setup_ai_guidelines(
             candidates = {relative_path.replace(os.sep, "/")}
             if directory:
                 base = relative_path.rstrip("/")
-                if base and not base.endswith("/"):
-                    candidates.add(f"{base}/")
+                candidates.add(f"{base}/")
             ignored = False
             matched_pattern: str | None = None
             with gitignore.open("r", encoding="utf-8") as handle:

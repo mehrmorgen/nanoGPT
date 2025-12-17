@@ -461,6 +461,103 @@ def test_run_test_batch_simple_successful_paths(tmp_path: Path) -> None:
     assert results["integration"]["duration"] == "0.30s"
 
 
+def test_run_quality_batch_typecheck_failed_increments_issues(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+
+    class _QualityToolsTypecheckFail:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+        def typecheck(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr="e1\ne2\n",
+            )
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+    module_name = "ml_playground.tools.quality.quality"
+    original_module = sys.modules.get(module_name)
+    stub_module = ModuleType(module_name)
+    stub_module.QualityTools = _QualityToolsTypecheckFail  # type: ignore[attr-defined]
+    sys.modules[module_name] = stub_module
+    try:
+        summary = ws._run_quality_batch(cfg, tmp_path, _StubRunner())
+    finally:
+        if original_module is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = original_module
+
+    assert summary["typecheck"]["status"] == "failed"
+    assert summary["overall"]["status"] == "failed"
+    assert summary["overall"]["total_issues"] >= 2
+
+
+def test_run_quality_batch_typecheck_success_covers_else_branch(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+
+    class _QualityToolsAllPass:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def lint(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+        def typecheck(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+        def deadcode(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(success=True, exit_code=0, stdout="", stderr="")
+
+    module_name = "ml_playground.tools.quality.quality"
+    original_module = sys.modules.get(module_name)
+    stub_module = ModuleType(module_name)
+    stub_module.QualityTools = _QualityToolsAllPass  # type: ignore[attr-defined]
+    sys.modules[module_name] = stub_module
+    try:
+        summary = ws._run_quality_batch(cfg, tmp_path, _StubRunner())
+    finally:
+        if original_module is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = original_module
+
+    assert summary["overall"]["status"] == "passed"
+
+
+def test_run_test_batch_simple_unit_exception_sets_error(tmp_path: Path) -> None:
+    cfg = _minimal_tools_config()
+
+    class _TestingToolsUnitBoom:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def unit(self, _args: list[str]) -> _FakeToolResult:
+            raise ToolExecutionError("boom", reason="fail", rationale="test")
+
+        def integration(self, _args: list[str]) -> _FakeToolResult:
+            return _FakeToolResult(
+                success=True, exit_code=0, stdout="1 passed in 0.1s", stderr=""
+            )
+
+    original = ws.TestingTools
+    ws.TestingTools = _TestingToolsUnitBoom  # type: ignore[assignment]
+    try:
+        results = ws._run_test_batch_simple(cfg, tmp_path, _StubRunner())
+    finally:
+        ws.TestingTools = original  # type: ignore[assignment]
+
+    assert results["unit"]["status"] == "error"
+    assert results["overall"]["status"] == "failed"
+
+
 def test_format_status_text_output_lists_sections() -> None:
     text = ws._format_status_text_output(
         {

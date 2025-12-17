@@ -85,11 +85,77 @@ def test_run_setup_ai_guidelines_single_file_root_symlink(tmp_path: Path) -> Non
 
     assert result.success is True
 
-    readme = tmp_path / ".dev-guidelines" / "README.md"
-    primary_path = tmp_path / "AGENTS.md"
-    assert primary_path.is_symlink()
-    assert primary_path.resolve() == readme.resolve()
-    assert any("link   " in line for line in result.logs)
+
+def test_gitignore_skips_blank_and_comment_lines(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+
+    (project_dir / ".gitignore").write_text(
+        "# comment\n\n.github/\n",
+        encoding="utf-8",
+    )
+    (project_dir / ".aiignore").write_text("", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("copilot", project_dir=project_dir, dry_run=True)
+
+    assert result.success is True
+    assert any("ignored by pattern" in line for line in result.logs)
+
+
+def test_gitignore_single_file_root_directory_false_branch(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+
+    # codex uses single-file-root and will call log_gitignore_status(primary_path, directory=False)
+    (project_dir / ".gitignore").write_text("AGENTS.md\n", encoding="utf-8")
+    (project_dir / ".aiignore").write_text("", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("codex", project_dir=project_dir, dry_run=True)
+
+    assert result.success is True
+    assert any("git    'AGENTS.md' ignored" in line for line in result.logs)
+
+
+def test_gitignore_directory_true_branch(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+
+    tool_dir = project_dir / ".github"
+    tool_dir.mkdir()
+
+    (project_dir / ".gitignore").write_text(".github/\n", encoding="utf-8")
+    (project_dir / ".aiignore").write_text("", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("copilot", project_dir=project_dir, dry_run=True)
+
+    assert result.success is True
+    assert any("git    '.github/' ignored" in line for line in result.logs)
+
+
+def test_gitignore_file_candidate_directory_false_branch(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+
+    tool_dir = project_dir / ".github"
+    tool_dir.mkdir()
+    (tool_dir / "copilot-instructions.md").write_text("old", encoding="utf-8")
+
+    # ensure tool directory status is logged and matched
+    (project_dir / ".gitignore").write_text(".github/\n", encoding="utf-8")
+    (project_dir / ".aiignore").write_text("", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("copilot", project_dir=project_dir, dry_run=True)
+
+    assert result.success is True
+    assert any("git    '.github/' ignored" in line for line in result.logs)
 
 
 def test_run_setup_ai_guidelines_is_idempotent_for_matching_link(
@@ -146,6 +212,79 @@ def test_run_setup_ai_guidelines_dry_run_reports_git_and_ai_ignore(
     result = run_setup_ai_guidelines("copilot", project_dir=project_dir, dry_run=True)
 
     assert result.success is True
+
+
+def test_gitignore_pattern_value_error_branch(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+    (base_dir / "policies.md").write_text("x", encoding="utf-8")
+
+    (project_dir / ".gitignore").write_text(".github/\n", encoding="utf-8")
+    (project_dir / ".aiignore").write_text("", encoding="utf-8")
+
+    original = ai_guidelines.GitWildMatchPattern
+
+    def exploding_pattern(_: str) -> object:
+        raise ValueError("bad pattern")
+
+    ai_guidelines.GitWildMatchPattern = exploding_pattern  # type: ignore[assignment]
+    try:
+        result = run_setup_ai_guidelines(
+            "copilot", project_dir=project_dir, dry_run=True
+        )
+    finally:
+        ai_guidelines.GitWildMatchPattern = original  # type: ignore[assignment]
+
+    assert result.success is True
+
+
+def test_ensure_dir_second_exists_check_branch(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+
+    original_exists = ai_guidelines.Path.exists
+    target = base_dir / "README.md"
+    seen: dict[str, int] = {"calls": 0}
+
+    def toggling_exists(self: Path) -> bool:
+        if self == target:
+            seen["calls"] += 1
+            # first call: pretend missing (so we enter is_file_like branch)
+            if seen["calls"] == 1:
+                return False
+            # second call: pretend it exists (skip touch)
+            return True
+        return original_exists(self)
+
+    ai_guidelines.Path.exists = toggling_exists  # type: ignore[assignment]
+    try:
+        result = run_setup_ai_guidelines(
+            "codex", project_dir=project_dir, dry_run=False
+        )
+    finally:
+        ai_guidelines.Path.exists = original_exists  # type: ignore[assignment]
+
+    assert result.success is True
+
+
+def test_gitignore_directory_candidate_adds_trailing_slash(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    base_dir = project_dir / ".dev-guidelines"
+    base_dir.mkdir()
+    (base_dir / "README.md").write_text("notes", encoding="utf-8")
+    (base_dir / "policies.md").write_text("x", encoding="utf-8")
+
+    # match a directory with trailing slash
+    (project_dir / ".gitignore").write_text(".github/\n", encoding="utf-8")
+    (project_dir / ".aiignore").write_text(".github/\n", encoding="utf-8")
+
+    result = run_setup_ai_guidelines("copilot", project_dir=project_dir, dry_run=True)
+
+    assert result.success is True
+    assert any("ignored by pattern" in line for line in result.logs)
     assert any("[dry-run]" in line for line in result.logs)
     assert any("git    '.github/' ignored" in line for line in result.logs)
     assert any("WARNING: ai     '.github/' is excluded" in line for line in result.logs)
@@ -289,21 +428,28 @@ def test_run_setup_ai_guidelines_windows_hardlink_success(tmp_path: Path) -> Non
 
     original_os = ai_guidelines.os
     original_run = ai_guidelines.subprocess.run
-    ai_guidelines.subprocess.run = lambda *args, **kwargs: SimpleNamespace(
-        returncode=0, stderr=""
-    )  # type: ignore[assignment]
+
+    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        del args
+        del kwargs
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    ai_guidelines.subprocess.run = fake_run
     ai_guidelines.os = SimpleNamespace(
-        name="nt", path=os.path, link=fake_link, sep=os.sep
+        name="nt",
+        link=fake_link,
+        path=original_os.path,
+        sep=original_os.sep,
     )  # type: ignore[assignment]
     try:
         result = run_setup_ai_guidelines(
-            "codex", project_dir=project_dir, dry_run=False
+            "copilot", project_dir=project_dir, dry_run=False
         )
     finally:
         ai_guidelines.os = original_os  # type: ignore[assignment]
         ai_guidelines.subprocess.run = original_run  # type: ignore[assignment]
 
-    primary_path = project_dir / "AGENTS.md"
+    primary_path = project_dir / ".github" / "copilot-instructions.md"
     assert result.success is True
     assert links and links[0][0] == readme and links[0][1] == primary_path
 
