@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Unit tests for tools.dev.hygiene helpers."""
 
 from __future__ import annotations
@@ -6,6 +7,7 @@ import subprocess
 from contextlib import contextmanager
 from types import SimpleNamespace, ModuleType
 from typing import Callable, Iterator
+from pathlib import Path
 import sys
 
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
@@ -23,12 +25,51 @@ class StubRunner:
         self,
         command: list[str],
         *,
-        cwd: str | None,
+        cwd: str | Path | None = None,
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,
         operation_id: OperationId,
+        capture_output: bool = True,
     ) -> ToolResult:
         self.commands.append(command)
         responder = self.responders.pop(0)
         return responder(operation_id)
+
+    def run_uv_command(  # pragma: no cover - unused in these tests
+        self,
+        args: list[str],
+        *,
+        cwd: str | Path | None = None,
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,
+        operation_id: OperationId,
+        python: str | None = None,
+        no_project: bool = False,
+    ) -> ToolResult:
+        return self.run_subprocess(
+            args,
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+            operation_id=operation_id,
+        )
+
+    def run_pytest_command(  # pragma: no cover - unused in these tests
+        self,
+        args: list[str],
+        *,
+        cwd: str | Path | None = None,
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,
+        operation_id: OperationId,
+    ) -> ToolResult:
+        return self.run_subprocess(
+            args,
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+            operation_id=operation_id,
+        )
 
 
 def _result(
@@ -49,7 +90,7 @@ def _result(
     return factory
 
 
-def test_run_cleanup_no_files_returns_message(tmp_path) -> None:
+def test_run_cleanup_no_files_returns_message(tmp_path: Path) -> None:
     runner = StubRunner(
         [
             _result(success=True, stdout=""),
@@ -63,7 +104,7 @@ def test_run_cleanup_no_files_returns_message(tmp_path) -> None:
     assert runner.commands[0][:3] == ["git", "ls-files", "-i"]
 
 
-def test_run_cleanup_propagates_failed_rm(tmp_path) -> None:
+def test_run_cleanup_propagates_failed_rm(tmp_path: Path) -> None:
     listing_stdout = "foo.log\nbar.ckpt\n"
     runner = StubRunner(
         [
@@ -81,7 +122,7 @@ def test_run_cleanup_propagates_failed_rm(tmp_path) -> None:
     assert runner.commands[2][3] == "bar.ckpt"
 
 
-def test_run_cleanup_returns_error_on_exception(tmp_path) -> None:
+def test_run_cleanup_returns_error_on_exception(tmp_path: Path) -> None:
     class ExplodingRunner(StubRunner):
         def __init__(self) -> None:
             super().__init__([])
@@ -105,7 +146,7 @@ def override_attr(obj: object, name: str, value: object) -> Iterator[None]:
         setattr(obj, name, original)
 
 
-def test_run_kill_port_dedupes_and_reports_success(tmp_path) -> None:
+def test_run_kill_port_dedupes_and_reports_success(tmp_path: Path) -> None:
     seen: list[int] = []
 
     def fake_pids(port: int) -> list[int]:
@@ -127,7 +168,7 @@ def test_run_kill_port_dedupes_and_reports_success(tmp_path) -> None:
     assert "Killed 2 processes" in (result.stdout or "")
 
 
-def test_run_kill_port_propagates_kill_failure(tmp_path) -> None:
+def test_run_kill_port_propagates_kill_failure(tmp_path: Path) -> None:
     def fake_pids(_: int) -> list[int]:
         return [42]
 
@@ -144,13 +185,16 @@ def test_run_kill_port_propagates_kill_failure(tmp_path) -> None:
     assert "Failed to kill PID 42" in (result.stderr or "")
 
 
-def test_run_kill_port_handles_lookup_exception(tmp_path) -> None:
+def test_run_kill_port_handles_lookup_exception(tmp_path: Path) -> None:
     def raising(_: int) -> list[int]:
         raise OSError("psutil error")
 
+    def always_true(_pid: int) -> bool:
+        return True
+
     with (
         override_attr(hygiene, "_pids_by_port", raising),
-        override_attr(hygiene, "_kill_pid", lambda _: True),
+        override_attr(hygiene, "_kill_pid", always_true),
     ):
         result = hygiene.run_kill_port(9000, StubRunner([]), tmp_path)
 
@@ -268,6 +312,46 @@ def test_kill_pid_returns_false_on_psutil_errors() -> None:
         _restore_psutil(original)
 
     assert result is False
+
+
+def test_kill_pid_returns_true_on_success() -> None:
+    """Cover the happy path where terminate/kill succeeds."""
+    fake_psutil = ModuleType("psutil")
+
+    class TimeoutExpired(Exception):
+        pass
+
+    class Process:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+            self.terminated = False
+            self.killed = False
+
+        def terminate(self) -> None:  # type: ignore[override]
+            self.terminated = True
+
+        def wait(self, timeout: float) -> None:  # type: ignore[override]
+            assert timeout == 1.0
+            return
+
+        def kill(self) -> None:  # type: ignore[override]
+            self.killed = True
+
+    def ProcessFactory(pid: int) -> Process:  # type: ignore[override]
+        return Process(pid)
+
+    fake_psutil.Process = ProcessFactory  # type: ignore[attr-defined]
+    fake_psutil.TimeoutExpired = TimeoutExpired  # type: ignore[attr-defined]
+    fake_psutil.NoSuchProcess = TimeoutExpired  # type: ignore[attr-defined]
+    fake_psutil.AccessDenied = TimeoutExpired  # type: ignore[attr-defined]
+
+    original = _install_fake_psutil(fake_psutil)
+    try:
+        result = hygiene._kill_pid(4321)
+    finally:
+        _restore_psutil(original)
+
+    assert result is True
 
 
 def test_pids_by_port_falls_back_to_empty_list_on_complete_failure() -> None:

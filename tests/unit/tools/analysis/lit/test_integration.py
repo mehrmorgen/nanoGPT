@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import sys
 from contextlib import contextmanager
-from pathlib import Path
 from types import ModuleType
-from typing import Dict, Iterator, Mapping, Optional
-
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, Mapping, Optional, cast
+from _pytest._code.code import ExceptionInfo
 import pytest
 
 from ml_playground.tools.analysis.lit import integration
@@ -77,6 +77,86 @@ def test_load_lit_components_uses_expected_modules() -> None:
         _restore_modules(originals)
 
 
+def test_protocol_placeholders_have_expected_shape() -> None:
+    """Concrete stubs should satisfy the structural protocol contracts."""
+
+    class DummyDataset(integration.LitDataset):  # type: ignore[misc]
+        def __init__(self) -> None:
+            self.examples: list[dict[str, object]] = [{"text": "hi"}]
+
+        def spec(self) -> dict[str, object]:
+            return {"text": "segment"}
+
+        def __len__(self) -> int:
+            return len(self.examples)
+
+        def __iter__(self) -> Iterator[Mapping[str, object]]:
+            return iter(self.examples)
+
+    class DummyModel(integration.LitModel):  # type: ignore[misc]
+        def input_spec(self) -> dict[str, object]:
+            return {"text": "segment"}
+
+        def output_spec(self) -> dict[str, object]:
+            return {"generated": "segment"}
+
+        def predict(
+            self, _inputs: Iterable[Mapping[str, object]], **_kwargs: object
+        ) -> list[Mapping[str, object]]:
+            return [{"generated": "ok"}]
+
+    class DummyTypes(integration.LitTypesModule):  # type: ignore[misc]
+        def TextSegment(self) -> object:  # noqa: N802
+            return "segment"
+
+    class DummyApp(integration.LitApp):  # type: ignore[misc]
+        def serve(self, *, port: int, host: str, open_browser: bool) -> None:
+            self.called = (port, host, open_browser)
+
+    class DummyServerModule(integration.LitServerModule):  # type: ignore[misc]
+        def serve(
+            self, app: object, *, port: int, host: str, open_browser: bool
+        ) -> None:
+            cast(integration.LitApp, app).serve(
+                port=port, host=host, open_browser=open_browser
+            )
+
+    class DummyServerFactory(integration.LitServerFactory):  # type: ignore[misc]
+        def __call__(
+            self,
+            models: Mapping[str, integration.LitModel],
+            datasets: Mapping[str, integration.LitDataset],
+        ):
+            return {"models": models, "datasets": datasets}
+
+    ds = DummyDataset()
+    model = DummyModel()
+    types = DummyTypes()
+    app = DummyApp()
+    server_module = DummyServerModule()
+    factory = DummyServerFactory()
+
+    assert ds.spec()["text"] == "segment"
+    assert len(ds) == 1
+    assert list(ds)[0]["text"] == "hi"
+
+    assert "text" in model.input_spec()
+    assert "generated" in model.output_spec()
+    assert model.predict([{"text": "x"}])[0]["generated"] == "ok"
+
+    assert types.TextSegment() == "segment"
+
+    app.serve(port=0, host="127.0.0.1", open_browser=False)
+    assert getattr(app, "called") == (0, "127.0.0.1", False)
+
+    server_module.serve(app, port=1, host="0.0.0.0", open_browser=True)
+    assert getattr(app, "called") == (1, "0.0.0.0", True)
+
+    built = factory({"m": model}, {"d": ds})
+    assert built["models"]["m"] is model
+    assert built["datasets"]["d"] is ds
+
+
 def test_load_lit_components_requires_lit_dependencies() -> None:
     """Import failures should explain how to install lit dependencies."""
 
@@ -86,9 +166,19 @@ def test_load_lit_components_requires_lit_dependencies() -> None:
     with override_attr(integration.importlib, "import_module", failing_import):
         with pytest.raises(
             RuntimeError, match="LIT dependencies are unavailable"
-        ) as exc:
+        ) as exc_info:
             integration._load_lit_components()
-        assert "uv sync --extra lit" in str(exc.value)
+        exc_info = cast(ExceptionInfo[RuntimeError], exc_info)
+        assert "uv sync --extra lit" in str(exc_info.value)
+
+
+def test_run_server_bundestag_char_wraps_runtime_error() -> None:
+    def boom() -> tuple[object, object, object]:
+        raise RuntimeError("boom")
+
+    with override_attr(integration, "_load_lit_components", boom):
+        with pytest.raises(RuntimeError, match="LIT is not available or incompatible"):
+            integration.run_server_bundestag_char()
 
 
 def test_import_lit_server_prefers_primary_module() -> None:
@@ -118,6 +208,7 @@ def test_import_lit_server_raises_runtime_error_with_version_hint() -> None:
         with pytest.raises(RuntimeError) as exc_info:
             integration._import_lit_server()
 
+        exc_info = cast(ExceptionInfo[RuntimeError], exc_info)
         message = str(exc_info.value)
         assert "Unable to import LIT server module" in message
         assert "9.9.9" in message
@@ -265,3 +356,227 @@ def test_parse_cli_args_parses_values() -> None:
     assert host == "0.0.0.0"
     assert port == 0
     assert open_browser is True
+
+
+def test_parse_cli_args_rejects_non_int_port() -> None:
+    import argparse
+
+    original_parse = argparse.ArgumentParser.parse_args
+
+    def fake_parse_args(  # type: ignore[override]
+        self: argparse.ArgumentParser, _argv: object | None = None
+    ):
+        return argparse.Namespace(host="127.0.0.1", port="nope", open_browser=False)
+
+    try:
+        argparse.ArgumentParser.parse_args = fake_parse_args  # type: ignore[assignment]
+        with pytest.raises(TypeError, match="--port must be parsed as an integer"):
+            integration._parse_cli_args([])
+    finally:
+        argparse.ArgumentParser.parse_args = original_parse  # type: ignore[assignment]
+
+
+def test_parse_cli_args_open_browser_non_bool_is_cast() -> None:
+    import argparse
+
+    original_parse = argparse.ArgumentParser.parse_args
+
+    def fake_parse_args(  # type: ignore[override]
+        self: argparse.ArgumentParser, _argv: object | None = None
+    ):
+        return argparse.Namespace(host="127.0.0.1", port=1234, open_browser="yes")
+
+    try:
+        argparse.ArgumentParser.parse_args = fake_parse_args  # type: ignore[assignment]
+        host, port, open_browser = integration._parse_cli_args([])
+    finally:
+        argparse.ArgumentParser.parse_args = original_parse  # type: ignore[assignment]
+
+    assert host == "127.0.0.1"
+    assert port == 1234
+    assert open_browser is True
+
+
+def test_run_server_bundestag_char_optional_input_file_empty_lines() -> None:
+    dataset_module = ModuleType("lit_nlp.api.dataset")
+    model_module = ModuleType("lit_nlp.api.model")
+    types_module = ModuleType("lit_nlp.api.types")
+
+    class DummyDatasetBase: ...
+
+    class DummyModelBase: ...
+
+    def text_segment() -> str:
+        return "segment"
+
+    dataset_module.Dataset = DummyDatasetBase  # type: ignore[attr-defined]
+    model_module.Model = DummyModelBase  # type: ignore[attr-defined]
+    types_module.TextSegment = text_segment  # type: ignore[attr-defined]
+
+    captured: dict[str, object] = {}
+
+    class ServerApp:
+        def __init__(
+            self, _models: Mapping[str, object], datasets: Mapping[str, object]
+        ):
+            captured["datasets"] = datasets
+
+        def serve(self, *, port: int, host: str, open_browser: bool) -> None:  # noqa: ARG002
+            return
+
+    server_module = ModuleType("lit_nlp.server")
+    server_module.Server = ServerApp  # type: ignore[attr-defined]
+
+    def fake_load() -> tuple[object, object, object]:
+        return dataset_module, model_module, types_module
+
+    def fake_import_server() -> ModuleType:
+        return server_module
+
+    original_exists = integration.Path.exists
+    original_read_text = integration.Path.read_text
+
+    def fake_exists(self: Path) -> bool:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            return True
+        return original_exists(self)
+
+    def fake_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            return "\n\n"
+        return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    with override_attr(integration, "_load_lit_components", fake_load):
+        with override_attr(integration, "_import_lit_server", fake_import_server):
+            with override_attr(integration.Path, "exists", fake_exists):
+                with override_attr(integration.Path, "read_text", fake_read_text):
+                    integration.run_server_bundestag_char(host="127.0.0.1", port=0)
+
+    datasets = captured["datasets"]
+    dataset = cast(Mapping[str, object], datasets)["bundestag_char_sample"]
+    examples = cast(list[Mapping[str, object]], getattr(dataset, "_examples"))
+    assert len(examples) >= 1
+    assert "Nächste Rednerin" in str(examples[0]["text"])
+
+
+def test_run_server_bundestag_char_optional_input_file_non_empty_lines() -> None:
+    dataset_module = ModuleType("lit_nlp.api.dataset")
+    model_module = ModuleType("lit_nlp.api.model")
+    types_module = ModuleType("lit_nlp.api.types")
+
+    class DummyDatasetBase: ...
+
+    class DummyModelBase: ...
+
+    def text_segment() -> str:
+        return "segment"
+
+    dataset_module.Dataset = DummyDatasetBase  # type: ignore[attr-defined]
+    model_module.Model = DummyModelBase  # type: ignore[attr-defined]
+    types_module.TextSegment = text_segment  # type: ignore[attr-defined]
+
+    captured: dict[str, object] = {}
+
+    class ServerApp:
+        def __init__(
+            self, _models: Mapping[str, object], datasets: Mapping[str, object]
+        ):
+            captured["datasets"] = datasets
+
+        def serve(self, *, port: int, host: str, open_browser: bool) -> None:  # noqa: ARG002
+            return
+
+    server_module = ModuleType("lit_nlp.server")
+    server_module.Server = ServerApp  # type: ignore[attr-defined]
+
+    def fake_load() -> tuple[object, object, object]:
+        return dataset_module, model_module, types_module
+
+    def fake_import_server() -> ModuleType:
+        return server_module
+
+    original_exists = integration.Path.exists
+    original_read_text = integration.Path.read_text
+
+    def fake_exists(self: Path) -> bool:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            return True
+        return original_exists(self)
+
+    def fake_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            return "first\nsecond\nthird\n"
+        return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    with override_attr(integration, "_load_lit_components", fake_load):
+        with override_attr(integration, "_import_lit_server", fake_import_server):
+            with override_attr(integration.Path, "exists", fake_exists):
+                with override_attr(integration.Path, "read_text", fake_read_text):
+                    integration.run_server_bundestag_char(host="127.0.0.1", port=0)
+
+    datasets = captured["datasets"]
+    dataset = cast(Mapping[str, object], datasets)["bundestag_char_sample"]
+    examples = cast(list[Mapping[str, object]], getattr(dataset, "_examples"))
+    assert len(examples) == 3
+    assert examples[0]["text"] == "first"
+
+
+def test_run_server_bundestag_char_optional_input_file_read_error() -> None:
+    dataset_module = ModuleType("lit_nlp.api.dataset")
+    model_module = ModuleType("lit_nlp.api.model")
+    types_module = ModuleType("lit_nlp.api.types")
+
+    class DummyDatasetBase: ...
+
+    class DummyModelBase: ...
+
+    def text_segment() -> str:
+        return "segment"
+
+    dataset_module.Dataset = DummyDatasetBase  # type: ignore[attr-defined]
+    model_module.Model = DummyModelBase  # type: ignore[attr-defined]
+    types_module.TextSegment = text_segment  # type: ignore[attr-defined]
+
+    captured: dict[str, object] = {}
+
+    class ServerApp:
+        def __init__(
+            self, _models: Mapping[str, object], datasets: Mapping[str, object]
+        ):
+            captured["datasets"] = datasets
+
+        def serve(self, *, port: int, host: str, open_browser: bool) -> None:  # noqa: ARG002
+            return
+
+    server_module = ModuleType("lit_nlp.server")
+    server_module.Server = ServerApp  # type: ignore[attr-defined]
+
+    def fake_load() -> tuple[object, object, object]:
+        return dataset_module, model_module, types_module
+
+    def fake_import_server() -> ModuleType:
+        return server_module
+
+    original_exists = integration.Path.exists
+
+    def fake_exists(self: Path) -> bool:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            return True
+        return original_exists(self)
+
+    def fake_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if str(self).endswith("tools/experiments/bundestag_char/datasets/input.txt"):
+            raise UnicodeError("boom")
+        return ""
+
+    with override_attr(integration, "_load_lit_components", fake_load):
+        with override_attr(integration, "_import_lit_server", fake_import_server):
+            with override_attr(integration.Path, "exists", fake_exists):
+                with override_attr(integration.Path, "read_text", fake_read_text):
+                    integration.run_server_bundestag_char(host="127.0.0.1", port=0)
+
+    datasets = captured["datasets"]
+    dataset = cast(Mapping[str, object], datasets)["bundestag_char_sample"]
+    examples = cast(list[Mapping[str, object]], getattr(dataset, "_examples"))
+    assert len(examples) >= 1
+    assert "Nächste Rednerin" in str(examples[0]["text"])
