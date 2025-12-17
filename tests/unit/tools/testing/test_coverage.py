@@ -988,7 +988,13 @@ def test_run_coverage_test_skips_unlink_for_main_file_name_branch(
 
     original_glob = coverage_module.Path.glob
 
-    def fake_glob(self: Path, pattern: str):  # type: ignore[no-untyped-def]
+    def fake_glob(  # type: ignore[no-untyped-def]
+        self: Path,
+        pattern: str,
+        *,
+        case_sensitive: bool | None = None,
+        recurse_symlinks: bool | None = None,
+    ):
         if pattern == "coverage.sqlite.*":
             return iter(
                 [
@@ -996,7 +1002,12 @@ def test_run_coverage_test_skips_unlink_for_main_file_name_branch(
                     self / "coverage.sqlite.1",
                 ]
             )
-        return original_glob(self, pattern)
+        return original_glob(
+            self,
+            pattern,
+            case_sensitive=case_sensitive,
+            recurse_symlinks=recurse_symlinks,
+        )
 
     with override_attr(coverage_module.Path, "glob", fake_glob):
         result = coverage_module.run_coverage_test(
