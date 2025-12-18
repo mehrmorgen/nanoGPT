@@ -65,7 +65,9 @@ def parse_line(line: str) -> tuple[int | None, list[int]] | None:
     return winner, moves
 
 
-def check_direction(board: list[list[int]], r: int, c: int, dr: int, dc: int, player: int) -> int:
+def check_direction(
+    board: list[list[int]], r: int, c: int, dr: int, dc: int, player: int
+) -> int:
     count = 0
     rr, cc = r, c
     while 0 <= rr < ROWS and 0 <= cc < COLS and board[rr][cc] == player:
@@ -84,7 +86,9 @@ def detect_win(board: list[list[int]], r: int, c: int, player: int) -> str | Non
     }
     for name, (dr, dc) in directions.items():
         forward = check_direction(board, r, c, dr, dc, player)
-        backward = check_direction(board, r, c, -dr, -dc, player) - 1  # subtract double-counted origin
+        backward = (
+            check_direction(board, r, c, -dr, -dc, player) - 1
+        )  # subtract double-counted origin
         if forward + backward >= 4:
             return name
     return None

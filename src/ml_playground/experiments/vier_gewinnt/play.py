@@ -1,18 +1,12 @@
 import argparse
-import sys
-from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[4]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from ml_playground.experiments.vier_gewinnt.engine import VierGewinnt
-from ml_playground.experiments.vier_gewinnt.players import (
+from .engine import VierGewinnt
+from .players import (
     RandomPlayer,
     HeuristicPlayer,
     MinimaxPlayer,
 )
-from ml_playground.experiments.vier_gewinnt.sampler_player import SamplerPlayer
+from .sampler_player import SamplerPlayer
 
 PLAYER_TYPES = {
     "human": None,  # Human player will be handled separately
@@ -68,7 +62,9 @@ def play_game(player1_type, player2_type):
         if current_player_obj is None:  # Human player
             while True:
                 try:
-                    col = int(input(f"Player {game.current_player}, enter column (0-6): "))
+                    col = int(
+                        input(f"Player {game.current_player}, enter column (0-6): ")
+                    )
                     if col in game.get_valid_moves():
                         move = col
                         break
@@ -77,7 +73,9 @@ def play_game(player1_type, player2_type):
                 except ValueError:
                     print("Invalid input. Please enter a number.")
         else:  # AI player
-            print(f"Player {game.current_player} ({current_player_obj.__class__.__name__}) is thinking...")
+            print(
+                f"Player {game.current_player} ({current_player_obj.__class__.__name__}) is thinking..."
+            )
             move = current_player_obj.get_move(game)
             print(f"Player {game.current_player} chose column {move}")
 

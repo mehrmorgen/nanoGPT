@@ -2,20 +2,15 @@
 This script runs the trainer for the vier_gewinnt experiment.
 """
 
-import sys
 from pathlib import Path
-
-# This is a bit of a hack to make the script runnable from the command line.
-# It adds the project root to the python path.
-# Assumes the script is in src/ml_playground/experiments/vier_gewinnt/
-project_root = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(project_root))
 
 
 def main():
     """
     Runs the training for the vier_gewinnt experiment.
     """
+    import sys
+
     from ml_playground.configuration.loading import load_full_experiment_config
     from ml_playground.training.loop.runner import Trainer as CoreTrainer
     from ml_playground.cli import _global_device_setup

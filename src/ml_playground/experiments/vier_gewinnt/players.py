@@ -82,13 +82,15 @@ class MinimaxPlayer(Player):
         if last_move_pos:
             row, col = last_move_pos
             # Only need to check if the last move created a win
-            is_terminal = game.check_win_from_position(row, col, 1) or \
-                         game.check_win_from_position(row, col, 2) or \
-                         game.is_full()
+            is_terminal = (
+                game.check_win_from_position(row, col, 1)
+                or game.check_win_from_position(row, col, 2)
+                or game.is_full()
+            )
         else:
             # For initial call, fall back to full check
             is_terminal = game.check_win(1) or game.check_win(2) or game.is_full()
-        
+
         if depth == 0 or is_terminal:
             return self.evaluate_board(game), None
 
@@ -99,13 +101,15 @@ class MinimaxPlayer(Player):
                 # Make move in-place
                 player = self._require_player_id()
                 move_row = self._make_inplace_move(game, move, player)
-                
+
                 # Recurse with the new position
-                eval_score, _ = self.minimax(game, depth - 1, False, alpha, beta, (move_row, move))
-                
+                eval_score, _ = self.minimax(
+                    game, depth - 1, False, alpha, beta, (move_row, move)
+                )
+
                 # Undo the move
                 self._undo_inplace_move(game, move)
-                
+
                 if eval_score > max_eval:
                     max_eval = eval_score
                     best_move = move
@@ -120,13 +124,15 @@ class MinimaxPlayer(Player):
                 # Make move in-place
                 player = 3 - self._require_player_id()
                 move_row = self._make_inplace_move(game, move, player)
-                
+
                 # Recurse with the new position
-                eval_score, _ = self.minimax(game, depth - 1, True, alpha, beta, (move_row, move))
-                
+                eval_score, _ = self.minimax(
+                    game, depth - 1, True, alpha, beta, (move_row, move)
+                )
+
                 # Undo the move
                 self._undo_inplace_move(game, move)
-                
+
                 if eval_score < min_eval:
                     min_eval = eval_score
                     best_move = move
@@ -232,13 +238,15 @@ class MinimaxPlayer(Player):
             score -= 80
         return score
 
-    def evaluate_window_both(self, window: list[int], player: int, opponent: int) -> int:
+    def evaluate_window_both(
+        self, window: list[int], player: int, opponent: int
+    ) -> int:
         """Evaluate a window for both players in a single pass."""
         score = 0
         player_count = window.count(player)
         opponent_count = window.count(opponent)
         empty_count = window.count(0)
-        
+
         # Player scoring
         if player_count == 4:
             score += 100
@@ -246,11 +254,11 @@ class MinimaxPlayer(Player):
             score += 10
         elif player_count == 2 and empty_count == 2:
             score += 5
-        
+
         # Opponent penalty (note the asymmetry)
         if opponent_count == 3 and empty_count == 1:
             score -= 80
-        
+
         return score
 
     def create_temp_game(self, game: VierGewinnt, col: int, player: int) -> VierGewinnt:
@@ -272,7 +280,7 @@ class MinimaxPlayer(Player):
                 game.move_history.append(col)
                 return r
         raise ValueError(f"Column {col} is full")
-    
+
     def _undo_inplace_move(self, game: VierGewinnt, col: int) -> None:
         """Undo the last move in the specified column."""
         if not game.move_history:

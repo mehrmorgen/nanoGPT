@@ -62,13 +62,16 @@ class TestHeuristicPlayer:
         player = HeuristicPlayer()
         game = VierGewinnt()
         
-        # Set up board where opponent can win
+        # Set up board where only opponent (player 2) has a winning threat at column 3
+        # Player 1 has no winning moves
         game.make_move(0)  # Player 1
         game.make_move(3)  # Player 2
-        game.make_move(0)  # Player 1
+        game.make_move(1)  # Player 1
         game.make_move(3)  # Player 2
-        game.make_move(0)  # Player 1
-        # Player 2 can win at 3
+        game.make_move(2)  # Player 1
+        game.make_move(3)  # Player 2 - has 3 in column 3
+        # Now it's player 1's turn and player 2 can win at column 3
+        # Player 1 has no 3-in-a-row anywhere
         
         move = player.get_move(game)
         assert move == 3  # Should block the win
