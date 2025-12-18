@@ -47,7 +47,7 @@ start = "\\n"
 
     cfg = config_loading.load_sample_config(cfg_path, default_config_path=default_path)
     # merged from defaults
-    assert str(cfg.runtime.out_dir).endswith("out/sample")
+    assert cfg.runtime.out_dir == tmp_path / "out/sample"
     assert cfg.runtime.log_interval == 7
     assert cfg.sample.start == "\n"
 

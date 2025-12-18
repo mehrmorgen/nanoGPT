@@ -34,10 +34,13 @@ class ExperimentPayload(TypedDict, total=False):
     sample: TomlMapping
 
 
-def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
+def get_cfg_path(
+    experiment: str, exp_config: Path | None, variant: str | None = None
+) -> Path:
     if exp_config:
         return exp_config
-    return _package_root() / "experiments" / experiment / "config.toml"
+    filename = f"config.{variant}.toml" if variant else "config.toml"
+    return _package_root() / "experiments" / experiment / filename
 
 
 def get_default_config_path(project_root: Path | None = None) -> Path:
@@ -133,7 +136,7 @@ def _load_and_merge_configs(
     )
     ldres_raw = read_toml_dict(ldres_config) if ldres_config.exists() else {}
 
-    merged = merge_mappings(defaults_raw, raw_exp, override_only=True)
+    merged = merge_mappings(defaults_raw, raw_exp)
 
     merged_payload = merge_mappings(merged, ldres_raw)
     return cast(ExperimentPayload, merged_payload)

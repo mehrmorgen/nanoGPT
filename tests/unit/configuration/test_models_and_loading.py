@@ -335,7 +335,9 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
+def test_full_loader_incomplete_train_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = """
 [prepare]
 
@@ -346,6 +348,17 @@ n_layer=1
 """
     cfg_path = tmp_path / "incomplete.toml"
     cfg_path.write_text(toml_text)
+
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
@@ -601,7 +614,7 @@ def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     cfg_path.write_text(cfg_text, encoding="utf-8")
     exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
     assert isinstance(exp.train.runtime.out_dir, Path)
-    assert str(exp.train.runtime.out_dir).endswith("out/rel_train")
+    assert exp.train.runtime.out_dir == tmp_path / "out/rel_train"
 
 
 def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
@@ -614,7 +627,7 @@ def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     cfg_path.write_text(cfg_text, encoding="utf-8")
     exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
     assert isinstance(exp.sample.runtime.out_dir, Path)
-    assert str(exp.sample.runtime.out_dir).endswith("out/rel_sample")
+    assert exp.sample.runtime.out_dir == tmp_path / "out/rel_sample"
 
 
 def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
@@ -712,7 +725,9 @@ def test_config_canonical_exports() -> None:
     assert hasattr(loading, "load_full_experiment_config")
 
 
-def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
+def test_full_loader_incomplete_sample_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -722,11 +737,24 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     cfg_path = tmp_path / "incomplete_sample.toml"
     cfg_path.write_text(toml_text)
 
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
+
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
+def test_full_loader_no_train_section_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = """
 [prepare]
 
@@ -737,11 +765,25 @@ out_dir = "out/test"
 """
     cfg_path = tmp_path / "no_train.toml"
     cfg_path.write_text(toml_text)
+
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
+
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
+def test_full_loader_no_sample_section_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -749,11 +791,25 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
     )
     cfg_path = tmp_path / "no_sample.toml"
     cfg_path.write_text(toml_text)
+
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
+
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
+def test_full_loader_train_missing_data_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -762,11 +818,24 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     cfg_path = tmp_path / "missing_data.toml"
     cfg_path.write_text(toml_text)
 
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
+
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
+def test_full_loader_train_missing_runtime_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -774,6 +843,17 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     )
     cfg_path = tmp_path / "missing_runtime.toml"
     cfg_path.write_text(toml_text)
+
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
+    monkeypatch.setattr(
+        config_loading, "_default_config_path_from_root", lambda _: default_path
+    )
 
     with pytest.raises(ValidationError):
         config_loading.load_experiment_toml(cfg_path)
@@ -808,22 +888,35 @@ def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
     assert exp.shared.dataset_dir.is_absolute()
 
 
-def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
+def test_cli_adapters_prerequisites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_loading, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr(config_cli, "_PROJECT_HOME", tmp_path)
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
-            dataset_dir=Path("./data"),
+            dataset_dir=data_dir,
             out_dir=Path("out/exp"),
             include_sample=True,
         ),
         encoding="utf-8",
     )
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
+    # Ensure default config is empty to prevent unintended merging
+    default_path = (
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
+    )
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    default_path.write_text("")
+
     train_meta = data_dir / "meta.pkl"
     train_meta.write_bytes(b"meta")
 
     exp = config_cli.load_experiment("exp", cfg_path)
+    assert exp.shared.dataset_dir == data_dir
 
     found_train_meta = config_cli.ensure_train_prerequisites(exp)
     assert found_train_meta == train_meta

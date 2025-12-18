@@ -93,6 +93,19 @@ class SimpleBatches:
         self.val = MemmapReader.open(val_path, dtype=dtype)
         self._cursor: dict[Literal["train", "val"], int] = {"train": 0, "val": 0}
 
+    def close(self) -> None:
+        """Explicitly close the underlying MemmapReaders."""
+        if self.train:
+            self.train.close()
+        if self.val:
+            self.val.close()
+
+    def __enter__(self) -> "SimpleBatches":
+        return self
+
+    def __exit__(self, _exc_type, _exc_val, _exc_tb) -> None:
+        self.close()
+
     def get_batch(
         self, split: Literal["train", "val"]
     ) -> tuple[torch.Tensor, torch.Tensor]:

@@ -1,0 +1,77 @@
+# Vier Gewinnt training and sampling configuration.
+
+[prepare]
+raw_text_path = "datasets/games.txt"
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+tokenizer_type = "char" # Placeholder, will be a custom tokenizer
+
+#[prepare.data]
+#directory = "./data"
+#complete_dataset = "games.txt"
+
+#[train.data]
+#directory = "./data"
+#complete_dataset = "games.txt"
+
+[train.model]
+# The board is 7x6=42, so the sequence length is 42.
+# The vocabulary is 3 (empty, player1, player2).
+n_layer = 4
+n_head = 4
+n_embd = 128
+block_size = 42
+dropout = 0.1
+bias = false
+vocab_size = 9
+
+[train.data]
+batch_size = 64
+block_size = 42
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 100
+lr_decay_iters = 5000
+min_lr = 0.0001
+
+[train.runtime]
+out_dir = "./out"
+max_iters = 5000
+eval_interval = 250
+eval_iters = 20
+log_interval = 10
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.runtime]
+out_dir = "./out"
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = "6" # Example start of a game
+num_samples = 2
+max_new_tokens = 100
+temperature = 0.8
+top_k = 3
+
+[shared]
+experiment = "vier_gewinnt"
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out"
+sample_out_dir = "./out"

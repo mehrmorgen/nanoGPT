@@ -72,6 +72,7 @@ class TestMemmapReader:
                     assert reader.arr[0] == test_data[0]
 
             finally:
+                reader.close()
                 path.unlink(missing_ok=True)
 
 
@@ -121,6 +122,7 @@ class TestSampleBatch:
                 assert torch.equal(x[:, 1:], y[:, :-1])
 
             finally:
+                reader.close()
                 path.unlink(missing_ok=True)
 
 
@@ -170,11 +172,10 @@ class TestSimpleBatches:
             )
 
             # Create SimpleBatches
-            batches = SimpleBatches(data_config, device, temp_path)
-
-            # Test batch retrieval
-            train_batch = batches.get_batch("train")
-            val_batch = batches.get_batch("val")
+            with SimpleBatches(data_config, device, temp_path) as batches:
+                # Test batch retrieval
+                train_batch = batches.get_batch("train")
+                val_batch = batches.get_batch("val")
 
             assert isinstance(train_batch, tuple)
             assert len(train_batch) == 2
@@ -219,12 +220,11 @@ class TestSimpleBatches:
                 batch_size=batch_size, block_size=block_size, sampler="sequential"
             )
 
-            batches = SimpleBatches(data_config, device, temp_path)
-
-            # Get multiple batches to test sequential behavior
-            seen_positions = set()
-            for _ in range(3):
-                x, y = batches.get_batch("train")
+            with SimpleBatches(data_config, device, temp_path) as batches:
+                # Get multiple batches to test sequential behavior
+                seen_positions = set()
+                for _ in range(3):
+                    x, y = batches.get_batch("train")
                 # Check that we're getting different data each time (sequential)
                 first_val = x[0, 0].item()
                 seen_positions.add(first_val)

@@ -42,6 +42,8 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 ## Policy
 
+```
+
 - Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests, runtime):
   - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
   - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
@@ -95,4 +97,6 @@ Testing
 
 - See `.dev-guidelines/README.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.
+
+```
 ```
