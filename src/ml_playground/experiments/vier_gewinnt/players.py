@@ -48,7 +48,7 @@ class HeuristicPlayer(Player):
 
 
 class MinimaxPlayer(Player):
-    def __init__(self, depth: int = 4) -> None:
+    def __init__(self, depth: int = 3) -> None:
         self.depth = depth
         self.player_id: Optional[int] = None
 
