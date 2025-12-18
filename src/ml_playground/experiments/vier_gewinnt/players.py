@@ -144,9 +144,8 @@ class MinimaxPlayer(Player):
         if game.check_win(3 - self.player_id):
             return -100000
 
-        score = 0
-        score += self.score_position(game, self.player_id)
-        score -= self.score_position(game, 3 - self.player_id)
+        # Use single-pass evaluation instead of scoring both players separately
+        score = self.score_position_both_players(game)
 
         return score
 
@@ -183,6 +182,42 @@ class MinimaxPlayer(Player):
 
         return score
 
+    def score_position_both_players(self, game: VierGewinnt) -> int:
+        """Evaluate board position for both players in a single pass."""
+        score = 0
+        board = game.board
+        rows, cols = game.rows, game.cols
+        player = self.player_id if self.player_id is not None else 1
+        opponent = 3 - player
+
+        # Horizontal
+        for r in range(rows):
+            row_array = [int(i) for i in list(board[r, :])]
+            for c in range(cols - 3):
+                window = row_array[c : c + 4]
+                score += self.evaluate_window_both(window, player, opponent)
+
+        # Vertical
+        for c in range(cols):
+            col_array = [int(i) for i in list(board[:, c])]
+            for r in range(rows - 3):
+                window = col_array[r : r + 4]
+                score += self.evaluate_window_both(window, player, opponent)
+
+        # Positive diagonal
+        for r in range(rows - 3):
+            for c in range(cols - 3):
+                window = [board[r + i][c + i] for i in range(4)]
+                score += self.evaluate_window_both(window, player, opponent)
+
+        # Negative diagonal
+        for r in range(3, rows):
+            for c in range(cols - 3):
+                window = [board[r - i][c + i] for i in range(4)]
+                score += self.evaluate_window_both(window, player, opponent)
+
+        return score
+
     def evaluate_window(self, window: list[int], player: int) -> int:
         score = 0
         opponent = 3 - player
@@ -195,6 +230,27 @@ class MinimaxPlayer(Player):
 
         if window.count(opponent) == 3 and window.count(0) == 1:
             score -= 80
+        return score
+
+    def evaluate_window_both(self, window: list[int], player: int, opponent: int) -> int:
+        """Evaluate a window for both players in a single pass."""
+        score = 0
+        player_count = window.count(player)
+        opponent_count = window.count(opponent)
+        empty_count = window.count(0)
+        
+        # Player scoring
+        if player_count == 4:
+            score += 100
+        elif player_count == 3 and empty_count == 1:
+            score += 10
+        elif player_count == 2 and empty_count == 2:
+            score += 5
+        
+        # Opponent penalty (note the asymmetry)
+        if opponent_count == 3 and empty_count == 1:
+            score -= 80
+        
         return score
 
     def create_temp_game(self, game: VierGewinnt, col: int, player: int) -> VierGewinnt:
