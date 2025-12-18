@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from typing import Dict, Tuple, List
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 from .engine import VierGewinnt
 from .players import (
@@ -54,38 +55,59 @@ def main() -> None:
         "player2", choices=PLAYER_CLASSES.keys(), help="Type of player 2"
     )
     parser.add_argument("num_games", type=int, help="Number of games to play")
-    parser.add_argument("output_file", help="File to save the training data")
+    default_output_file = Path(__file__).parent / "datasets" / "games.txt"
+    parser.add_argument(
+        "output_file",
+        nargs="?",
+        default=str(default_output_file),
+        help="File to save the training data",
+    )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=1000,
+        help="Print progress every N simulation attempts (0 disables).",
+    )
     args = parser.parse_args()
 
     player1 = PLAYER_CLASSES[args.player1]()
     player2 = PLAYER_CLASSES[args.player2]()
 
-    seen_games: set[str] = set()
+    seen_games: set[bytes] = set()
     attempts = 0
     max_attempts = max(args.num_games * 20, args.num_games + 10)
 
-    while len(seen_games) < args.num_games:
-        if attempts >= max_attempts:
-            raise RuntimeError(
-                "Unable to generate the requested number of unique games. "
-                "The selected players may be too deterministic for this quota."
-            )
+    output_path = Path(args.output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        while len(seen_games) < args.num_games:
+            if attempts >= max_attempts:
+                raise RuntimeError(
+                    "Unable to generate the requested number of unique games. "
+                    "The selected players may be too deterministic for this quota."
+                )
 
-        winner, move_history = play_game(player1, player2)
-        record = f"{winner}:{','.join(map(str, move_history))}"
-        attempts += 1
+            _, move_history = play_game(player1, player2)
+            attempts += 1
 
-        seen_games.add(record)
+            # moves are 0..6, so bytes(move_history) is a compact and fast hash key
+            key = bytes(move_history)
+            if key in seen_games:
+                if args.progress_every and attempts % args.progress_every == 0:
+                    print(
+                        f"Collected {len(seen_games)}/{args.num_games} unique games "
+                        f"after {attempts} simulations"
+                    )
+                continue
 
-        if attempts % 10 == 0 or attempts == args.num_games:
-            print(
-                f"Collected {len(seen_games)}/{args.num_games} unique games "
-                f"after {attempts} simulations"
-            )
+            seen_games.add(key)
+            f.write(",".join(map(str, move_history)) + "\n")
 
-    with open(args.output_file, "w") as f:
-        for record in seen_games:
-            f.write(record + "\n")
+            if args.progress_every and attempts % args.progress_every == 0:
+                print(
+                    f"Collected {len(seen_games)}/{args.num_games} unique games "
+                    f"after {attempts} simulations"
+                )
 
 
 if __name__ == "__main__":

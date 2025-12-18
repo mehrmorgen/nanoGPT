@@ -59,6 +59,9 @@ events.out.tfevents.*
 **/raw/
 **/out/
 
+# Generated datasets (do not version)
+/data/
+
 # Vendor llama.cpp binaries and build artifacts (do not commit)
 tools/llama_cpp/llama-gguf
 tools/llama_cpp/llama-quantize
