@@ -54,7 +54,9 @@ class MinimaxPlayer(Player):
 
     def get_move(self, game: VierGewinnt) -> int:
         self.player_id = game.current_player
-        _, move = self.minimax(game, self.depth, True, -np.inf, np.inf)
+        # Get the last move position for optimized terminal detection
+        last_move_pos = game.get_last_move_position()
+        _, move = self.minimax(game, self.depth, True, -np.inf, np.inf, last_move_pos)
         if move is None:
             return random.choice(game.get_valid_moves())
         return move
@@ -71,10 +73,22 @@ class MinimaxPlayer(Player):
         maximizing_player: bool,
         alpha: float,
         beta: float,
+        last_move_pos: tuple[int, int] | None = None,
     ) -> Tuple[float, Optional[int]]:
         valid_moves = game.get_valid_moves()
 
-        is_terminal = game.check_win(1) or game.check_win(2) or game.is_full()
+        # Optimized terminal detection: only check around last move
+        is_terminal = False
+        if last_move_pos:
+            row, col = last_move_pos
+            # Only need to check if the last move created a win
+            is_terminal = game.check_win_from_position(row, col, 1) or \
+                         game.check_win_from_position(row, col, 2) or \
+                         game.is_full()
+        else:
+            # For initial call, fall back to full check
+            is_terminal = game.check_win(1) or game.check_win(2) or game.is_full()
+        
         if depth == 0 or is_terminal:
             return self.evaluate_board(game), None
 
@@ -82,9 +96,16 @@ class MinimaxPlayer(Player):
             max_eval = -np.inf
             best_move = None
             for move in valid_moves:
+                # Make move in-place
                 player = self._require_player_id()
-                new_game = self.create_temp_game(game, move, player)
-                eval_score, _ = self.minimax(new_game, depth - 1, False, alpha, beta)
+                move_row = self._make_inplace_move(game, move, player)
+                
+                # Recurse with the new position
+                eval_score, _ = self.minimax(game, depth - 1, False, alpha, beta, (move_row, move))
+                
+                # Undo the move
+                self._undo_inplace_move(game, move)
+                
                 if eval_score > max_eval:
                     max_eval = eval_score
                     best_move = move
@@ -96,9 +117,16 @@ class MinimaxPlayer(Player):
             min_eval = np.inf
             best_move = None
             for move in valid_moves:
+                # Make move in-place
                 player = 3 - self._require_player_id()
-                new_game = self.create_temp_game(game, move, player)
-                eval_score, _ = self.minimax(new_game, depth - 1, True, alpha, beta)
+                move_row = self._make_inplace_move(game, move, player)
+                
+                # Recurse with the new position
+                eval_score, _ = self.minimax(game, depth - 1, True, alpha, beta, (move_row, move))
+                
+                # Undo the move
+                self._undo_inplace_move(game, move)
+                
                 if eval_score < min_eval:
                     min_eval = eval_score
                     best_move = move
@@ -179,3 +207,24 @@ class MinimaxPlayer(Player):
                 break
         temp_game.current_player = 3 - player
         return temp_game
+
+    def _make_inplace_move(self, game: VierGewinnt, col: int, player: int) -> int:
+        """Make a move in-place and return the row where the piece was placed."""
+        for r in range(game.rows - 1, -1, -1):
+            if game.board[r, col] == 0:
+                game.board[r, col] = player
+                game.move_history.append(col)
+                return r
+        raise ValueError(f"Column {col} is full")
+    
+    def _undo_inplace_move(self, game: VierGewinnt, col: int) -> None:
+        """Undo the last move in the specified column."""
+        if not game.move_history:
+            return
+        # Remove the last move from history
+        game.move_history.pop()
+        # Clear the top piece in the column
+        for r in range(game.rows):
+            if game.board[r, col] != 0:
+                game.board[r, col] = 0
+                return
