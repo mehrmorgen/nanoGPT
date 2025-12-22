@@ -41,11 +41,11 @@ dependencies = [
 
 [project.scripts]
 ci-tasks = "ml_playground.tools.cli:main_entry"
-cli = "ml_playground.runtime.cli:main_entry"
+cli = "ml_playground.runtime.cli.main:main_entry"
 env-tasks = "ml_playground.tools.cli:main_entry"
 lint-tasks = "ml_playground.tools.cli:main_entry"
 lit-tasks = "ml_playground.tools.cli:main_entry"
-ml-playground = "ml_playground.runtime.cli:main_entry"
+ml-playground = "ml_playground.runtime.cli.main:main_entry"
 test-tasks = "ml_playground.tools.cli:main_entry"
 tools = "ml_playground.tools.cli:main_entry"
 
@@ -148,7 +148,7 @@ extend-select = [
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
-files = ["src/ml_playground"]
+files = ["src/ml_playground", "src/ml_playground/runtime"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 # Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
 # that slow down type checking and are not part of core runtime.
@@ -259,6 +259,7 @@ omit = [
     "**/mlruns/*",
     "**/.hf_cache/*",
     "**/.cache/*",
+    "src/ml_playground/runtime/**",
 ]
 
 [tool.coverage.report]

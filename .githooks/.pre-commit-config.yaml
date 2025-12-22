@@ -18,43 +18,70 @@ repos:
   - id: checkmake
 - repo: local
   hooks:
-  # TODO(mock-free-refactor): re-enable coverage badge hook after coverage branch lands
-  # - id: coverage-badge
-  #   name: coverage badge
-  #   entry: bash
-  #   args:
-  #     - -c
-  #     - |
-  #       set -e
-  #       if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
-  #         COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
-  #       fi
-  #       make coverage-badge SKIP_COVERAGE_TESTS=1
-  #       git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
-  #   language: system
-  #   pass_filenames: false
-  #   stages: [pre-commit]
-  - id: coverage-threshold
-    name: coverage threshold (>=90.00%)
-    entry: uv
-    args: [run, tools, test, coverage, --verbose]
-    language: system
-    pass_filenames: false
-  - id: basedpyright
-    name: basedpyright (strict)
-    entry: uv
-    args: [run, basedpyright, src/ml_playground]
-    language: system
-    pass_filenames: false
-  - id: mypy
-    name: mypy
-    entry: uv
-    args: [run, mypy, --incremental, src/ml_playground]
-    language: system
-    pass_filenames: false
-  - id: vulture
-    name: vulture
-    entry: uv
-    args: [run, vulture, src/ml_playground, --min-confidence, "90"]
-    language: system
-    pass_filenames: false
+    # TODO(mock-free-refactor): re-enable coverage badge hook after coverage branch lands
+    # - id: coverage-badge
+    #   name: coverage badge
+    #   entry: bash
+    #   args:
+    #     - -c
+    #     - |
+    #       set -e
+    #       if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
+    #         COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
+    #       fi
+    #       make coverage-badge SKIP_COVERAGE_TESTS=1
+    #       git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
+    #   language: system
+    #   pass_filenames: false
+    #   stages: [pre-commit]
+    - id: coverage-threshold
+      name: coverage threshold (>=88.00% lines, >=80.00% branches)
+      entry: uv
+      args:
+        - run
+        - tools
+        - test
+        - coverage
+        - --line-threshold
+        - "88"
+        - --branch-threshold
+        - "80"
+        - --verbose
+      language: system
+      pass_filenames: false
+    - id: integration-tests
+      name: integration tests
+      entry: uv
+      args: [run, pytest, tests/integration, -q]
+      language: system
+      pass_filenames: false
+    - id: acceptance-tests
+      name: acceptance tests
+      entry: uv
+      args: [run, pytest, tests/acceptance, -q]
+      language: system
+      pass_filenames: false
+    - id: e2e-tests
+      name: e2e tests
+      entry: uv
+      args: [run, pytest, tests/e2e, -q]
+      language: system
+      pass_filenames: false
+    - id: basedpyright
+      name: basedpyright (strict)
+      entry: uv
+      args: [run, basedpyright, src/ml_playground]
+      language: system
+      pass_filenames: false
+    - id: mypy
+      name: mypy
+      entry: uv
+      args: [run, mypy, --incremental, src/ml_playground]
+      language: system
+      pass_filenames: false
+    - id: vulture
+      name: vulture
+      entry: uv
+      args: [run, vulture, src/ml_playground, --min-confidence, "90"]
+      language: system
+      pass_filenames: false
