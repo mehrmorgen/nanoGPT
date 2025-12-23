@@ -32,6 +32,9 @@ src/ml_playground/runtime/
   - `run_or_exit` and `handle_tool_result` to normalize process exit codes and ToolResult reporting.
   - `extract_exp_config` and `complete_experiments` to work with Typer contexts and experiment naming.
   - `log_directory` and `log_command_status` to emit consistent, testable log lines.
+- Maintain runner invariants:
+  - `runtime.cli.runners` wraps `run_prepare/train/sample` implementations and always calls `handle_tool_result`.
+  - Dependency container (`CLIDependencies`) can be overridden/reset for tests; defaults mirror `configuration.cli`.
 
 ## Usage Example
 

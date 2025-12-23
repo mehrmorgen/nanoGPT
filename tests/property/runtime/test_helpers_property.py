@@ -14,6 +14,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from ml_playground.configuration.models import SharedConfig
 from ml_playground.runtime import helpers as rt_helpers
 
 
@@ -251,20 +252,31 @@ def test_log_directory_various_paths(
 def test_log_command_status_handles_dataset_dir(tag: str, dataset_dir: Path) -> None:
     """Test log_command_status handles dataset_dir safely."""
 
-    class SharedCfg:
-        def __init__(self, path: Path) -> None:
-            self.dataset_dir = path
-
     class _BufferLogger:
         def __init__(self) -> None:
             self.messages: list[str] = []
 
+        def debug(self, msg: str) -> None:  # pragma: no cover - test stub
+            self.messages.append(msg)
+
         def info(self, msg: str) -> None:
             self.messages.append(msg)
 
+        def warning(self, msg: str) -> None:  # pragma: no cover - test stub
+            self.messages.append(msg)
+
+        def error(self, msg: str) -> None:  # pragma: no cover - test stub
+            self.messages.append(msg)
+
     logger = _BufferLogger()
-    rt_helpers.log_command_status(
-        tag, SharedCfg(dataset_dir), out_dir=None, logger=logger
-    )  # type: ignore[arg-type]
+    shared_cfg = SharedConfig(
+        experiment="demo",
+        config_path=dataset_dir / "cfg.toml",
+        project_home=dataset_dir.parent,
+        dataset_dir=dataset_dir,
+        train_out_dir=dataset_dir.parent / "train",
+        sample_out_dir=dataset_dir.parent / "sample",
+    )
+    rt_helpers.log_command_status(tag, shared_cfg, out_dir=None, logger=logger)
 
     assert isinstance(logger.messages, list)
