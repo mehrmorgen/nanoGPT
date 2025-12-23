@@ -110,7 +110,7 @@ def global_options(
         )
         typer.echo("", err=True)
         typer.echo(context.get_help(), err=True)
-        raise typer.Exit(0)
+        raise typer.Exit(2)
 
 
 @app.command()

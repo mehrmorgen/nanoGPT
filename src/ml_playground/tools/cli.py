@@ -18,8 +18,9 @@ from ml_playground.tools.dev import DevTools
 from ml_playground.tools.environment import EnvironmentTools
 from ml_playground.tools.quality import QualityTools
 from ml_playground.tools.testing import TestingTools
-from ml_playground.tools.core.config import load_tools_config, ToolsConfig
+from ml_playground.tools.core import runtime as tools_runtime
 from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutionError
+from ml_playground.tools.core.interfaces import ToolResult
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -85,21 +86,19 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(learn_app, name="learn")
 
 
-# Global options and state
-class GlobalState:
-    """Global state for CLI options."""
-
-    def __init__(self):
-        self.learning_mode: bool = False
-        self.verbosity: int = 1
-        self.dry_run: bool = False
-        self.project_root: Optional[Path] = None
-        self.config: Optional[ToolsConfig] = None
-        self._learning_mode_set: bool = False
+# Global options and state (shared with tools runtime)
 
 
-# Global state instance
-state = GlobalState()
+class GlobalState(tools_runtime.ToolsCLIState):
+    """Compatibility wrapper for tests expecting a local GlobalState type."""
+
+
+state = tools_runtime.state
+
+
+def load_tools_config(project_root: Path | None = None):
+    """Compatibility shim delegating to tools core config loader."""
+    return tools_runtime.load_tools_config(project_root)
 
 
 def load_config_with_error_handling(project_root: Path | None = None) -> None:
@@ -108,7 +107,6 @@ def load_config_with_error_handling(project_root: Path | None = None) -> None:
         state.config = load_tools_config(project_root)
         state.project_root = project_root
 
-        # Apply default learning mode from config if not explicitly set
         if not state._learning_mode_set and state.config is not None:
             state.learning_mode = state.config.learning_mode_default
             state.verbosity = state.config.default_verbosity
@@ -116,7 +114,7 @@ def load_config_with_error_handling(project_root: Path | None = None) -> None:
     except ToolConfigurationError as e:
         typer.echo(f"Configuration error: {e}", err=True)
         raise typer.Exit(1)
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - defensive catch for CLI surface
         typer.echo(f"Unexpected error loading configuration: {e}", err=True)
         raise typer.Exit(1)
 
@@ -231,7 +229,7 @@ def _get_dev_tools() -> DevTools:
     return DevTools(config=state.config)
 
 
-def _handle_tool_result(result) -> None:
+def _handle_tool_result(result: ToolResult) -> None:
     """Handle tool result and exit appropriately."""
     if result.stdout:
         typer.echo(result.stdout)

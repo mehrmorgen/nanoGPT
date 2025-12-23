@@ -43,9 +43,9 @@ repos:
         - test
         - coverage
         - --line-threshold
-        - "88"
+        - "89"
         - --branch-threshold
-        - "80"
+        - "81"
         - --verbose
       language: system
       pass_filenames: false

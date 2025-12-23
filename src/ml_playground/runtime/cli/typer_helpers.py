@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import click
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, cast
 
 import typer
 
@@ -17,14 +17,14 @@ def extract_exp_config(ctx: typer.Context) -> Path | None:
             "Context object missing or not a dict; no exp_config."
         )
         return None
-    mapping = obj
-    exp_config_obj = mapping.get("exp_config")
+    mapping = cast(dict[str, Any], obj)
+    exp_config_obj: object | None = mapping.get("exp_config")
     logger = logging.getLogger(__name__)
     logger.debug("Context exp_config resolved to %s", exp_config_obj)
-    if exp_config_obj is None:
-        return None
     if isinstance(exp_config_obj, Path):
         return exp_config_obj
+    if exp_config_obj is None:
+        return None
     logger.debug("Unexpected exp_config value type %s; ignoring.", type(exp_config_obj))
     return None
 

@@ -24,7 +24,7 @@ os.environ["HYPOTHESIS_STORAGE_DIRECTORY"] = ".cache/hypothesis"
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _seed_randomness() -> None:
+def _seed_randomness() -> None:  # pyright: ignore[reportUnusedFunction]
     """Seed random number generators for deterministic test runs.
 
     This fixture automatically runs once per test session to ensure

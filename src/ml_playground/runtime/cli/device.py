@@ -22,7 +22,7 @@ def global_device_setup(
     Matches legacy monolithic CLI behavior; never raises on torch env issues.
     """
     if torch_module is not None:
-        torch_mod = cast(Any, torch_module)
+        torch_mod = torch_module
     else:
         cli_mod = sys.modules.get("ml_playground.runtime.cli")
         if cli_mod is None:

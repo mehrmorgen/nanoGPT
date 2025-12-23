@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Generator
 
 import pytest
 
@@ -12,7 +13,7 @@ BASE_TAG = "base"
 
 
 @pytest.fixture(autouse=True)
-def _restore_bootstrap_defaults() -> None:
+def _restore_bootstrap_defaults() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
     """Ensure each test runs with a controlled default factory."""
 
     bootstrap.configure_runtime_cli_dependencies(lambda: _make_dependencies(BASE_TAG))
@@ -24,16 +25,46 @@ def _make_dependencies(tag: str) -> bootstrap.CLIDependencies:
     def _load_experiment(experiment: str, exp_config: Path | None) -> SimpleNamespace:
         return SimpleNamespace(tag=tag, experiment=experiment, exp_config=exp_config)
 
-    def _noop(*_args: object, **_kwargs: object) -> SimpleNamespace:
+    def _run_prepare(
+        experiment: str,
+        prepare_cfg: Any,
+        config_path: Path,
+        shared_cfg: Any,
+        learning_mode_engine: Any | None,
+    ) -> SimpleNamespace:
+        del experiment, prepare_cfg, config_path, shared_cfg, learning_mode_engine
         return SimpleNamespace(tag=tag)
+
+    def _run_train(
+        experiment: str,
+        train_cfg: Any,
+        config_path: Path,
+        shared_cfg: Any,
+        learning_mode_engine: Any | None,
+    ) -> SimpleNamespace:
+        del experiment, train_cfg, config_path, shared_cfg, learning_mode_engine
+        return SimpleNamespace(tag=tag)
+
+    def _run_sample(
+        experiment: str,
+        sample_cfg: Any,
+        config_path: Path,
+        shared_cfg: Any,
+        learning_mode_engine: Any | None,
+    ) -> SimpleNamespace:
+        del experiment, sample_cfg, config_path, shared_cfg, learning_mode_engine
+        return SimpleNamespace(tag=tag)
+
+    def _ensure_prereq(_: Any) -> None:
+        return None
 
     return bootstrap.CLIDependencies(
         load_experiment=_load_experiment,
-        ensure_train_prerequisites=lambda _: None,
-        ensure_sample_prerequisites=lambda _: None,
-        run_prepare=lambda *_args, **_kwargs: _noop(),
-        run_train=lambda *_args, **_kwargs: _noop(),
-        run_sample=lambda *_args, **_kwargs: _noop(),
+        ensure_train_prerequisites=_ensure_prereq,
+        ensure_sample_prerequisites=_ensure_prereq,
+        run_prepare=_run_prepare,
+        run_train=_run_train,
+        run_sample=_run_sample,
     )
 
 

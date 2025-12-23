@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Mapping, cast
 import math
@@ -25,12 +24,6 @@ from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
-
-
-@dataclass(slots=True)
-class _ValidationInfoStub:
-    context: Mapping[str, Any] | None
-    config: Any | None = None
 
 
 class ExperimentConfigTestHarness(config_models.ExperimentConfig):

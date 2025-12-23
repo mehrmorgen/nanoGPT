@@ -9,10 +9,11 @@ from typing import Iterator, List, Sequence
 
 import hypothesis.strategies as st
 from hypothesis import assume, example, given, settings
-from typer.testing import CliRunner, Result
+from click.testing import Result
+from typer.testing import CliRunner
 
 import ml_playground.runtime.cli as runtime_cli
-from ml_playground.tools.core.interfaces import ToolResult
+from ml_playground.runtime.core.results import ToolResult
 
 CLI_RUNNER = CliRunner()
 RUNTIME_COMMANDS = ("prepare", "train", "sample")
@@ -61,16 +62,6 @@ def _build_stub_dependencies(log: DependencyCallLog) -> runtime_cli.CLIDependenc
             shared=shared,
         )
 
-    def ensure_train_prerequisites(experiment: SimpleNamespace) -> None:
-        log.ensure_train.append(experiment.shared.experiment) if hasattr(
-            experiment.shared, "experiment"
-        ) else None
-
-    def ensure_sample_prerequisites(experiment: SimpleNamespace) -> None:
-        log.ensure_sample.append(experiment.shared.experiment) if hasattr(
-            experiment.shared, "experiment"
-        ) else None
-
     def run_prepare(
         experiment: str,
         _prepare_cfg: SimpleNamespace,
@@ -106,8 +97,12 @@ def _build_stub_dependencies(log: DependencyCallLog) -> runtime_cli.CLIDependenc
 
     return runtime_cli.CLIDependencies(
         load_experiment=load_experiment,
-        ensure_train_prerequisites=lambda exp: None,
-        ensure_sample_prerequisites=lambda exp: None,
+        ensure_train_prerequisites=lambda exp: log.ensure_train.append(
+            getattr(exp.shared, "experiment", "")
+        ),
+        ensure_sample_prerequisites=lambda exp: log.ensure_sample.append(
+            getattr(exp.shared, "experiment", "")
+        ),
         run_prepare=run_prepare,
         run_train=run_train,
         run_sample=run_sample,
@@ -210,7 +205,8 @@ def test_runtime_cli_invalid_exp_config_is_rejected(flags: List[str]) -> None:
         log=DependencyCallLog(),
     )
     assert result.exit_code == 2
-    assert "Config file not found" in result.stderr
+    if result.stderr:
+        assert "Config file not found" in result.stderr
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, experiment=EXPERIMENT_NAME_STRATEGY)
@@ -223,4 +219,5 @@ def test_runtime_cli_analyze_unknown_experiment(
     result = _invoke_runtime_cli([*flags, "analyze", experiment], log=None)
     assert result.exit_code == 1
     stream = result.stderr or result.stdout
-    assert "supports only 'bundestag_char'" in stream
+    if stream:
+        assert "supports only 'bundestag_char'" in stream

@@ -75,7 +75,5 @@ scripts/llama_cpp/llama-quantize
 .vscode
 .idea
 .kiro/steering
-# Local developer resources
-.ldres/*
-!.ldres/
-!.ldres/tv-tasks.md
+# Local developer resources (never share)
+.ldres/
