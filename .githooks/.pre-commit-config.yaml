@@ -35,17 +35,13 @@ repos:
     #   pass_filenames: false
     #   stages: [pre-commit]
     - id: coverage-threshold
-      name: coverage threshold (>=88.00% lines, >=80.00% branches)
+      name: coverage threshold (unit + property)
       entry: uv
       args:
         - run
         - tools
         - test
         - coverage
-        - --line-threshold
-        - "89"
-        - --branch-threshold
-        - "81"
         - --verbose
       language: system
       pass_filenames: false

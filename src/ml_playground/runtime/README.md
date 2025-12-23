@@ -28,6 +28,10 @@ src/ml_playground/runtime/
 - Parse runtime options and hydrate typed configuration objects before invoking training or sampling flows.
 - Assemble dependency bundles (tokenizers, checkpoint managers, loggers) in a single place to keep CLI handlers thin.
 - Expose hooks that the Typer commands in `src/ml_playground/tools/` and `src/ml_playground/cli.py` can call without duplicating wiring logic.
+- Provide shared helpers (`runtime.helpers`) for CLI flows:
+  - `run_or_exit` and `handle_tool_result` to normalize process exit codes and ToolResult reporting.
+  - `extract_exp_config` and `complete_experiments` to work with Typer contexts and experiment naming.
+  - `log_directory` and `log_command_status` to emit consistent, testable log lines.
 
 ## Usage Example
 
