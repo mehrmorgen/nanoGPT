@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, cast
-import sys
+from typing import Any, Callable, Optional
 import importlib
 
 import torch
@@ -19,33 +18,16 @@ def global_device_setup(
 ) -> None:
     """Set global seeds and enable TF32 as needed.
 
-    Matches legacy monolithic CLI behavior; never raises on torch env issues.
+    Delegates to the runtime.device implementation to keep CLI and runtime aligned.
     """
-    if torch_module is not None:
-        torch_mod = torch_module
-    else:
-        cli_mod = sys.modules.get("ml_playground.runtime.cli")
-        if cli_mod is None:
-            cli_mod = importlib.import_module("ml_playground.runtime.cli")
-        torch_mod = cast(Any, getattr(cli_mod, "torch", torch))
+    rt_device = importlib.import_module("ml_playground.runtime.device")
     try:
-        manual_seed = cast(Callable[[int], object], torch_mod.manual_seed)
-        manual_seed(seed)
-        _cuda_available = (
-            cuda_is_available()
-            if cuda_is_available is not None
-            else torch_mod.cuda.is_available()
+        rt_device.global_device_setup(
+            device,
+            dtype,
+            seed,
+            cuda_is_available=cuda_is_available,
+            torch_module=torch_module if torch_module is not None else torch,
         )
-        if _cuda_available:
-            cuda_manual_seed = cast(Callable[[int], None], torch_mod.cuda.manual_seed)
-            cuda_manual_seed(seed)
-            try:
-                torch_mod.backends.cuda.matmul.fp32_precision = "tf32"
-            except AttributeError:
-                pass
-            try:
-                torch_mod.backends.cudnn.fp32_precision = "tf32"
-            except AttributeError:
-                pass
-    except (RuntimeError, AssertionError, AttributeError):
-        pass
+    except Exception:  # pragma: no cover - defensive parity with legacy shim
+        return
