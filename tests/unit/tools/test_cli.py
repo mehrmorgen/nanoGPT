@@ -3,10 +3,13 @@ Tests the CLI entry points, command routing, and learning mode integration
 without using mocks, following the project's testing guidelines.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from contextlib import contextmanager
 import importlib
 from types import SimpleNamespace
+from typing import Any, Iterator
 
 import pytest
 import typer
@@ -14,13 +17,16 @@ import typer
 from typer.testing import CliRunner
 
 import ml_playground.tools.cli as tools_cli
+from ml_playground.tools.cli import helpers as cli_helpers
+from ml_playground.tools.cli.commands import test as test_commands
+from ml_playground.tools.cli.state import state as cli_state
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolConfigurationError, ToolExecutionError
 from ml_playground.tools.core.interfaces import ToolResult
 
 
 @contextmanager
-def swap_attr(target, name: str, value):
+def swap_attr(target: object, name: str, value: Any) -> Iterator[None]:
     original = getattr(target, name)
     setattr(target, name, value)
     try:
@@ -30,7 +36,7 @@ def swap_attr(target, name: str, value):
 
 
 @contextmanager
-def swap_attr_by_path(path: str, value):
+def swap_attr_by_path(path: str, value: Any) -> Iterator[None]:
     module_path, attr = path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     original = getattr(module, attr)
@@ -44,12 +50,12 @@ def swap_attr_by_path(path: str, value):
 @pytest.fixture(autouse=True)
 def reset_cli_state() -> None:
     """Ensure CLI global state is reset between tests."""
-    tools_cli.state.learning_mode = False
-    tools_cli.state.verbosity = 1
-    tools_cli.state.dry_run = False
-    tools_cli.state.project_root = None
-    tools_cli.state.config = None
-    tools_cli.state._learning_mode_set = False
+    cli_state.learning_mode = False
+    cli_state.verbosity = 1
+    cli_state.dry_run = False
+    cli_state.project_root = None
+    cli_state.config = None
+    cli_state._learning_mode_set = False  # pyright: ignore[reportPrivateUsage]
 
 
 class TestGlobalState:
@@ -87,22 +93,19 @@ class TestCLIBasics:
         """Set up test environment."""
         self.runner = CliRunner()
         # Reset global state before each test
-        tools_cli.state.learning_mode = False
-        tools_cli.state.verbosity = 1
-        tools_cli.state.dry_run = False
-        tools_cli.state.project_root = None
-        tools_cli.state.config = None
+        tools_cli.state.learning_mode = False  # pyright: ignore[reportAttributeAccessIssue]
+        tools_cli.state.verbosity = 1  # pyright: ignore[reportAttributeAccessIssue]
+        tools_cli.state.dry_run = False  # pyright: ignore[reportAttributeAccessIssue]
+        tools_cli.state.project_root = None  # pyright: ignore[reportAttributeAccessIssue]
+        tools_cli.state.config = None  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_cli_help(self):
         """Test that CLI shows help when no arguments provided."""
         result = self.runner.invoke(tools_cli.app, ["--help"])
 
         assert result.exit_code == 0
-        assert "quality" in result.stdout
-        assert "test" in result.stdout
-        assert "env" in result.stdout
-        assert "ci" in result.stdout
-        assert "agentic" in result.stdout
+        for subcommand in ("quality", "test", "env", "ci", "agentic", "dev", "learn"):
+            assert subcommand in result.stdout
 
 
 class TestCLIErrorBranches:
@@ -138,7 +141,7 @@ class TestCLIErrorBranches:
                     rationale="simulate failure",
                 )
 
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: FailingTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: FailingTestingTools()):
             result = self.runner.invoke(tools_cli.app, ["test", "unit"])
 
         assert result.exit_code == 1
@@ -156,7 +159,7 @@ class TestCLIErrorBranches:
                 )
 
         with swap_attr(
-            tools_cli, "_get_environment_tools", lambda: FailingEnvironmentTools()
+            cli_helpers, "get_environment_tools", lambda: FailingEnvironmentTools()
         ):
             logdir = Path(".").resolve()
             result = self.runner.invoke(
@@ -178,7 +181,7 @@ class TestCLIErrorBranches:
                     rationale="simulate failure",
                 )
 
-        with swap_attr(tools_cli, "_get_ci_tools", lambda: FailingCITools()):
+        with swap_attr(cli_helpers, "get_ci_tools", lambda: FailingCITools()):
             result = self.runner.invoke(tools_cli.app, ["ci", "quality-gate"])
 
         assert result.exit_code == 1
@@ -329,7 +332,7 @@ class TestCLIErrorBranches:
                     stdout="coverage ok",
                 )
 
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: FakeTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: FakeTestingTools()):
             result = self.runner.invoke(
                 tools_cli.app,
                 [
@@ -380,7 +383,7 @@ class TestCLIErrorBranches:
                     stderr="coverage failed",
                 )
 
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: FakeTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: FakeTestingTools()):
             result = self.runner.invoke(tools_cli.app, ["test", "coverage"])
 
         assert result.exit_code == 7
@@ -408,7 +411,7 @@ class TestCLIErrorBranches:
                     stdout="coverage ok",
                 )
 
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: FakeTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: FakeTestingTools()):
             result = self.runner.invoke(tools_cli.app, ["test", "coverage"])
 
         assert result.exit_code == 0
@@ -699,7 +702,7 @@ class TestQualityCommands:
                 )
 
         stub = StubQualityTools()
-        with swap_attr(tools_cli, "_get_quality_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_quality_tools", lambda: stub):
             result = self.runner.invoke(
                 tools_cli.app, ["quality", "lint", "--", "--fix"]
             )
@@ -732,7 +735,7 @@ class TestQualityCommands:
                     stderr="format failed",
                 )
 
-        with swap_attr(tools_cli, "_get_quality_tools", lambda: StubQualityTools()):
+        with swap_attr(cli_helpers, "get_quality_tools", lambda: StubQualityTools()):
             result = self.runner.invoke(tools_cli.app, ["quality", "format"])
 
         assert result.exit_code == 5
@@ -800,7 +803,7 @@ class TestCLIIntegration:
                 )
 
         stub = StubTestingTools()
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: stub):
             result = self.runner.invoke(
                 tools_cli.app, ["test", "unit", "pattern", "--", "-k", "fast"]
             )
@@ -828,7 +831,7 @@ class TestCLIIntegration:
                 )
 
         stub = StubCITools()
-        with swap_attr(tools_cli, "_get_ci_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_ci_tools", lambda: stub):
             result = self.runner.invoke(
                 tools_cli.app, ["ci", "quality-gate", "--", "--verbose"]
             )
@@ -883,7 +886,7 @@ class TestCoverageCommands:
                 )
 
         captured: list[dict[str, object]] = []
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: StubTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: StubTestingTools()):
             result = self.runner.invoke(
                 tools_cli.app,
                 [
@@ -914,6 +917,9 @@ class TestCoverageCommands:
         """Failure from unified `coverage` should propagate exit codes and respect thresholds options."""
 
         class StubTestingTools:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
             def coverage(
                 self,
                 args: list[str],
@@ -925,6 +931,17 @@ class TestCoverageCommands:
                 verbosity_level: int,
                 force_regen: bool = False,
             ) -> ToolResult:
+                self.calls.append(
+                    {
+                        "args": args,
+                        "line": line_threshold,
+                        "branch": branch_threshold,
+                        "verbose": verbose,
+                        "learning_mode": learning_mode,
+                        "verbosity": verbosity_level,
+                        "force_regen": force_regen,
+                    }
+                )
                 assert learning_mode is False
                 assert verbosity_level == 1
                 assert line_threshold == 95.0
@@ -938,7 +955,7 @@ class TestCoverageCommands:
                     stderr="threshold failed",
                 )
 
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: StubTestingTools()):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: StubTestingTools()):
             result = self.runner.invoke(
                 tools_cli.app,
                 [
@@ -983,7 +1000,7 @@ class TestEnvironmentCommands:
                 )
 
         stub = StubEnvTools()
-        with swap_attr(tools_cli, "_get_environment_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_environment_tools", lambda: stub):
             result = self.runner.invoke(
                 tools_cli.app,
                 [
@@ -1024,7 +1041,7 @@ class TestEnvironmentCommands:
                 )
 
         stub = StubEnvTools()
-        with swap_attr(tools_cli, "_get_environment_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_environment_tools", lambda: stub):
             logdir = tmp_path / "logs"
             logdir.mkdir()
 
@@ -1084,7 +1101,7 @@ class TestAgenticCommands:
                 )
 
         stub = StubAgenticTools()
-        with swap_attr(tools_cli, "_get_agentic_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_agentic_tools", lambda: stub):
             result = self.runner.invoke(
                 tools_cli.app,
                 ["--learning-mode", "--verbosity", "2", "agentic", "guidelines-setup"],
@@ -1109,7 +1126,7 @@ class TestAgenticCommands:
                     "batch review failed", reason="oops", rationale="boom"
                 )
 
-        with swap_attr(tools_cli, "_get_agentic_tools", lambda: FailingAgenticTools()):
+        with swap_attr(cli_helpers, "get_agentic_tools", lambda: FailingAgenticTools()):
             result = self.runner.invoke(
                 tools_cli.app, ["agentic", "batch-review", "--format", "yaml"]
             )
@@ -1176,8 +1193,10 @@ class TestToolFactories:
                 captured["config"] = config
                 captured["root_path"] = root_path
 
-        with swap_attr(tools_cli, "QualityTools", FakeQualityTools):
-            instance = tools_cli._get_quality_tools()
+        with swap_attr_by_path(
+            "ml_playground.tools.quality.QualityTools", FakeQualityTools
+        ):
+            instance = cli_helpers.get_quality_tools()
 
         assert isinstance(instance, FakeQualityTools)
         assert captured["config"] is tools_cli.state.config
@@ -1186,19 +1205,19 @@ class TestToolFactories:
     @pytest.mark.parametrize(
         "factory_name, target_path, expects_root",
         [
-            ("_get_testing_tools", "ml_playground.tools.cli.TestingTools", True),
+            ("get_testing_tools", "ml_playground.tools.testing.TestingTools", True),
             (
-                "_get_environment_tools",
-                "ml_playground.tools.cli.EnvironmentTools",
+                "get_environment_tools",
+                "ml_playground.tools.environment.EnvironmentTools",
                 True,
             ),
-            ("_get_ci_tools", "ml_playground.tools.cli.CITools", True),
+            ("get_ci_tools", "ml_playground.tools.ci.CITools", True),
             (
-                "_get_agentic_tools",
+                "get_agentic_tools",
                 "ml_playground.tools.agentic.AgenticTools",
                 True,
             ),
-            ("_get_dev_tools", "ml_playground.tools.cli.DevTools", False),
+            ("get_dev_tools", "ml_playground.tools.dev.DevTools", False),
         ],
     )
     def test_tool_factories_create_expected_classes(
@@ -1223,7 +1242,7 @@ class TestToolFactories:
                 captured["root_path"] = root_path
 
         with swap_attr_by_path(target_path, FactoryStub):
-            factory = getattr(tools_cli, factory_name)
+            factory = getattr(cli_helpers, factory_name)
             instance = factory()  # type: ignore[operator]
 
         assert isinstance(instance, FactoryStub)
@@ -1249,7 +1268,7 @@ class TestHandleToolResult:
             stdout="hello",
         )
 
-        tools_cli._handle_tool_result(result)
+        cli_helpers.handle_tool_result(result)
 
         captured = capsys.readouterr()
         assert "hello" in captured.out
@@ -1267,7 +1286,7 @@ class TestHandleToolResult:
         )
 
         with pytest.raises(typer.Exit) as exc:
-            tools_cli._handle_tool_result(result)
+            cli_helpers.handle_tool_result(result)
 
         captured = capsys.readouterr()
         assert "boom" in captured.err
@@ -1302,14 +1321,14 @@ class TestInvokeTests:
         self, monkeypatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         stub = self.StubTestingTools()
-        with swap_attr(tools_cli, "_get_testing_tools", lambda: stub):
+        with swap_attr(cli_helpers, "get_testing_tools", lambda: stub):
             original_learning = tools_cli.state.learning_mode
             original_verbosity = tools_cli.state.verbosity
             try:
                 tools_cli.state.learning_mode = True
                 tools_cli.state.verbosity = 2
                 ctx = SimpleNamespace(obj={})
-                tools_cli._invoke_tests(
+                test_commands._invoke_tests(
                     ctx, "tests/unit", pattern="selected", extra_args=["-q"]
                 )
             finally:
@@ -1325,11 +1344,11 @@ class TestInvokeTests:
 
     def test_invoke_tests_handles_unknown_suite(self, monkeypatch) -> None:
         with swap_attr(
-            tools_cli, "_get_testing_tools", lambda: self.StubTestingTools()
+            cli_helpers, "get_testing_tools", lambda: self.StubTestingTools()
         ):
             ctx = SimpleNamespace(obj={})
             with pytest.raises(typer.Exit) as exc:
-                tools_cli._invoke_tests(
+                test_commands._invoke_tests(
                     ctx, "tests/unknown", pattern=None, extra_args=[]
                 )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import textwrap
 from pathlib import Path
 
@@ -12,8 +13,8 @@ from ml_playground.tools.core.config import (
     DEFAULT_TOOLS_CONFIG,
     ToolsConfig,
     ToolConfigurationError,
-    load_tools_config,
     get_tool_config,
+    load_tools_config,
 )
 
 
@@ -46,31 +47,26 @@ def test_tools_config_customization() -> None:
 
 
 def test_test_tools_config_validation() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Timeout"):
         config_module.TestToolsConfig(timeout=-1)
-    with pytest.raises(ValueError):
+
+    with pytest.raises(ValueError, match="Coverage threshold"):
         config_module.TestToolsConfig(coverage_threshold=200.0)
 
 
 def test_tool_config_timeout_upper_bound_validation() -> None:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="Timeout too large"):
         config_module.ToolConfig(timeout=4000)
-
-    assert "Timeout too large" in str(excinfo.value)
 
 
 def test_agentic_tools_config_invalid_output_format_raises() -> None:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="json.*yaml"):
         config_module.AgenticToolsConfig(output_format="xml")
-
-    assert "Output format must be 'json' or 'yaml'" in str(excinfo.value)
 
 
 def test_tools_config_default_verbosity_validation() -> None:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="Verbosity level must be 0, 1, or 2"):
         ToolsConfig(default_verbosity=5)
-
-    assert "Verbosity level must be 0, 1, or 2" in str(excinfo.value)
 
 
 def test_load_tools_config_success(tmp_path: Path) -> None:
@@ -96,18 +92,59 @@ def test_load_tools_config_success(tmp_path: Path) -> None:
 
 
 def test_load_tools_config_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(ToolConfigurationError) as exc:
+    with pytest.raises(ToolConfigurationError, match="pyproject.toml not found"):
         load_tools_config(project_root=tmp_path)
-    assert "pyproject.toml not found" in str(exc.value)
 
 
 def test_load_tools_config_invalid_toml(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("not = [valid")
 
-    with pytest.raises(ToolConfigurationError) as exc:
+    with pytest.raises(ToolConfigurationError, match="Invalid TOML"):
         load_tools_config(project_root=tmp_path)
-    assert "Invalid TOML" in str(exc.value)
+
+
+def test_load_tools_config_invalid_schema_wrapped(tmp_path: Path) -> None:
+    """Invalid values inside tools section surface as ToolConfigurationError."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        textwrap.dedent(
+            """
+            [tool.ml_playground.tools]
+            default_verbosity = "bad"
+            """
+        )
+    )
+
+    with pytest.raises(ToolConfigurationError, match="Invalid tools configuration"):
+        load_tools_config(project_root=tmp_path)
+
+
+def test_load_tools_config_discovers_project_root(tmp_path: Path) -> None:
+    """_find_project_root finds pyproject.toml when called from a subdirectory."""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subdir = project_root / "nested"
+    subdir.mkdir()
+
+    pyproject = project_root / "pyproject.toml"
+    pyproject.write_text(
+        textwrap.dedent(
+            """
+            [tool.ml_playground.tools]
+            """
+        ).strip()
+    )
+
+    original_cwd = Path.cwd()
+    try:
+        os.chdir(subdir)
+        config = load_tools_config(project_root=None)
+    finally:
+        os.chdir(original_cwd)
+
+    assert config.learning_mode_default is False
+    assert config.default_verbosity == 1
 
 
 def test_get_tool_config_returns_specific_category(tmp_path: Path) -> None:
@@ -129,9 +166,8 @@ def test_get_tool_config_invalid_category(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("[tool.ml_playground.tools]")
 
-    with pytest.raises(ToolConfigurationError) as exc:
+    with pytest.raises(ToolConfigurationError, match="Unknown tool category"):
         get_tool_config("nonexistent", project_root=tmp_path)
-    assert "Unknown tool category" in str(exc.value)
 
 
 def test_default_tools_config_structure_matches_model_defaults() -> None:
@@ -140,3 +176,28 @@ def test_default_tools_config_structure_matches_model_defaults() -> None:
     assert cfg.quality.timeout == 120
     assert cfg.environment.cache_cleanup_age_days == 7
     assert cfg.ci.badge_output_dir == Path("docs/assets")
+
+
+def test_find_project_root_without_pyproject_fails(tmp_path: Path) -> None:
+    """Fail fast when no pyproject is found in any parent."""
+    original_cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        with pytest.raises(ToolConfigurationError, match="pyproject.toml not found"):
+            load_tools_config(project_root=None)
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_load_tools_config_permission_error_is_wrapped(tmp_path: Path) -> None:
+    """Permission errors surface as ToolConfigurationError via load_tools_config."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("dummy = true")
+    pyproject.chmod(0)
+    try:
+        with pytest.raises(
+            ToolConfigurationError, match="Failed to load pyproject.toml"
+        ):
+            load_tools_config(project_root=tmp_path)
+    finally:
+        pyproject.chmod(0o644)

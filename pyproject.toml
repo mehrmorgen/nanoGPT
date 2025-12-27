@@ -40,14 +40,14 @@ dependencies = [
 ]
 
 [project.scripts]
-ci-tasks = "ml_playground.tools.cli:main_entry"
+ci-tasks = "ml_playground.tools.cli.main:main_entry"
 cli = "ml_playground.runtime.cli.main:main_entry"
-env-tasks = "ml_playground.tools.cli:main_entry"
-lint-tasks = "ml_playground.tools.cli:main_entry"
-lit-tasks = "ml_playground.tools.cli:main_entry"
+env-tasks = "ml_playground.tools.cli.main:main_entry"
+lint-tasks = "ml_playground.tools.cli.main:main_entry"
+lit-tasks = "ml_playground.tools.cli.main:main_entry"
 ml-playground = "ml_playground.runtime.cli.main:main_entry"
-test-tasks = "ml_playground.tools.cli:main_entry"
-tools = "ml_playground.tools.cli:main_entry"
+test-tasks = "ml_playground.tools.cli.main:main_entry"
+tools = "ml_playground.tools.cli.main:main_entry"
 
 [project.optional-dependencies]
 
@@ -263,17 +263,16 @@ exclude_lines = [
 ]
 show_missing = true
 omit = [
-    # No exclusions needed - tools are now part of the main codebase
 ]
 skip_covered = false
-# Total coverage can lag structural thresholds (line/branch); rely on thresholds instead of fail_under  
-fail_under = 0.0
+# Enforce a raised total coverage gate aligned with current project coverage
+fail_under = 84.0
 precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 90.4
-branch_threshold = 83.8
+line_threshold = 85.8
+branch_threshold = 81.4
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

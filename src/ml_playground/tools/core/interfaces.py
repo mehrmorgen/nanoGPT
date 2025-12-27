@@ -5,8 +5,8 @@ throughout the tools system, including ToolInterface, ToolResult, and
 supporting models with Pydantic validation.
 """
 
-from typing import Protocol, List, Literal
-from pydantic import BaseModel, Field, field_validator
+from typing import List, Literal, Set
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class LearningInfo(BaseModel):
@@ -52,22 +52,29 @@ class OperationId(BaseModel):
 
     @field_validator("category")
     @classmethod
-    def validate_category(cls, v: str, info) -> str:
+    def validate_category(cls, v: str, info: ValidationInfo) -> str:
         """Validate category based on namespace."""
-        # Get namespace from the model data
-        namespace = info.data.get("namespace") if info.data else None
-        if namespace == "tools":
-            valid_categories = {"ci", "quality", "test", "env", "agentic", "dev"}
-            if v not in valid_categories:
-                raise ValueError(
-                    f"Invalid tools category: {v}. Must be one of {valid_categories}"
-                )
-        elif namespace == "ml":
-            valid_categories = {"prepare", "train", "sample", "analyze"}
-            if v not in valid_categories:
-                raise ValueError(
-                    f"Invalid ml category: {v}. Must be one of {valid_categories}"
-                )
+        valid_categories_by_namespace: dict[str, Set[str]] = {
+            "tools": {
+                "ci",
+                "quality",
+                "test",
+                "env",
+                "agentic",
+                "dev",
+                "learn",
+                "analysis",
+            },
+            "ml": {"prepare", "train", "sample", "analyze"},
+        }
+
+        namespace = info.data["namespace"]
+        valid_categories = valid_categories_by_namespace[namespace]  # type: ignore[index]
+
+        if v not in valid_categories:
+            raise ValueError(
+                f"Invalid {namespace} category: {v}. Must be one of {valid_categories}"
+            )
         return v
 
     @field_validator("command")
@@ -133,27 +140,23 @@ class ToolResult(BaseModel):
         )
 
 
-class ToolInterface(Protocol):
-    """Protocol defining the interface for all integrated tools.
-
-    All tool implementations must conform to this protocol to ensure
-    consistent behavior across the tools system.
-    """
+class ToolInterface:
+    """Runtime interface contract for integrated tools."""
 
     @property
     def category(self) -> str:
         """The tool category (e.g., 'ci', 'quality', 'test')."""
-        ...
+        raise NotImplementedError
 
     @property
     def command(self) -> str:
         """The specific command name (e.g., 'coverage-test', 'lint')."""
-        ...
+        raise NotImplementedError
 
     @property
     def description(self) -> str:
         """A brief description of what the tool does."""
-        ...
+        raise NotImplementedError
 
     def execute(
         self,
@@ -163,33 +166,13 @@ class ToolInterface(Protocol):
         verbosity_level: int = 0,
         dry_run: bool = False,
     ) -> ToolResult:
-        """Execute the tool with the given arguments.
-
-        The returned ToolResult will have operation_id automatically
-        generated as f"tools.{self.category}.{self.command}".
-
-        Args:
-            args: Command-line arguments for the tool
-            learning_mode: Whether to enable educational output
-            verbosity_level: Level of detail for learning mode (0-2)
-            dry_run: Whether to simulate execution without running
-
-        Returns:
-            ToolResult with execution details and learning information
-        """
-        ...
+        """Execute the tool with the given arguments."""
+        raise NotImplementedError
 
     def get_help(self) -> str:
         """Return help text for the tool."""
-        ...
+        raise NotImplementedError
 
     def validate_args(self, args: List[str]) -> None:
-        """Validate arguments before execution.
-
-        Args:
-            args: Command-line arguments to validate
-
-        Raises:
-            ValueError: If arguments are invalid
-        """
-        ...
+        """Validate arguments before execution."""
+        raise NotImplementedError

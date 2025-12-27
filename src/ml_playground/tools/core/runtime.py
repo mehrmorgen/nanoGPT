@@ -29,6 +29,13 @@ class ToolsCLIState:
         self.config = None
         self._learning_mode_set = False
 
+    def apply_learning_defaults(self) -> None:
+        """Apply learning defaults from loaded config unless explicitly set."""
+        if self._learning_mode_set or self.config is None:
+            return
+        self.learning_mode = self.config.learning_mode_default
+        self.verbosity = self.config.default_verbosity
+
 
 state = ToolsCLIState()
 
@@ -42,6 +49,7 @@ def set_config(config: ToolsConfig, project_root: Optional[Path] = None) -> None
     """Inject a preloaded configuration for the tools CLI state."""
     state.config = config
     state.project_root = project_root
+    state.apply_learning_defaults()
 
 
 def load_config_with_error_handling(project_root: Path | None = None) -> None:
@@ -50,15 +58,10 @@ def load_config_with_error_handling(project_root: Path | None = None) -> None:
         state.config = load_tools_config(project_root)
         state.project_root = project_root
 
-        if not state._learning_mode_set and state.config is not None:
-            state.learning_mode = state.config.learning_mode_default
-            state.verbosity = state.config.default_verbosity
+        state.apply_learning_defaults()
 
-    except ToolConfigurationError as exc:  # pragma: no cover - exercised via CLI
+    except ToolConfigurationError as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
-        raise typer.Exit(1) from exc
-    except Exception as exc:  # pragma: no cover - defensive catch for CLI surface
-        typer.echo(f"Unexpected error loading configuration: {exc}", err=True)
         raise typer.Exit(1) from exc
 
 

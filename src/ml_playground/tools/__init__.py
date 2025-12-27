@@ -8,6 +8,8 @@ The module is designed to complement the existing ML workflow CLI (`uv run cli`)
 by providing development support tools with learning mode capabilities.
 """
 
+from __future__ import annotations
+
 from ml_playground.tools.core.interfaces import (
     ToolInterface,
     ToolResult,

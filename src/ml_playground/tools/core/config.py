@@ -205,8 +205,11 @@ def _find_project_root() -> Path:
             return current
         current = current.parent
 
-    # Fallback to current directory
-    return Path.cwd()
+    raise ToolConfigurationError(
+        "pyproject.toml not found in any parent directory",
+        reason="Project root could not be determined",
+        rationale="Tool configuration must be rooted at an explicit pyproject.toml",
+    )
 
 
 def _load_pyproject_toml(project_root: Path) -> Dict[str, Any]:

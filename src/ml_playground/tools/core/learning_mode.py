@@ -129,22 +129,23 @@ class LearningModeEngine:
         explanations: List[str] = []
 
         if self.verbosity == VerbosityLevel.MINIMAL:
-            # Just basic command info
-            if base_content.get("minimal_explanation"):
-                explanations.append(base_content["minimal_explanation"])
+            minimal = base_content.get("minimal_explanation")
+            if minimal:
+                explanations.append(minimal)
+            return explanations
 
-        elif self.verbosity == VerbosityLevel.STANDARD:
-            # Balanced explanations
-            if base_content.get("standard_explanation"):
-                explanations.extend(base_content["standard_explanation"])
+        if self.verbosity == VerbosityLevel.STANDARD:
+            standard = base_content.get("standard_explanation")
+            if standard:
+                explanations.extend(standard)
+            if context:
+                explanations.append(f"Context: {context}")
+            return explanations
 
-        elif self.verbosity == VerbosityLevel.COMPREHENSIVE:
-            # Full explanations for beginners
-            if base_content.get("comprehensive_explanation"):
-                explanations.extend(base_content["comprehensive_explanation"])
-
-        # Add context-specific explanation if provided
-        if context and self.verbosity != VerbosityLevel.MINIMAL:
+        comprehensive = base_content.get("comprehensive_explanation")
+        if comprehensive:
+            explanations.extend(comprehensive)
+        if context:
             explanations.append(f"Context: {context}")
 
         return explanations
@@ -209,6 +210,10 @@ class LearningModeEngine:
                 lines.append(f"  • {concept}")
 
         return lines
+
+    def get_category_best_practices(self, category: str) -> List[str]:
+        """Public accessor for category best practices."""
+        return self._get_category_best_practices(category)
 
     def _get_category_best_practices(self, category: str) -> List[str]:
         """Get general best practices for a tool category."""

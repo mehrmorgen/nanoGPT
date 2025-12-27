@@ -1,11 +1,23 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 import pytest
 
-from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from typing import Any, Iterator
+from contextlib import contextmanager
+
+from pathlib import Path
+
 from click.exceptions import Exit as ClickExit
+from typer.testing import CliRunner
 import ml_playground.tools.cli as cli
+from ml_playground.tools.cli.commands import (
+    ci as ci_commands,
+    env as env_commands,
+    quality as quality_commands,
+    test as test_commands,
+)
+from ml_playground.tools.cli import helpers as cli_helpers
+from ml_playground.tools.core.interfaces import OperationId, ToolResult
 
 
 def make_result(*, success: bool, stdout: str = "", stderr: str = "") -> ToolResult:
@@ -19,7 +31,7 @@ def make_result(*, success: bool, stdout: str = "", stderr: str = "") -> ToolRes
 
 
 def test_handle_tool_result_success(capsys: pytest.CaptureFixture[str]) -> None:
-    cli._handle_tool_result(make_result(success=True, stdout="ok", stderr=""))
+    cli_helpers.handle_tool_result(make_result(success=True, stdout="ok", stderr=""))
     out, err = capsys.readouterr()
     assert "ok" in out
     assert err == ""
@@ -29,21 +41,22 @@ def test_handle_tool_result_failure_raises_exit(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with pytest.raises(ClickExit):
-        cli._handle_tool_result(make_result(success=False, stderr="bad"))
+        cli_helpers.handle_tool_result(make_result(success=False, stderr="bad"))
     out, err = capsys.readouterr()
+    assert out == ""
     assert "bad" in err
 
 
 def test_invoke_tests_invalid_suite_exits(capsys: pytest.CaptureFixture[str]) -> None:
     ctx = None  # _invoke_tests doesn't access ctx
     with pytest.raises(ClickExit):
-        cli._invoke_tests(ctx, "tests/unknown", None, [])  # type: ignore[arg-type]
+        test_commands._invoke_tests(ctx, "tests/unknown", None, [])  # type: ignore[arg-type]
     _out, err = capsys.readouterr()
     assert "Unsupported test suite" in err
 
 
 def test_load_config_with_error_handling_exit(
-    tmp_path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with pytest.raises(ClickExit):
         cli.load_config_with_error_handling(tmp_path)
@@ -51,14 +64,14 @@ def test_load_config_with_error_handling_exit(
     assert "Configuration error" in err
 
 
-def test_tools_cli_getters_return_instances(tmp_path) -> None:
+def test_tools_cli_getters_return_instances(tmp_path: Path) -> None:
     # Initialize state using repository root config
     cli.main(learning_mode=False, verbosity=0, dry_run=False, project_root=None)
 
-    q = cli._get_quality_tools()
-    t = cli._get_testing_tools()
-    e = cli._get_environment_tools()
-    c = cli._get_ci_tools()
+    q = cli_helpers.get_quality_tools()
+    t = cli_helpers.get_testing_tools()
+    e = cli_helpers.get_environment_tools()
+    c = cli_helpers.get_ci_tools()
 
     from ml_playground.tools.quality import QualityTools as QT
     from ml_playground.tools.testing import TestingTools as TT
@@ -72,7 +85,7 @@ def test_tools_cli_getters_return_instances(tmp_path) -> None:
 
 
 @contextmanager
-def swap_attr(target, name: str, value):
+def swap_attr(target: object, name: str, value: Any) -> Iterator[None]:
     original = getattr(target, name)
     setattr(target, name, value)
     try:
@@ -83,77 +96,86 @@ def swap_attr(target, name: str, value):
 
 def test_quality_commands_use_tool_getter_stubs() -> None:
     class StubQuality:
-        def lint(self, *a, **k):
+        def lint(self, *a: object, **k: object):
             return make_result(success=True, stdout="lint ok")
 
-        def format(self, *a, **k):
+        def format(self, *a: object, **k: object):
             return make_result(success=True, stdout="format ok")
 
-        def deadcode(self, *a, **k):
+        def deadcode(self, *a: object, **k: object):
             return make_result(success=True, stdout="deadcode ok")
 
-        def typecheck(self, *a, **k):
+        def typecheck(self, *a: object, **k: object):
             return make_result(success=True, stdout="typecheck ok")
 
-    with swap_attr(cli, "_get_quality_tools", lambda: StubQuality()):
-        cli.quality_lint(None)
-        cli.quality_format(None)
-        cli.quality_deadcode(None)
-        cli.quality_typecheck(None)
+    with swap_attr(cli_helpers, "get_quality_tools", lambda: StubQuality()):
+        quality_commands.quality_lint(None)
+        quality_commands.quality_format(None)
+        quality_commands.quality_deadcode(None)
+        quality_commands.quality_typecheck(None)
 
 
 def test_env_and_ci_commands_use_tool_getter_stubs() -> None:
     class StubEnv:
-        def sync(self, *a, **k):
+        def sync(self, *a: object, **k: object):
             return make_result(success=True, stdout="sync ok")
 
     class StubCI:
-        def quality_fast(self, *a, **k):
+        def quality_fast(self, *a: object, **k: object):
             return make_result(success=True, stdout="fast ok")
 
-        def quality_ext(self, *a, **k):
+        def quality_ext(self, *a: object, **k: object):
             return make_result(success=True, stdout="ext ok")
 
-    with swap_attr(cli, "_get_environment_tools", lambda: StubEnv()):
-        cli.env_sync(groups=None, all_groups=False, frozen=False, args=None)
-    with swap_attr(cli, "_get_ci_tools", lambda: StubCI()):
-        cli.ci_quality_fast(None)
-        cli.ci_quality_ext(None)
+    with swap_attr(cli_helpers, "get_environment_tools", lambda: StubEnv()):
+        env_commands.env_sync(groups=None, all_groups=False, frozen=False, args=None)
+    with swap_attr(cli_helpers, "get_ci_tools", lambda: StubCI()):
+        ci_commands.ci_quality_fast(None)
+        ci_commands.ci_quality_ext(None)
 
 
 def test_testing_coverage_threshold_failure_raises() -> None:
     class StubTesting:
-        def coverage(self, *a, **k):
+        def coverage(self, *a: object, **k: object):
             return make_result(success=False, stderr="threshold fail")
 
-    with swap_attr(cli, "_get_testing_tools", lambda: StubTesting()):
-        with pytest.raises(ClickExit):
-            cli.test_coverage(
-                line_threshold=0.0,
-                branch_threshold=0.0,
-                force_regen=False,
-                verbose=False,
-                args=None,
-            )
+    runner = CliRunner()
+    with swap_attr(cli_helpers, "get_testing_tools", lambda: StubTesting()):
+        result = runner.invoke(test_commands.build_app(), ["coverage"])
+    assert result.exit_code == 1
+    assert "threshold fail" in (result.stderr or result.stdout)
 
 
 def test_testing_command_dispatch_with_stubs() -> None:
     class StubTesting:
-        def unit(self, args, *, learning_mode: bool, verbosity_level: int):
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def unit(self, args: list[str], *, learning_mode: bool, verbosity_level: int):
+            self.calls.append("unit")
             return make_result(success=True, stdout="unit ok")
 
-        def property_tests(self, args, *, learning_mode: bool, verbosity_level: int):
+        def property_tests(
+            self, args: list[str], *, learning_mode: bool, verbosity_level: int
+        ):
+            self.calls.append("property")
             return make_result(success=True, stdout="property ok")
 
-        def regression(self, args, *, learning_mode: bool, verbosity_level: int):
+        def regression(
+            self, args: list[str], *, learning_mode: bool, verbosity_level: int
+        ):
+            self.calls.append("regression")
             return make_result(success=True, stdout="regression ok")
 
-        def all_tests(self, args, *, learning_mode: bool, verbosity_level: int):
+        def all_tests(
+            self, args: list[str], *, learning_mode: bool, verbosity_level: int
+        ):
+            self.calls.append("all")
             return make_result(success=True, stdout="all ok")
 
         def coverage(
             self,
-            args,
+            args: list[str],
             *,
             line_threshold: float | None = None,
             branch_threshold: float | None = None,
@@ -162,30 +184,32 @@ def test_testing_command_dispatch_with_stubs() -> None:
             verbosity_level: int,
             force_regen: bool = False,
         ):
+            self.calls.append("coverage")
             return make_result(success=True, stdout="coverage ok")
 
-        def clean(self, args, *, learning_mode: bool, verbosity_level: int):
+        def clean(self, args: list[str], *, learning_mode: bool, verbosity_level: int):
+            self.calls.append("clean")
             return make_result(success=True, stdout="clean ok")
 
-    with swap_attr(cli, "_get_testing_tools", lambda: StubTesting()):
-        cli.test_unit(ctx=None, pattern=None, extra_args=None)
-        cli.test_property(ctx=None, pattern=None, extra_args=None)
-        cli.test_regression(ctx=None, pattern=None, extra_args=None)
-        cli.test_all(None)
-        cli.test_coverage(
-            line_threshold=0.0,
-            branch_threshold=0.0,
-            force_regen=False,
-            verbose=False,
-            args=None,
-        )
-        cli.test_clean(None)
+    runner = CliRunner()
+    stub = StubTesting()
+    with swap_attr(cli_helpers, "get_testing_tools", lambda: stub):
+        assert runner.invoke(test_commands.build_app(), ["unit"]).exit_code == 0
+        assert runner.invoke(test_commands.build_app(), ["property"]).exit_code == 0
+        assert runner.invoke(test_commands.build_app(), ["regression"]).exit_code == 0
+        assert runner.invoke(test_commands.build_app(), ["all"]).exit_code == 0
+        assert runner.invoke(test_commands.build_app(), ["coverage"]).exit_code == 0
+        assert runner.invoke(test_commands.build_app(), ["clean"]).exit_code == 0
+    assert stub.calls == ["unit", "property", "regression", "all", "coverage", "clean"]
 
 
 def test_ci_badge_command_with_stub() -> None:
     class StubCI:
-        def coverage_badge(self, *a, **k):
+        def coverage_badge(self, *a: object, **k: object):
             return make_result(success=True, stdout="badge ok")
 
-    with swap_attr(cli, "_get_ci_tools", lambda: StubCI()):
-        cli.ci_coverage_badge(None)
+    runner = CliRunner()
+    with swap_attr(cli_helpers, "get_ci_tools", lambda: StubCI()):
+        result = runner.invoke(ci_commands.app, ["coverage-badge"])
+    assert result.exit_code == 0
+    assert "badge ok" in result.stdout

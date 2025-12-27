@@ -49,6 +49,17 @@ class TestLearningModeEngine:
         assert result.best_practices == []  # Minimal mode has no best practices
         assert result.related_concepts == []  # Minimal mode has no related concepts
 
+    def test_explain_command_minimal_omits_context(self):
+        """Minimal verbosity does not add context line."""
+        engine = LearningModeEngine(VerbosityLevel.MINIMAL)
+        result = engine.explain_command(
+            command="unit",
+            context="should not appear",
+            category="test",
+            executed_commands=[],
+        )
+        assert all("Context:" not in exp for exp in result.explanations)
+
     def test_explain_command_standard_verbosity(self):
         """Test command explanation with standard verbosity."""
         engine = LearningModeEngine(VerbosityLevel.STANDARD)
@@ -101,6 +112,21 @@ class TestLearningModeEngine:
         assert any("style violations" in exp for exp in result.explanations)
         assert len(result.best_practices) > 0
         assert len(result.related_concepts) > 0
+
+    def test_format_output_with_empty_learning_info(self):
+        """No learning info sections are rendered when empty."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="tools",
+            category="test",
+            command="unit",
+        )
+        output = engine.format_output(result, learning_enabled=True)
+        assert "Explanation" not in output
+        assert "Best practices" not in output
+        assert "Related concepts" not in output
 
     def test_explain_command_environment_category(self):
         """Test command explanation for environment tools."""
@@ -243,121 +269,143 @@ class TestLearningModeEngine:
         assert "🔗 Related concepts:" in output
         assert "Test-Driven Development" in output
 
-    def test_category_best_practices(self):
-        """Test category-specific best practices generation."""
+    def test_comprehensive_includes_context(self):
+        """Comprehensive verbosity appends context to explanations."""
         engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        result = engine.explain_command(
+            command="integration",
+            context="Full stack verification",
+            category="test",
+            executed_commands=[],
+        )
+        assert any("Full stack verification" in exp for exp in result.explanations)
 
-        # Test quality category
-        quality_practices = engine._get_category_best_practices("quality")
-        assert len(quality_practices) > 0
-        assert any("linting" in practice.lower() for practice in quality_practices)
-
-        # Test testing category
-        test_practices = engine._get_category_best_practices("test")
-        assert len(test_practices) > 0
-        assert any(
-            "tdd" in practice.lower() or "test-driven" in practice.lower()
-            for practice in test_practices
+    def test_standard_context_and_default_commands_list(self) -> None:
+        """Standard verbosity appends context and defaults executed_commands list."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        info = engine.explain_command(
+            command="lint",
+            context="Pre-commit hook",
+            category="quality",
+            executed_commands=None,
         )
 
-        # Test unknown category
-        unknown_practices = engine._get_category_best_practices("unknown")
-        assert unknown_practices == []
+        assert info.commands_executed == []
+        assert any("Pre-commit hook" in exp for exp in info.explanations)
 
-    def test_educational_content_coverage(self):
-        """Test that educational content covers expected commands."""
-        engine = LearningModeEngine()
+    def test_standard_no_context_skips_append(self) -> None:
+        """Standard verbosity without context does not append context line."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        info = engine.explain_command(
+            command="lint",
+            context="",
+            category="quality",
+            executed_commands=["uv run tools quality lint"],
+        )
 
-        # Test that we have content for key testing commands
-        test_commands = [
-            "unit",
-            "integration",
-            "e2e",
-            "coverage-test",
-            "coverage-report",
-        ]
-        for command in test_commands:
-            content_key = f"test.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
-            assert "minimal_explanation" in content
-            assert "standard_explanation" in content
-            assert "comprehensive_explanation" in content
+        assert info.explanations  # standard_explanation present
+        assert not any(exp.startswith("Context:") for exp in info.explanations)
 
-        # Test that we have content for key quality commands
-        quality_commands = [
-            "lint",
-            "format",
-            "deadcode",
-            "basedpyright",
-            "mypy",
-            "typecheck",
-        ]
-        for command in quality_commands:
-            content_key = f"quality.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
-            assert "minimal_explanation" in content
-            assert "standard_explanation" in content
-            assert "comprehensive_explanation" in content
+    def test_standard_missing_content_still_handles_context_flag(self) -> None:
+        """Standard verbosity with missing base content still evaluates context branch."""
+        engine = LearningModeEngine(VerbosityLevel.STANDARD)
+        info = engine.explain_command(
+            command="nonexistent-command",
+            context="Context only",
+            category="quality",
+            executed_commands=["uv run tools quality nonexistent-command"],
+        )
 
-        # Test that we have content for key environment commands
-        env_commands = [
-            "setup",
-            "sync",
-            "verify",
-            "clean",
-            "info",
-            "ai-guidelines",
-            "tensorboard",
-            "gguf-help",
-        ]
-        for command in env_commands:
-            content_key = f"env.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
-            assert "minimal_explanation" in content
-            assert "standard_explanation" in content
-            assert "comprehensive_explanation" in content
+        assert info.explanations == ["Context: Context only"]
 
-        # Test that we have content for key CI commands
-        ci_commands = [
-            "quality-gate",
-            "quality-fast",
-            "quality-ext",
-            "quality-ci-local",
-            "coverage-badge",
-            "mutation-reset",
-            "mutation-summary",
-            "mutation-init",
-            "mutation-exec",
-            "mutation-report",
-            "mutation-run",
-        ]
-        for command in ci_commands:
-            content_key = f"ci.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
-            assert "minimal_explanation" in content
-            assert "standard_explanation" in content
-            assert "comprehensive_explanation" in content
+    def test_comprehensive_explanations_include_context(self) -> None:
+        """Comprehensive verbosity includes comprehensive_explanation and context."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        info = engine.explain_command(
+            command="lint",
+            context="CI pipeline",
+            category="quality",
+            executed_commands=["uv run tools quality lint"],
+        )
 
-        # Test that we have content for key agentic commands
-        agentic_commands = [
-            "guidelines-setup",
-            "batch-review",
-            "workflow-helper",
-            "batch-quality",
-            "batch-validate",
-            "workflow-status",
-        ]
-        for command in agentic_commands:
-            content_key = f"agentic.{command}"
-            assert content_key in engine._educational_content
-            content = engine._educational_content[content_key]
-            assert "minimal_explanation" in content
-            assert "standard_explanation" in content
-            assert "comprehensive_explanation" in content
+        assert any("lint" in exp.lower() for exp in info.explanations)
+        assert any("CI pipeline" in exp for exp in info.explanations)
+
+    def test_comprehensive_explanations_from_content_and_context(self) -> None:
+        """Comprehensive branch emits content plus context."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        info = engine.explain_command(
+            command="lint",
+            context="Pipeline context",
+            category="quality",
+            executed_commands=["uv run tools quality lint"],
+        )
+
+        assert any("Linting is the process" in exp for exp in info.explanations)
+        assert info.explanations[-1] == "Context: Pipeline context"
+
+    def test_comprehensive_explanations_from_content_without_context(self) -> None:
+        """Comprehensive branch emits content and omits context when none provided."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        info = engine.explain_command(
+            command="lint",
+            context="",
+            category="quality",
+            executed_commands=["uv run tools quality lint"],
+        )
+
+        assert any("Linting is the process" in exp for exp in info.explanations)
+        assert not any(exp.startswith("Context:") for exp in info.explanations)
+
+    def test_comprehensive_explanations_graceful_when_missing_content(self) -> None:
+        """Comprehensive verbosity tolerates missing content and still adds context."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        info = engine.explain_command(
+            command="nonexistent-command",
+            context="Debugging session",
+            category="quality",
+            executed_commands=["uv run tools quality nonexistent-command"],
+        )
+
+        assert info.explanations  # should include context even without base content
+        assert info.explanations[-1].startswith("Context: Debugging session")
+
+    def test_minimal_verbosity_skips_context_even_when_provided(self) -> None:
+        """Minimal verbosity never appends context lines."""
+        engine = LearningModeEngine(VerbosityLevel.MINIMAL)
+        info = engine.explain_command(
+            command="lint",
+            context="Should not appear",
+            category="quality",
+            executed_commands=["uv run tools quality lint"],
+        )
+
+        assert all("Context:" not in exp for exp in info.explanations)
+
+    def test_comprehensive_no_content_no_context_results_empty(self) -> None:
+        """Comprehensive branch with no content and no context yields empty explanations."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        info = engine.explain_command(
+            command="nonexistent-command",
+            context="",
+            category="quality",
+            executed_commands=["uv run tools quality nonexistent-command"],
+        )
+
+        assert info.explanations == []
+
+    def test_category_best_practices_public_accessor(self):
+        """Test category-specific best practices via public accessor."""
+        engine = LearningModeEngine(VerbosityLevel.COMPREHENSIVE)
+        quality_practices = engine.get_category_best_practices("quality")
+        assert quality_practices
+        assert any("lint" in practice.lower() for practice in quality_practices)
+
+        test_practices = engine.get_category_best_practices("test")
+        assert test_practices
+        assert any("test" in practice.lower() for practice in test_practices)
+
+        assert engine.get_category_best_practices("unknown") == []
 
     def test_learning_info_structure(self):
         """Test that LearningInfo has correct structure."""

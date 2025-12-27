@@ -10,14 +10,14 @@
 
 ## Purpose
 
-Developer tooling that powers the `uv run tools ...` command surface. Provides Typer-based CLIs for environment setup, quality gates, CI workflows, review automation, and agentic helpers.
+Developer tooling that powers the `uv run tools ...` command surface. Provides Typer-based CLIs for environment setup, quality gates, CI workflows, review automation, and agentic helpers. These tools follow the project-wide development practices documented in `.dev-guidelines/DEVELOPMENT.md` (strict typing, dependency injection over mocking, tests-first, coverage enforcement).
 
 ## Structure
 
 ```bash
 src/ml_playground/tools/
 ├── README.md          # package overview (this file)
-├── cli.py             # Typer entrypoint dispatching to categories
+├── cli/               # Typer entrypoint + category command modules (main.py, commands/)
 ├── __init__.py        # package exports and CLI glue
 ├── categories/        # user-facing command groups (env, quality, test, ci, dev, agentic)
 ├── core/              # shared services (state mgmt, dependency injection, logging)
@@ -35,6 +35,7 @@ src/ml_playground/tools/
   - `agentic`: AI-assisted batch operations and review helpers.
 - **Core services** provide shared logging, configuration loading, and dependency wiring so categories stay thin.
 - **Utilities** wrap subprocess execution, environment management, and path handling with consistent error reporting.
+- **AI workflows**: use `uv run tools agentic ...` for batch review and learning-mode helpers; review AI-generated changes, keep type hints, and ensure tests/coverage pass.
 
 ## Usage
 
@@ -50,7 +51,13 @@ uv run tools env verify
 
 # list review comments needing replies
 uv run tools dev review-list <pr_number> --unreplied --unresolved
+
+# AI batch review (JSON output for downstream consumers)
+uv run tools agentic batch-review --format json
 ```
+
+The packaged CLI entrypoint is `ml_playground.tools.cli.main:main_entry`, wired via the
+`tools` script in `pyproject.toml`.
 
 ## Implementation Notes
 
