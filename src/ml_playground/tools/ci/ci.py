@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import subprocess
+import json
 from pathlib import Path
 from typing import List, Tuple
 
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
-from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, _default_runner
+from ml_playground.tools.utils.subprocess_utils import (
+    RealSubprocessRunner,
+    SubprocessRunner,
+)
 
 
 class CITools:
@@ -33,7 +36,7 @@ class CITools:
         self.cache_dir = root_path / ".cache"
         # Use the project-local githooks pre-commit configuration
         self.pre_commit_config = root_path / ".githooks" / ".pre-commit-config.yaml"
-        self._subprocess_runner = subprocess_runner or _default_runner
+        self._subprocess_runner = subprocess_runner or RealSubprocessRunner()
 
     @property
     def category(self) -> str:
@@ -118,7 +121,7 @@ class CITools:
 
         # Run specific pre-commit hooks for fast feedback
         hooks = ["ruff", "ruff-format", "mdformat"]
-        results = []
+        results: List[tuple[str, ToolResult]] = []
 
         for hook in hooks:
             result = self._subprocess_runner.run_uv_command(
@@ -145,11 +148,11 @@ class CITools:
         combined_stdout = ""
         combined_stderr = ""
 
-        for hook, result in results:
-            if result.stdout:
-                combined_stdout += f"{hook}:\n{result.stdout}\n"
-            if result.stderr:
-                combined_stderr += f"{hook} warnings:\n{result.stderr}\n"
+        for hook_name, hook_result in results:
+            if hook_result.stdout:
+                combined_stdout += f"{hook_name}:\n{hook_result.stdout}\n"
+            if hook_result.stderr:
+                combined_stderr += f"{hook_name} warnings:\n{hook_result.stderr}\n"
 
         return ToolResult(
             success=True,
@@ -230,35 +233,13 @@ class CITools:
         # Add additional arguments
         command.extend(args)
 
-        # Run act directly with subprocess since it's not a uv command
-        try:
-            result = subprocess.run(
-                command,
-                cwd=self.root_path,
-                capture_output=True,
-                text=True,
-                timeout=self.config.ci.timeout,
-            )
-
-            return ToolResult(
-                success=result.returncode == 0,
-                exit_code=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                operation_id=operation_id,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ToolExecutionError(
-                f"Act command timed out after {self.config.ci.timeout} seconds",
-                reason="Command execution exceeded configured timeout",
-                rationale="CI operations must complete within reasonable time bounds",
-            ) from exc
-        except Exception as exc:
-            raise ToolExecutionError(
-                f"Failed to execute act command: {exc}",
-                reason="Subprocess execution failed",
-                rationale="Act must be available and executable for local CI testing",
-            ) from exc
+        # Use SubprocessRunner for DI and consistent execution
+        return self._subprocess_runner.run_subprocess(
+            command,
+            cwd=self.root_path,
+            timeout=self.config.ci.timeout,
+            operation_id=operation_id,
+        )
 
     def coverage_badge(self, args: List[str]) -> ToolResult:
         """Regenerate the SVG coverage badges.
@@ -294,13 +275,13 @@ class CITools:
 
         # Generate badges directly
         try:
-            import json
-
             # Read coverage data
             with open(json_path) as f:
                 coverage_data = json.load(f)
 
-            total_coverage = coverage_data.get("totals", {}).get("percent_covered", 0)
+            total_coverage: float = coverage_data.get("totals", {}).get(
+                "percent_covered", 0.0
+            )
 
             # Create simple SVG badge in configured directory (relative to root path)
             badge_dir = (self.root_path / self.config.ci.badge_output_dir).resolve()

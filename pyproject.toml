@@ -153,7 +153,7 @@ extend-select = [
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
-files = ["src/ml_playground", "src/ml_playground/runtime"]
+files = ["src/ml_playground", "src/ml_playground/runtime", "src/ml_playground/tools/ci"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
@@ -177,7 +177,6 @@ include = [
 ]
 exclude = [
     "src/ml_playground/tools/agentic",
-    "src/ml_playground/tools/ci",
     "src/ml_playground/tools/cli",
     "src/ml_playground/tools/core",
     "src/ml_playground/tools/dev",
@@ -186,7 +185,6 @@ exclude = [
     "src/ml_playground/tools/testing",
     "src/ml_playground/tools/utils",
     "tests/unit/tools/agentic",
-    "tests/unit/tools/ci",
     "tests/unit/tools/cli",
     "tests/unit/tools/core",
     "tests/unit/tools/dev",
@@ -293,13 +291,13 @@ omit = [
 ]
 skip_covered = false
 # Enforce a raised total coverage gate aligned with current project coverage
-fail_under = 88.7
+fail_under = 88.8
 precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 89.7
-branch_threshold = 84.8
+line_threshold = 89.8
+branch_threshold = 85.2
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

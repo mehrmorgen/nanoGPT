@@ -6,7 +6,7 @@ using fakes instead of mocks. Mutation testing moved to TestingTools.
 
 import pytest
 from pathlib import Path
-from typing import Any, List
+from typing import List, cast
 
 from ml_playground.tools.ci import CITools
 from ml_playground.tools.core.interfaces import ToolResult
@@ -46,7 +46,8 @@ def ci_tools(tmp_path: Path) -> CITools:
 @pytest.fixture
 def fake_runner(ci_tools: CITools) -> FakeSubprocessRunner:
     """Get the fake subprocess runner from CI tools."""
-    return ci_tools._subprocess_runner
+    # Accessing protected member for testing purposes
+    return cast(FakeSubprocessRunner, ci_tools._subprocess_runner)
 
 
 class TestQualityGate:
@@ -179,6 +180,50 @@ class TestQualityFast:
         assert result.exit_code == 0
         assert len(fake_runner.calls) == 3  # One call per hook
 
+    def test_quality_fast_success_aggregates_output(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
+        """Test successful fast quality checks with stdout and stderr aggregation."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-fast"
+        )
+        # quality_fast runs 3 hooks: ruff, ruff-format, mdformat
+        ruff_res = create_success_result(operation_id, "ruff ok")
+        ruff_res.stderr = "ruff warning"
+
+        format_res = create_success_result(operation_id, "format ok")
+        format_res.stderr = ""
+
+        md_res = create_success_result(operation_id, "md ok")
+        md_res.stderr = "md warning"
+
+        fake_runner.set_results([ruff_res, format_res, md_res])
+
+        result = ci_tools.quality_fast([])
+
+        assert result.success is True
+        assert "ruff:\nruff ok" in (result.stdout or "")
+        assert "ruff warning" in (result.stderr or "")
+        assert "mdformat:\nmd ok" in (result.stdout or "")
+        assert "mdformat warnings:\nmd warning" in (result.stderr or "")
+
+    def test_quality_fast_empty_stdout(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
+        """Test quality fast with empty stdout to hit coverage branches."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-fast"
+        )
+        # All hooks return empty stdout
+        res = create_success_result(operation_id, "")
+        fake_runner.set_results([res, res, res])
+
+        result = ci_tools.quality_fast([])
+
+        assert result.success is True
+        assert result.stdout == ""
+        assert result.stderr == ""
+
     def test_quality_fast_hook_failure(
         self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
     ):
@@ -203,7 +248,8 @@ class TestQualityExt:
         """Test successful extended quality validation (mutation testing moved to testing tools)."""
         # Create a fake runner for this specific test
         fake_runner = FakeSubprocessRunner()
-        ci_tools._subprocess_runner = fake_runner
+        # Accessing protected member for testing purposes
+        object.__setattr__(ci_tools, "_subprocess_runner", fake_runner)
 
         # Mock the quality_gate method to return success
         operation_id = OperationId(
@@ -319,12 +365,24 @@ class TestCoverageBadge:
         json_path = coverage_dir / "coverage.json"
 
         # Mock the coverage generation to create the JSON file
-        def mock_run_uv_command(cmd, **kwargs):
-            if "coverage" in cmd and "json" in cmd:
+        def mock_run_uv_command(
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if "coverage" in args and "json" in args:
                 json_path.write_text('{"totals": {"percent_covered": 75.0}}')
             return success_result
 
-        ci_tools._subprocess_runner.run_uv_command = mock_run_uv_command
+        # Accessing protected member for testing purposes
+        object.__setattr__(
+            ci_tools._subprocess_runner, "run_uv_command", mock_run_uv_command
+        )
 
         result = ci_tools.coverage_badge([])
 
@@ -351,25 +409,52 @@ class TestCoverageBadge:
         )
         assert fake_runner.calls  # ensure command executed
 
+    def test_coverage_badge_color_thresholds(self, ci_tools: CITools, tmp_path: Path):
+        """Test coverage badge generation with different color thresholds."""
+        coverage_dir = ci_tools.cache_dir / "coverage"
+        coverage_dir.mkdir(parents=True, exist_ok=True)
+        json_path = coverage_dir / "coverage.json"
+
+        thresholds = [
+            (95, "brightgreen"),
+            (85, "green"),
+            (75, "yellowgreen"),
+            (65, "yellow"),
+            (55, "red"),
+        ]
+
+        for percent, expected_color in thresholds:
+            json_path.write_text(f'{{"totals": {{"percent_covered": {percent}}}}}')
+            result = ci_tools.coverage_badge([])
+            assert result.success is True
+
+            badge_file = (
+                ci_tools.root_path
+                / ci_tools.config.ci.badge_output_dir
+                / "coverage.svg"
+            )
+            svg_content = badge_file.read_text()
+            assert f'fill="{expected_color}"' in svg_content
+
     def test_coverage_badge_respects_configured_output_dir(
         self, tmp_path: Path
     ) -> None:
+        """Test coverage badge respects custom output directory."""
         config = ToolsConfig()
-        config.ci.badge_output_dir = Path("artifacts/badges")
+        custom_dir = Path("custom/badges")
+        config.ci.badge_output_dir = custom_dir
         fake_runner = FakeSubprocessRunner()
         ci_tools = CITools(config, tmp_path, subprocess_runner=fake_runner)
 
         coverage_dir = tmp_path / ".cache" / "coverage"
-        coverage_dir.mkdir(parents=True)
+        coverage_dir.mkdir(parents=True, exist_ok=True)
         json_path = coverage_dir / "coverage.json"
         json_path.write_text('{"totals": {"percent_covered": 88.2}}')
 
         result = ci_tools.coverage_badge([])
 
         assert result.success is True
-        expected_badge = (
-            tmp_path / config.ci.badge_output_dir / "coverage.svg"
-        ).resolve()
+        expected_badge = (tmp_path / custom_dir / "coverage.svg").resolve()
         assert expected_badge.exists()
         assert "88.2% coverage" in result.stdout
 
@@ -380,117 +465,94 @@ class TestCoverageBadge:
 class TestQualityCILocal:
     """Test local CI execution functionality."""
 
-    def test_quality_ci_local_success(self, ci_tools: CITools):
+    def test_quality_ci_local_success(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
         """Test successful local CI execution."""
-        # Create a fake subprocess runner that simulates successful subprocess.run
-        fake_runner = FakeSubprocessRunner()
-        ci_tools._subprocess_runner = fake_runner
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-ci-local"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "CI passed")])
 
-        # Mock subprocess.run directly since quality_ci_local uses it
-        import subprocess
+        result = ci_tools.quality_ci_local([])
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "CI passed" in (result.stdout or "")
 
-        original_run = subprocess.run
+    def test_quality_ci_local_generic_failure(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
+        """Test local CI execution with generic failure."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-ci-local"
+        )
+        fake_runner.set_results(
+            [create_failure_result(operation_id, 1, stderr="act not installed")]
+        )
 
-        def fake_subprocess_run(*args: Any, **kwargs: Any) -> Any:
-            # Create a mock result object
-            class MockResult:
-                def __init__(self) -> None:
-                    self.returncode = 0
-                    self.stdout = "CI passed"
-                    self.stderr = ""
+        result = ci_tools.quality_ci_local([])
+        assert result.success is False
+        assert result.exit_code == 1
+        assert "act not installed" in (result.stderr or "")
 
-            return MockResult()
-
-        subprocess.run = fake_subprocess_run
-
-        try:
-            result = ci_tools.quality_ci_local([])
-            assert result.success is True
-            assert result.exit_code == 0
-        finally:
-            subprocess.run = original_run
-
-    def test_quality_ci_local_generic_failure(self, ci_tools: CITools):
-        import subprocess
-        from ml_playground.tools.core.errors import ToolExecutionError
-
-        original_run = subprocess.run
-
-        def fake_run(*args, **kwargs):
-            raise RuntimeError("act not installed")
-
-        subprocess.run = fake_run
-
-        try:
-            with pytest.raises(ToolExecutionError) as exc_info:
-                ci_tools.quality_ci_local([])
-            assert "Failed to execute act command" in str(exc_info.value)
-        finally:
-            subprocess.run = original_run
-
-    def test_quality_ci_local_failure(self, ci_tools: CITools):
+    def test_quality_ci_local_failure(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
         """Test local CI execution failure."""
-        import subprocess
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-ci-local"
+        )
+        fake_runner.set_results(
+            [create_failure_result(operation_id, 1, stderr="CI failed")]
+        )
 
-        original_run = subprocess.run
+        result = ci_tools.quality_ci_local([])
+        assert result.success is False
+        assert result.exit_code == 1
+        assert "CI failed" in (result.stderr or "")
 
-        def fake_subprocess_run(*args: Any, **kwargs: Any) -> Any:
-            class MockResult:
-                def __init__(self) -> None:
-                    self.returncode = 1
-                    self.stdout = ""
-                    self.stderr = "CI failed"
-
-            return MockResult()
-
-        subprocess.run = fake_subprocess_run
-
-        try:
-            result = ci_tools.quality_ci_local([])
-            assert result.success is False
-            assert result.exit_code == 1
-        finally:
-            subprocess.run = original_run
-
-    def test_quality_ci_local_with_cache_binding(self, ci_tools: CITools):
+    def test_quality_ci_local_with_cache_binding(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
         """Test local CI execution with cache binding."""
-        import subprocess
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-ci-local"
+        )
+        fake_runner.set_results(
+            [create_success_result(operation_id, "CI with cache binding")]
+        )
 
-        original_run = subprocess.run
+        result = ci_tools.quality_ci_local([], bind_caches=True)
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "CI with cache binding" in (result.stdout or "")
 
-        def fake_subprocess_run(*args: Any, **kwargs: Any) -> Any:
-            class MockResult:
-                def __init__(self) -> None:
-                    self.returncode = 0
-                    self.stdout = "CI with cache binding"
-                    self.stderr = ""
+    def test_quality_ci_local_without_cache_binding(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
+        """Test local CI execution without cache binding."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="quality-ci-local"
+        )
+        fake_runner.set_results([create_success_result(operation_id, "CI no cache")])
 
-            return MockResult()
+        result = ci_tools.quality_ci_local([], bind_caches=False)
+        assert result.success is True
+        # Verify --bind was NOT in the command
+        assert not any("--bind" in call["command"] for call in fake_runner.calls)
 
-        subprocess.run = fake_subprocess_run
-
-        try:
-            result = ci_tools.quality_ci_local(["--cache-binding"])
-            assert result.success is True
-            assert result.exit_code == 0
-        finally:
-            subprocess.run = original_run
-
-    def test_quality_ci_local_timeout(self, ci_tools: CITools):
+    def test_quality_ci_local_timeout(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner
+    ):
         """Test local CI execution with timeout."""
-        import subprocess
-        from ml_playground.tools.core.errors import ToolExecutionError
+        from ml_playground.tools.core.errors import TimeoutError
 
-        original_run = subprocess.run
+        # Configure fake runner to raise TimeoutError
+        def timeout_side_effect(command: List[str], **kwargs: object) -> ToolResult:
+            raise TimeoutError("Command timed out", reason="timeout", rationale="test")
 
-        def fake_subprocess_run(*args: Any, **kwargs: Any) -> Any:
-            raise subprocess.TimeoutExpired("act", 300)
+        fake_runner.run_subprocess = timeout_side_effect
 
-        subprocess.run = fake_subprocess_run
-
-        try:
-            with pytest.raises(ToolExecutionError) as exc_info:
-                ci_tools.quality_ci_local([])
-            assert "timed out after 900 seconds" in str(exc_info.value)
-        finally:
-            subprocess.run = original_run
+        with pytest.raises(TimeoutError) as exc_info:
+            ci_tools.quality_ci_local([])
+        assert "Command timed out" in str(exc_info.value)
