@@ -293,13 +293,13 @@ omit = [
 ]
 skip_covered = false
 # Enforce a raised total coverage gate aligned with current project coverage
-fail_under = 84.0
+fail_under = 88.7
 precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 85.8
-branch_threshold = 81.4
+line_threshold = 89.7
+branch_threshold = 84.8
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"
