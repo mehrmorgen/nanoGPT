@@ -10,7 +10,16 @@ from typing import Optional
 import typer
 from typing_extensions import Annotated
 
-from ml_playground.tools.cli.commands import agentic, ci, dev, env, learn, quality, test
+from ml_playground.tools.cli.commands import (
+    agentic,
+    analysis,
+    ci,
+    dev,
+    env,
+    learn,
+    quality,
+    test,
+)
 from ml_playground.tools.cli.state import (
     GlobalState,
     apply_cli_options,
@@ -35,6 +44,7 @@ test_app = test.app
 env_app = env.app
 ci_app = ci.app
 agentic_app = agentic.app
+analysis_app = analysis.app
 dev_app = dev.app
 learn_app = learn.app
 
@@ -43,6 +53,7 @@ app.add_typer(test_app, name="test")
 app.add_typer(env_app, name="env")
 app.add_typer(ci_app, name="ci")
 app.add_typer(agentic_app, name="agentic")
+app.add_typer(analysis_app, name="analysis")
 app.add_typer(dev_app, name="dev")
 app.add_typer(learn_app, name="learn")
 
@@ -121,6 +132,7 @@ def show_config() -> None:
     typer.echo(
         f"  Agentic tools: {'enabled' if state.config.agentic.enabled else 'disabled'}"
     )
+    typer.echo("  Analysis tools: enabled")
 
 
 def main_entry() -> None:
@@ -145,6 +157,7 @@ __all__ = [
     "test_app",
     "env_app",
     "ci_app",
+    "analysis_app",
     "agentic_app",
     "dev_app",
     "learn_app",

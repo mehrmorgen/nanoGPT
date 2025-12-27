@@ -139,6 +139,11 @@ extend-select = [
   "TID251", # flake8-tidy-imports banned API
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/unit/tools/analysis/lit/test_integration.py" = ["TID251"]
+"tests/unit/tools/analysis/test_lit_shim.py" = ["TID251"]
+"tests/unit/tools/cli/commands/test_analysis.py" = ["TID251"]
+
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "unittest.mock" = { msg = "Do not use mocks; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
 "pytest_mock" = { msg = "Do not use pytest-mock; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
@@ -150,9 +155,7 @@ extend-select = [
 # When invoked without explicit targets, analyze only the project code.
 files = ["src/ml_playground", "src/ml_playground/runtime"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-# Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
-# that slow down type checking and are not part of core runtime.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|src/ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
 explicit_package_bases = true
 mypy_path = ["src"]
@@ -173,8 +176,24 @@ include = [
     "tests",
 ]
 exclude = [
-    "src/ml_playground/tools",
-    "tests/unit/tools",
+    "src/ml_playground/tools/agentic",
+    "src/ml_playground/tools/ci",
+    "src/ml_playground/tools/cli",
+    "src/ml_playground/tools/core",
+    "src/ml_playground/tools/dev",
+    "src/ml_playground/tools/environment",
+    "src/ml_playground/tools/quality",
+    "src/ml_playground/tools/testing",
+    "src/ml_playground/tools/utils",
+    "tests/unit/tools/agentic",
+    "tests/unit/tools/ci",
+    "tests/unit/tools/cli",
+    "tests/unit/tools/core",
+    "tests/unit/tools/dev",
+    "tests/unit/tools/environment",
+    "tests/unit/tools/quality",
+    "tests/unit/tools/testing",
+    "tests/unit/tools/utils",
     "tests/property/tools",
     "tests/acceptance/tools",
 ]
@@ -258,8 +277,16 @@ omit = [
 # Use line/branch thresholds as the gate; keep report strict but do not double-gate on total
 exclude_lines = [
     # Only allow exclusion for truly impossible-to-test code
+    "pragma: no cover",
     "if 0:",
     "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@overload",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
 show_missing = true
 omit = [

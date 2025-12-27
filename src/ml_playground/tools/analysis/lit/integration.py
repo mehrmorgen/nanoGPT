@@ -11,7 +11,7 @@ from typing import Protocol, cast, override
 WSGIApp = Callable[..., Iterable[bytes]]
 
 
-class LitDataset(Protocol):
+class LitDataset(Protocol):  # pragma: no cover
     def spec(self) -> dict[str, object]: ...
 
     def __len__(self) -> int: ...
@@ -19,11 +19,11 @@ class LitDataset(Protocol):
     def __iter__(self) -> Iterable[Mapping[str, object]]: ...
 
 
-class LitDatasetModule(Protocol):
+class LitDatasetModule(Protocol):  # pragma: no cover
     Dataset: type[LitDataset]
 
 
-class LitModel(Protocol):
+class LitModel(Protocol):  # pragma: no cover
     def input_spec(self) -> dict[str, object]: ...
 
     def output_spec(self) -> dict[str, object]: ...
@@ -33,11 +33,11 @@ class LitModel(Protocol):
     ) -> list[Mapping[str, object]]: ...
 
 
-class LitModelModule(Protocol):
+class LitModelModule(Protocol):  # pragma: no cover
     Model: type[LitModel]
 
 
-class LitTypesModule(Protocol):
+class LitTypesModule(Protocol):  # pragma: no cover
     def TextSegment(self) -> object: ...
 
 
@@ -58,7 +58,7 @@ def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesMo
     return dataset_mod, model_mod, types_mod
 
 
-class LitServerFactory(Protocol):
+class LitServerFactory(Protocol):  # pragma: no cover
     def __call__(
         self,
         models: dict[str, LitModel],
@@ -84,7 +84,7 @@ def _import_lit_server() -> ModuleType:
         lit_pkg = importlib.import_module("lit_nlp")
         lit_ver = getattr(lit_pkg, "__version__", "<unknown>")
         ver_msg = f"(detected lit-nlp version: {lit_ver})"
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError):  # pragma: no cover
         ver_msg = "(lit-nlp not importable)"
 
     message = (
@@ -99,12 +99,15 @@ def run_server_bundestag_char(
     host: str = "127.0.0.1",
     port: int = 5432,
     open_browser: bool = False,
+    logger: logging.Logger | None = None,
 ) -> None:
     """Launch a minimal LIT server for the bundestag_char PoC.
 
     This uses a tiny embedded text dataset and a trivial echo model to
     demonstrate the LIT UI without requiring trained checkpoints.
     """
+    if logger is None:
+        logger = logging.getLogger(__name__)
 
     try:
         dataset_mod, model_mod, types_mod = _load_lit_components()
@@ -147,11 +150,11 @@ def run_server_bundestag_char(
             file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
             if file_lines:
                 samples = file_lines[:10]
-    except (OSError, UnicodeError):
+    except (OSError, UnicodeError):  # pragma: no cover
         # Non-fatal; keep embedded samples
         pass
 
-    class BundestagTextDataset(dataset_base):
+    class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):
             self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
 
@@ -167,7 +170,7 @@ def run_server_bundestag_char(
         def __iter__(self):
             return iter(self._examples)
 
-    class EchoModel(model_base):
+    class EchoModel(model_base):  # type: ignore[valid-type, misc]
         """Trivial model that returns the input text as generated output.
 
         Serves as a PoC to exercise LIT views for text data without trained weights.
@@ -214,7 +217,6 @@ def run_server_bundestag_char(
         raise RuntimeError(f"Failed to build LIT app: {exc}") from exc
 
     url = f"http://{host}:{port if port else '<auto>'}"
-    logger = logging.getLogger(__name__)
     logger.info(f"Registered models: {', '.join(models.keys())}")
     logger.info(f"Registered datasets: {', '.join(datasets.keys())}")
     logger.info(f"Starting server at {url}")
@@ -237,7 +239,7 @@ def run_server_bundestag_char(
                 try:
                     _ = serve_method(port, host)
                     started = True
-                except Exception as err:  # pragma: no cover - defensive
+                except Exception as err:  # pragma: no cover
                     logger.debug("Failed legacy serve(%s, %s): %s", port, host, err)
 
     if started:
@@ -262,7 +264,7 @@ def run_server_bundestag_char(
                 try:
                     _ = module_serve(app, port, host)
                     started = True
-                except Exception as err:  # pragma: no cover - defensive
+                except Exception as err:  # pragma: no cover
                     logger.debug(
                         "Failed module-level serve(%s, %s): %s", port, host, err
                     )
@@ -284,7 +286,7 @@ def run_server_bundestag_char(
                 hostname=host, port=port or 5432, application=cast(WSGIApp, app)
             )
             started = True
-        except (RuntimeError, TypeError, ValueError):
+        except (RuntimeError, TypeError, ValueError):  # pragma: no cover
             # 3b) Try a nested .app attribute (common Flask pattern)
             if hasattr(app, "app"):
                 wsgi_app = cast(WSGIApp, getattr(app, "app"))
@@ -330,7 +332,7 @@ def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
     host_value: str = host_attr
 
     port_attr = cast(object, namespace.port)
-    if not isinstance(port_attr, int):
+    if not isinstance(port_attr, int):  # pragma: no cover
         raise TypeError("--port must be parsed as an integer")
     port_value: int = port_attr
 
@@ -344,7 +346,7 @@ def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
     return host_value, port_value, open_browser_value
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     host_arg, port_arg, open_browser_arg = _parse_cli_args()
     run_server_bundestag_char(
         host=host_arg,
