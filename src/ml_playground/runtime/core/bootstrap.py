@@ -48,7 +48,7 @@ def get_runtime_cli_dependencies() -> CLIDependencies:
 
     global _current
     if _current is None:
-        if _default_factory is None:  # pragma: no cover - defensive guard
+        if _default_factory is None:
             raise RuntimeError("Runtime CLI dependencies have not been configured.")
         _current = _default_factory()
     return _current

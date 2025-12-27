@@ -29,10 +29,10 @@ class TrainConfigLike(Protocol):
     logger: LoggerLike
     runtime: Any | None
     # optional hooks to align with runtime training flow; kept optional for compatibility
-    data: Any | None  # pragma: no cover - protocol attribute
-    model: Any | None  # pragma: no cover - protocol attribute
-    optim: Any | None  # pragma: no cover - protocol attribute
-    schedule: Any | None  # pragma: no cover - protocol attribute
+    data: Any | None
+    model: Any | None
+    optim: Any | None
+    schedule: Any | None
 
 
 @runtime_checkable

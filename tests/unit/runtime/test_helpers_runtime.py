@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Iterator, cast
 
 import typer
+from pytest import LogCaptureFixture
 
 from ml_playground.runtime import helpers
 
@@ -129,3 +130,15 @@ def test_log_command_status_swallows_errors_from_log_directory() -> None:
             raise TypeError(msg)
 
     helpers.log_command_status("tag", shared, out_dir=None, logger=FailingLogger())
+
+
+def test_run_or_exit_keyboard_interrupt_logs_and_returns(
+    caplog: LogCaptureFixture,
+) -> None:
+    with caplog.at_level("INFO"):
+        helpers.run_or_exit(
+            lambda: (_ for _ in ()).throw(KeyboardInterrupt),
+            keyboard_interrupt_msg="stop",
+        )
+
+    assert "stop" in caplog.text

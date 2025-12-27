@@ -29,5 +29,5 @@ def global_device_setup(
             cuda_is_available=cuda_is_available,
             torch_module=torch_module if torch_module is not None else torch,
         )
-    except Exception:  # pragma: no cover - defensive parity with legacy shim
+    except Exception:
         return

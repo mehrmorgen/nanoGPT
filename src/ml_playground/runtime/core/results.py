@@ -47,7 +47,7 @@ class OperationId:
         if not self.command:
             raise ValueError("command must be provided")
 
-    def __str__(self) -> str:  # pragma: no cover - trivial accessor
+    def __str__(self) -> str:
         return f"{self.namespace}.{self.category}.{self.command}"
 
 

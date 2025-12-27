@@ -272,8 +272,8 @@ precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 89.2
-branch_threshold = 81.9
+line_threshold = 90.4
+branch_threshold = 83.8
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

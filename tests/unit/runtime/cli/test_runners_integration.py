@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import sys
 import importlib
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from ml_playground.configuration.models import (
     DataConfig,
@@ -187,3 +189,13 @@ def test_run_sample_handles_tool_result(tmp_path: Path) -> None:
 
     assert result.success is True
     assert "impl" in calls and "handle" in calls
+
+
+def test_cli_module_prefers_existing_module(monkeypatch: Any) -> None:
+    """_cli_module should reuse an existing module from sys.modules."""
+    dummy = SimpleNamespace(marker="existing")
+    monkeypatch.setitem(sys.modules, "ml_playground.runtime.cli", dummy)
+
+    mod = runners._cli_module()  # pyright: ignore[reportPrivateUsage]
+
+    assert mod is dummy

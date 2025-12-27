@@ -212,7 +212,7 @@ def main_entry() -> None:
     except KeyboardInterrupt:
         cli_pkg.typer.echo("\nOperation cancelled by user", err=True)
         raise cli_pkg.typer.Exit(1)
-    except Exception as exc:  # pragma: no cover - defensive for console entry point
+    except Exception as exc:
         cli_pkg.typer.echo(f"Runtime CLI execution failed: {exc}", err=True)
         raise cli_pkg.typer.Exit(1) from exc
 

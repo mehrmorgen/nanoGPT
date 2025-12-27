@@ -64,3 +64,10 @@ def test_shared_config_like_requires_paths(tmp_path: Path) -> None:
             self.sample_out_dir = tmp_path / "sample"
 
     assert isinstance(SharedCfg(), SharedConfigLike)  # type: ignore[arg-type]
+
+
+def test_runtime_checkable_rejects_non_conforming() -> None:
+    class NotShared:
+        pass
+
+    assert not isinstance(NotShared(), SharedConfigLike)
