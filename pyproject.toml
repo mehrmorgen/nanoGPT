@@ -143,6 +143,8 @@ extend-select = [
 "tests/unit/tools/analysis/lit/test_integration.py" = ["TID251"]
 "tests/unit/tools/analysis/test_lit_shim.py" = ["TID251"]
 "tests/unit/tools/cli/commands/test_analysis.py" = ["TID251"]
+"tests/unit/tools/dev/test_review.py" = ["TID251"]
+"tests/unit/tools/dev/test_ai_guidelines.py" = ["TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "unittest.mock" = { msg = "Do not use mocks; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
@@ -153,7 +155,7 @@ extend-select = [
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
-files = ["src/ml_playground", "src/ml_playground/runtime", "src/ml_playground/tools/ci"]
+files = ["src/ml_playground", "src/ml_playground/runtime", "src/ml_playground/tools/ci", "src/ml_playground/tools/dev"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
@@ -179,7 +181,6 @@ exclude = [
     "src/ml_playground/tools/agentic",
     "src/ml_playground/tools/cli",
     "src/ml_playground/tools/core",
-    "src/ml_playground/tools/dev",
     "src/ml_playground/tools/environment",
     "src/ml_playground/tools/quality",
     "src/ml_playground/tools/testing",
@@ -187,7 +188,6 @@ exclude = [
     "tests/unit/tools/agentic",
     "tests/unit/tools/cli",
     "tests/unit/tools/core",
-    "tests/unit/tools/dev",
     "tests/unit/tools/environment",
     "tests/unit/tools/quality",
     "tests/unit/tools/testing",
@@ -296,8 +296,8 @@ precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 89.8
-branch_threshold = 85.2
+line_threshold = 91.0
+branch_threshold = 88.0
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

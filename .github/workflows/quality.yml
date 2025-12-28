@@ -62,6 +62,8 @@ jobs:
           du -sh .cache/pre-commit || true
           du -sh .venv || true
       - run: uv sync --frozen --group dev
+      - name: Install local package for CLI tests
+        run: uv pip install -e .
       - run: uv run tools --no-learning-mode ci quality-gate
       - name: Prune uv cache
         run: |

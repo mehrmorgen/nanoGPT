@@ -346,6 +346,35 @@ def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
     return host_value, port_value, open_browser_value
 
 
+# Public wrappers (non-underscored) for external callers/tests
+def load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
+    """Public entry to load lit components."""
+    return _load_lit_components()
+
+
+def import_lit_server() -> ModuleType:
+    """Public entry to import lit server module."""
+    return _import_lit_server()
+
+
+def parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
+    """Public entry to parse CLI args for the lit server."""
+    return _parse_cli_args(argv)
+
+
+__all__ = [
+    "LitDataset",
+    "LitDatasetModule",
+    "LitModel",
+    "LitModelModule",
+    "LitTypesModule",
+    "load_lit_components",
+    "import_lit_server",
+    "parse_cli_args",
+    "run_server_bundestag_char",
+]
+
+
 if __name__ == "__main__":  # pragma: no cover
     host_arg, port_arg, open_browser_arg = _parse_cli_args()
     run_server_bundestag_char(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Protocol
 
 import typer
 from typing_extensions import Annotated
@@ -58,6 +58,34 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(learn_app, name="learn")
 
 
+class LoaderHook(Protocol):
+    def __call__(self, project_root: Optional[Path] = None) -> None: ...
+
+
+class RunnerHook(Protocol):
+    def __call__(self) -> None: ...
+
+
+# Injectables for tests to avoid monkeypatching
+_config_loader: LoaderHook = load_config_with_error_handling
+_app_runner: RunnerHook = app
+
+
+def set_cli_hooks(
+    *,
+    config_loader: LoaderHook | None = None,
+    app_runner: RunnerHook | None = None,
+) -> None:
+    """Configure CLI hook overrides for testing.
+
+    Falls back to defaults when overrides are not provided.
+    """
+
+    global _config_loader, _app_runner
+    _config_loader = config_loader or load_config_with_error_handling
+    _app_runner = app_runner or app
+
+
 @app.callback()
 def main(
     learning_mode: Annotated[
@@ -92,7 +120,7 @@ def main(
     ] = None,
 ) -> None:
     """ML Playground unified development tools entry."""
-    load_config_with_error_handling(project_root)
+    _config_loader(project_root)
     apply_cli_options(learning_mode, verbosity, dry_run)
 
 
@@ -107,7 +135,7 @@ def version() -> None:
 def show_config() -> None:
     """Show current configuration."""
     if state.config is None:
-        load_config_with_error_handling()
+        _config_loader()
 
     if state.config is None:
         typer.echo("Configuration not loaded", err=True)
@@ -138,7 +166,7 @@ def show_config() -> None:
 def main_entry() -> None:
     """Main entry point for the tools CLI."""
     try:
-        app()
+        _app_runner()
     except KeyboardInterrupt:
         typer.echo("\nOperation cancelled by user", err=True)
         sys.exit(1)
@@ -151,6 +179,7 @@ __all__ = [
     "app",
     "main",
     "main_entry",
+    "set_cli_hooks",
     "state",
     "GlobalState",
     "quality_app",
@@ -162,3 +191,7 @@ __all__ = [
     "dev_app",
     "learn_app",
 ]
+
+
+if __name__ == "__main__":
+    main_entry()

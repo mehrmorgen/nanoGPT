@@ -49,6 +49,8 @@ jobs:
           mkdir -p .venv
       - name: Sync dependencies (dev)
         run: uv sync --frozen --group dev
+      - name: Install local package for CLI tests
+        run: uv pip install -e .
 
       - name: Run mutation suite
         run: uv run tools test mutation run

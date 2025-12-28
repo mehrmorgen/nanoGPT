@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from _pytest.capture import CaptureFixture
 
 from typing import Any, Iterator
 from contextlib import contextmanager
@@ -18,6 +19,8 @@ from ml_playground.tools.cli.commands import (
 )
 from ml_playground.tools.cli import helpers as cli_helpers
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from ml_playground.tools.cli.state import reset_state
+from ml_playground.tools.core.config import ToolsConfig
 
 
 def make_result(*, success: bool, stdout: str = "", stderr: str = "") -> ToolResult:
@@ -30,7 +33,7 @@ def make_result(*, success: bool, stdout: str = "", stderr: str = "") -> ToolRes
     )
 
 
-def test_handle_tool_result_success(capsys: pytest.CaptureFixture[str]) -> None:
+def test_handle_tool_result_success(capsys: CaptureFixture[str]) -> None:
     cli_helpers.handle_tool_result(make_result(success=True, stdout="ok", stderr=""))
     out, err = capsys.readouterr()
     assert "ok" in out
@@ -38,7 +41,7 @@ def test_handle_tool_result_success(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_handle_tool_result_failure_raises_exit(
-    capsys: pytest.CaptureFixture[str],
+    capsys: CaptureFixture[str],
 ) -> None:
     with pytest.raises(ClickExit):
         cli_helpers.handle_tool_result(make_result(success=False, stderr="bad"))
@@ -47,7 +50,7 @@ def test_handle_tool_result_failure_raises_exit(
     assert "bad" in err
 
 
-def test_invoke_tests_invalid_suite_exits(capsys: pytest.CaptureFixture[str]) -> None:
+def test_invoke_tests_invalid_suite_exits(capsys: CaptureFixture[str]) -> None:
     ctx = None  # _invoke_tests doesn't access ctx
     with pytest.raises(ClickExit):
         test_commands._invoke_tests(ctx, "tests/unknown", None, [])  # type: ignore[arg-type]
@@ -56,7 +59,7 @@ def test_invoke_tests_invalid_suite_exits(capsys: pytest.CaptureFixture[str]) ->
 
 
 def test_load_config_with_error_handling_exit(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: CaptureFixture[str]
 ) -> None:
     with pytest.raises(ClickExit):
         cli.load_config_with_error_handling(tmp_path)
@@ -82,6 +85,39 @@ def test_tools_cli_getters_return_instances(tmp_path: Path) -> None:
     assert isinstance(t, TT)
     assert isinstance(e, ET)
     assert isinstance(c, CT)
+
+
+def test_get_dev_tools_requires_config() -> None:
+    reset_state()
+    with pytest.raises(RuntimeError):
+        cli_helpers.get_dev_tools()
+
+
+@pytest.mark.parametrize(  # type: ignore[misc]
+    "getter",
+    [
+        cli_helpers.get_quality_tools,
+        cli_helpers.get_testing_tools,
+        cli_helpers.get_environment_tools,
+        cli_helpers.get_ci_tools,
+        cli_helpers.get_agentic_tools,
+    ],
+)
+def test_tool_getters_require_config(getter: Any) -> None:
+    reset_state()
+    with pytest.raises(RuntimeError):
+        getter()
+
+
+def test_quality_getter_uses_project_root(tmp_path: Path) -> None:
+    reset_state()
+    state = cli.state
+    state.config = ToolsConfig()  # type: ignore[attr-defined]
+    state.project_root = tmp_path  # type: ignore[attr-defined]
+    qt = cli_helpers.get_quality_tools()
+    from ml_playground.tools.quality import QualityTools as QT
+
+    assert isinstance(qt, QT)
 
 
 @contextmanager

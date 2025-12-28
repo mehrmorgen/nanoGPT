@@ -1,42 +1,83 @@
 from __future__ import annotations
 
 import os
-import subprocess
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable, List, Optional
 
+from pydantic import BaseModel, ConfigDict
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 
-from ml_playground.tools.core.interfaces import ToolResult
+from ml_playground.tools.core.interfaces import OperationId, ToolResult
+from ml_playground.tools.utils.subprocess_utils import (
+    RealSubprocessRunner,
+    SubprocessRunner,
+)
 
 README_NAME = "README.md"
 
 
-@dataclass(frozen=True)
-class ToolSpec:
+class ToolSpec(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     primary_link: str
     root: str
     single_file_root: bool = False
 
 
+class SetupResult(BaseModel):
+    """Structured result for setup_ai_guidelines."""
+
+    model_config = ConfigDict(frozen=True)
+
+    success: bool
+    logs: List[str]
+    error: Optional[str] = None
+
+
 TOOL_MAP: dict[str, ToolSpec] = {
-    "copilot": ToolSpec(".github/copilot-instructions.md", ".github"),
-    "aiassistant": ToolSpec(".aiassistant/rules/00-README.md", ".aiassistant/rules"),
-    "junie": ToolSpec(".junie/guidelines.md", ".junie"),
-    "kiro": ToolSpec(".kiro/steering/product.md", ".kiro/steering"),
-    "windsurf": ToolSpec(".windsurf/rules/rule.md", ".windsurf/rules"),
-    "cursor": ToolSpec(".cursor/rules/00-readme.mdc", ".cursor/rules"),
-    "gemini": ToolSpec("GEMINI.md", ".", True),
-    "codex": ToolSpec("AGENTS.md", ".", True),
+    "copilot": ToolSpec(
+        primary_link=".github/copilot-instructions.md",
+        root=".github",
+    ),
+    "aiassistant": ToolSpec(
+        primary_link=".aiassistant/rules/00-README.md",
+        root=".aiassistant/rules",
+    ),
+    "junie": ToolSpec(
+        primary_link=".junie/guidelines.md",
+        root=".junie",
+    ),
+    "kiro": ToolSpec(
+        primary_link=".kiro/steering/product.md",
+        root=".kiro/steering",
+    ),
+    "windsurf": ToolSpec(
+        primary_link=".windsurf/rules/rule.md",
+        root=".windsurf/rules",
+    ),
+    "cursor": ToolSpec(
+        primary_link=".cursor/rules/00-readme.mdc",
+        root=".cursor/rules",
+    ),
+    "gemini": ToolSpec(
+        primary_link="GEMINI.md",
+        root=".",
+        single_file_root=True,
+    ),
+    "codex": ToolSpec(
+        primary_link="AGENTS.md",
+        root=".",
+        single_file_root=True,
+    ),
 }
 
 
-def _relative_tool_path(project_dir: Path, tool_dir: Path) -> str:
+def relative_tool_path(project_dir: Path, tool_dir: Path) -> str:
     return os.path.relpath(tool_dir, start=project_dir).replace(os.sep, "/")
 
 
-def _project_path(project_dir: Path, relative_path: str) -> Path:
+def project_path(project_dir: Path, relative_path: str) -> Path:
     path = Path(relative_path)
     if path.is_absolute():
         raise ValueError(
@@ -51,8 +92,12 @@ def _project_path(project_dir: Path, relative_path: str) -> Path:
     return project_dir / path
 
 
-def _gitignore_match(
-    project_dir: Path, relative_path: str, *, directory: bool
+def gitignore_match(
+    project_dir: Path,
+    relative_path: str,
+    *,
+    directory: bool,
+    git_wild_match_pattern_factory: Callable[[str], Any] | None = None,
 ) -> tuple[bool, str | None]:
     gitignore = project_dir / ".gitignore"
     if not gitignore.exists():
@@ -77,7 +122,10 @@ def _gitignore_match(
                 continue
 
             try:
-                pattern = GitWildMatchPattern(line)
+                if git_wild_match_pattern_factory:
+                    pattern = git_wild_match_pattern_factory(line)
+                else:
+                    pattern = GitWildMatchPattern(line)
             except ValueError:
                 continue
 
@@ -88,7 +136,7 @@ def _gitignore_match(
     return ignored, matched_pattern
 
 
-def _is_listed_in_aiignore(project_dir: Path, tool_dir: Path) -> bool:
+def is_listed_in_aiignore(project_dir: Path, tool_dir: Path) -> bool:
     ignore_path = project_dir / ".aiignore"
     if not ignore_path.exists():
         return False
@@ -105,11 +153,13 @@ def _is_listed_in_aiignore(project_dir: Path, tool_dir: Path) -> bool:
         return False
 
     spec = PathSpec.from_lines("gitwildmatch", patterns)
-    relative_path = _relative_tool_path(project_dir, tool_dir).rstrip("/")
-    return bool(spec.match_file(relative_path) or spec.match_file(relative_path + "/"))
+    rel_path = relative_tool_path(project_dir, tool_dir).rstrip("/")
+    return bool(spec.match_file(rel_path) or spec.match_file(rel_path + "/"))
 
 
-def _windows_create_junction(link_path: Path, target_path: Path) -> None:
+def windows_create_junction(
+    link_path: Path, target_path: Path, subprocess_runner: SubprocessRunner
+) -> None:
     cmd = [
         "cmd",
         "/c",
@@ -118,8 +168,11 @@ def _windows_create_junction(link_path: Path, target_path: Path) -> None:
         str(link_path),
         str(target_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
+    operation_id = OperationId(
+        namespace="tools", category="dev", command="setup-ai-guidelines-junction"
+    )
+    result = subprocess_runner.run_subprocess(cmd, operation_id=operation_id)
+    if not result.success:
         raise RuntimeError(
             f"failed to create junction {link_path} -> {target_path}: {result.stderr.strip()}"
         )
@@ -158,7 +211,18 @@ def ensure_base_and_empty_readme(
 
 
 def create_or_update_link(
-    link_path: Path, target_path: Path, dry_run: bool, *, logs: list[str]
+    link_path: Path,
+    target_path: Path,
+    dry_run: bool,
+    *,
+    logs: list[str],
+    subprocess_runner: SubprocessRunner,
+    os_path_samefile: Callable[[Path | str, Path | str], bool] | None = None,
+    path_resolve: Callable[[Path], Path] | None = None,
+    path_readlink: Callable[[Path], Path] | None = None,
+    os_relpath: Callable[[Path | str, Path | str], str] | None = None,
+    os_name: str | None = None,
+    os_link_op: Callable[[Path | str, Path | str], None] | None = None,
 ) -> None:
     link_exists = False
     link_is_symlink = False
@@ -169,7 +233,7 @@ def create_or_update_link(
         link_exists = False
         link_is_symlink = False
 
-    is_windows = os.name == "nt"
+    is_windows = (os_name or os.name) == "nt"
     try:
         target_is_dir = target_path.is_dir()
     except OSError:
@@ -178,7 +242,10 @@ def create_or_update_link(
     desired_link_repr: str | None = None
     if not is_windows:
         try:
-            desired_link_repr = os.path.relpath(target_path, start=link_path.parent)
+            if os_relpath:
+                desired_link_repr = os_relpath(target_path, link_path.parent)
+            else:
+                desired_link_repr = os.path.relpath(target_path, start=link_path.parent)
         except ValueError:
             desired_link_repr = str(target_path)
     elif target_is_dir:
@@ -187,17 +254,26 @@ def create_or_update_link(
     current_link_repr: str | None = None
     if link_is_symlink:
         try:
-            current_link_repr = link_path.readlink().as_posix()
+            if path_readlink:
+                current_link_repr = path_readlink(link_path).as_posix()
+            else:
+                current_link_repr = link_path.readlink().as_posix()
         except OSError:
             current_link_repr = None
 
     same = False
-    if link_exists or (link_is_symlink and current_link_repr):
+    if link_exists or (link_is_symlink and current_link_repr is not None):
         try:
-            same = os.path.samefile(link_path, target_path)
+            if os_path_samefile:
+                same = os_path_samefile(link_path, target_path)
+            else:
+                same = os.path.samefile(link_path, target_path)
         except OSError:
             try:
-                same = link_path.resolve() == target_path.resolve()
+                if path_resolve:
+                    same = path_resolve(link_path) == path_resolve(target_path)
+                else:
+                    same = link_path.resolve() == target_path.resolve()
             except OSError:
                 same = False
 
@@ -246,11 +322,14 @@ def create_or_update_link(
 
     if is_windows:
         if target_is_dir:
-            _windows_create_junction(link_path, target_path)
+            windows_create_junction(link_path, target_path, subprocess_runner)
             logs.append(f"link   {link_path} => {target_path} (junction)")
         else:
             try:
-                os.link(target_path, link_path)
+                if os_link_op:
+                    os_link_op(target_path, link_path)
+                else:
+                    os.link(target_path, link_path)
                 logs.append(f"link   {link_path} == {target_path} (hardlink)")
             except OSError as e:
                 message = (
@@ -259,7 +338,10 @@ def create_or_update_link(
                 )
                 raise RuntimeError(message) from e
     else:
-        rel = os.path.relpath(target_path, start=link_path.parent)
+        try:
+            rel = os.path.relpath(target_path, start=link_path.parent)
+        except ValueError:
+            rel = str(target_path)
         try:
             if target_is_dir:
                 link_path.symlink_to(rel, target_is_directory=True)
@@ -280,6 +362,13 @@ def mirror_tree(
     dry_run: bool,
     *,
     logs: list[str],
+    subprocess_runner: SubprocessRunner,
+    os_path_samefile: Callable[[Path | str, Path | str], bool] | None = None,
+    path_resolve: Callable[[Path], Path] | None = None,
+    path_readlink: Callable[[Path], Path] | None = None,
+    os_relpath: Callable[[Path | str, Path | str], str] | None = None,
+    os_name: str | None = None,
+    os_link_op: Callable[[Path | str, Path | str], None] | None = None,
 ) -> None:
     if not src_dir.exists():
         return
@@ -288,19 +377,39 @@ def mirror_tree(
         if exclude and target in exclude:
             continue
         dest_path = (dest_dir / entry.name).resolve()
-        create_or_update_link(dest_path, target, dry_run, logs=logs)
+        create_or_update_link(
+            dest_path,
+            target,
+            dry_run,
+            logs=logs,
+            subprocess_runner=subprocess_runner,
+            os_path_samefile=os_path_samefile,
+            path_resolve=path_resolve,
+            path_readlink=path_readlink,
+            os_relpath=os_relpath,
+            os_name=os_name,
+            os_link_op=os_link_op,
+        )
 
 
-def _log_gitignore_status(
-    project_dir: Path, tool_dir: Path, *, directory: bool, logs: list[str]
+def log_gitignore_status(
+    project_dir: Path,
+    tool_dir: Path,
+    *,
+    directory: bool,
+    logs: list[str],
+    git_wild_match_pattern_factory: Callable[[str], Any] | None = None,
 ) -> None:
-    relative_path = _relative_tool_path(project_dir, tool_dir).replace(os.sep, "/")
-    display_path = relative_path.rstrip("/")
+    rel_path = relative_tool_path(project_dir, tool_dir).replace(os.sep, "/")
+    display_path = rel_path.rstrip("/")
     if directory:
         display_path = (display_path + "/") if display_path else "/"
 
-    ignored, matched_pattern = _gitignore_match(
-        project_dir, relative_path, directory=directory
+    ignored, matched_pattern = gitignore_match(
+        project_dir,
+        rel_path,
+        directory=directory,
+        git_wild_match_pattern_factory=git_wild_match_pattern_factory,
     )
 
     if ignored:
@@ -320,9 +429,9 @@ def _log_gitignore_status(
     )
 
 
-def _log_aiignore_status(project_dir: Path, tool_dir: Path, *, logs: list[str]) -> None:
-    display_path = _relative_tool_path(project_dir, tool_dir).rstrip("/") + "/"
-    if _is_listed_in_aiignore(project_dir, tool_dir):
+def log_aiignore_status(project_dir: Path, tool_dir: Path, *, logs: list[str]) -> None:
+    display_path = relative_tool_path(project_dir, tool_dir).rstrip("/") + "/"
+    if is_listed_in_aiignore(project_dir, tool_dir):
         logs.append(
             f"WARNING: ai     '{display_path}' is excluded by .aiignore. Remove this entry so AI tools can access their guidelines."
         )
@@ -335,8 +444,19 @@ def setup_ai_guidelines(
     tool: str,
     project_dir: Path,
     dry_run: bool = False,
+    subprocess_runner: SubprocessRunner | None = None,
+    os_path_samefile: Callable[[Path | str, Path | str], bool] | None = None,
+    path_resolve: Callable[[Path], Path] | None = None,
+    path_readlink: Callable[[Path], Path] | None = None,
+    os_relpath: Callable[[Path | str, Path | str], str] | None = None,
+    os_name: str | None = None,
+    git_wild_match_pattern_factory: Callable[[str], Any] | None = None,
+    create_or_update_link_op: Callable[..., None] | None = None,
+    ensure_base_and_empty_readme_op: Callable[..., Path] | None = None,
+    os_link_op: Callable[[Path | str, Path | str], None] | None = None,
 ) -> ToolResult:
     logs: list[str] = []
+    runner = subprocess_runner or RealSubprocessRunner()
 
     try:
         tool_key = tool.lower()
@@ -356,13 +476,16 @@ def setup_ai_guidelines(
         base_dir = project_dir / ".dev-guidelines"
 
         # 1) Ensure base + empty README
-        readme = ensure_base_and_empty_readme(project_dir, dry_run, logs=logs)
+        if ensure_base_and_empty_readme_op:
+            readme = ensure_base_and_empty_readme_op(project_dir, dry_run, logs=logs)
+        else:
+            readme = ensure_base_and_empty_readme(project_dir, dry_run, logs=logs)
 
         # 2) Ensure tool directory exists
         tool_dir = (
             project_dir
             if spec.single_file_root
-            else _project_path(project_dir, spec.root)
+            else project_path(project_dir, spec.root)
         )
         ensure_dir(tool_dir, dry_run, logs=logs)
 
@@ -370,12 +493,44 @@ def setup_ai_guidelines(
         if spec.single_file_root:
             primary_path = project_dir / Path(spec.primary_link).name
         else:
-            primary_path = _project_path(project_dir, spec.primary_link)
+            primary_path = project_path(project_dir, spec.primary_link)
         ensure_dir(primary_path.parent, dry_run, logs=logs)
-        create_or_update_link(primary_path, readme, dry_run, logs=logs)
+
+        if create_or_update_link_op:
+            create_or_update_link_op(
+                primary_path,
+                readme,
+                dry_run,
+                logs=logs,
+                subprocess_runner=runner,
+                os_path_samefile=os_path_samefile,
+                path_resolve=path_resolve,
+                path_readlink=path_readlink,
+                os_relpath=os_relpath,
+                os_name=os_name,
+            )
+        else:
+            create_or_update_link(
+                primary_path,
+                readme,
+                dry_run,
+                logs=logs,
+                subprocess_runner=runner,
+                os_path_samefile=os_path_samefile,
+                path_resolve=path_resolve,
+                path_readlink=path_readlink,
+                os_relpath=os_relpath,
+                os_name=os_name,
+            )
 
         if spec.single_file_root:
-            _log_gitignore_status(project_dir, primary_path, directory=False, logs=logs)
+            log_gitignore_status(
+                project_dir,
+                primary_path,
+                directory=False,
+                logs=logs,
+                git_wild_match_pattern_factory=git_wild_match_pattern_factory,
+            )
             logs.append(
                 f"note   {tool_key} configured as single-file root; skipping tree mirroring."
             )
@@ -392,7 +547,19 @@ def setup_ai_guidelines(
         # 4) Mirror entire BASE_DIR contents into tool_dir (exclude README)
         exclude: set[Path] = {readme.resolve()}
         mirror_tree(
-            project_dir, base_dir.resolve(), tool_dir, exclude, dry_run, logs=logs
+            project_dir,
+            base_dir.resolve(),
+            tool_dir,
+            exclude,
+            dry_run,
+            logs=logs,
+            subprocess_runner=runner,
+            os_path_samefile=os_path_samefile,
+            path_resolve=path_resolve,
+            path_readlink=path_readlink,
+            os_relpath=os_relpath,
+            os_name=os_name,
+            os_link_op=os_link_op,
         )
 
         # 5) Clean broken symlinks pointing into BASE_DIR within tool's directory
@@ -401,7 +568,10 @@ def setup_ai_guidelines(
                 if not path.is_symlink():
                     continue
                 try:
-                    target = (path.parent / path.readlink()).resolve()
+                    if path_readlink:
+                        target = (path.parent / path_readlink(path)).resolve()
+                    else:
+                        target = (path.parent / path.readlink()).resolve()
                 except OSError:
                     target = None
                 if (
@@ -416,8 +586,14 @@ def setup_ai_guidelines(
                         logs.append(f"clean  removed broken symlink {path}")
 
         # 6) Report ignore status for the tool's directory
-        _log_gitignore_status(project_dir, tool_dir, directory=True, logs=logs)
-        _log_aiignore_status(project_dir, tool_dir, logs=logs)
+        log_gitignore_status(
+            project_dir,
+            tool_dir,
+            directory=True,
+            logs=logs,
+            git_wild_match_pattern_factory=git_wild_match_pattern_factory,
+        )
+        log_aiignore_status(project_dir, tool_dir, logs=logs)
 
         logs.append("done.")
         return ToolResult.create(
@@ -428,7 +604,7 @@ def setup_ai_guidelines(
             command="setup-ai-guidelines",
             stdout="\n".join(logs),
         )
-    except Exception as exc:  # pragma: no cover - defensive catch
+    except Exception as exc:
         return ToolResult.create(
             success=False,
             exit_code=1,

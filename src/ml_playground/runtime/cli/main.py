@@ -222,3 +222,7 @@ def _cli_module():
     if mod is None:
         mod = importlib.import_module("ml_playground.runtime.cli")
     return mod
+
+
+if __name__ == "__main__":
+    main_entry()
