@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import cast
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -16,19 +16,23 @@ from ml_playground.models.core.optimization import (
 from ml_playground.models.layers.block import Block
 from ml_playground.models.layers.normalization import LayerNorm
 from ml_playground.models.utils.init import init_transformer_weights
+from ml_playground.core.logging_protocol import LoggerLike
 
 
 class GPT(nn.Module):
     """GPT model backed by the modular `ml_playground.models` hierarchy."""
 
-    def __init__(self, config: ModelConfig | GPTConfig, logger) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        config: ModelConfig | GPTConfig,
+        logger: LoggerLike | None,
+    ) -> None:
+        super().__init__()  # pyright: ignore[reportUnknownMemberType]
         if isinstance(config, ModelConfig):
             config = build_gpt_config(config)
-        config = cast(GPTConfig, config)
 
         vocab_size = config.vocab_size
-        if vocab_size is None:
+        if not vocab_size:
             raise ValueError("GPTConfig.vocab_size must be set")
 
         self.config: GPTConfig = config
@@ -67,7 +71,7 @@ class GPT(nn.Module):
     def forward(
         self, idx: torch.Tensor, targets: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
-        bsz, seq_len = idx.size()
+        _bsz, seq_len = idx.size()
         if seq_len > self.config.block_size:
             raise ValueError(
                 "Cannot forward sequence of length %s, block size is only %s"
@@ -100,7 +104,11 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(self.config.n_embd, self.config.vocab_size, bias=False)
 
     @classmethod
-    def from_pretrained(cls, *args, **kwargs):  # pragma: no cover - legacy API parity
+    def from_pretrained(
+        cls,
+        *args: Any,
+        **kwargs: Any,
+    ) -> "GPT":  # pragma: no cover - legacy API parity
         raise NotImplementedError("from_pretrained is not supported in this port")
 
     def configure_optimizers(

@@ -22,7 +22,7 @@ def merge_mappings(
 
     merged: dict[str, Any] = {} if override_only else deepcopy(dict(base))
     for key, override_value in override.items():
-        base_value = base.get(key) if isinstance(base, Mapping) else None
+        base_value = base.get(key)
         if isinstance(base_value, Mapping) and isinstance(override_value, Mapping):
             merged[key] = merge_mappings(
                 base_value,

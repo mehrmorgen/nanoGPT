@@ -151,7 +151,7 @@ def read_toml_dict(
         raise Exception(f"{path.name}: {exc}")
     if not isinstance(data, dict):
         raise TypeError(f"TOML root in {path} must be a mapping")
-    return cast(TomlMapping, data)
+    return data  # type: ignore[assignment]
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
