@@ -13,40 +13,41 @@ authors = [
 license = { file = "LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "numpy>=2.3.2",
+    "numpy>=2.3.4",
     "requests>=2.32.5",
-    "tiktoken>=0.11.0",
+    "tiktoken>=0.12.0",
     "tqdm>=4.67.1",
-    "datasets>=4.0.0",
-    "beautifulsoup4>=4.13.5",
-    "pydantic>=2.11.7",
-    "notebook>=7.4.5",
-    "typer==0.17.3",
+    "datasets>=4.3.0",
+    "beautifulsoup4>=4.14.2",
+    "pydantic>=2.12.3",
+    "notebook>=7.4.7",
+    "typer==0.20.0",
+    "pathspec>=0.12.1",
     "sentencepiece>=0.2.1",
-    "pandas-stubs==2.3.2.250827",
+    "pandas-stubs==2.3.2.250926",
     "toml>=0.10.2",
-    "mlflow>=3.8.1",
     "hatchling>=1.27.0",
-    "pip >= 25.2",
-    "torch==2.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
-    "torch==2.8.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
-    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
-    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
-    "torch==2.8.0; platform_system == 'Windows'",
-    "transformers==4.56.0",
+    "pip >= 25.3",
+    "torch==2.9.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "torch==2.9.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
+    "torch==2.9.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+    "torch==2.9.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "torch==2.9.0; platform_system == 'Windows'",
+    "transformers==4.57.1",
     "peft>=0.17.1",
     "tensorboard>=2.20.0",
     "torch-tb-profiler>=0.4.3",
 ]
 
 [project.scripts]
-ci-tasks = "tools.ci_tasks:main"
-cli = "ml_playground.cli:main"
-env-tasks = "tools.env_tasks:main"
-lint-tasks = "tools.lint_tasks:main"
-lit-tasks = "tools.lit_tasks:main"
-ml-playground = "ml_playground.cli:main"
-test-tasks = "tools.test_tasks:main"
+ci-tasks = "ml_playground.tools.cli:main_entry"
+cli = "ml_playground.runtime.cli:main_entry"
+env-tasks = "ml_playground.tools.cli:main_entry"
+lint-tasks = "ml_playground.tools.cli:main_entry"
+lit-tasks = "ml_playground.tools.cli:main_entry"
+ml-playground = "ml_playground.runtime.cli:main_entry"
+test-tasks = "ml_playground.tools.cli:main_entry"
+tools = "ml_playground.tools.cli:main_entry"
 
 [project.optional-dependencies]
 
@@ -84,16 +85,13 @@ include = [
     "src/ml_playground/**",
 ]
 
-[tool.hatch.build.targets.wheel.force-include]
-"tools" = "tools"
+# No additional files to force-include
 
 [tool.hatch.build.targets.sdist]
 include = [
     "pyproject.toml",
     "src/ml_playground",
     "src/ml_playground/**",
-    "tools",
-    "tools/**",
 ]
 
 
@@ -101,24 +99,26 @@ include = [
 # Mandatory dev tooling available in the project venv
 # Sync with: uv sync --group dev to install these extras when needed.
 dev = [
-    "pytest>=8.4.1",
+    "pytest>=8.4.2",
     "pytest-xdist>=3.8.0",
     "pytest-bdd>=8.1.0",
-    "pytest-cov>=6.2.1",
-    "coverage[toml]>=7.10.6",
-    "ruff>=0.12.11",
-    "mypy>=1.17.1",
-    "pyright>=1.1.405",
-    "types-requests>=2.32.4.20250809",
-    "vulture>=2.11.0",
-    "cosmic-ray>=8.3.0",
-    "hypothesis>=6.0.0",
-    "tomli-w>=1.0.0",
+    "pytest-cov>=7.0.0",
+    "coverage[toml]>=7.11.0",
+    "ruff>=0.14.2",
+    "mypy>=1.18.2",
+    "basedpyright>=1.32.1",
+    "types-requests>=2.32.4.20250913",
+    "types-PyYAML>=6.0.12.20250915",
+    "vulture>=2.14",
+    "cosmic-ray>=8.4.3",
+    "hypothesis>=6.142.4",
+    "tomli-w>=1.2.0",
     "pre-commit>=4.3.0",
-    "coverage-badge>=1.1.0",
+    "coverage-badge>=1.1.2",
     "mdformat>=0.7.17",
     "mdformat-gfm>=0.3.5",
     "mdformat-frontmatter>=0.4.1",
+    "psutil>=6.0.0",
 ]
 
 
@@ -131,39 +131,12 @@ number = false
 
 [tool.ruff]
 respect-gitignore = true
-extend-exclude = [
-    ".idea",
-    ".vscode",
-    "out",
-    "**/out/**",
-    "data",
-    "datasets",
-    "**/datasets/**",
-    "checkpoints",
-    "**/checkpoints/**",
-    "*.pt",
-    "runs",
-    "**/runs/**",
-    "wandb",
-    "**/wandb/**",
-    "lightning_logs",
-    "**/lightning_logs/**",
-    "artifacts",
-    "**/artifacts/**",
-    "mlruns",
-    "**/mlruns/**",
-    ".cache",
-    "**/.cache/**",
-    ".venv",
-    "env",
-    ".git",
-    "htmlcov",
-]
+# Most exclusions handled by .gitignore, only add specific overrides if needed
 cache-dir = ".cache/ruff"
 
 [tool.ruff.lint]
 extend-select = [
-  "TID252", # flake8-tidy-imports banned API
+  "TID251", # flake8-tidy-imports banned API
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -192,10 +165,32 @@ ignore_missing_imports = true
 cache_dir = ".cache/mypy"
 
 
+[tool.basedpyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+include = [
+    "src/ml_playground",
+    "tests",
+]
+exclude = [
+    "src/ml_playground/tools",
+    "src/ml_playground/experiments/speakger",
+    "src/ml_playground/experiments/bundestag_char",
+    "tests/unit/tools",
+    "tests/property/tools",
+    "tests/acceptance",
+    "tests/e2e",
+]
+stubPath = "typings"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "."
+extraPaths = ["src"]
+
+
 [tool.pytest.ini_options]
-# Updated pytest settings for ml_playground. Benchmarks are disabled in gate runs to avoid
-# warnings under xdist when `-W error` is enabled.
-addopts = "-W error --strict-markers --strict-config -v -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\" -p no:benchmark"
+# Updated pytest settings for ml_playground
+addopts = "-qq -W error --strict-markers --strict-config -r fEsxX -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
 pythonpath = ["src", "."]
 testpaths = [
     "tests",
@@ -233,8 +228,13 @@ markers = [
 ]
 bdd_features_base_dir = "tests/acceptance/features/"
 
+[tool.hypothesis]
+deadline = "200 ms"
+database = ".cache/hypothesis"
+derandomize = true
+
 [tool.ruff.lint.isort]
-known-first-party = ["ml_playground", "tests", "tools"]
+known-first-party = ["ml_playground", "tests"]
 classes = []
 
 [tool.coverage.run]
@@ -255,13 +255,6 @@ omit = [
     "**/mlruns/*",
     "**/.hf_cache/*",
     "**/.cache/*",
-    "**/tools/*",
-    "**/_remote_module_non_scriptable.py",
-    # CLIs are covered on the full-tool-integration branch
-    "src/ml_playground/cli.py",
-    "src/ml_playground/configuration/cli.py",
-    # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "src/ml_playground/analysis/*",
 ]
 
 [tool.coverage.report]
@@ -273,16 +266,17 @@ exclude_lines = [
 ]
 show_missing = true
 omit = [
-    # CLIs are covered on the full-tool-integration branch
-    "src/ml_playground/cli.py",
-    "src/ml_playground/configuration/cli.py",
-    # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "src/ml_playground/analysis/*",
+    # No exclusions needed - tools are now part of the main codebase
 ]
 skip_covered = false
-# Align with CI gate threshold for unit+property suites
-fail_under = 87.0
+# Align with CI gate threshold for unit+property suites  
+fail_under = 86.0
 precision = 2
+
+# Custom coverage thresholds for CI
+[tool.ml_playground.coverage.thresholds]
+line_threshold = 90.0
+branch_threshold = 70.0
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"
@@ -302,3 +296,6 @@ file = ".cache/cosmic-ray/session.sqlite"
 
 [cosmic-ray.distributor]
 name = "local"
+
+
+

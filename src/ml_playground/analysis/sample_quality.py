@@ -136,11 +136,11 @@ def _find_anomalies(lines: list[str]) -> Anomalies:
     # Look for standalone 4-digit years in body (not header lines)
     year_pat = re.compile(r"(?<!\d)(19|20)\d{2}(?!\d)")
     stray: list[str] = []
-    for i, ln in enumerate(lines):
+    for _i, ln in enumerate(lines):
         s = ln.strip()
         if s.startswith("Jahr:"):
             continue
-        for m in year_pat.findall(s):
+        for _m in year_pat.findall(s):
             # m comes from grouped regex; we want the full year. Adjust:
             for full in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", s):
                 stray.append(full)

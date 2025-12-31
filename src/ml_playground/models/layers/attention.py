@@ -11,7 +11,7 @@ class CausalSelfAttention(nn.Module):
     """Causal self-attention block shared across GPT variants."""
 
     def __init__(self, config: GPTConfig) -> None:
-        super().__init__()
+        super().__init__()  # type: ignore[reportUnknownMemberType]
         if config.n_head <= 0:
             raise ValueError("n_head must be a positive integer")
         if config.n_embd % config.n_head != 0:
