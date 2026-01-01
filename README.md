@@ -3,17 +3,20 @@
 ![Line Coverage](docs/assets/coverage-lines.svg)
 ![Branch Coverage](docs/assets/coverage-branches.svg)
 
-This module provides a single, one-way interface to prepare data, train, and sample.
-It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
+This module provides a single, one-way interface to prepare data, train, and
+sample. It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
-- Developer Guidelines: see `.dev-guidelines/README.md` for setup, development workflow, and policies.
+- Developer Guidelines: see `.dev-guidelines/README.md` for setup, development
+  workflow, and policies.
 - Tools index: see `tools/README.md` for helper scripts and usage.
 
 ## Documentation abstraction policy
 
 - Top-level docs are high-level and describe the why and the overall layout.
-- Each subfolder contains its own `README.md` with a focused scope and a folder tree.
-- The deeper you go in the directory tree, the lower the level of abstraction and the more operational details you’ll find.
+- Each subfolder contains its own `README.md` with a focused scope and a folder
+  tree.
+- The deeper you go in the directory tree, the lower the level of abstraction
+  and the more operational details you’ll find.
 
 ## Repository structure (high-level)
 
@@ -42,38 +45,66 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 ## Policy
 
-- Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests, runtime):
-  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
-  - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
-  - `uv run lint-tasks <command>` for lint/format bundles when you need faster feedback.
+- Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests,
+  runtime):
+  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`,
+    `sample`).
+  - `uv run env-tasks <command>` for environment setup, cache cleanup,
+    TensorBoard, and AI-guideline helpers.
+  - `uv run lint-tasks <command>` for lint/format bundles when you need faster
+    feedback.
   - `uv run test-tasks <command>` for pytest suites.
-  - `uv run ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
-- The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
-- Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
-- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
-- Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
-- Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
-- Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
-- Review comment triage: use `uv run python tools/review.py list --pr <number> --unreplied --unresolved` to spot pending feedback; map comment URLs/IDs in `replies.json` for `bulk-reply`, and list comment IDs in `delete.json` for `uv run python tools/review.py delete --pr <number> --comments delete.json`.
+  - `uv run ci-tasks <command>` for end-to-end quality gates, coverage
+    generation, and mutation workflows.
+- The project uses a `src/` layout. The uv CLIs automatically expose `src/` so
+  `ml_playground` is importable without editable installs.
+- Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests
+  must pass.
+- Linear history for own work: rebase your branches and avoid merge commits;
+  fast-forward only. See `.dev-guidelines/README.md` for developer policies.
+- Test-Driven Development (TDD) is required for functional changes: write a
+  failing test, implement minimal code to pass, then refactor.
+- Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`,
+  `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared
+  `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation
+  steps, reviewer expectations, and a shared quality checklist.
+- Granular commits are required. Each functional/behavioral change MUST pair its
+  production code with the corresponding tests in the same commit
+  (unit/integration). Exceptions: documentation-only, test-only refactors, and
+  mechanical formatting.
+- Review comment triage: use `uv run python tools/review.py list --pr <number>
+  --unreplied --unresolved` to spot pending feedback; map comment URLs/IDs in
+  `replies.json` for `bulk-reply`, and list comment IDs in `delete.json` for
+  `uv run python tools/review.py delete --pr <number> --comments delete.json`.
 
 Setup and Developer Workflow
 
-- See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
+- See `.dev-guidelines/README.md` for environment setup, development practices,
+  and testing policies (entry point to all developer guidelines).
 
 Datasets
 
-- Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
-- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at src/ml_playground/experiments/bundestag_char/datasets/input.txt)
-- Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
+- Shakespeare (GPT-2 BPE; prepared via internal
+  ml_playground.experiments.shakespeare)
+- Bundestag (char-level; prepared via internal
+  ml_playground.experiments.bundestag_char; requires a user-provided text at
+  src/ml_playground/experiments/bundestag_char/datasets/input.txt)
+- Bundestag (tiktoken BPE; prepared via internal
+  ml_playground.experiments.bundestag_tiktoken)
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `README.md` and `.dev-guidelines/README.md`.
-- Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI:
+  `uv run cli <command>`. For exact commands, refer to each experiment's
+  `README.md` and `.dev-guidelines/README.md`.
+- Universal meta policy: the data directory must contain a `meta.pkl` file used
+  by training and sampling. The `prepare` step is responsible for writing
+  `meta.pkl`.
 
 Notes
 
-- Configuration is defined via TOML dataclasses under `src/ml_playground/configuration/`.
+- Configuration is defined via TOML dataclasses under
+  `src/ml_playground/configuration/`.
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
 - Checkpoint behavior and policies are described in `.dev-guidelines/README.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
@@ -81,7 +112,8 @@ Notes
 
 Mutation testing
 
-- See `.dev-guidelines/README.md` for how to run optional mutation testing (Cosmic Ray).
+- See `.dev-guidelines/README.md` for how to run optional mutation testing
+  (Cosmic Ray).
 
 TensorBoard (auto-enabled)
 

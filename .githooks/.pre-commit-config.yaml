@@ -35,14 +35,14 @@ repos:
     #   pass_filenames: false
     #   stages: [pre-commit]
     - id: coverage-threshold
-      name: coverage threshold (>=88.00% lines, >=80.00% branches)
+      name: coverage threshold (>=93.80% lines, >=87.20% branches)
       entry: bash
       args:
         - -c
         - |
           set -euo pipefail
           uv run ci-tasks coverage-test
-          uv run ci-tasks coverage-threshold --line-threshold 88 --branch-threshold 80 --verbose
+          uv run ci-tasks coverage-threshold --line-threshold 93.8 --branch-threshold 87.2 --verbose
       language: system
       pass_filenames: false
     - id: integration-tests
