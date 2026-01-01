@@ -72,7 +72,7 @@ For focused iterations, rely on task-specific commands (e.g., `uv run pytest pat
 ### Granular Commits Policy
 
 - **One logical change per commit** (e.g., fix a test, adjust a config, refactor a function)
-- **Keep commits under ~200 lines** unless unavoidable
+- **Keep commits under ~400 lines** unless unavoidable
 - **Ensure quality gates pass before the commit is recorded** (the pre-commit hook enforces this automatically)
 - **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit
   and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the
