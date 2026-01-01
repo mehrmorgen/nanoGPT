@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ml_playground.configuration import models as config_models
 from ml_playground.configuration.models import (
@@ -22,6 +22,7 @@ from ml_playground.configuration.models import (
 from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.merge_utils import merge_mappings
+from ml_playground.experiments.extras_registry import register_extras_model
 from tests.conftest import minimal_full_experiment_toml
 
 
@@ -918,6 +919,59 @@ def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
         context={"config_path": "not-a-path"},
     )
     assert not cfg2.raw_dir.is_absolute()
+
+
+def test_prepare_extras_requires_registered_model(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "missing_extras_model"
+    exp_dir.mkdir()
+    cfg_path = exp_dir / "config.toml"
+    cfg_path.write_text(
+        "[prepare]\n[prepare.extras]\nunknown = 1\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing_extras_model.prepare"):
+        config_loading.load_prepare_config(cfg_path, default_config_path=cfg_path)
+
+
+def test_prepare_extras_validates_known_fields(tmp_path: Path) -> None:
+    class StrictExtras(BaseModel):
+        model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+        allowed: int | None = None
+
+    register_extras_model("extras_test", "prepare", StrictExtras)
+
+    exp_dir = tmp_path / "extras_test"
+    exp_dir.mkdir()
+    cfg_path = exp_dir / "config.toml"
+    cfg_path.write_text(
+        "[prepare]\n[prepare.extras]\nallowed = 1\n",
+        encoding="utf-8",
+    )
+
+    cfg = config_loading.load_prepare_config(cfg_path, default_config_path=cfg_path)
+    assert cfg.extras["allowed"] == 1
+
+
+def test_prepare_extras_rejects_unknown_fields(tmp_path: Path) -> None:
+    class StrictExtras(BaseModel):
+        model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+        allowed: int | None = None
+
+    register_extras_model("extras_strict", "prepare", StrictExtras)
+
+    exp_dir = tmp_path / "extras_strict"
+    exp_dir.mkdir()
+    cfg_path = exp_dir / "config.toml"
+    cfg_path.write_text(
+        "[prepare]\n[prepare.extras]\nunknown = 1\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError):
+        config_loading.load_prepare_config(cfg_path, default_config_path=cfg_path)
 
 
 def test_peft_config_coerces_target_modules() -> None:

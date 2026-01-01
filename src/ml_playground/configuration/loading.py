@@ -13,6 +13,10 @@ from ml_playground.configuration.models import (
     TrainerConfig,
 )
 from ml_playground.configuration.merge_utils import merge_mappings
+from ml_playground.experiments.extras_registry import (
+    get_extras_model,
+    load_extras_models,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,22 @@ def _ensure_mapping(value: Any, context: str) -> TomlMapping:
     if not isinstance(value, Mapping):
         raise TypeError(f"Expected mapping for {context}")
     return dict(value)
+
+
+def _validate_extras(experiment_name: str, section: str, data: TomlMapping) -> None:
+    load_extras_models(experiment_name)
+    model = get_extras_model(experiment_name, section)
+    extras = data.get("extras", {})
+    if extras is None:
+        extras = {}
+    if model is None:
+        if extras:
+            raise ValueError(
+                f"Missing extras model registration for '{experiment_name}.{section}'"
+            )
+        return
+    validated = model.model_validate(extras)
+    data["extras"] = validated.model_dump()
 
 
 def read_toml_dict(
@@ -146,6 +166,13 @@ def load_full_experiment_config(
         config_path, project_home, experiment_name
     )
 
+    for section in ("prepare", "train", "sample"):
+        section_data = effective_config.get(section)
+        if isinstance(section_data, Mapping):
+            section_payload = dict(section_data)
+            _validate_extras(experiment_name, section, section_payload)
+            effective_config[section] = section_payload
+
     shared = _ensure_mapping(effective_config.setdefault("shared", {}), "[shared]")
     shared["config_path"] = config_path
     shared["project_home"] = project_home
@@ -173,6 +200,7 @@ def load_train_config(
     raw_merged = merge_mappings(defaults_raw, raw_exp)
 
     train_data = _ensure_mapping(raw_merged.get("train", {}), "[train] section")
+    _validate_extras(config_path.parent.name, "train", train_data)
 
     context = {"config_path": config_path}
     cfg = TrainerConfig.model_validate(train_data, context=context)
@@ -200,6 +228,7 @@ def load_sample_config(
         raise ValueError("Config must contain a [sample] section")
 
     sample_data = _ensure_mapping(raw_merged.get("sample", {}), "[sample] section")
+    _validate_extras(config_path.parent.name, "sample", sample_data)
 
     context = {"config_path": config_path}
     cfg = SamplerConfig.model_validate(sample_data, context=context)
@@ -227,6 +256,7 @@ def load_prepare_config(
         raise ValueError("Config must contain a [prepare] section")
 
     prepare_data = _ensure_mapping(raw_merged.get("prepare", {}), "[prepare] section")
+    _validate_extras(config_path.parent.name, "prepare", prepare_data)
 
     context = {"config_path": config_path}
     cfg = PreparerConfig.model_validate(prepare_data, context=context)
