@@ -15,8 +15,11 @@ from ml_playground.configuration.models import (
     SharedConfig,
     READ_POLICY_BEST,
 )
-from ml_playground.core.error_handling import CheckpointError, LoggerLike
+from ml_playground.core.error_handling import CheckpointError
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.models.core.model import GPT
+from ml_playground.training.ema import EMA
+from ml_playground.training.types import OptimizerLike
 
 
 __all__ = [
@@ -83,8 +86,8 @@ def apply_checkpoint(
     checkpoint: Checkpoint,
     *,
     model: GPT,
-    optimizer,
-    ema,
+    optimizer: OptimizerLike,
+    ema: EMA | None,
 ) -> tuple[int, float]:
     """Apply checkpoint state to the model/optimizer and return iteration metrics."""
     model.load_state_dict(checkpoint.model, strict=False)
@@ -101,8 +104,8 @@ def save_checkpoint(
     cfg: TrainerConfig,
     *,
     model: GPT,
-    optimizer,
-    ema,
+    optimizer: OptimizerLike,
+    ema: EMA | None,
     iter_num: int,
     counter_value: int | None = None,
     best_val_loss: float,

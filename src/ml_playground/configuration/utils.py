@@ -38,8 +38,12 @@ def coerce_path(value: Any) -> Path | None:
 class ConfigCrossFieldValidator(_ModelsConfigCrossFieldValidator):
     """Expose cross-field validation helpers for configuration models."""
 
-    runtime: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.runtime)
-    trainer: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.trainer)
+    runtime: Callable[[Any], None] = staticmethod(
+        _ModelsConfigCrossFieldValidator.runtime
+    )
+    trainer: Callable[[Any], None] = staticmethod(
+        _ModelsConfigCrossFieldValidator.trainer
+    )
     lr_schedule: Callable[[Any], None] = staticmethod(
         _ModelsConfigCrossFieldValidator.lr_schedule
     )

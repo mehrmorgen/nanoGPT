@@ -95,6 +95,8 @@ def _make_batches(
 class TestSampler(Sampler):
     """Sampler variant that exposes protected helpers for white-box tests."""
 
+    __test__ = False
+
     def expose_get_start_ids(self) -> list[int]:
         return self._get_start_ids()
 

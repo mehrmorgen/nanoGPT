@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Literal
 import pickle
+from typing import Any, Callable
 
 import numpy as np
 
@@ -13,45 +13,27 @@ from ml_playground.configuration.models import DataConfig
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.data_pipeline.transforms.tokenization import coerce_tokenizer_type
-from ml_playground.data_pipeline.transforms.metadata import validate_metadata_contract
 from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.core.tokenizer_protocol import Tokenizer
 
 __all__ = [
     "write_bin_and_meta",
     "seed_text_file",
-    "coerce_seed_policy",
-    "seed_text_file_with_policy",
     "setup_tokenizer",
     "snapshot_file_states",
     "diff_file_states",
 ]
-
-SeedPolicy = Literal["auto", "fail_fast"]
-
-
-def coerce_seed_policy(value: Any | None) -> SeedPolicy:
-    if value is None:
-        return "auto"
-    if value in ("auto", "fail_fast"):
-        return value
-    raise DataError(
-        f"Unknown seed policy: {value}",
-        reason="Unsupported seed_text_file policy",
-        rationale="Seed policy must be 'auto' or 'fail_fast'",
-    )
 
 
 def write_bin_and_meta(
     ds_dir: Path,
     train: np.ndarray,
     val: np.ndarray,
-    meta: dict,
+    meta: dict[str, Any],
     logger: LoggerLike,
     data_cfg: DataConfig | None = None,
 ) -> None:
     ds_dir.mkdir(parents=True, exist_ok=True)
-    validated_meta = validate_metadata_contract(meta)
 
     if data_cfg is not None:
         train_path = data_cfg.train_path(ds_dir)
@@ -75,7 +57,6 @@ def write_bin_and_meta(
                 rationale="Preparation requires re-using valid metadata to guarantee deterministic outputs",
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-            validate_metadata_contract(existing_meta)
             created, _, skipped = diff_file_states(
                 [train_path, val_path, meta_path], before
             )
@@ -99,7 +80,7 @@ def write_bin_and_meta(
         tmp_train.write_bytes(train.tobytes())
         tmp_val.write_bytes(val.tobytes())
         with tmp_meta.open("wb") as f:
-            pickle.dump(validated_meta, f)
+            pickle.dump(meta, f)
 
         tmp_train.replace(train_path)
         tmp_val.replace(val_path)
@@ -131,40 +112,17 @@ def seed_text_file(dst: Path, candidates: list[Path]) -> None:
     )
 
 
-def seed_text_file_with_policy(
-    dst: Path,
-    candidates: list[Path],
-    *,
-    policy: SeedPolicy,
-) -> None:
-    if policy not in ("auto", "fail_fast"):
-        raise DataError(
-            f"Unknown seed policy: {policy}",
-            reason="Unsupported seed_text_file policy",
-            rationale="Seed policy must be 'auto' or 'fail_fast'",
-        )
-    if dst.exists():
-        return
-    if policy == "auto":
-        seed_text_file(dst, candidates)
-        return
-    raise FileNotFoundError(
-        f"seed_text_file: required file missing at {dst} (policy={policy})"
-    )
-
-
 def setup_tokenizer(
     out_dir: Path,
     data_cfg: DataConfig | None = None,
     *,
-    tiktoken_loader: Callable[[], Any] | None = None,
+    token_factory: Callable[..., Tokenizer] | None = None,
 ) -> Tokenizer | None:
     meta_path = out_dir / "meta.pkl"
     if not meta_path.exists():
         return None
     with meta_path.open("rb") as f:
         meta = pickle.load(f)
-    meta = validate_metadata_contract(meta)
     tokenizer_type = meta.get("tokenizer_type")
     if tokenizer_type is None:
         raise DataError(
@@ -172,16 +130,20 @@ def setup_tokenizer(
             reason="Metadata lacks tokenizer_type entry",
             rationale="Downstream steps need explicit tokenizer kind to construct compatible tokenizers",
         )
+    factory = token_factory or create_tokenizer
+
     if tokenizer_type in ("char", "word"):
         vocab = meta.get("stoi") or meta.get("vocab")
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
+        tokenizer = factory(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
     elif tokenizer_type == "tiktoken":
         encoding_name = meta.get("encoding_name", "cl100k_base")
-        tokenizer = create_tokenizer(
-            tokenizer_type,
-            encoding_name=encoding_name,
-            loader=tiktoken_loader,
-        )
+        loader = meta.get("tokenizer_loader")
+        if loader is None:
+            tokenizer = factory(tokenizer_type, encoding_name=encoding_name)
+        else:
+            tokenizer = factory(
+                tokenizer_type, encoding_name=encoding_name, loader=loader
+            )
     else:
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type))
+        tokenizer = factory(coerce_tokenizer_type(tokenizer_type))
     return tokenizer

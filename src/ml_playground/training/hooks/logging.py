@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.models.core.model import GPT
 
 
@@ -9,7 +10,7 @@ __all__ = ["log_training_step"]
 
 
 def log_training_step(
-    logger,
+    logger: LoggerLike,
     iter_num: int,
     loss_value: float,
     dt: float,
