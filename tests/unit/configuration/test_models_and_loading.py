@@ -26,7 +26,8 @@ from ml_playground.experiments.extras_registry import register_extras_model
 from tests.conftest import minimal_full_experiment_toml
 
 
-def test_full_loader_roundtrip(tmp_path: Path) -> None:
+def test_full_loader_when_valid_config_then_roundtrips(tmp_path: Path) -> None:
+    """Full loader when valid config then roundtrips."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test_next"),
@@ -48,13 +49,14 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
     assert isinstance(exp.shared.dataset_dir, Path)
 
 
-def test_read_toml_dict_missing_file_raises(tmp_path: Path) -> None:
+def test_read_toml_dict_when_missing_then_raises(tmp_path: Path) -> None:
+    """Read toml dict when missing then raises."""
     missing_path = tmp_path / "missing.toml"
     with pytest.raises(FileNotFoundError):
         config_loading.read_toml_dict(missing_path)
 
 
-def test_get_default_config_path_with_none_uses_package_root() -> None:
+def test_get_default_config_path_when_root_none_then_uses_package_root() -> None:
     """get_default_config_path with None should use package root."""
     path = config_loading.get_default_config_path(None)
     assert path.name == "default_config.toml"
@@ -65,7 +67,9 @@ def test_get_default_config_path_with_none_uses_package_root() -> None:
     )
 
 
-def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
+def test_get_default_config_path_when_root_provided_then_uses_root(
+    tmp_path: Path,
+) -> None:
     """get_default_config_path with explicit root should use that root."""
     path = config_loading.get_default_config_path(tmp_path)
     assert (
@@ -74,7 +78,9 @@ def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
     )
 
 
-def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
+def test_default_config_path_when_root_is_src_then_uses_src_layout(
+    tmp_path: Path,
+) -> None:
     """_default_config_path_from_root should handle roots named 'src'."""
     src_root = tmp_path / "src"
     src_root.mkdir()
@@ -84,13 +90,16 @@ def test_default_config_path_when_root_is_src(tmp_path: Path) -> None:
     )
 
 
-def test_get_cfg_path_without_override(tmp_path: Path) -> None:
+def test_get_cfg_path_when_no_override_then_returns_default(tmp_path: Path) -> None:
+    """Get cfg path when no override then returns default."""
     expected = config_loading._package_root() / "experiments" / "demo" / "config.toml"
     result = config_loading.get_cfg_path("demo", None)
     assert result == expected
 
 
-def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:
+def test_list_experiments_with_config_when_configs_exist_then_returns_sorted_names(
+    tmp_path: Path,
+) -> None:
     """list_experiments_with_config should return sorted experiment names with config.toml."""
     # Create fake experiments directory structure
     experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
@@ -114,7 +123,9 @@ def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> No
     assert result == ["exp_a", "exp_b", "exp_c"]
 
 
-def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
+def test_list_experiments_with_config_when_prefix_given_then_filters_names(
+    tmp_path: Path,
+) -> None:
     """list_experiments_with_config should filter by prefix."""
     experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
@@ -132,14 +143,16 @@ def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
     assert result == ["bundestag_char", "bundestag_tiktoken"]
 
 
-def test_list_experiments_with_config_handles_missing_root() -> None:
+def test_list_experiments_with_config_when_root_missing_then_returns_empty() -> None:
     """list_experiments_with_config should return empty list if experiments root doesn't exist."""
     missing_root = Path("/nonexistent/path/loading")
     result = config_loading.list_experiments_with_config(experiments_root=missing_root)
     assert result == []
 
 
-def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
+def test_list_experiments_with_config_when_iterdir_fails_then_returns_empty(
+    tmp_path: Path,
+) -> None:
     """list_experiments_with_config should return empty list on OSError."""
     experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
@@ -154,14 +167,14 @@ def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
     assert result == []
 
 
-def test_load_and_merge_configs_missing_file_raises(tmp_path: Path) -> None:
+def test_load_and_merge_configs_when_missing_then_raises(tmp_path: Path) -> None:
     """_load_and_merge_configs should raise FileNotFoundError for missing config."""
     missing_path = tmp_path / "missing.toml"
     with pytest.raises(FileNotFoundError, match="Config file not found"):
         config_loading._load_and_merge_configs(missing_path, tmp_path, "test")
 
 
-def test_load_prepare_config_success(tmp_path: Path) -> None:
+def test_load_prepare_config_when_valid_then_returns_config(tmp_path: Path) -> None:
     """load_prepare_config should load and validate prepare config."""
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("""
@@ -182,7 +195,7 @@ tokenizer_type = "char"
     assert "provenance" in cfg.extras
 
 
-def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
+def test_load_prepare_config_when_missing_section_then_raises(tmp_path: Path) -> None:
     """load_prepare_config should raise ValueError if [prepare] section is missing."""
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("[train]\n")
@@ -197,7 +210,8 @@ def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
         config_loading.load_prepare_config(cfg_path, default_config_path=default_path)
 
 
-def test_load_train_config_sets_provenance(tmp_path: Path) -> None:
+def test_load_train_config_when_loaded_then_sets_provenance(tmp_path: Path) -> None:
+    """Load train config when loaded then sets provenance."""
     config = tmp_path / "train.toml"
     config.write_text(
         """
@@ -221,7 +235,8 @@ out_dir = "./out"
     assert provenance.get("context", {}).get("config_path") == str(config)
 
 
-def test_load_sample_config_sets_provenance(tmp_path: Path) -> None:
+def test_load_sample_config_when_loaded_then_sets_provenance(tmp_path: Path) -> None:
+    """Load sample config when loaded then sets provenance."""
     config = tmp_path / "sample.toml"
     config.write_text(
         """
@@ -250,7 +265,8 @@ out_dir = "./train"
     assert provenance.get("context", {}).get("config_path") == str(config)
 
 
-def test_load_train_config_requires_mapping(tmp_path: Path) -> None:
+def test_load_train_config_when_section_not_mapping_then_raises(tmp_path: Path) -> None:
+    """Load train config when section not mapping then raises."""
     config = tmp_path / "train_invalid.toml"
     config.write_text("train = 'value'\n")
 
@@ -261,7 +277,8 @@ def test_load_train_config_requires_mapping(tmp_path: Path) -> None:
         config_loading.load_train_config(config, default_config_path=default_config)
 
 
-def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
+def test_load_sample_config_when_sample_missing_then_raises(tmp_path: Path) -> None:
+    """Load sample config when sample missing then raises."""
     config = tmp_path / "sample_invalid.toml"
     config.write_text("[train]\n[train.runtime]\nout_dir='.'\n")
 
@@ -272,14 +289,16 @@ def test_load_sample_config_requires_sample_block(tmp_path: Path) -> None:
         config_loading.load_sample_config(config, default_config_path=default_config)
 
 
-def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
+def test_read_toml_dict_when_file_exists_then_returns_mapping(tmp_path: Path) -> None:
+    """Read toml dict when file exists then returns mapping."""
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
     data = config_loading.read_toml_dict(cfg_path)
     assert data == {"key": "value"}
 
 
-def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
+def test_read_toml_dict_when_root_not_mapping_then_raises(tmp_path: Path) -> None:
+    """Read toml dict when root not mapping then raises."""
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
 
@@ -290,7 +309,8 @@ def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
         config_loading.read_toml_dict(cfg_path, toml_loader=fake_loads)
 
 
-def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
+def test_read_toml_dict_when_toml_invalid_then_raises(tmp_path: Path) -> None:
+    """Read toml dict when toml invalid then raises."""
     cfg_path = tmp_path / "broken.toml"
     cfg_path.write_text("not = [", encoding="utf-8")
 
@@ -298,7 +318,8 @@ def test_read_toml_dict_invalid_toml_raises(tmp_path: Path) -> None:
         config_loading.read_toml_dict(cfg_path)
 
 
-def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
+def test_full_loader_when_empty_config_then_raises(tmp_path: Path) -> None:
+    """Full loader when empty config then raises."""
     toml_text = ""
     cfg_path = tmp_path / "empty.toml"
     cfg_path.write_text(toml_text)
@@ -310,7 +331,8 @@ def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
         )
 
 
-def test_full_loader_bad_root_type(tmp_path: Path) -> None:
+def test_full_loader_when_root_not_mapping_then_raises(tmp_path: Path) -> None:
+    """Full loader when root not mapping then raises."""
     bad_text = """
 arr = [1,2,3]
 """
@@ -324,7 +346,8 @@ arr = [1,2,3]
         )
 
 
-def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
+def test_full_loader_when_sample_has_unknown_keys_then_raises(tmp_path: Path) -> None:
+    """Full loader when sample has unknown keys then raises."""
     cfg_path = tmp_path / "cfg_bad_sample_nested.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -336,7 +359,8 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
+def test_full_loader_when_train_incomplete_then_raises(tmp_path: Path) -> None:
+    """Full loader when train incomplete then raises."""
     toml_text = """
 [prepare]
 
@@ -352,7 +376,8 @@ n_layer=1
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
+def test_full_loader_when_unknown_top_level_then_raises(tmp_path: Path) -> None:
+    """Full loader when unknown top level then raises."""
     cfg_path = tmp_path / "cfg.toml"
     base = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -365,7 +390,8 @@ def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
+def test_full_loader_when_train_has_unknown_keys_then_raises(tmp_path: Path) -> None:
+    """Full loader when train has unknown keys then raises."""
     cfg_path = tmp_path / "cfg_bad_nested.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -377,7 +403,8 @@ def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
+def test_load_experiment_toml_when_valid_then_returns_config(tmp_path: Path) -> None:
+    """Load experiment toml when valid then returns config."""
     cfg_path = tmp_path / "exp.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -394,7 +421,8 @@ def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
     assert exp.sample.runtime.log_interval == 2
 
 
-def test_explicit_sample_runtime_overrides(tmp_path: Path) -> None:
+def test_sample_runtime_when_explicit_then_overrides_defaults(tmp_path: Path) -> None:
+    """Sample runtime when explicit then overrides defaults."""
     cfg_path = tmp_path / "exp2.toml"
     text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
@@ -420,13 +448,15 @@ tensorboard_enabled = false
     assert runtime.tensorboard_enabled is False
 
 
-def test_data_config_tokenizer_choices() -> None:
+def test_data_config_when_tokenizer_choices_then_accepts() -> None:
+    """Data config when tokenizer choices then accepts."""
     DataConfig(tokenizer="char")
     DataConfig(tokenizer="word")
     DataConfig(tokenizer="tiktoken")
 
 
-def test_dataconfig_positive_ints() -> None:
+def test_data_config_when_positive_ints_then_accepts() -> None:
+    """Data config when positive ints then accepts."""
     with pytest.raises(ValidationError):
         DataConfig(batch_size=0)
     with pytest.raises(ValidationError):
@@ -439,7 +469,8 @@ def test_dataconfig_positive_ints() -> None:
     assert cfg.batch_size == 1
 
 
-def test_sampleconfig_ranges() -> None:
+def test_sample_config_when_out_of_range_then_raises() -> None:
+    """Sample config when out of range then raises."""
     with pytest.raises(ValidationError):
         SampleConfig(temperature=0.0)
     with pytest.raises(ValidationError):
@@ -451,7 +482,8 @@ def test_sampleconfig_ranges() -> None:
     SampleConfig(temperature=0.1, top_k=0, top_p=0.5)
 
 
-def test_lrschedule_validations() -> None:
+def test_lr_schedule_when_invalid_then_raises() -> None:
+    """Lr schedule when invalid then raises."""
     with pytest.raises(ValidationError):
         LRSchedule(warmup_iters=-1)
     with pytest.raises(ValidationError):
@@ -464,7 +496,8 @@ def test_lrschedule_validations() -> None:
     LRSchedule(warmup_iters=2, lr_decay_iters=2, min_lr=0)
 
 
-def test_optimconfig_non_negative() -> None:
+def test_optim_config_when_negative_then_raises() -> None:
+    """Optim config when negative then raises."""
     with pytest.raises(ValidationError):
         OptimConfig(learning_rate=-1e-3)
     with pytest.raises(ValidationError):
@@ -478,7 +511,8 @@ def test_optimconfig_non_negative() -> None:
     OptimConfig()
 
 
-def test_modelconfig_ranges() -> None:
+def test_model_config_when_invalid_then_raises() -> None:
+    """Model config when invalid then raises."""
     with pytest.raises(ValidationError):
         ModelConfig(n_layer=0)
     with pytest.raises(ValidationError):
@@ -494,7 +528,8 @@ def test_modelconfig_ranges() -> None:
     ModelConfig()
 
 
-def test_default_constants_across_configs() -> None:
+def test_config_defaults_when_initialized_then_match_expected() -> None:
+    """Config defaults when initialized then match expected."""
     schedule = LRSchedule()
     assert schedule.decay_lr is True
     assert schedule.warmup_iters == 2_000
@@ -523,7 +558,8 @@ def test_default_constants_across_configs() -> None:
     assert sample.top_p is None
 
 
-def test_runtime_checkpointing_keep_non_negative(tmp_path: Path) -> None:
+def test_runtime_checkpointing_when_negative_keep_then_raises(tmp_path: Path) -> None:
+    """Runtime checkpointing when negative keep then raises."""
     with pytest.raises(ValidationError):
         RuntimeConfig(
             out_dir=tmp_path,
@@ -541,7 +577,8 @@ def test_runtime_checkpointing_keep_non_negative(tmp_path: Path) -> None:
     RuntimeConfig(out_dir=tmp_path)
 
 
-def test_runtimeconfig_defaults_and_checkpointing() -> None:
+def test_runtime_config_when_initialized_then_defaults_match() -> None:
+    """Runtime config when initialized then defaults match."""
     runtime = RuntimeConfig(out_dir=Path("./out"))
     assert runtime.max_iters == 600_000
     assert runtime.eval_interval == 2_000
@@ -565,7 +602,8 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
     assert runtime.ckpt_time_interval_minutes == 0
 
 
-def test_merge_mappings_nested_and_replace() -> None:
+def test_merge_mappings_when_nested_then_merges_and_overrides() -> None:
+    """Merge mappings when nested then merges and overrides."""
     base = {"a": 1, "b": {"x": 1, "y": 2}, "c": {"k": 1}, "d": 4}
     override = {"b": {"y": 20, "z": 3}, "c": 5, "e": 6}
     out = merge_mappings(base, override)
@@ -575,7 +613,8 @@ def test_merge_mappings_nested_and_replace() -> None:
     assert out["e"] == 6
 
 
-def test_merge_mappings_numeric_replacements() -> None:
+def test_merge_mappings_when_override_numeric_then_replaces() -> None:
+    """Merge mappings when override numeric then replaces."""
     base = {"a": {"x": 1, "y": -2}, "b": 10}
     override = {"a": {"x": 3}, "b": 0}
     out = merge_mappings(base, override)
@@ -584,7 +623,8 @@ def test_merge_mappings_numeric_replacements() -> None:
     assert out["b"] == 0
 
 
-def test_merge_mappings_type_replacement() -> None:
+def test_merge_mappings_when_override_type_then_replaces() -> None:
+    """Merge mappings when override type then replaces."""
     base = {"a": {"x": 1}, "b": {"y": 2}}
     override = {"b": 7}
     out = merge_mappings(base, override)
@@ -592,7 +632,8 @@ def test_merge_mappings_type_replacement() -> None:
     assert out["b"] == 7
 
 
-def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+def test_trainer_config_when_relative_out_dir_then_resolves(tmp_path: Path) -> None:
+    """Trainer config when relative out dir then resolves."""
     cfg_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/rel_train"),
@@ -605,7 +646,8 @@ def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     assert str(exp.train.runtime.out_dir).endswith("out/rel_train")
 
 
-def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+def test_sampler_config_when_relative_out_dir_then_resolves(tmp_path: Path) -> None:
+    """Sampler config when relative out dir then resolves."""
     cfg_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/rel_sample"),
@@ -618,7 +660,8 @@ def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     assert str(exp.sample.runtime.out_dir).endswith("out/rel_sample")
 
 
-def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
+def test_experiment_config_when_shared_paths_then_coerces(tmp_path: Path) -> None:
+    """Experiment config when shared paths then coerces."""
     ds_dir = Path("./data/shared")
     out_dir = Path("out/shared")
     cfg_text = minimal_full_experiment_toml(dataset_dir=ds_dir, out_dir=out_dir)
@@ -637,7 +680,8 @@ def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
     assert str(exp.shared.sample_out_dir).endswith(str(out_dir))
 
 
-def test_cross_field_validations(tmp_path: Path) -> None:
+def test_trainer_config_when_cross_field_invalid_then_raises(tmp_path: Path) -> None:
+    """Trainer config when cross field invalid then raises."""
     with pytest.raises(ValueError):
         TrainerConfig(
             model=ModelConfig(block_size=4),
@@ -667,7 +711,8 @@ def test_cross_field_validations(tmp_path: Path) -> None:
         RuntimeConfig(out_dir=tmp_path, log_interval=10, eval_interval=1)
 
 
-def test_dataconfig_paths_and_defaults() -> None:
+def test_data_config_when_initialized_then_defaults_match() -> None:
+    """Data config when initialized then defaults match."""
     config = DataConfig()
     assert config.train_bin == "train.bin"
     assert config.val_bin == "val.bin"
@@ -680,18 +725,21 @@ def test_dataconfig_paths_and_defaults() -> None:
     assert config.sampler in ("random", "sequential")
 
 
-def test_dataconfig_meta_none_rejected() -> None:
+def test_data_config_when_meta_none_then_raises() -> None:
+    """Data config when meta none then raises."""
     with pytest.raises(ValidationError):
         DataConfig(meta_pkl=cast(Any, None))
 
 
-def test_preparerconfig_path_coercion_and_resolve(tmp_path: Path) -> None:
+def test_preparer_config_when_paths_then_resolves(tmp_path: Path) -> None:
+    """Preparer config when paths then resolves."""
     config = PreparerConfig(raw_dir=tmp_path / "raw")
     assert isinstance(config.raw_dir, Path)
     _ = config.raw_dir
 
 
-def test_sampleconfig_more_ranges() -> None:
+def test_sample_config_when_bounds_then_accepts() -> None:
+    """Sample config when bounds then accepts."""
     with pytest.raises(ValidationError):
         SampleConfig(num_samples=0)
     with pytest.raises(ValidationError):
@@ -701,7 +749,7 @@ def test_sampleconfig_more_ranges() -> None:
     SampleConfig(temperature=1e-6, top_k=0, top_p=1.0)
 
 
-def test_config_canonical_exports() -> None:
+def test_configuration_module_when_imported_then_exports_expected() -> None:
     """Test that canonical configuration modules export expected APIs."""
     from ml_playground.configuration import models
     from ml_playground.configuration import loading
@@ -713,7 +761,8 @@ def test_config_canonical_exports() -> None:
     assert hasattr(loading, "load_full_experiment_config")
 
 
-def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
+def test_full_loader_when_sample_incomplete_then_raises(tmp_path: Path) -> None:
+    """Full loader when sample incomplete then raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -727,7 +776,8 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
+def test_full_loader_when_train_missing_then_raises(tmp_path: Path) -> None:
+    """Full loader when train missing then raises."""
     toml_text = """
 [prepare]
 
@@ -742,7 +792,8 @@ out_dir = "out/test"
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
+def test_full_loader_when_sample_missing_then_raises(tmp_path: Path) -> None:
+    """Full loader when sample missing then raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -754,7 +805,8 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
+def test_full_loader_when_train_data_missing_then_raises(tmp_path: Path) -> None:
+    """Full loader when train data missing then raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -767,7 +819,8 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
+def test_full_loader_when_train_runtime_missing_then_raises(tmp_path: Path) -> None:
+    """Full loader when train runtime missing then raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("data/shakespeare"),
         out_dir=Path("out/test"),
@@ -780,7 +833,8 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
+def test_full_loader_when_sample_runtime_missing_then_raises(tmp_path: Path) -> None:
+    """Full loader when sample runtime missing then raises."""
     toml_text = minimal_full_experiment_toml(
         dataset_dir=Path("./data"),
         out_dir=Path("out/test"),
@@ -794,7 +848,8 @@ def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
         config_loading.load_experiment_toml(cfg_path)
 
 
-def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
+def test_cli_adapters_when_loaded_then_validates(tmp_path: Path) -> None:
+    """Cli adapters when loaded then validates."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -809,7 +864,8 @@ def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
     assert exp.shared.dataset_dir.is_absolute()
 
 
-def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
+def test_cli_adapters_when_prereqs_present_then_passes(tmp_path: Path) -> None:
+    """Cli adapters when prereqs present then passes."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -835,7 +891,8 @@ def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
     config_cli.ensure_sample_prerequisites(exp)
 
 
-def test_cli_ensure_train_prerequisites_missing_meta(tmp_path: Path) -> None:
+def test_cli_train_prereqs_when_meta_missing_then_raises(tmp_path: Path) -> None:
+    """Cli train prereqs when meta missing then raises."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -855,7 +912,8 @@ def test_cli_ensure_train_prerequisites_missing_meta(tmp_path: Path) -> None:
     assert "Run 'prepare' first" in msg
 
 
-def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
+def test_cli_sample_prereqs_when_meta_missing_then_raises(tmp_path: Path) -> None:
+    """Cli sample prereqs when meta missing then raises."""
     cfg_path = tmp_path / "exp.toml"
     cfg_path.write_text(
         minimal_full_experiment_toml(
@@ -875,7 +933,9 @@ def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
     assert "Run 'prepare' and 'train' first" in msg
 
 
-def test_internal_path_helpers(tmp_path: Path) -> None:
+def test_path_helpers_when_invalid_then_raises(tmp_path: Path) -> None:
+    """Path helpers when invalid then raises."""
+
     class _BadPath:
         def __init__(self, value: Path) -> None:
             self._value = value
@@ -898,12 +958,14 @@ def test_internal_path_helpers(tmp_path: Path) -> None:
     assert config_models._resolve_if_relative(absolute_path, tmp_path) == absolute_path
 
 
-def test_no_nan_validator_raises() -> None:
+def test_optim_config_when_nan_then_raises() -> None:
+    """Optim config when nan then raises."""
     with pytest.raises(ValidationError):
         config_models.OptimConfig(learning_rate=float("nan"))
 
 
-def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
+def test_preparer_config_when_context_path_then_resolves(tmp_path: Path) -> None:
+    """Preparer config when context path then resolves."""
     cfg_path = tmp_path / "exp.toml"
     context = {"config_path": cfg_path}
     cfg = config_models.PreparerConfig.model_validate(
@@ -921,7 +983,8 @@ def test_preparer_config_context_path_resolution(tmp_path: Path) -> None:
     assert not cfg2.raw_dir.is_absolute()
 
 
-def test_prepare_extras_requires_registered_model(tmp_path: Path) -> None:
+def test_prepare_extras_when_model_missing_then_raises(tmp_path: Path) -> None:
+    """Prepare extras when model missing then raises."""
     exp_dir = tmp_path / "missing_extras_model"
     exp_dir.mkdir()
     cfg_path = exp_dir / "config.toml"
@@ -934,7 +997,9 @@ def test_prepare_extras_requires_registered_model(tmp_path: Path) -> None:
         config_loading.load_prepare_config(cfg_path, default_config_path=cfg_path)
 
 
-def test_prepare_extras_validates_known_fields(tmp_path: Path) -> None:
+def test_prepare_extras_when_fields_valid_then_allows(tmp_path: Path) -> None:
+    """Prepare extras when fields valid then allows."""
+
     class StrictExtras(BaseModel):
         model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -954,7 +1019,9 @@ def test_prepare_extras_validates_known_fields(tmp_path: Path) -> None:
     assert cfg.extras["allowed"] == 1
 
 
-def test_prepare_extras_rejects_unknown_fields(tmp_path: Path) -> None:
+def test_prepare_extras_when_unknown_field_then_raises(tmp_path: Path) -> None:
+    """Prepare extras when unknown field then raises."""
+
     class StrictExtras(BaseModel):
         model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -974,7 +1041,8 @@ def test_prepare_extras_rejects_unknown_fields(tmp_path: Path) -> None:
         config_loading.load_prepare_config(cfg_path, default_config_path=cfg_path)
 
 
-def test_peft_config_coerces_target_modules() -> None:
+def test_peft_config_when_targets_list_then_coerces_tuple() -> None:
+    """Peft config when targets list then coerces tuple."""
     peft = config_models.TrainerConfig.PeftConfig.model_validate(
         {"target_modules": ["a", "b"], "enabled": True}
     )
@@ -982,7 +1050,10 @@ def test_peft_config_coerces_target_modules() -> None:
     assert peft.target_modules == ("a", "b")
 
 
-def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
+def test_experiment_config_when_resolving_dict_then_converts_paths(
+    tmp_path: Path,
+) -> None:
+    """Experiment config when resolving dict then converts paths."""
     base_dir = tmp_path / "project"
     base_dir.mkdir()
     cfg_path = base_dir / "cfg.toml"
@@ -1016,7 +1087,8 @@ def test_experiment_config_resolve_paths_from_dict(tmp_path: Path) -> None:
     assert isinstance(result["sample"]["runtime"]["out_dir"], Path)
 
 
-def test_experiment_config_resolve_paths_with_namespace(tmp_path: Path) -> None:
+def test_experiment_config_when_shared_namespace_then_preserves(tmp_path: Path) -> None:
+    """Experiment config when shared namespace then preserves."""
     cfg_path = tmp_path / "cfg.toml"
     shared_ns = SimpleNamespace(config_path=cfg_path)
     data = {"shared": shared_ns}
@@ -1024,7 +1096,8 @@ def test_experiment_config_resolve_paths_with_namespace(tmp_path: Path) -> None:
     assert config_models.ExperimentConfig._resolve_paths(data)["shared"] is shared_ns
 
 
-def test_shared_config_resolves_relative_paths(tmp_path: Path) -> None:
+def test_shared_config_when_relative_then_resolves(tmp_path: Path) -> None:
+    """Shared config when relative then resolves."""
     cfg_path = tmp_path / "cfg.toml"
     data = {
         "config_path": cfg_path,
@@ -1056,7 +1129,8 @@ def _trainer_dict(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def test_trainer_config_resolve_paths_with_context(tmp_path: Path) -> None:
+def test_trainer_config_when_context_path_then_resolves(tmp_path: Path) -> None:
+    """Trainer config when context path then resolves."""
     trainer_dict = _trainer_dict(tmp_path)
     cfg_path = tmp_path / "cfg.toml"
     trainer = TrainerConfig.model_validate(
@@ -1066,7 +1140,10 @@ def test_trainer_config_resolve_paths_with_context(tmp_path: Path) -> None:
     assert trainer.runtime.out_dir.is_absolute()
 
 
-def test_trainer_config_resolve_paths_without_context(tmp_path: Path) -> None:
+def test_trainer_config_when_context_missing_then_keeps_relative(
+    tmp_path: Path,
+) -> None:
+    """Trainer config when context missing then keeps relative."""
     trainer_dict = _trainer_dict(tmp_path)
     trainer_dict["runtime"]["out_dir"] = Path("rel_out")
     trainer = TrainerConfig.model_validate(
@@ -1085,7 +1162,8 @@ def _sampler_dict(tmp_path: Path) -> dict[str, Any]:
     return {"runtime": runtime, "sample": sample}
 
 
-def test_sampler_config_resolve_paths_with_context(tmp_path: Path) -> None:
+def test_sampler_config_when_context_path_then_resolves(tmp_path: Path) -> None:
+    """Sampler config when context path then resolves."""
     sampler_dict = _sampler_dict(tmp_path)
     cfg_path = tmp_path / "cfg.toml"
     sampler = config_models.SamplerConfig.model_validate(
@@ -1095,7 +1173,10 @@ def test_sampler_config_resolve_paths_with_context(tmp_path: Path) -> None:
     assert sampler.runtime.out_dir.is_absolute()
 
 
-def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
+def test_sampler_config_when_context_missing_then_keeps_relative(
+    tmp_path: Path,
+) -> None:
+    """Sampler config when context missing then keeps relative."""
     sampler_dict = _sampler_dict(tmp_path)
     sampler_dict["runtime"]["out_dir"] = Path("rel_out")
     sampler = config_models.SamplerConfig.model_validate(
@@ -1105,11 +1186,15 @@ def test_sampler_config_resolve_paths_without_context(tmp_path: Path) -> None:
     assert str(sampler.runtime.out_dir) == "rel_out"
 
 
-def test_experiment_config_resolve_paths_non_dict() -> None:
+def test_experiment_config_when_non_dict_then_returns_input() -> None:
+    """Experiment config when non dict then returns input."""
     assert config_models.ExperimentConfig._resolve_paths(123) == 123
 
 
-def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> None:
+def test_experiment_config_when_config_missing_then_returns_input(
+    tmp_path: Path,
+) -> None:
+    """Experiment config when config missing then returns input."""
     data = {
         "shared": {"experiment": "unit"},
         "prepare": {},
@@ -1117,13 +1202,15 @@ def test_experiment_config_resolve_paths_missing_config_path(tmp_path: Path) -> 
     assert config_models.ExperimentConfig._resolve_paths(data) is data
 
 
-def test_shared_config_resolve_paths_invalid_config_path() -> None:
+def test_shared_config_when_config_invalid_then_returns_input() -> None:
+    """Shared config when config invalid then returns input."""
     data = {"config_path": object(), "project_home": "rel", "dataset_dir": 123}
     resolved = config_models.SharedConfig._resolve_shared_paths(data.copy())
     assert resolved == data
 
 
-def test_runtime_config_validates_log_interval(tmp_path: Path) -> None:
+def test_runtime_config_when_log_interval_invalid_then_raises(tmp_path: Path) -> None:
+    """Runtime config when log interval invalid then raises."""
     with pytest.raises(ValidationError):
         RuntimeConfig(
             out_dir=tmp_path / "out",
@@ -1185,7 +1272,8 @@ def _base_trainer_kwargs(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def test_trainer_config_rejects_large_data_block(tmp_path: Path) -> None:
+def test_trainer_config_when_data_block_too_large_then_raises(tmp_path: Path) -> None:
+    """Trainer config when data block too large then raises."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["data"] = DataConfig(
         batch_size=2,
@@ -1197,7 +1285,8 @@ def test_trainer_config_rejects_large_data_block(tmp_path: Path) -> None:
         TrainerConfig(**kwargs)
 
 
-def test_trainer_config_rejects_min_lr_above_learning_rate(tmp_path: Path) -> None:
+def test_trainer_config_when_min_lr_too_high_then_raises(tmp_path: Path) -> None:
+    """Trainer config when min lr too high then raises."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["optim"] = OptimConfig(
         learning_rate=0.05,
@@ -1216,7 +1305,10 @@ def test_trainer_config_rejects_min_lr_above_learning_rate(tmp_path: Path) -> No
         TrainerConfig(**kwargs)
 
 
-def test_trainer_config_requires_zero_warmup_without_decay(tmp_path: Path) -> None:
+def test_trainer_config_when_decay_off_then_requires_zero_warmup(
+    tmp_path: Path,
+) -> None:
+    """Trainer config when decay off then requires zero warmup."""
     kwargs = _base_trainer_kwargs(tmp_path)
     kwargs["schedule"] = LRSchedule(
         decay_lr=False,
@@ -1228,7 +1320,8 @@ def test_trainer_config_requires_zero_warmup_without_decay(tmp_path: Path) -> No
         TrainerConfig(**kwargs)
 
 
-def test_lr_schedule_requires_warmup_le_decay_iters() -> None:
+def test_lr_schedule_when_warmup_gt_decay_then_raises() -> None:
+    """Lr schedule when warmup gt decay then raises."""
     with pytest.raises(ValidationError):
         LRSchedule(
             decay_lr=True,
@@ -1238,7 +1331,8 @@ def test_lr_schedule_requires_warmup_le_decay_iters() -> None:
         )
 
 
-def test_data_config_requires_ngram_one_for_non_tiktoken() -> None:
+def test_data_config_when_non_tiktoken_ngram_then_raises() -> None:
+    """Data config when non tiktoken ngram then raises."""
     with pytest.raises(ValidationError):
         DataConfig(
             batch_size=2,

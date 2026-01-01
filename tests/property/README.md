@@ -17,6 +17,8 @@ configuration stays isolated.
 
 - Keep properties deterministic: set explicit `@settings(derandomize=True)` or pin the
   Hypothesis seed via environment variables.
+- Configure `@settings(max_examples=..., deadline=..., derandomize=True)` explicitly
+  to stay within unit-test runtime budgets.
 - Use dependency injection seams (e.g., `CLIDependencies`, configuration factories)
   instead of monkeypatching or mocks.
 - Prefer `TemporaryDirectory()` or other context managers over function-scoped fixtures.
@@ -29,8 +31,14 @@ tests/property/
 ├── README.md                       - this file
 ├── cli/                            - CLI-facing properties
 ├── configuration/                  - TOML loading and config invariants
-└── data_pipeline/                  - data preparation/tokenization properties
+├── data_pipeline/                  - data preparation/tokenization properties
+└── sampling/                       - sampling/sampler invariants
 ```
+
+## Naming
+
+- **Files**: `test_<subject>_property.py` for property suites.
+- **Functions**: `test_<behavior>_<condition>_<expected>` with a one-line docstring.
 
 ## Running
 
