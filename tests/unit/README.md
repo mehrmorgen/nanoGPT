@@ -30,7 +30,8 @@ to run.
 
 - **File names**: `test_<module>.py` within the corresponding directory (e.g.,
   `tests/unit/training/checkpointing/test_service.py`).
-- **Test functions**: Prefer `test_<unit_of_behavior>_<expected_outcome>` (snake_case, verbs included when meaningful).
+- **Test functions**: `test_<behavior>_<condition>_<expected>` (snake_case, verbs included when meaningful).
+- **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
 - **Helpers/stubs**: Prefix with `_Stub` or `_make_` to signal test-only collaborators and avoid collisions with
   production symbols.
 
@@ -39,6 +40,7 @@ to run.
 ### Traditional Unit Tests
 
 Standard unit tests that validate specific behaviors with hand-crafted examples.
+Write these only when a property cannot express the behavior cleanly.
 
 ### Property-Based Tests
 

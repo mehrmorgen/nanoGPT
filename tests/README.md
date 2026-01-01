@@ -14,9 +14,12 @@ tests/
 ├── integration/         - multi-module behaviors using public APIs
 ├── property/            - Hypothesis properties scoped as part of coverage gates
 ├── support/             - shared data/assets for tests (read-only)
-└── unit/                - exemplar-driven unit tests (fast, deterministic)
+└── unit/                - example-driven unit tests (use when properties are insufficient)
     └── <package>/       - mirrors `src/ml_playground/<package>/` for unit tests
 ```
+
+Property-based tests are the default starting point. Unit tests exist for
+named scenarios that are hard to express as properties.
 
 Unit tests always live under `tests/unit/<package>/...`, mirroring the namespace
 in `src/ml_playground/`. Do not create alternative layouts such as
