@@ -169,9 +169,7 @@ def load_full_experiment_config(
     for section in ("prepare", "train", "sample"):
         section_data = effective_config.get(section)
         if isinstance(section_data, Mapping):
-            section_payload = dict(section_data)
-            _validate_extras(experiment_name, section, section_payload)
-            effective_config[section] = section_payload
+            _validate_extras(experiment_name, section, cast(TomlMapping, section_data))
 
     shared = _ensure_mapping(effective_config.setdefault("shared", {}), "[shared]")
     shared["config_path"] = config_path
