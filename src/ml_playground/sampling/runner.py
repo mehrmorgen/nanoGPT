@@ -5,9 +5,10 @@ device, dtype, and autocast contexts locally without exposing legacy shims.
 """
 
 from __future__ import annotations
-from contextlib import nullcontext
+from dataclasses import dataclass
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
-from typing import cast
+from typing import Callable, Iterable, List, Protocol, Sequence, cast
 import logging
 import torch
 from torch import autocast
@@ -20,11 +21,47 @@ from ml_playground.configuration.models import (
     ModelConfig,
     SamplerConfig,
     READ_POLICY_BEST,
+    RuntimeConfig,
     SharedConfig,
 )
 from ml_playground.core.error_handling import DataError, FileOperationError
 from ml_playground.models.core.model import GPT
 from ml_playground.data_pipeline.transforms.io import setup_tokenizer
+
+
+class TokenizerProtocol(Protocol):
+    def encode(self, text: str) -> list[int]: ...
+
+    def decode(self, token_ids: Sequence[int]) -> str: ...
+
+    def decode_tensor(self, token_tensor: torch.Tensor) -> str: ...
+
+
+@dataclass(frozen=True)
+class SamplerDependencies:
+    cuda_is_available: Callable[[], bool]
+    cuda_manual_seed: Callable[[int], None]
+
+
+def default_sampler_dependencies() -> SamplerDependencies:
+    def _cuda_is_available() -> bool:
+        cuda_module = getattr(torch, "cuda", None)
+        if cuda_module is None:
+            return False
+        return bool(cuda_module.is_available())
+
+    def _cuda_manual_seed(seed: int) -> None:
+        cuda_module = getattr(torch, "cuda", None)
+        if cuda_module is None:
+            return
+        manual_seed = getattr(cuda_module, "manual_seed", None)
+        if callable(manual_seed):
+            manual_seed(seed)
+
+    return SamplerDependencies(
+        cuda_is_available=_cuda_is_available,
+        cuda_manual_seed=_cuda_manual_seed,
+    )
 
 
 """
@@ -41,7 +78,13 @@ All experiments should use these utilities to ensure consistency and proper erro
 class Sampler:
     """Generate samples from a trained `GPT` model using a strict configuration."""
 
-    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
+    def __init__(
+        self,
+        cfg: SamplerConfig,
+        shared: SharedConfig,
+        *,
+        deps: SamplerDependencies | None = None,
+    ):
         """Instantiate the sampler and eagerly load required runtime state.
 
         Args:
@@ -54,11 +97,12 @@ class Sampler:
         """
         self.cfg = cfg
         self.shared = shared
-        self.runtime_cfg = cfg.runtime
-        self.sample_cfg = cfg.sample
-
-        if self.runtime_cfg is None:
+        self.deps: SamplerDependencies = deps or default_sampler_dependencies()
+        runtime_cfg = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
+        if runtime_cfg is None:
             raise ValueError("Runtime configuration is missing")
+        self.runtime_cfg = runtime_cfg
+        self.sample_cfg = cfg.sample
 
         self.out_dir = shared.sample_out_dir
         # Use a stable, module-level logger name for predictable capture in tests
@@ -67,19 +111,18 @@ class Sampler:
         self._setup_torch_env()
 
         self.model = self._load_checkpoint_and_model()
-        self.tokenizer = self._setup_tokenizer()
+        self.tokenizer: TokenizerProtocol = self._setup_tokenizer()
         self._prompt_tensor: torch.Tensor | None = None
         self._cached_prompt_ids: tuple[int, ...] | None = None
 
     def _setup_torch_env(self) -> None:
         """Seed global torch RNG state and prepare autocast context."""
-        torch.manual_seed(self.runtime_cfg.seed)
+        manual_seed = cast(Callable[[int], object], torch.manual_seed)
+        manual_seed(self.runtime_cfg.seed)
         # Guard CUDA-specific calls for non-CUDA environments
-        cuda_is_available = self.cfg.cuda_is_available_fn or torch.cuda.is_available
-        cuda_manual_seed = self.cfg.cuda_manual_seed_fn or torch.cuda.manual_seed
         try:
-            if cuda_is_available():
-                cuda_manual_seed(self.runtime_cfg.seed)
+            if self.deps.cuda_is_available():
+                self.deps.cuda_manual_seed(self.runtime_cfg.seed)
         except (RuntimeError, AssertionError, AttributeError):
             pass
 
@@ -89,10 +132,11 @@ class Sampler:
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
         }[self.runtime_cfg.dtype]
-        self.ctx = (
+        self.ctx = cast(
+            AbstractContextManager[object],
             nullcontext()
             if self.device_type == "cpu"
-            else autocast(device_type=self.device_type, dtype=pt_dtype)
+            else autocast(device_type=self.device_type, dtype=pt_dtype),
         )
 
     def _load_checkpoint_and_model(self) -> GPT:
@@ -141,11 +185,11 @@ class Sampler:
         model.to(self.runtime_cfg.device)
         return model
 
-    def _setup_tokenizer(self):
+    def _setup_tokenizer(self) -> TokenizerProtocol:
         """Load tokenizer metadata from the sampling output directory."""
         tokenizer = setup_tokenizer(self.out_dir)
         if tokenizer:
-            return tokenizer
+            return cast(TokenizerProtocol, tokenizer)
         raise DataError(
             f"Tokenizer metadata not found in sampling output directory: {self.out_dir}.\n"
             "Expected 'meta.pkl' to exist. Run 'train' first to propagate metadata to the sampling directory.",
@@ -156,7 +200,7 @@ class Sampler:
     def _get_start_ids(self) -> list[int]:
         """Resolve the configured prompt source and tokenize it."""
         start_text = self.sample_cfg.start
-        if isinstance(start_text, str) and start_text.startswith("FILE:"):
+        if start_text.startswith("FILE:"):
             prompt_path = Path(start_text[5:])
             try:
                 start_text = prompt_path.read_text(encoding="utf-8")
@@ -167,7 +211,8 @@ class Sampler:
                     reason=f"{e.__class__.__name__} raised while reading prompt file",
                     rationale="Sampling requires the prompt file to be readable to seed generation",
                 ) from e
-        return self.tokenizer.encode(start_text)
+        encoded = self.tokenizer.encode(start_text)
+        return [int(token) for token in encoded]
 
     def run(self) -> None:
         """Generate one or more samples and stream them through the logger."""
@@ -200,29 +245,52 @@ class Sampler:
                         top_k=self.sample_cfg.top_k,
                     )
                     output_tensor = y[0].detach().cpu()
-                    output = self._decode_tokens(output_tensor)
+                    output = self.decode_tokens(output_tensor)
                     self.logger.info(output)
                     self.logger.info("---------------")
 
+    def decode_tokens(self, token_tensor: torch.Tensor) -> str:
+        """Decode a tensor of token ids using the configured tokenizer."""
+        return self._decode_tokens(token_tensor)
+
     def _decode_tokens(self, token_tensor: torch.Tensor) -> str:
-        if token_tensor.dtype != torch.long:
-            token_tensor = token_tensor.to(torch.long)
-        if token_tensor.device.type != "cpu":
-            token_tensor = token_tensor.cpu()
+        tensor = token_tensor
+        if tensor.dtype != torch.long:
+            tensor = tensor.to(torch.long)
+        if tensor.device.type != "cpu":
+            tensor = tensor.cpu()
 
         decoder = getattr(self.tokenizer, "decode_tensor", None)
         if callable(decoder):
-            return cast(str, decoder(token_tensor))
+            return cast(str, decoder(tensor))
 
-        token_list = token_tensor.tolist()
-        return self.tokenizer.decode(token_list)
+        flat_tensor = tensor.flatten()
+        normalized: List[int] = [
+            int(val.item()) for val in cast(Iterable[torch.Tensor], flat_tensor)
+        ]
+        return self.tokenizer.decode(normalized)
+
+    @property
+    def prompt_tensor(self) -> torch.Tensor | None:
+        """Expose the cached prompt tensor for read-only inspection."""
+        return self._prompt_tensor
+
+    @property
+    def cached_prompt_ids(self) -> tuple[int, ...] | None:
+        """Expose the cached prompt ids for read-only inspection."""
+        return self._cached_prompt_ids
 
 
-def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
+def sample(
+    cfg: SamplerConfig,
+    shared: SharedConfig | None = None,
+    *,
+    deps: SamplerDependencies | None = None,
+) -> None:
     """Run sampling with optional shared configuration fallback."""
 
     if shared is None:
-        runtime = cfg.runtime
+        runtime = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
         if runtime is None:
             raise ValueError("Runtime configuration is missing")
         out_dir = runtime.out_dir
@@ -235,11 +303,13 @@ def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
             sample_out_dir=out_dir,
         )
 
-    sampler_instance = Sampler(cfg, shared)
+    sampler_instance = Sampler(cfg, shared, deps=deps)
     sampler_instance.run()
 
 
 __all__ = [
     "Sampler",
+    "SamplerDependencies",
+    "default_sampler_dependencies",
     "sample",
 ]

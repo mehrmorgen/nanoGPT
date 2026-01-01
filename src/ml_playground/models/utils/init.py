@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import torch.nn as nn
 
 
@@ -8,8 +10,9 @@ def init_transformer_weights(module: nn.Module) -> None:
 
     if isinstance(module, nn.Linear):
         nn.init.normal_(module.weight, mean=0.0, std=0.02)
-        if module.bias is not None:
-            nn.init.zeros_(module.bias)
+        bias = cast(nn.Parameter | None, module.bias)
+        if bias is not None:
+            nn.init.zeros_(bias)
     elif isinstance(module, nn.Embedding):
         nn.init.normal_(module.weight, mean=0.0, std=0.02)
 

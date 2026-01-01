@@ -380,9 +380,17 @@ def test_global_setup_enables_tf32_when_cuda_available() -> None:
     except Exception:
         pass
     cli._global_device_setup("cuda", "bfloat16", seed=1, cuda_is_available=lambda: True)
-    # Flags should be enabled
-    assert getattr(torch.backends.cuda.matmul, "allow_tf32", True) is True
-    assert getattr(torch.backends.cudnn, "allow_tf32", True) is True
+    # Flags should be enabled (new or legacy API)
+    if hasattr(torch.backends.cuda.matmul, "fp32_precision"):
+        assert torch.backends.cuda.matmul.fp32_precision == "tf32"
+    else:
+        assert getattr(torch.backends.cuda.matmul, "allow_tf32", True) is True
+    if hasattr(torch.backends.cudnn, "conv") and hasattr(
+        torch.backends.cudnn.conv, "fp32_precision"
+    ):
+        assert torch.backends.cudnn.conv.fp32_precision == "tf32"
+    else:
+        assert getattr(torch.backends.cudnn, "allow_tf32", True) is True
 
 
 def test_global_setup_no_crash_without_cuda() -> None:

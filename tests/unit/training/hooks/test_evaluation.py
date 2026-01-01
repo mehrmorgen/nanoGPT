@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 
 from ml_playground.configuration.models import (
@@ -77,7 +78,7 @@ def test_run_evaluation_records_scalars() -> None:
         lr=0.01,
         raw_model=None,
         batches=None,
-        ctx=None,
+        ctx=nullcontext(),
         writer=writer,
         estimate_loss_fn=fake_estimate,
     )
@@ -105,7 +106,7 @@ def test_run_evaluation_without_writer() -> None:
         lr=0.02,
         raw_model=None,
         batches=None,
-        ctx=None,
+        ctx=nullcontext(),
         writer=None,
         estimate_loss_fn=fake_estimate,
     )

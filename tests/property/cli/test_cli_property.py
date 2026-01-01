@@ -450,8 +450,14 @@ def test_global_device_setup_sets_cuda_state(
 
     assert ("cpu", 7) in seed_calls
     assert ("cuda", 7) in seed_calls
-    assert fake_torch.backends.cuda.matmul.allow_tf32 is True
-    assert fake_torch.backends.cudnn.allow_tf32 is True
+    assert (
+        fake_torch.backends.cuda.matmul.allow_tf32 is True
+        or fake_torch.backends.cuda.matmul.fp32_precision == "tf32"
+    )
+    assert (
+        fake_torch.backends.cudnn.allow_tf32 is True
+        or fake_torch.backends.cudnn.conv.fp32_precision == "tf32"
+    )
 
 
 def test_run_train_impl_invokes_trainer(
@@ -626,7 +632,7 @@ def test_prepare_command_invokes_custom_dependency(experiment: str) -> None:
             calls["prepare"] += 1
             assert name == experiment
             assert prepare_cfg is exp.prepare
-            assert config_path_arg == config_path
+            assert config_path_arg == config_path.resolve()
             assert shared_cfg is shared
 
         deps = CLIDependencies(

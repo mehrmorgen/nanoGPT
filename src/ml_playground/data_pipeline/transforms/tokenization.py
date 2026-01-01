@@ -105,7 +105,9 @@ def create_standardized_metadata(
         pass
 
     if extras:
-        normalized_extras: dict[str, Any] = {str(key): value for key, value in extras.items()}
+        normalized_extras: dict[str, Any] = {
+            str(key): value for key, value in extras.items()
+        }
         meta.update(normalized_extras)
 
     return meta

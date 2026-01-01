@@ -18,42 +18,29 @@ TokenBatch = Mapping[str, object | None]
 
 
 class _Tokenizer(Protocol):
-    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
-        ...
+    def __call__(self, text: str, **kwargs: object) -> TokenBatch: ...
 
     def decode(
         self,
         token_ids: object,
-        *,
-        skip_special_tokens: bool,
-        clean_up_tokenization_spaces: bool,
-    ) -> str:
-        ...
+        **kwargs: object,
+    ) -> str: ...
 
 
 class _Model(Protocol):
-    def generate(
-        self,
-        *,
-        input_ids: object,
-        attention_mask: object | None = ...,
-    ) -> Sequence[object]:
-        ...
+    def generate(self, **kwargs: object) -> Sequence[object]: ...
 
 
 class _TokenizerFactory(Protocol):
-    def __call__(self, model_path: Path, *, use_fast: bool) -> _Tokenizer:
-        ...
+    def __call__(self, model_path: Path, **kwargs: object) -> _Tokenizer: ...
 
 
 class _BaseModelFactory(Protocol):
-    def __call__(self, model_name: str) -> _Model:
-        ...
+    def __call__(self, model_name: str) -> _Model: ...
 
 
 class _PeftFactory(Protocol):
-    def __call__(self, base_model: _Model, adapters_path: Path) -> _Model:
-        ...
+    def __call__(self, _base_model: _Model, _adapters_path: Path) -> _Model: ...
 
 
 # Expose names for monkeypatching in tests (compat with previous integration)
@@ -175,7 +162,7 @@ def _run_sampling(
         else PeftModel.from_pretrained,  # type: ignore[attr-defined]
     )
 
-    tok = _tok_factory(out_dir / "tokenizer", use_fast=True)
+    tok: _Tokenizer = _tok_factory(out_dir / "tokenizer", use_fast=True)
     base = _base_factory(model_name)
     model: _Model
     try:

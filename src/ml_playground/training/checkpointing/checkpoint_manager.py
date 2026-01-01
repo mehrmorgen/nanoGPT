@@ -130,7 +130,7 @@ def _expect_mapping(value: Any, field: str) -> Dict[str, Any]:
             reason=f"Observed type {type(value).__name__}",
             rationale="Checkpoint serialization stores dictionaries for composite payload sections",
         )
-    return dict(value)
+    return dict(cast(Mapping[str, Any], value))
 
 
 def _expect_type(value: Any, field: str, expected_type: ExpectedTypes) -> Any:

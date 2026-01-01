@@ -5,8 +5,45 @@ import logging
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, cast
 import importlib
+from types import ModuleType
 
 WSGIApp = Callable[..., Iterable[bytes]]
+
+
+def _import_lit_server() -> ModuleType:
+    paths = [
+        "lit_nlp.server",
+        "lit_nlp.dev_server",
+        "lit_nlp.runtime.server",
+        "lit_nlp.lib.server",
+    ]
+    last_err: Exception | None = None
+    for path in paths:
+        try:
+            return importlib.import_module(path)
+        except (ImportError, ModuleNotFoundError) as err:
+            last_err = err
+
+    try:
+        import lit_nlp  # type: ignore
+
+        lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
+        ver_msg = f"(detected lit-nlp version: {lit_ver})"
+    except (ImportError, AttributeError):
+        ver_msg = "(lit-nlp not importable)"
+    raise RuntimeError(
+        "Unable to import LIT server module. Tried: lit_nlp.server, "
+        "lit_nlp.dev_server, lit_nlp.runtime.server, lit_nlp.lib.server.\n"
+        f"{ver_msg}. Last error: {last_err}"
+    )
+
+
+def _load_lit_components():
+    from lit_nlp.api import dataset as lit_dataset  # type: ignore
+    from lit_nlp.api import model as lit_model  # type: ignore
+    from lit_nlp.api import types as lit_types  # type: ignore
+
+    return lit_dataset, lit_model, lit_types
 
 
 def run_server_bundestag_char(
@@ -20,42 +57,9 @@ def run_server_bundestag_char(
     demonstrate the LIT UI without requiring trained checkpoints.
     """
 
-    def _import_lit_server():
-        paths = [
-            "lit_nlp.server",
-            "lit_nlp.dev_server",
-            "lit_nlp.runtime.server",
-            "lit_nlp.lib.server",
-        ]
-        last_err: Exception | None = None
-        for p in paths:
-            try:
-                return importlib.import_module(p)
-            except (
-                ImportError,
-                ModuleNotFoundError,
-            ) as err:  # pragma: no cover - best-effort compatibility
-                last_err = err
-        # If all imports failed, raise with context
-        try:
-            import lit_nlp  # type: ignore
-
-            lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
-            ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except (ImportError, AttributeError):
-            ver_msg = "(lit-nlp not importable)"
-        raise RuntimeError(
-            "Unable to import LIT server module. Tried: lit_nlp.server, "
-            "lit_nlp.dev_server, lit_nlp.runtime.server, lit_nlp.lib.server.\n"
-            f"{ver_msg}. Last error: {last_err}"
-        )
-
     try:
         # Lazy imports to avoid hard-dependency unless the command is used.
-        from lit_nlp.api import dataset as lit_dataset  # type: ignore
-        from lit_nlp.api import model as lit_model  # type: ignore
-        from lit_nlp.api import types as lit_types  # type: ignore
-
+        lit_dataset, lit_model, lit_types = _load_lit_components()
         lit_server = _import_lit_server()
     except ImportError as e:  # pragma: no cover - import-guard path
         # Try to include lit-nlp version info to aid debugging

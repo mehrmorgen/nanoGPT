@@ -1,31 +1,31 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Tuple, cast
+from typing import Any, Dict, Literal, Tuple
 
 import torch
 
-from ml_playground.data_pipeline.sampling.batches import SimpleBatches
+from ml_playground.training.types import BatchProvider
 from ml_playground.models.core.model import GPT
 
 
 __all__ = ["estimate_loss"]
 
 
-@torch.no_grad()
 def estimate_loss(
-    model: GPT, batches: SimpleBatches, eval_iters: int, ctx: Any
+    model: GPT, batches: BatchProvider, eval_iters: int, ctx: Any
 ) -> Dict[str, float]:
     """Estimate loss on train/val splits."""
     out: Dict[str, float] = {}
     model.eval()
-    splits: Tuple[Literal["train"], Literal["val"]] = ("train", "val")
-    for split in splits:
-        losses = torch.zeros(eval_iters, dtype=torch.float32)
-        for k in range(eval_iters):
-            X, Y = batches.get_batch(cast(Literal["train", "val"], split))
-            with ctx:
-                _, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean().item()
+    splits: Tuple[Literal["train", "val"], Literal["train", "val"]] = ("train", "val")
+    with torch.no_grad():
+        for split in splits:
+            losses = torch.zeros(eval_iters, dtype=torch.float32)
+            for k in range(eval_iters):
+                x_batch, y_batch = batches.get_batch(split)
+                with ctx:
+                    _, loss = model(x_batch, y_batch)
+                losses[k] = loss.item()
+            out[split] = losses.mean().item()
     model.train()
     return out

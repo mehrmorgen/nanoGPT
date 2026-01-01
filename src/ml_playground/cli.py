@@ -148,18 +148,55 @@ def _global_device_setup(
     """
     try:
         torch.manual_seed(seed)
+    except (RuntimeError, AttributeError, OSError):
+        # Never fail CLI due to environment-specific torch issues
+        return
+
+    try:
         _cuda_available = (
             cuda_is_available()
             if cuda_is_available is not None
             else torch.cuda.is_available()
         )
-        if _cuda_available:
-            torch.cuda.manual_seed(seed)
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
     except (RuntimeError, AttributeError, OSError):
-        # Never fail CLI due to environment-specific torch issues
+        _cuda_available = False
+
+    if not _cuda_available:
+        return
+
+    try:
+        torch.cuda.manual_seed(seed)
+    except (RuntimeError, AttributeError, OSError):
         pass
+
+    cuda_backends = getattr(torch.backends, "cuda", None)
+    if cuda_backends is not None:
+        matmul = getattr(cuda_backends, "matmul", None)
+        if matmul is not None:
+            try:
+                if hasattr(matmul, "fp32_precision"):
+                    matmul.fp32_precision = "tf32"
+                else:
+                    matmul.allow_tf32 = True
+            except (AttributeError, TypeError, ValueError, RuntimeError):
+                try:
+                    matmul.allow_tf32 = True
+                except (AttributeError, TypeError, ValueError, RuntimeError):
+                    pass
+
+    cudnn_backends = getattr(torch.backends, "cudnn", None)
+    if cudnn_backends is not None:
+        try:
+            conv = getattr(cudnn_backends, "conv", None)
+            if conv is not None and hasattr(conv, "fp32_precision"):
+                conv.fp32_precision = "tf32"
+            else:
+                cudnn_backends.allow_tf32 = True
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            try:
+                cudnn_backends.allow_tf32 = True
+            except (AttributeError, TypeError, ValueError, RuntimeError):
+                pass
 
 
 # --- Typer helpers ---------------------------------------------------------

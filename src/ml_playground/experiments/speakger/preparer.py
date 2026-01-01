@@ -7,9 +7,15 @@ from ml_playground.experiments.protocol import (
     PrepareReport,
 )
 
+__all__ = ["SpeakGerPreparer", "config_path"]
+
 
 def _config_path() -> Path:
     return Path(__file__).resolve().parent / "config.toml"
+
+
+def config_path() -> Path:
+    return _config_path()
 
 
 class SpeakGerPreparer(_PreparerProto):

@@ -40,14 +40,13 @@ dependencies = [
 ]
 
 [project.scripts]
-ci-tasks = "ml_playground.tools.cli:main_entry"
-cli = "ml_playground.runtime.cli:main_entry"
-env-tasks = "ml_playground.tools.cli:main_entry"
-lint-tasks = "ml_playground.tools.cli:main_entry"
-lit-tasks = "ml_playground.tools.cli:main_entry"
-ml-playground = "ml_playground.runtime.cli:main_entry"
-test-tasks = "ml_playground.tools.cli:main_entry"
-tools = "ml_playground.tools.cli:main_entry"
+ci-tasks = "tools.ci_tasks:main"
+cli = "ml_playground.cli:main"
+env-tasks = "tools.env_tasks:main"
+lint-tasks = "tools.lint_tasks:main"
+lit-tasks = "tools.lit_tasks:main"
+ml-playground = "ml_playground.cli:main"
+test-tasks = "tools.test_tasks:main"
 
 [project.optional-dependencies]
 
@@ -85,13 +84,16 @@ include = [
     "src/ml_playground/**",
 ]
 
-# No additional files to force-include
+[tool.hatch.build.targets.wheel.force-include]
+"tools" = "tools"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "pyproject.toml",
     "src/ml_playground",
     "src/ml_playground/**",
+    "tools",
+    "tools/**",
 ]
 
 
@@ -174,12 +176,17 @@ include = [
 ]
 exclude = [
     "src/ml_playground/tools",
-    "src/ml_playground/experiments/speakger",
-    "src/ml_playground/experiments/bundestag_char",
+    "src/ml_playground/cli.py",
     "tests/unit/tools",
     "tests/property/tools",
-    "tests/acceptance",
-    "tests/e2e",
+    "tests/acceptance/tools",
+    "src/ml_playground/runtime",
+    "tests/unit/runtime",
+    "tests/property/runtime",
+    "tests/acceptance/runtime",
+    "tests/unit/cli",
+    "tests/property/cli",
+    "tests/acceptance/cli",
 ]
 stubPath = "typings"
 
@@ -234,7 +241,7 @@ database = ".cache/hypothesis"
 derandomize = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["ml_playground", "tests"]
+known-first-party = ["ml_playground", "tests", "tools"]
 classes = []
 
 [tool.coverage.run]
@@ -296,5 +303,3 @@ file = ".cache/cosmic-ray/session.sqlite"
 
 [cosmic-ray.distributor]
 name = "local"
-
-
