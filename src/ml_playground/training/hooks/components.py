@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple, cast
+from typing import Any, Callable, Optional, Tuple, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
@@ -24,13 +24,14 @@ def initialize_components(
     *,
     log_dir: str,
     compile_fn: Optional[Callable[[GPT], GPT]] = None,
+    torch_module: Any = torch,
 ) -> Tuple[GPT, GradScaler, Optional[EMA], Optional[SummaryWriter]]:
     """Compile model, create scaler/EMA, and initialize TensorBoard writer."""
     compiled_model = model
     if cfg.runtime.compile:
         compiler = compile_fn
         if compiler is None:
-            compiler = getattr(torch, "compile", None)
+            compiler = getattr(torch_module, "compile", None)
         if compiler is None:
             raise RuntimeError("torch.compile requested but unavailable")
         compiled_model = cast(GPT, compiler(model))

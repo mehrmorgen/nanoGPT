@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pickle
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -87,7 +86,7 @@ def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
     assert tokenizer.decode([0]) == "a"
 
 
-def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> None:
+def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
     class DummyEncoding:
         n_vocab = 1
         _mergeable_ranks = {"a": 0}
@@ -99,7 +98,6 @@ def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> 
             return "a" * len(token_ids)
 
     dummy_module = SimpleNamespace(get_encoding=lambda name: DummyEncoding())
-    monkeypatch.setitem(sys.modules, "tiktoken", dummy_module)
 
     meta = {
         "tokenizer_type": "tiktoken",
@@ -109,7 +107,7 @@ def test_setup_tokenizer_uses_tiktoken_encoding(monkeypatch, tmp_path: Path) -> 
     with (tmp_path / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
 
-    tokenizer = setup_tokenizer(tmp_path)
+    tokenizer = setup_tokenizer(tmp_path, tiktoken_loader=lambda: dummy_module)
     assert tokenizer is not None
     assert tokenizer.name == "tiktoken"
     assert tokenizer.decode([0, 0]) == "aa"

@@ -473,9 +473,7 @@ def test_sampler_requires_runtime(out_dir: Path) -> None:
         Sampler(cfg, shared)
 
 
-def test_sampler_setup_torch_env_handles_cuda_errors(
-    out_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sampler_setup_torch_env_handles_cuda_errors(out_dir: Path) -> None:
     """_setup_torch_env should swallow CUDA availability errors."""
     _write_char_meta(out_dir / "meta.pkl")
 
@@ -510,8 +508,6 @@ def test_sampler_setup_torch_env_handles_cuda_errors(
     def _raise_runtime_error() -> bool:
         raise RuntimeError("cuda probing failed")
 
-    monkeypatch.setattr(torch.cuda, "is_available", _raise_runtime_error)
-
     shared = SharedConfig(
         experiment="unit",
         config_path=out_dir / "cfg.toml",
@@ -521,13 +517,13 @@ def test_sampler_setup_torch_env_handles_cuda_errors(
         sample_out_dir=out_dir,
     )
 
-    sampler = Sampler(cfg, shared)
+    sampler = Sampler(
+        cfg.model_copy(update={"cuda_is_available_fn": _raise_runtime_error}), shared
+    )
     assert sampler.device_type == "cpu"
 
 
-def test_sampler_setup_torch_env_seeds_cuda_when_available(
-    out_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sampler_setup_torch_env_seeds_cuda_when_available(out_dir: Path) -> None:
     """_setup_torch_env should call torch.cuda.manual_seed when CUDA is available."""
     _write_char_meta(out_dir / "meta.pkl")
 
@@ -561,12 +557,8 @@ def test_sampler_setup_torch_env_seeds_cuda_when_available(
 
     called: dict[str, int] = {}
 
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-
     def _manual_seed(seed: int) -> None:
         called["seed"] = seed
-
-    monkeypatch.setattr(torch.cuda, "manual_seed", _manual_seed)
 
     shared = SharedConfig(
         experiment="unit",
@@ -577,7 +569,15 @@ def test_sampler_setup_torch_env_seeds_cuda_when_available(
         sample_out_dir=out_dir,
     )
 
-    sampler = Sampler(cfg, shared)
+    sampler = Sampler(
+        cfg.model_copy(
+            update={
+                "cuda_is_available_fn": lambda: True,
+                "cuda_manual_seed_fn": _manual_seed,
+            }
+        ),
+        shared,
+    )
     assert called["seed"] == cfg.runtime.seed
     assert sampler.ctx is not None
 

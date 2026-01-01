@@ -207,6 +207,11 @@ def _build_deps(
     writer: Any | None = None,
     raise_on_final_save: Optional[BaseException] = None,
     propagate_exception: Optional[BaseException] = None,
+    vmap_fn: Callable[
+        [Callable[[torch.Tensor, torch.Tensor], torch.Tensor]],
+        Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    ]
+    | None = None,
 ) -> Tuple[TrainerDependencies, _FakeCkptMgr]:
     evaluation = evaluation or {}
     batches = _FakeBatches(device="cpu")
@@ -324,6 +329,7 @@ def _build_deps(
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        vmap=vmap_fn,
     )
     return deps, manager
 
@@ -511,9 +517,7 @@ def test_trainer_tensorboard_logging_success(tmp_path: Path) -> None:
     assert writer.closed is True
 
 
-def test_trainer_keyboard_interrupt_skips_final_save(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_trainer_keyboard_interrupt_skips_final_save(tmp_path: Path) -> None:
     logger = _ListLogger()
     saved_calls: list[Dict[str, Any]] = []
     deps, manager = _build_deps(
@@ -528,11 +532,7 @@ def test_trainer_keyboard_interrupt_skips_final_save(
         del self, X, Y
         raise KeyboardInterrupt()
 
-    monkeypatch.setattr(
-        trainer,
-        "_train_step",
-        MethodType(_interrupt, trainer),
-    )
+    trainer._train_step = MethodType(_interrupt, trainer)  # type: ignore[assignment]
 
     with pytest.raises(KeyboardInterrupt):
         trainer.run()
@@ -541,10 +541,18 @@ def test_trainer_keyboard_interrupt_skips_final_save(
     assert any("Training loop interrupted" in msg for msg in logger.infos)
 
 
-def test_train_step_accum_with_grad_clip_and_ema(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
+def test_train_step_accum_with_grad_clip_and_ema(tmp_path: Path) -> None:
+    def fake_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
+        def wrapped(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
+            losses = [func(xb, yb) for xb, yb in zip(x_batch, y_batch)]
+            return torch.stack(losses)
+
+        return wrapped
+
+    deps, _manager = _build_deps(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        vmap_fn=fake_vmap,
+    )
     cfg = _make_cfg(
         tmp_path,
         max_iters=0,
@@ -564,15 +572,6 @@ def test_train_step_accum_with_grad_clip_and_ema(
 
     trainer.ema = StubEMA()
 
-    def fake_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
-        def wrapped(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
-            losses = [func(xb, yb) for xb, yb in zip(x_batch, y_batch)]
-            return torch.stack(losses)
-
-        return wrapped
-
-    monkeypatch.setattr(torch, "vmap", fake_vmap)
-
     X = torch.zeros((2, 2))
     Y = torch.zeros((2, 2))
     loss = trainer._train_step(X, Y)
@@ -581,18 +580,7 @@ def test_train_step_accum_with_grad_clip_and_ema(
     assert trainer.ema.calls == 1
 
 
-def test_train_step_accum_fallback_without_vmap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
-    cfg = _make_cfg(
-        tmp_path,
-        max_iters=0,
-        grad_accum_steps=2,
-    )
-    shared = _shared(tmp_path, cfg)
-    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
-
+def test_train_step_accum_fallback_without_vmap(tmp_path: Path) -> None:
     def raising_vmap(func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
         del func
 
@@ -601,7 +589,17 @@ def test_train_step_accum_fallback_without_vmap(
 
         return wrapped
 
-    monkeypatch.setattr(torch, "vmap", raising_vmap)
+    deps, _manager = _build_deps(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        vmap_fn=raising_vmap,
+    )
+    cfg = _make_cfg(
+        tmp_path,
+        max_iters=0,
+        grad_accum_steps=2,
+    )
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
 
     X = torch.zeros((2, 2))
     Y = torch.zeros((2, 2))
@@ -610,31 +608,19 @@ def test_train_step_accum_fallback_without_vmap(
     assert isinstance(loss, torch.Tensor)
 
 
-def test_default_trainer_dependencies_returns_callables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured: dict[str, Any] = {}
-
-    def stub_initialize_components(
-        model: Any,
-        cfg: TrainerConfig,
-        runtime: runner_mod.RuntimeContext,
-        log_dir: str,
-    ) -> tuple[Any, str, None, None]:
-        captured["model"] = model
-        captured["cfg"] = cfg
-        captured["runtime"] = runtime
-        captured["log_dir"] = log_dir
-        return model, "scaler", None, None
-
-    monkeypatch.setattr(runner_mod, "initialize_components", stub_initialize_components)
-
+def test_default_trainer_dependencies_returns_callables(tmp_path: Path) -> None:
     deps = runner_mod.default_trainer_dependencies()
     assert callable(deps.initialize_batches)
     assert callable(deps.create_manager)
     assert callable(deps.run_evaluation)
+    assert deps.vmap is None or callable(deps.vmap)
 
     cfg = _make_cfg(tmp_path, max_iters=0)
+    cfg = cfg.model_copy(
+        update={
+            "runtime": cfg.runtime.model_copy(update={"tensorboard_enabled": False})
+        }
+    )
     runtime = runner_mod.RuntimeContext(
         device_type="cpu", autocast_context=nullcontext()
     )
@@ -643,14 +629,11 @@ def test_default_trainer_dependencies_returns_callables(
         model, cfg, runtime, log_dir=str(tmp_path)
     )
     assert compiled is model
-    assert scaler == "scaler"
+    assert isinstance(scaler, runner_mod.GradScaler)
     assert ema is None and writer is None
-    assert captured["log_dir"] == str(tmp_path)
 
 
-def test_trainer_propagates_non_keyboard_exception(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_trainer_propagates_non_keyboard_exception(tmp_path: Path) -> None:
     logger = _ListLogger()
     deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
     cfg = _make_cfg(tmp_path, max_iters=3, logger=logger)
@@ -660,7 +643,7 @@ def test_trainer_propagates_non_keyboard_exception(
     def _boom(self, *_args: Any, **_kwargs: Any) -> torch.Tensor:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(trainer, "_train_step", MethodType(_boom, trainer))
+    trainer._train_step = MethodType(_boom, trainer)  # type: ignore[assignment]
 
     with pytest.raises(RuntimeError):
         trainer.run()
@@ -682,19 +665,11 @@ def test_trainer_train_step_validates_grad_accum(tmp_path: Path) -> None:
         trainer._train_step(torch.zeros((2, 2)), torch.zeros((2, 2)))
 
 
-def test_train_entrypoint_uses_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_train_entrypoint_uses_dependencies(tmp_path: Path) -> None:
     deps, manager = _build_deps(evaluation={0: {"train": 0.5, "val": 0.4}})
 
-    monkeypatch.setattr(
-        runner_mod,
-        "default_trainer_dependencies",
-        lambda: deps,
-    )
-
     cfg = _make_cfg(tmp_path, max_iters=0)
-    iters, best = runner_mod.train(cfg)
+    iters, best = runner_mod.train(cfg, deps=deps)
 
     assert iters == 1
     assert best == pytest.approx(0.4)

@@ -131,7 +131,7 @@ def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
     assert hasattr(v, "__getitem__") and "a" in v and v["a"] == 1
 
 
-def test_tiktoken_tokenizer_handles_missing_mergeable_ranks(monkeypatch) -> None:
+def test_tiktoken_tokenizer_handles_missing_mergeable_ranks() -> None:
     """When encoder lacks mergeable ranks mapping, tokenizer should expose empty mapping."""
 
     class Encoder:
