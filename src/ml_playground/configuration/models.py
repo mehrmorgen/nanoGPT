@@ -41,6 +41,9 @@ CheckpointSaveFn = _t.Callable[..., None]
 ModelFactoryFn = _t.Callable[[Any, object], Any]
 # Optional model compile indirection for sampling
 CompileModelFn = _t.Callable[[Any], Any]
+# Optional runtime CUDA indirections for sampling
+CudaIsAvailableFn = _t.Callable[[], bool]
+CudaManualSeedFn = _t.Callable[[int], None]
 
 
 def _resolve_path_strict(v: Path) -> Path:
@@ -313,6 +316,8 @@ class SamplerConfig(_FrozenStrictModel):
     # Optional compile hook; if provided and runtime.compile=True, this will be used
     # to compile/wrap the model. Defaults to torch.compile when available.
     compile_model_fn: Optional[CompileModelFn] = None
+    cuda_is_available_fn: Optional[CudaIsAvailableFn] = None
+    cuda_manual_seed_fn: Optional[CudaManualSeedFn] = None
 
 
 class OptimConfig(_FrozenStrictModel):

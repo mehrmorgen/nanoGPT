@@ -75,9 +75,11 @@ class Sampler:
         """Seed global torch RNG state and prepare autocast context."""
         torch.manual_seed(self.runtime_cfg.seed)
         # Guard CUDA-specific calls for non-CUDA environments
+        cuda_is_available = self.cfg.cuda_is_available_fn or torch.cuda.is_available
+        cuda_manual_seed = self.cfg.cuda_manual_seed_fn or torch.cuda.manual_seed
         try:
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed(self.runtime_cfg.seed)
+            if cuda_is_available():
+                cuda_manual_seed(self.runtime_cfg.seed)
         except (RuntimeError, AssertionError, AttributeError):
             pass
 

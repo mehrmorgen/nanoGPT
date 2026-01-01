@@ -874,17 +874,18 @@ def test_cli_ensure_sample_prerequisites_missing_meta(tmp_path: Path) -> None:
     assert "Run 'prepare' and 'train' first" in msg
 
 
-def test_internal_path_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    bad_path = tmp_path / "bad"
+def test_internal_path_helpers(tmp_path: Path) -> None:
+    class _BadPath:
+        def __init__(self, value: Path) -> None:
+            self._value = value
 
-    original_resolve = Path.resolve
-
-    def fake_resolve(self: Path):
-        if self == bad_path:
+        def resolve(self) -> Path:
             raise OSError("cannot resolve")
-        return original_resolve(self)
 
-    monkeypatch.setattr(Path, "resolve", fake_resolve, raising=False)
+        def __str__(self) -> str:
+            return str(self._value)
+
+    bad_path = cast(Path, _BadPath(tmp_path / "bad"))
 
     with pytest.raises(ValueError, match="Invalid path"):
         config_models._resolve_path_strict(bad_path)

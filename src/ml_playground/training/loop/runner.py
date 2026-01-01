@@ -55,6 +55,12 @@ class TrainerDependencies:
     propagate_metadata: Callable[..., None]
     run_evaluation: Callable[..., Dict[str, float]]
     get_lr: Callable[[int, LRSchedule, OptimConfig], float]
+    vmap: Optional[
+        Callable[
+            [Callable[[torch.Tensor, torch.Tensor], torch.Tensor]],
+            Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        ]
+    ] = None
 
 
 def default_trainer_dependencies() -> TrainerDependencies:
@@ -77,6 +83,7 @@ def default_trainer_dependencies() -> TrainerDependencies:
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        vmap=getattr(torch, "vmap", None),
     )
 
 
@@ -94,6 +101,7 @@ class Trainer:
         self.logger = cfg.logger
 
         self.deps = deps or default_trainer_dependencies()
+        self._vmap = self.deps.vmap
 
         self.runtime: RuntimeContext = setup_runtime(cfg)
         self.ctx: AbstractContextManager[object] = self.runtime.autocast_context
@@ -318,7 +326,7 @@ class Trainer:
     def _train_step_accum(
         self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
     ) -> torch.Tensor:
-        if grad_steps > 1 and hasattr(torch, "vmap"):
+        if grad_steps > 1 and self._vmap is not None:
             try:
                 return self._train_step_vmap(X, Y, grad_steps)
             except RuntimeError:
@@ -340,6 +348,8 @@ class Trainer:
     def _train_step_vmap(
         self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
     ) -> torch.Tensor:
+        if self._vmap is None:
+            raise RuntimeError("vmap is unavailable for this trainer instance")
         x_expanded = X.unsqueeze(0).expand(grad_steps, *X.shape)
         y_expanded = Y.unsqueeze(0).expand(grad_steps, *Y.shape)
 
@@ -349,7 +359,7 @@ class Trainer:
                 _, loss_val = self.model(x_batch, y_batch)
                 return loss_val
 
-            vmap_fn = torch.vmap(_forward)
+            vmap_fn = self._vmap(_forward)
             losses = vmap_fn(x_expanded, y_expanded)
 
         loss_tensor = losses.mean()
@@ -357,7 +367,12 @@ class Trainer:
         return loss_tensor
 
 
-def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> Tuple[int, float]:
+def train(
+    cfg: TrainerConfig,
+    shared: SharedConfig | None = None,
+    *,
+    deps: TrainerDependencies | None = None,
+) -> Tuple[int, float]:
     """Run the strict trainer with optional shared metadata fallback."""
     if shared is None:
         out_dir = cfg.runtime.out_dir
@@ -370,5 +385,5 @@ def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> Tuple[int, 
             sample_out_dir=out_dir,
         )
 
-    trainer = Trainer(cfg, shared)
+    trainer = Trainer(cfg, shared, deps=deps)
     return trainer.run()

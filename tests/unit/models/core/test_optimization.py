@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 import torch
 
@@ -22,50 +22,22 @@ class _ListLogger:
         self.messages.append(message % args if args else message)
 
 
-def test_configure_optimizers_uses_default_factory_and_logs(monkeypatch) -> None:
+def test_configure_optimizers_uses_default_factory_and_logs() -> None:
     model = _TinyModel()
     logger = _ListLogger()
-    recorded: dict[str, Any] = {}
-
-    class DummyOptimizer(torch.optim.Optimizer):
-        def __init__(self, params):  # type: ignore[override]
-            super().__init__(params, {})
-
-        def step(self, closure=None):  # type: ignore[override]
-            return None
-
-        def zero_grad(self, set_to_none: bool = True):  # type: ignore[override]
-            return None
-
-    def fake_adamw(
-        params: Iterable[torch.nn.Parameter] | optimization.ParamGroups,
-        **kwargs: Any,
-    ) -> DummyOptimizer:
-        recorded["params"] = params
-        recorded["kwargs"] = kwargs
-        if isinstance(params, Sequence) and params and isinstance(params[0], dict):
-            flat_params: list[torch.nn.Parameter] = []
-            for group in params:  # type: ignore[assignment]
-                flat_params.extend(group["params"])
-        else:
-            flat_params = list(params)  # type: ignore[arg-type]
-        return DummyOptimizer(flat_params)
-
-    monkeypatch.setattr(torch.optim, "AdamW", fake_adamw)
 
     optimizer = optimization.configure_optimizers(
         model,
         weight_decay=0.1,
         learning_rate=0.01,
         betas=(0.9, 0.95),
-        device_type="cuda",
+        device_type="cpu",
         logger=logger,
     )
 
-    assert isinstance(optimizer, torch.optim.Optimizer)
-    assert recorded["kwargs"]["lr"] == 0.01
-    assert recorded["kwargs"]["betas"] == (0.9, 0.95)
-    assert recorded["kwargs"]["fused"] is True
+    assert isinstance(optimizer, torch.optim.AdamW)
+    assert optimizer.defaults["lr"] == 0.01
+    assert optimizer.defaults["betas"] == (0.9, 0.95)
     assert any("decayed parameter tensors" in msg for msg in logger.messages)
     assert any("non-decayed parameter tensors" in msg for msg in logger.messages)
 
