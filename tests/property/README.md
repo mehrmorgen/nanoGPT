@@ -32,7 +32,8 @@ tests/property/
 ├── cli/                            - CLI-facing properties
 ├── configuration/                  - TOML loading and config invariants
 ├── data_pipeline/                  - data preparation/tokenization properties
-└── sampling/                       - sampling/sampler invariants
+├── sampling/                       - sampling/sampler invariants
+└── training/                       - training runtime and loop invariants
 ```
 
 ## Naming
