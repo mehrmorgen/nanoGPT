@@ -87,6 +87,14 @@ class _ConfigCrossFieldValidator:
             raise ValueError(
                 "train.runtime.log_interval must be <= train.runtime.eval_interval"
             )
+        if (
+            runtime.log_interval_games is not None
+            and runtime.eval_interval_games is not None
+            and runtime.log_interval_games > runtime.eval_interval_games
+        ):
+            raise ValueError(
+                "train.runtime.log_interval_games must be <= train.runtime.eval_interval_games"
+            )
 
     @staticmethod
     def trainer(trainer: "TrainerConfig") -> None:
@@ -181,9 +189,13 @@ class PreparerConfig(_FrozenStrictModel):
 class RuntimeConfig(_FrozenStrictModel):
     out_dir: Path
     max_iters: NonNegativeStrictInt = 600_000
+    max_games: Optional[NonNegativeStrictInt] = None
     eval_interval: AtLeastOneInt = 2_000
     eval_iters: AtLeastOneInt = 200
+    eval_interval_games: Optional[AtLeastOneInt] = None
+    eval_games: Optional[AtLeastOneInt] = None
     log_interval: AtLeastOneInt = 1
+    log_interval_games: Optional[AtLeastOneInt] = None
     eval_only: bool = False
     seed: SeedInt = 1337
     device: DeviceKind = "cpu"
@@ -193,6 +205,7 @@ class RuntimeConfig(_FrozenStrictModel):
     tensorboard_update_mode: Literal["eval", "log"] = "eval"
     always_save_checkpoint: bool = False
     iters_per_epoch: Optional[EpochCount] = None
+    games_per_epoch: Optional[EpochCount] = None
     max_epochs: Optional[EpochCount] = None
     ckpt_metric: Literal["val_loss", "perplexity"] = "val_loss"
     ckpt_greater_is_better: bool = False
@@ -240,6 +253,14 @@ class RuntimeConfig(_FrozenStrictModel):
         if self.eval_interval <= 0:
             return 0
         return int(self.max_iters // self.eval_interval)
+
+    @computed_field(return_type=int)
+    def total_eval_games(self) -> int:
+        if self.eval_interval_games is None or self.max_games is None:
+            return 0
+        if self.eval_interval_games <= 0:
+            return 0
+        return int(self.max_games // self.eval_interval_games)
 
 
 class TrainerConfig(_FrozenStrictModel):
