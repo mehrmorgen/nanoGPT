@@ -581,15 +581,20 @@ def test_runtime_config_when_initialized_then_defaults_match() -> None:
     """Runtime config when initialized then defaults match."""
     runtime = RuntimeConfig(out_dir=Path("./out"))
     assert runtime.max_iters == 600_000
+    assert runtime.max_games is None
     assert runtime.eval_interval == 2_000
     assert runtime.eval_iters == 200
+    assert runtime.eval_interval_games is None
+    assert runtime.eval_games is None
     assert runtime.log_interval == 1
+    assert runtime.log_interval_games is None
     assert runtime.eval_only is False
     assert runtime.seed == 1337
     assert runtime.device == "cpu"
     assert runtime.dtype == "float32"
     assert runtime.compile is False
     assert runtime.tensorboard_enabled is True
+    assert runtime.games_per_epoch is None
 
     checkpoint = runtime.checkpointing
     assert checkpoint.read_policy in ("latest", "best")
@@ -1117,7 +1122,7 @@ def _trainer_dict(tmp_path: Path) -> dict[str, Any]:
     optim = OptimConfig().model_dump()
     schedule = LRSchedule().model_dump()
     runtime = config_models.RuntimeConfig(out_dir=tmp_path / "out").model_dump(
-        exclude={"total_eval_steps"}
+        exclude={"total_eval_steps", "total_eval_games"}
     )
     runtime["out_dir"] = "rel_out"
     return {
@@ -1155,7 +1160,7 @@ def test_trainer_config_when_context_missing_then_keeps_relative(
 
 def _sampler_dict(tmp_path: Path) -> dict[str, Any]:
     runtime = config_models.RuntimeConfig(out_dir=tmp_path / "out").model_dump(
-        exclude={"total_eval_steps"}
+        exclude={"total_eval_steps", "total_eval_games"}
     )
     runtime["out_dir"] = "rel_out"
     sample = SampleConfig().model_dump()
