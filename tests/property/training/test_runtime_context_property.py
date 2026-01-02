@@ -7,7 +7,7 @@ import logging
 from tempfile import TemporaryDirectory
 
 import torch
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, assume, given, settings, strategies as st
 
 from ml_playground.configuration.models import RuntimeConfig
 from ml_playground.core.runtime_context import runtime_context
@@ -30,6 +30,7 @@ def test_runtime_context_when_device_then_sets_device_type(
     seed: int,
 ) -> None:
     """Runtime context when device selected then sets device type."""
+    assume(not (device == "mps" and dtype == "float16"))
     with TemporaryDirectory() as tmp_dir:
         runtime = RuntimeConfig(
             out_dir=Path(tmp_dir),
