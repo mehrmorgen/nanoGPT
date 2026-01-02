@@ -106,8 +106,8 @@ always_save_checkpoint = true
 seed = 1337
 # Compute device: "mps" (Apple), "cuda" (NVIDIA), or "cpu".
 device = "mps"
-# Compute dtype: "float16" recommended on mps/cuda for memory and speed; "float32" for numerical stability.
-dtype = "float16"
+# Compute dtype: "float32" recommended on mps for stability; "float16" only on cuda.
+dtype = "float32"
 # If true, compile the model (PyTorch 2.x) to potentially speed up training.
 compile = false
 # Also checkpoint periodically based on wall-clock minutes (0 to disable).
@@ -130,8 +130,8 @@ keep_last_n = 3
 out_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
 # Compute device for sampling: "mps", "cuda", or "cpu".
 device = "mps"
-# Compute dtype during sampling; "float16" is common for speed/memory.
-dtype = "float16"
+# Compute dtype during sampling; "float32" keeps mps stable.
+dtype = "float32"
 # If true, torch.compile the model before generation (may add startup overhead).
 compile = false
 # Random seed applied before sampling to make runs reproducible (when do_sample=true).

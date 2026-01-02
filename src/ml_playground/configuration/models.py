@@ -226,6 +226,15 @@ class RuntimeConfig(_FrozenStrictModel):
         _ConfigCrossFieldValidator.runtime(self)
         return self
 
+    @model_validator(mode="after")
+    def _check_device_guidance(self) -> "RuntimeConfig":
+        if self.device == "mps":
+            if self.compile:
+                raise ValueError("runtime.compile must be false when device is mps")
+            if self.dtype == "float16":
+                raise ValueError("runtime.dtype float16 is not supported on mps")
+        return self
+
     @computed_field(return_type=int)
     def total_eval_steps(self) -> int:
         if self.eval_interval <= 0:
