@@ -170,6 +170,29 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
     assert payload["is_best"] is True
 
 
+def test_save_checkpoint_requires_domain_counter(tmp_path: Path) -> None:
+    cfg = _make_cfg(tmp_path)
+    runtime = cfg.runtime.model_copy(
+        update={"ckpt_naming_policy": "domain", "ckpt_domain_label": "games"}
+    )
+    cfg = cfg.model_copy(update={"runtime": runtime})
+    shared = _make_shared(tmp_path, cfg)
+    manager = service.create_manager(cfg, shared)
+
+    with pytest.raises(ValueError):
+        service.save_checkpoint(
+            manager,
+            cfg,
+            model=_StubModel(),
+            optimizer=_StubOptimizer(),
+            ema=None,
+            iter_num=1,
+            best_val_loss=0.5,
+            logger=_StubLogger(),
+            is_best=False,
+        )
+
+
 def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
     cfg_latest = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     shared = _make_shared(tmp_path, cfg_latest)

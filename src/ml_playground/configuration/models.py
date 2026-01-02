@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, TYPE_CHECKING
 import typing as _t
@@ -77,6 +78,7 @@ KEY_EXTRAS = "extras"
 
 DeviceKind = Literal["cpu", "mps", "cuda"]
 DTypeKind = Literal["float32", "bfloat16", "float16"]
+CheckpointNamingPolicy = Literal["steps", "domain"]
 
 
 class _ConfigCrossFieldValidator:
@@ -220,6 +222,9 @@ class RuntimeConfig(_FrozenStrictModel):
     ckpt_write_metadata: bool = True
     ckpt_last_filename: str = "ckpt_last.pt"
     ckpt_best_filename: str = "ckpt_best.pt"
+    ckpt_naming_policy: CheckpointNamingPolicy = "steps"
+    ckpt_domain_label: str | None = None
+    ckpt_naming_strict: bool = False
     ckpt_top_k: NonNegativeStrictInt = 0
     ckpt_time_interval_minutes: MinutesNonNegative = 0
 
@@ -253,6 +258,20 @@ class RuntimeConfig(_FrozenStrictModel):
                 raise ValueError("runtime.compile must be false when device is mps")
             if self.dtype == "float16":
                 raise ValueError("runtime.dtype float16 is not supported on mps")
+        return self
+
+    @model_validator(mode="after")
+    def _check_checkpoint_naming(self) -> "RuntimeConfig":
+        if self.ckpt_naming_policy == "domain":
+            label = self.ckpt_domain_label
+            if not label or not label.strip():
+                raise ValueError(
+                    "runtime.ckpt_domain_label is required when ckpt_naming_policy=domain"
+                )
+            if not re.fullmatch(r"[a-z0-9_]+", label):
+                raise ValueError(
+                    "runtime.ckpt_domain_label must match [a-z0-9_]+ for checkpoint naming"
+                )
         return self
 
     @computed_field(return_type=int)

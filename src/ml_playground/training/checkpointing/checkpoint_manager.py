@@ -10,6 +10,7 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Literal,
     Mapping,
     Optional,
     Tuple,
@@ -27,6 +28,8 @@ TorchUnpicklingError = _torch_pickle.UnpicklingError  # type: ignore[attr-define
 
 
 __all__ = ["Checkpoint", "CheckpointManager", "CheckpointDependencies"]
+
+CheckpointNamingPolicy = Literal["steps", "domain"]
 
 
 def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
@@ -232,6 +235,9 @@ class CheckpointManager:
         atomic: bool = True,
         keep_last: int = 1,
         keep_best: int = 1,
+        naming_policy: CheckpointNamingPolicy = "steps",
+        counter_label: str | None = None,
+        strict_naming: bool = False,
         *,
         deps: CheckpointDependencies | None = None,
     ):
@@ -245,56 +251,116 @@ class CheckpointManager:
             )
         self.keep_last = keep_last
         self.keep_best = keep_best
+        self.naming_policy = naming_policy
+        self.counter_label = counter_label
+        self.strict_naming = strict_naming
+        if self.naming_policy == "domain" and not self.counter_label:
+            raise CheckpointError(
+                "Domain checkpoint naming requires a counter label",
+                reason="Naming policy uses domain counters but no label was provided",
+                rationale="Domain checkpoints must include a label to disambiguate counters",
+            )
         self.last_checkpoints: List[_CkptInfo] = []
         self.best_checkpoints: List[_CkptInfo] = []
         self._deps = deps or CheckpointDependencies.default()
         # Discover any existing checkpoints so behavior persists across restarts
         self._discover_existing()
 
-    def _discover_existing(self) -> None:
-        """Scan the filesystem for rotated checkpoints and rebuild manager state."""
-        for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
-            # iter from filename suffix
-            stem = p.stem  # e.g., ckpt_last_00000010
-            parts = stem.split("_")
-            iter_str = parts[-1]
-            try:
-                it = int(iter_str)
-            except ValueError as e:
+    def _parse_last_counter(self, stem: str) -> int:
+        prefix = "ckpt_last_"
+        if self.naming_policy == "domain" and self.counter_label:
+            labeled_prefix = f"{prefix}{self.counter_label}_"
+            if stem.startswith(labeled_prefix):
+                iter_str = stem[len(labeled_prefix) :]
+            elif self.strict_naming:
                 raise CheckpointError(
-                    f"Could not parse iteration from last-checkpoint filename {p.name}: {e}",
-                    reason="Filename suffix does not encode an integer iteration",
-                    rationale="Checkpoint discovery depends on canonical naming to rebuild manager state",
-                ) from e
-            created = self._stat_checkpoint_file(p)
-            self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
-        for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
-            stem = p.stem  # e.g., ckpt_best_00000010_1.234567
+                    f"Unexpected checkpoint name (expected {labeled_prefix}<count>): {stem}",
+                    reason="Strict checkpoint naming is enabled for domain counters",
+                    rationale="Strict naming prevents mixing step and domain counters in checkpoints",
+                )
+            else:
+                iter_str = stem[len(prefix) :]
+        else:
+            iter_str = stem[len(prefix) :]
+        try:
+            return int(iter_str)
+        except ValueError as e:
+            raise CheckpointError(
+                f"Could not parse iteration from last-checkpoint filename {stem}: {e}",
+                reason="Filename suffix does not encode an integer counter",
+                rationale="Checkpoint discovery depends on canonical naming to rebuild manager state",
+            ) from e
+
+    def _parse_best_counter(self, stem: str) -> tuple[int, float]:
+        prefix = "ckpt_best_"
+        counter_str: str
+        metric_str: str
+        if self.naming_policy == "domain" and self.counter_label:
+            labeled_prefix = f"{prefix}{self.counter_label}_"
+            if stem.startswith(labeled_prefix):
+                remainder = stem[len(labeled_prefix) :]
+                parts = remainder.split("_")
+                if len(parts) < 2:
+                    raise CheckpointError(
+                        f"Unexpected best-checkpoint filename format: {stem}",
+                        reason="Filename lacks counter/metric segments",
+                        rationale="Best-checkpoint retention requires canonical naming",
+                    )
+                counter_str, metric_str = parts[0], parts[1]
+            elif self.strict_naming:
+                raise CheckpointError(
+                    f"Unexpected checkpoint name (expected {labeled_prefix}<count>_<metric>): {stem}",
+                    reason="Strict checkpoint naming is enabled for domain counters",
+                    rationale="Strict naming prevents mixing step and domain counters in checkpoints",
+                )
+            else:
+                parts = stem.split("_")
+                if len(parts) < 3:
+                    raise CheckpointError(
+                        f"Unexpected best-checkpoint filename format: {stem}",
+                        reason="Filename lacks iteration/metric segments",
+                        rationale="Best-checkpoint retention requires canonical naming",
+                    )
+                counter_str = parts[2]
+                metric_str = parts[3] if len(parts) >= 4 else "inf"
+        else:
             parts = stem.split("_")
             if len(parts) < 3:
                 raise CheckpointError(
-                    f"Unexpected best-checkpoint filename format: {p.name}",
+                    f"Unexpected best-checkpoint filename format: {stem}",
                     reason="Filename lacks iteration/metric segments",
-                    rationale="Best-checkpoint retention requires canonical ckpt_best_<iter>_<metric>.pt names",
+                    rationale="Best-checkpoint retention requires canonical naming",
                 )
-            try:
-                it = int(parts[2])
-            except ValueError as e:
-                raise CheckpointError(
-                    f"Could not parse iteration from best-checkpoint filename {p.name}: {e}",
-                    reason="Iteration segment is not an integer",
-                    rationale="Consistent numbering lets the manager sort best checkpoints by creation",
-                ) from e
-            metric = float("inf")
-            if len(parts) >= 4:
-                try:
-                    metric = float(parts[3])
-                except ValueError as e:
-                    raise CheckpointError(
-                        f"Could not parse metric from best-checkpoint filename {p.name}: {e}",
-                        reason="Metric segment is not a float",
-                        rationale="Best checkpoint ordering depends on parsing the recorded metric",
-                    ) from e
+            counter_str = parts[2]
+            metric_str = parts[3] if len(parts) >= 4 else "inf"
+        try:
+            counter = int(counter_str)
+        except ValueError as e:
+            raise CheckpointError(
+                f"Could not parse iteration from best-checkpoint filename {stem}: {e}",
+                reason="Iteration segment is not an integer",
+                rationale="Consistent numbering lets the manager sort best checkpoints by creation",
+            ) from e
+        try:
+            metric = float(metric_str)
+        except ValueError as e:
+            raise CheckpointError(
+                f"Could not parse metric from best-checkpoint filename {stem}: {e}",
+                reason="Metric segment is not a float",
+                rationale="Best checkpoint ordering depends on parsing the recorded metric",
+            ) from e
+        return counter, metric
+
+    def _discover_existing(self) -> None:
+        """Scan the filesystem for rotated checkpoints and rebuild manager state."""
+        for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
+            stem = p.stem  # e.g., ckpt_last_00000010 or ckpt_last_games_00000010
+            it = self._parse_last_counter(stem)
+            created = self._stat_checkpoint_file(p)
+            self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
+        for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
+            stem = p.stem  # e.g., ckpt_best_00000010_1.234567 or ckpt_best_games_...
+            it, metric = self._parse_best_counter(stem)
             created = self._stat_checkpoint_file(p)
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
 
@@ -316,22 +382,31 @@ class CheckpointManager:
         metric: float,
         iter_num: int,
         logger: LoggerLike,
+        counter_value: int | None = None,
         is_best: bool = False,
     ) -> Path:
         """Persist a checkpoint and enforce retention policies for last and best entries."""
         # API compatibility: base_filename kept but unused with rotated-only scheme
         _ = base_filename
+        counter = iter_num if counter_value is None else counter_value
         # Determine rotated filename based on kind
-        if is_best:
-            rotated_name = f"ckpt_best_{iter_num:08d}_{metric:.6f}.pt"
+        if self.naming_policy == "domain" and self.counter_label:
+            label = self.counter_label
+            if is_best:
+                rotated_name = f"ckpt_best_{label}_{counter:08d}_{metric:.6f}.pt"
+            else:
+                rotated_name = f"ckpt_last_{label}_{counter:08d}.pt"
         else:
-            rotated_name = f"ckpt_last_{iter_num:08d}.pt"
+            if is_best:
+                rotated_name = f"ckpt_best_{counter:08d}_{metric:.6f}.pt"
+            else:
+                rotated_name = f"ckpt_last_{counter:08d}.pt"
         path = self.out_dir / rotated_name
 
         # Save the checkpoint
         _atomic_save(checkpoint.to_dict(), path, self.atomic)
 
-        ckpt_info = _CkptInfo(path, metric, iter_num, time.time())
+        ckpt_info = _CkptInfo(path, metric, counter, time.time())
 
         # Manage last checkpoints
         if self.keep_last > -1 and not is_best:
