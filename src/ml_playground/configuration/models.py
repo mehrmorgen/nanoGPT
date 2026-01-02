@@ -253,6 +253,31 @@ class TrainerConfig(_FrozenStrictModel):
         block_size: AtLeastOneInt = 1024
 
     class PeftConfig(_FrozenStrictModel):
+        class AdapterOutputPolicy(_FrozenStrictModel):
+            base_dir: str = "adapters"
+            best_name: str = "best"
+            last_name: str = "last"
+            final_name: str = "final"
+
+            @model_validator(mode="after")
+            def _validate_names(self) -> "TrainerConfig.PeftConfig.AdapterOutputPolicy":
+                names = [self.best_name, self.last_name, self.final_name]
+                if not self.base_dir:
+                    raise ValueError("base_dir must be non-empty for adapter outputs")
+                if any(not name for name in names):
+                    raise ValueError("adapter output names must be non-empty")
+                if len(set(names)) != len(names):
+                    raise ValueError("adapter output names must be unique")
+                return self
+
+            def resolve(self, out_dir: Path) -> dict[str, Path]:
+                base = out_dir / self.base_dir
+                return {
+                    "best": base / self.best_name,
+                    "last": base / self.last_name,
+                    "final": base / self.final_name,
+                }
+
         enabled: bool = False
         r: PositiveStrictInt = 8
         lora_alpha: PositiveStrictFloat = 16.0
@@ -260,6 +285,7 @@ class TrainerConfig(_FrozenStrictModel):
         bias: Literal["none", "all", "lora_only"] = "none"
         target_modules: tuple[str, ...] = ()
         extend_mlp_targets: bool = False
+        adapter_outputs: AdapterOutputPolicy = AdapterOutputPolicy()
 
         @model_validator(mode="before")
         @classmethod

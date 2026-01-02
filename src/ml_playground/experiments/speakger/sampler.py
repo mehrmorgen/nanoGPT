@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from typing import Any
 
-from ml_playground.configuration.models import SamplerConfig
+from ml_playground.configuration.models import SamplerConfig, TrainerConfig
 from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
@@ -99,6 +99,7 @@ def _run_sampling(
     tokenizer_factory: Any | None = None,
     base_model_factory: Any | None = None,
     peft_model_factory: Any | None = None,
+    adapter_output_policy: TrainerConfig.PeftConfig.AdapterOutputPolicy | None = None,
 ):
     samples_dir = out_dir / "samples"
     samples_dir.mkdir(parents=True, exist_ok=True)
@@ -123,8 +124,13 @@ def _run_sampling(
     tok = _tok_factory(out_dir / "tokenizer", use_fast=True)
     base = _base_factory(model_name)
     try:
-        # build adapters path using Path joining, not bitwise and
-        model = _peft_factory(base, out_dir / "adapters" / "best")
+        policy = (
+            adapter_output_policy
+            if adapter_output_policy is not None
+            else TrainerConfig.PeftConfig.AdapterOutputPolicy()
+        )
+        adapter_dir = policy.resolve(out_dir)["best"]
+        model = _peft_factory(base, adapter_dir)
     except (FileNotFoundError, NotADirectoryError):
         model = base  # type: ignore[assignment]
 
@@ -184,6 +190,14 @@ class SpeakGerSampler(_SamplerProto):
             tokenizer_factory=cfg.extras.get("tokenizer_factory"),
             base_model_factory=cfg.extras.get("base_model_factory"),
             peft_model_factory=cfg.extras.get("peft_model_factory"),
+            adapter_output_policy=(
+                cfg.extras.get("adapter_output_policy")
+                if isinstance(
+                    cfg.extras.get("adapter_output_policy"),
+                    TrainerConfig.PeftConfig.AdapterOutputPolicy,
+                )
+                else None
+            ),
         )
         return SampleReport(
             created_files=(txt_path, json_path),
