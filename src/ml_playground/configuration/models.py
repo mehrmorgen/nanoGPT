@@ -278,6 +278,11 @@ class PoolSizePolicy(_FrozenStrictModel):
         )
 
 
+class BaselineLoggingPolicy(_FrozenStrictModel):
+    enabled: bool = False
+    baseline_depth: NonNegativeStrictInt = 0
+
+
 class TrainerConfig(_FrozenStrictModel):
     @model_validator(mode="before")
     @classmethod
@@ -347,6 +352,7 @@ class TrainerConfig(_FrozenStrictModel):
     schedule: "LRSchedule"
     runtime: RuntimeConfig
     pool_size_policy: PoolSizePolicy | None = None
+    baseline_logging: BaselineLoggingPolicy | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
     hf_model: HFModelConfig | None = None
     peft: PeftConfig | None = None
