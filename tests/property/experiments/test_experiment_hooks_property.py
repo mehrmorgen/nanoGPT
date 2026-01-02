@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 import io
 import logging
+from pathlib import Path
 
 from hypothesis import given, settings, strategies as st
 
@@ -48,7 +49,7 @@ def test_experiment_hooks_run_invokes_all(count: int) -> None:
 
 
 def test_build_hook_context_uses_experiment_logger_name() -> None:
-    config = RuntimeConfig()
+    config = RuntimeConfig(out_dir=Path("out"))
     stream = io.StringIO()
     context = build_hook_context(
         "demo",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -138,8 +139,16 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
             self.out_dir = shared.train_out_dir
 
         def save_checkpoint(
-            self, checkpoint, base_filename, metric, iter_num, logger, is_best
+            self,
+            checkpoint,
+            base_filename,
+            metric,
+            iter_num,
+            logger,
+            is_best,
+            counter_value=None,
         ):
+            del base_filename, counter_value
             calls.append(
                 {
                     "metric": metric,
@@ -170,7 +179,7 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
     assert payload["is_best"] is True
 
 
-def test_save_checkpoint_requires_domain_counter(tmp_path: Path) -> None:
+def test_save_checkpoint_defaults_domain_counter(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     runtime = cfg.runtime.model_copy(
         update={"ckpt_naming_policy": "domain", "ckpt_domain_label": "games"}
@@ -179,18 +188,19 @@ def test_save_checkpoint_requires_domain_counter(tmp_path: Path) -> None:
     shared = _make_shared(tmp_path, cfg)
     manager = service.create_manager(cfg, shared)
 
-    with pytest.raises(ValueError):
-        service.save_checkpoint(
-            manager,
-            cfg,
-            model=_StubModel(),
-            optimizer=_StubOptimizer(),
-            ema=None,
-            iter_num=1,
-            best_val_loss=0.5,
-            logger=_StubLogger(),
-            is_best=False,
-        )
+    service.save_checkpoint(
+        manager,
+        cfg,
+        model=_StubModel(),
+        optimizer=_StubOptimizer(),
+        ema=None,
+        iter_num=1,
+        best_val_loss=0.5,
+        logger=logging.getLogger("test"),
+        is_best=False,
+    )
+    expected = cfg.runtime.out_dir / "ckpt_last_games_00000001.pt"
+    assert expected.exists()
 
 
 def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
@@ -424,8 +434,17 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
             self.calls: list[dict[str, Any]] = []
 
         def save_checkpoint(
-            self, checkpoint, *, base_filename, metric, iter_num, logger, is_best
+            self,
+            checkpoint,
+            *,
+            base_filename,
+            metric,
+            iter_num,
+            logger,
+            is_best,
+            counter_value=None,
         ):
+            del counter_value
             self.calls.append(
                 {
                     "checkpoint": checkpoint,
