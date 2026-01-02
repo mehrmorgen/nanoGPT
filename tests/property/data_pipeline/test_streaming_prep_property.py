@@ -39,6 +39,7 @@ def test_append_bin_and_meta_when_appending_then_updates_counts(
             "tokenizer_type": "char",
             "train_tokens": 0,
             "val_tokens": 0,
+            "games": 3,
             "stoi": {"a": 0},
         }
 
@@ -62,6 +63,7 @@ def test_append_bin_and_meta_when_appending_then_updates_counts(
 
         assert meta["train_tokens"] == len(train_first)
         assert meta["val_tokens"] == len(val_first)
+        assert meta["games"] == 3
 
         train_second_arr = np.asarray(train_second, dtype=np.uint16)
         val_second_arr = np.asarray(val_second, dtype=np.uint16)
@@ -70,6 +72,7 @@ def test_append_bin_and_meta_when_appending_then_updates_counts(
             "tokenizer_type": "char",
             "train_tokens": 0,
             "val_tokens": 0,
+            "games": 2,
             "stoi": {"a": 0},
         }
 
@@ -86,6 +89,7 @@ def test_append_bin_and_meta_when_appending_then_updates_counts(
 
         assert updated["train_tokens"] == len(train_first) + len(train_second)
         assert updated["val_tokens"] == len(val_first) + len(val_second)
+        assert updated["games"] == 5
 
         assert train_path.stat().st_size == (len(train_first) + len(train_second)) * 2
         assert val_path.stat().st_size == (len(val_first) + len(val_second)) * 2
