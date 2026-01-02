@@ -9,6 +9,7 @@ tokenization, data loading, and batch sampling with strict typing and validation
 
 - `preparer.py` - Main data preparation workflow
 - `transforms/io.py` - Dataset artifact I/O helpers
+- `transforms/ingestion.py` - Streaming CSV/text/JSONL ingestion helpers
 - `transforms/streaming.py` - Append-only helpers for online/self-play data
 
 ## Key APIs
@@ -17,6 +18,8 @@ tokenization, data loading, and batch sampling with strict typing and validation
 - `write_bin_and_meta()` - Persist train/val bins with metadata
 - `append_bin_and_meta()` - Append-only updates with metadata refresh
 - `validate_metadata_contract()` - Enforce metadata schema requirements
+- `stream_csv_column()` - Stream text columns from CSV inputs
+- `stream_jsonl()` - Stream JSONL records with layout validation
 
 ## Usage Example
 
