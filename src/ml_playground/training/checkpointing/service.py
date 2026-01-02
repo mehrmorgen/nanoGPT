@@ -110,8 +110,6 @@ def save_checkpoint(
     is_best: bool,
 ) -> None:
     """Persist the current training state via the checkpoint manager."""
-    if cfg.runtime.ckpt_naming_policy == "domain" and counter_value is None:
-        raise ValueError("domain counter is required for ckpt_naming_policy=domain")
     checkpoint = Checkpoint(
         model=model.state_dict(),
         optimizer=optimizer.state_dict(),
@@ -141,16 +139,6 @@ def save_checkpoint(
             )
 
     base_filename = "ckpt_best.pt" if is_best else "ckpt_last.pt"
-    if counter_value is None:
-        manager.save_checkpoint(
-            checkpoint,
-            base_filename=base_filename,
-            metric=best_val_loss,
-            iter_num=iter_num,
-            logger=logger,
-            is_best=is_best,
-        )
-        return
     manager.save_checkpoint(
         checkpoint,
         base_filename=base_filename,
