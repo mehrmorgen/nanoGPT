@@ -11,6 +11,7 @@ tokenization, data loading, and batch sampling with strict typing and validation
 - `transforms/io.py` - Dataset artifact I/O helpers
 - `transforms/depth_pools.py` - Depth-based pool partitioning and blending
 - `transforms/ingestion.py` - Streaming CSV/text/JSONL ingestion helpers
+- `transforms/refresh_policy.py` - Bin refresh policy helpers for streaming data
 - `transforms/streaming.py` - Append-only helpers for online/self-play data
 
 ## Key APIs
@@ -20,6 +21,7 @@ tokenization, data loading, and batch sampling with strict typing and validation
 - `append_bin_and_meta()` - Append-only updates with metadata refresh
 - `partition_by_depth()` - Group records into per-depth pools
 - `blend_pools()` - Blend depth pools with optional weights
+- `should_refresh_bins()` - Decide when to refresh bins based on new data
 - `validate_metadata_contract()` - Enforce metadata schema requirements
 - `stream_csv_column()` - Stream text columns from CSV inputs
 - `stream_jsonl()` - Stream JSONL records with layout validation
