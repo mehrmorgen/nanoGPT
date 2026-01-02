@@ -161,12 +161,18 @@ MinutesNonNegative = Annotated[int, Field(ge=0)]
 EpochCount = AtLeastOneInt
 
 
+class BinRefreshPolicy(_FrozenStrictModel):
+    min_new_tokens: NonNegativeStrictInt = 0
+    min_new_ratio: UnitIntervalStrictFloat = 0.0
+
+
 class PreparerConfig(_FrozenStrictModel):
     raw_dir: Path = Path("./raw")
     raw_text_path: Path | None = None
     tokenizer_type: Literal["char", "word", "tiktoken"] = "char"
     add_structure_tokens: bool = False
     doc_separator: str = ""
+    bin_refresh_policy: BinRefreshPolicy | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI hooks (keep generic to avoid import cycles)
     # Function to read text from a path (e.g., Path -> str)
