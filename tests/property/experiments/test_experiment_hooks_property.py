@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from contextlib import nullcontext
+import io
+import logging
+
+from hypothesis import given, settings, strategies as st
+
+from ml_playground.configuration.models import RuntimeConfig
+from ml_playground.core.runtime_context import RuntimeContext
+from ml_playground.experiments.hooks import (
+    ExperimentHookContext,
+    ExperimentHooks,
+    HookEvent,
+    build_hook_context,
+)
+
+
+class _Recorder:
+    def __init__(self, calls: list[HookEvent]) -> None:
+        self._calls = calls
+
+    def handle(self, event: HookEvent, context: ExperimentHookContext) -> None:
+        del context
+        self._calls.append(event)
+
+
+@settings(max_examples=30, deadline=50, derandomize=True)
+@given(count=st.integers(min_value=1, max_value=8))
+def test_experiment_hooks_run_invokes_all(count: int) -> None:
+    """Hook runner invokes each registered hook exactly once."""
+    calls: list[HookEvent] = []
+    hooks = ExperimentHooks()
+    for _ in range(count):
+        hooks.register(_Recorder(calls))
+
+    context = ExperimentHookContext(
+        experiment="demo",
+        runtime=RuntimeContext(
+            device_type="cpu",
+            autocast_context=nullcontext(),
+            logger=logging.getLogger("test"),
+        ),
+    )
+    hooks.run(HookEvent.TRAIN, context)
+
+    assert calls == [HookEvent.TRAIN] * count
+
+
+def test_build_hook_context_uses_experiment_logger_name() -> None:
+    config = RuntimeConfig()
+    stream = io.StringIO()
+    context = build_hook_context(
+        "demo",
+        config,
+        logger_level=logging.INFO,
+        stream_handler_factory=lambda: logging.StreamHandler(stream),
+    )
+    assert context.runtime.logger.name == "ml_playground.experiment.demo"
