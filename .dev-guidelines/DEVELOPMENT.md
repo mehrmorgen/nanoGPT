@@ -30,26 +30,36 @@ Core development practices, quality standards, and workflow for ml_playground co
 ## Guiding Principles
 
 - **Quality gates and TDD discipline.** Always run `uv run ci-tasks quality` before committing and practice strict
-  TDD as the default workflow (see [Developer Guidelines](Readme.md#core-principles-non-negotiable) and the canonical
+  TDD as the default workflow (see [Developer Guidelines](README.md#core-principles-non-negotiable) and the canonical
   process in [Testing Standards](TESTING.md#test-driven-development-required)).
 - **UV-first Typer CLIs.** Prefer the published Typer entry points (`env-tasks`, `test-tasks`, `ci-tasks`) over ad-hoc
   scripts so local workflows mirror CI (see the [repository README](../README.md#policy)).
-- **Single-source configuration.** Treat TOML as the authoritative source and rely on the configuration loaders rather than
-  duplicating merge logic; detailed guidance lives in [SETUP.md](SETUP.md#configuration-system) and
-  [`ml_playground/configuration`](../ml_playground/configuration).
-- **Strict typing and deterministic utilities.** Use explicit type hints, `pathlib.Path`, and pure helpers to keep code
-  predictable (see [`ml_playground/core`](../ml_playground/core)).
-- **Centralized utilities over ad-hoc logic.** Extend shared infrastructure (tokenizers, data prep, error handling) rather
-  than reinventing it, referencing [Framework Utilities](../docs/framework_utilities.md#overview) for patterns.
-- **Deterministic, multi-layered tests.** Rely on the unit/property suites for coverage and add higher-level tests only
-  when they exercise meaningful integration paths (see [tests/README.md](../tests/README.md#structure) and
-  [Testing Standards](TESTING.md#testing-standards-ultra-strict-policy---100-success-required)).
-- **Documentation with intentional abstraction.** Follow the abstraction gradient and DRY policy in
-  [Documentation Guidelines](DOCUMENTATION.md#abstraction-policy).
-- **Git hygiene and reviewability.** Stay on short-lived feature branches with granular Conventional Commits (see
-  [GIT_VERSIONING.md](GIT_VERSIONING.md#branching-model-feature-branches-required)).
-- **Self-contained tooling.** Keep helper scripts documented, explicit, and discoverable (see
-  [tools/README.md](../tools/README.md#conventions)).
+- **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
+  global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
+  strict Pydantic models forbid extras and enforce cross-field invariants (see
+  [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
+  [`ml_playground/configuration`](../src/ml_playground/configuration/)).
+- **Strict Typing, Immutability, and Determinism.** Use explicit type hints, treat configuration and data structures as
+  immutable, and favor pure, side-effect-free functions to keep code predictable and prevent state bugs.
+- **Centralized Utilities and Explicit Device Management.** Extend shared infrastructure (tokenizers, data prep, error
+  handling) rather than reinventing it. Device selection (CPU/GPU) must be explicit and passed through function
+  signatures; global device state is forbidden.
+- **Deterministic, multi-layered tests.** Keep unit tests fast, isolated, and deterministic; complement them with
+  property, integration, e2e, and acceptance suites so changes are guarded at multiple levels while maintaining coverage
+  expectations (see [tests/README.md](../tests/README.md#structure) and
+  [tests/unit/README.md](../tests/unit/README.md#principles)).
+- **Documentation with intentional abstraction.** Follow the abstraction gradient and DRY rules for README files,
+  keeping shared narratives centralized and using annotated folder trees rather than duplicating prose (see the
+  [Documentation Guidelines](DOCUMENTATION.md#abstraction-policy)).
+- **Git hygiene and reviewability.** Develop on short-lived feature branches, keep commits granular and conventional,
+  and maintain a linear, runnable history to streamline reviews and CI (see
+  [Developer Guidelines](Readme.md#core-principles-non-negotiable)).
+- **Self-contained tooling.** Run helper scripts via UV, keep them documented and explicit in their CLI contracts, and
+  avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
+- **Strict API Boundaries and Dependency Scoping.** External imports must be restricted to a defined public API surface.
+  Production code must only import packages from the default dependency group; development dependencies are forbidden.
+- **Explicit Error Contracts (Fail Fast).** All public functions must explicitly document the exceptions they raise.
+  Catching broad exceptions (`except Exception:`, `except:`) is strictly forbidden.
 
 ## Quality Gates (Mandatory)
 

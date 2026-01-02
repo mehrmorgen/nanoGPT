@@ -83,7 +83,7 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 
 ```bash
 src/ml_playground/experiments/bundestag_char/
-├── Readme.md        # experiment documentation (this file)
+├── README.md        # experiment documentation (this file)
 ├── config.toml      # sample/preset config for real runs
 ├── test_config.toml # tiny defaults for tests
 ├── preparer.py      # dataset preparation (char vocab, encode, write bins/meta)
@@ -114,7 +114,7 @@ tokenizer = "word"
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).

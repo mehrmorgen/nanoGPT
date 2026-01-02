@@ -6,13 +6,13 @@
 This module provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
-- Developer Guidelines: see `.dev-guidelines/Readme.md` for setup, development workflow, and policies.
+- Developer Guidelines: see `.dev-guidelines/README.md` for setup, development workflow, and policies.
 - Tools index: see `tools/README.md` for helper scripts and usage.
 
 ## Documentation abstraction policy
 
 - Top-level docs are high-level and describe the why and the overall layout.
-- Each subfolder contains its own `Readme.md` with a focused scope and a folder tree.
+- Each subfolder contains its own `README.md` with a focused scope and a folder tree.
 - The deeper you go in the directory tree, the lower the level of abstraction and the more operational details you’ll find.
 
 ## Repository structure (high-level)
@@ -50,7 +50,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
   - `uv run ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
 - The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
-- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
+- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/README.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
 - Code reviews follow `.dev-guidelines/AUTHOR_GUIDELINES.md`, `.dev-guidelines/REVIEWER_GUIDELINES.md`, and the shared `.dev-guidelines/CODE_REVIEW_CHECKLIST.md`, which define author preparation steps, reviewer expectations, and a shared quality checklist.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
@@ -58,7 +58,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 Setup and Developer Workflow
 
-- See `.dev-guidelines/Readme.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
+- See `.dev-guidelines/README.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
 
 Datasets
 
@@ -68,24 +68,24 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `README.md` and `.dev-guidelines/README.md`.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes
 
 - Configuration is defined via TOML dataclasses under `src/ml_playground/configuration/`.
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
-- Checkpoint behavior and policies are described in `.dev-guidelines/Readme.md`.
+- Checkpoint behavior and policies are described in `.dev-guidelines/README.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
 - CLI validations: train and sample commands now fail fast if `meta.pkl` is missing.
 
 Mutation testing
 
-- See `.dev-guidelines/Readme.md` for how to run optional mutation testing (Cosmic Ray).
+- See `.dev-guidelines/README.md` for how to run optional mutation testing (Cosmic Ray).
 
 TensorBoard (auto-enabled)
 
-- Training logs to TensorBoard. See `.dev-guidelines/Readme.md` for commands.
+- Training logs to TensorBoard. See `.dev-guidelines/README.md` for commands.
 
 GGUF export (vendor approach)
 
@@ -93,6 +93,6 @@ GGUF export (vendor approach)
 
 Testing
 
-- See `.dev-guidelines/Readme.md` for testing standards and gates.
+- See `.dev-guidelines/README.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.
 ```

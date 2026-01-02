@@ -3,29 +3,43 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from pathspec import PathSpec
+from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 import typer
 
 app = typer.Typer(add_completion=False)
 
 # ---- Constants ----
-README_NAME = "Readme.md"
+README_NAME = "README.md"
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = PROJECT_DIR / "tools"
 BASE_DIR = PROJECT_DIR / ".dev-guidelines"
 
+
 # Tool configuration:
-#   maps tool name -> relative path (from project dir) for the primary symlink to Readme.md
-TOOL_MAP: Dict[str, str] = {
-    "copilot": ".github/copilot-instructions.md",
-    "aiassistant": ".aiassistant/rules/00-Readme.md",
-    "junie": ".junie/guidelines.md",
-    "kiro": ".kiro/steering/product.md",
-    "windsurf": ".windsurf/rules/rule.md",
-    "cursor": ".cursor/rules/00-readme.mdc",
-    "gemini": "GEMINI.md",
-    # "codex": "Agent.md" - for codex we would need to merge or hope to
+#   maps tool name -> ToolSpec describing the primary README.md link target and
+#   whether the target should mirror the full guidelines directory tree.
+#   All paths are relative to PROJECT_DIR to keep locations anchored at repo root.
+@dataclass(frozen=True)
+class ToolSpec:
+    """Description of the filesystem layout for an AI tool."""
+
+    primary_link: str
+    root: str
+    single_file_root: bool = False
+
+
+TOOL_MAP: dict[str, ToolSpec] = {
+    "copilot": ToolSpec(".github/copilot-instructions.md", ".github"),
+    "aiassistant": ToolSpec(".aiassistant/rules/00-README.md", ".aiassistant/rules"),
+    "junie": ToolSpec(".junie/guidelines.md", ".junie"),
+    "kiro": ToolSpec(".kiro/steering/product.md", ".kiro/steering"),
+    "windsurf": ToolSpec(".windsurf/rules/rule.md", ".windsurf/rules"),
+    "cursor": ToolSpec(".cursor/rules/00-readme.mdc", ".cursor/rules"),
+    "gemini": ToolSpec("GEMINI.md", ".", True),
+    "codex": ToolSpec("AGENTS.md", ".", True),  # https://agents.md
 }
 
 
@@ -59,7 +73,7 @@ def ensure_dir(path: Path, dry_run: bool) -> None:
         # On some platforms calling exists() can raise for problematic paths; fall through to create logic
         pass
 
-    # Heuristic: treat as file if it has a suffix (e.g., "Readme.md"); directories like ".github" have no suffix
+    # Heuristic: treat as file if it has a suffix (e.g., "README.md"); directories like ".github" have no suffix
     is_file_like = path.suffix != ""
 
     if dry_run:
@@ -138,11 +152,41 @@ def create_or_update_link(link_path: Path, target_path: Path, dry_run: bool) -> 
     except OSError:
         target_is_dir = False
 
-    # If link_path and target_path are effectively the same, skip
-    try:
-        same = os.path.samefile(link_path, target_path)
-    except OSError:
-        same = link_path.resolve() == target_path.resolve()
+    desired_link_repr: str | None = None
+    if not is_windows:
+        try:
+            desired_link_repr = os.path.relpath(target_path, start=link_path.parent)
+        except ValueError:
+            desired_link_repr = str(target_path)
+    elif target_is_dir:
+        desired_link_repr = str(target_path)
+
+    current_link_repr: str | None = None
+    if link_is_symlink:
+        try:
+            current_link_repr = link_path.readlink().as_posix()
+        except OSError:
+            current_link_repr = None
+
+    same = False
+    if link_exists or (link_is_symlink and current_link_repr):
+        try:
+            same = os.path.samefile(link_path, target_path)
+        except OSError:
+            try:
+                same = link_path.resolve() == target_path.resolve()
+            except OSError:
+                same = False
+
+    if same and link_is_symlink:
+        if not link_exists:
+            same = False
+        elif desired_link_repr is not None and current_link_repr is not None:
+            if current_link_repr.replace("\\", "/") != desired_link_repr.replace(
+                "\\", "/"
+            ):
+                same = False
+
     if same:
         info(f"ok     {link_path} == {target_path} (same path)")
         return
@@ -261,55 +305,130 @@ def clean_broken_symlinks_pointing_into_base(scan_dir: Path, dry_run: bool) -> N
                 info(f"clean  removed broken symlink {path}")
 
 
-def is_ignored_by_git(tool_dir: Path) -> bool:
-    """Check if a directory is ignored by Git.
+def _relative_tool_path(tool_dir: Path) -> str:
+    """Return the project-relative path for the given tool directory."""
 
-    Args:
-        tool_dir: The directory path to check.
+    return os.path.relpath(tool_dir, start=PROJECT_DIR).replace(os.sep, "/")
 
-    Returns:
-        True if the directory is ignored by Git, False otherwise.
-    """
-    if not (PROJECT_DIR / ".git").exists():
-        return False
 
-    try:
-        result = subprocess.run(
-            ["git", "check-ignore", str(tool_dir)],
-            cwd=PROJECT_DIR,
-            capture_output=True,
-            text=True,
+def _project_path(relative_path: str) -> Path:
+    """Join a project-relative path to PROJECT_DIR, forbidding escapes."""
+
+    path = Path(relative_path)
+    if path.is_absolute():
+        raise ValueError(
+            f"ToolSpec paths must be project-relative; got absolute '{relative_path}'."
         )
-        return result.returncode == 0
-    except (FileNotFoundError, OSError):
-        return False
+    if any(part == ".." for part in path.parts):
+        raise ValueError(
+            f"ToolSpec paths must not contain parent directory references: '{relative_path}'."
+        )
+    if path == Path("."):
+        return PROJECT_DIR
+    return PROJECT_DIR / path
 
 
-def ask_gitignore_for_dir(tool_dir: Path, dry_run: bool) -> None:
-    """Ask to add tool_dir (as a trailing-slash path) to .gitignore if not present.
+def _gitignore_match(relative_path: str, *, directory: bool) -> tuple[bool, str | None]:
+    """Return whether a path is ignored and the last matching pattern."""
 
-    Args:
-        tool_dir: The directory to potentially add to .gitignore.
-        dry_run: If True, only print actions without executing.
-    """
-    gitignore_path = PROJECT_DIR / ".gitignore"
-    relative_path = os.path.relpath(tool_dir, start=PROJECT_DIR).rstrip("/") + "/"
+    gitignore = PROJECT_DIR / ".gitignore"
+    if not gitignore.exists():
+        return False, None
 
-    if is_ignored_by_git(tool_dir):
-        info(f"git    '{relative_path}' already ignored by git")
+    candidates = {relative_path.replace(os.sep, "/")}
+    if directory:
+        base = relative_path.rstrip("/")
+        if base and not base.endswith("/"):
+            candidates.add(f"{base}/")
+        elif not base:
+            candidates.add("/")
+
+    ignored = False
+    matched_pattern: str | None = None
+
+    with gitignore.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.rstrip("\n")
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            try:
+                pattern = GitWildMatchPattern(line)
+            except ValueError:
+                continue
+
+            if any(pattern.match_file(candidate) for candidate in candidates):
+                ignored = pattern.include
+                matched_pattern = line.strip()
+
+    return ignored, matched_pattern
+
+
+def log_gitignore_status(path: Path, *, directory: bool) -> None:
+    """Log when a path is not ignored by Git, accounting for negated patterns."""
+
+    relative_path = _relative_tool_path(path).replace(os.sep, "/")
+    display_path = relative_path.rstrip("/")
+    if directory:
+        display_path = (display_path + "/") if display_path else "/"
+
+    ignored, matched_pattern = _gitignore_match(relative_path, directory=directory)
+
+    if ignored:
+        info(
+            "git    '%s' ignored by pattern '%s'."
+            % (display_path, matched_pattern or "<unknown>")
+        )
         return
 
-    if typer.confirm(f"Add '{relative_path}' to .gitignore?", default=False):
-        if dry_run:
-            info(f"[dry-run] append '{relative_path}' to {gitignore_path}")
-        else:
-            with gitignore_path.open("a", encoding="utf-8") as f:
-                if gitignore_path.exists() and gitignore_path.stat().st_size > 0:
-                    f.write("\n")
-                f.write(relative_path + "\n")
-            info(f"git    added '{relative_path}' to .gitignore")
+    if matched_pattern and matched_pattern.startswith("!"):
+        info(
+            "git    '%s' kept by negated pattern '%s'."
+            % (display_path, matched_pattern)
+        )
+        return
+
+    warn(
+        "git    '%s' is not ignored by .gitignore. Add an entry if you want Git to "
+        "skip committing these files." % display_path
+    )
+
+
+def is_listed_in_aiignore(tool_dir: Path) -> bool:
+    """Check if the given directory is matched by patterns in .aiignore."""
+
+    ignore_path = PROJECT_DIR / ".aiignore"
+    if not ignore_path.exists():
+        return False
+
+    with ignore_path.open("r", encoding="utf-8") as f:
+        lines = [line.rstrip("\n") for line in f]
+
+    patterns = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not patterns:
+        return False
+
+    spec = PathSpec.from_lines("gitwildmatch", patterns)
+    relative_path = _relative_tool_path(tool_dir).rstrip("/")
+    return bool(spec.match_file(relative_path) or spec.match_file(relative_path + "/"))
+
+
+def log_aiignore_status(tool_dir: Path) -> None:
+    """Warn when the tool directory is excluded via .aiignore."""
+
+    relative_path = _relative_tool_path(tool_dir).rstrip("/") + "/"
+    if is_listed_in_aiignore(tool_dir):
+        warn(
+            "ai     '%s' is excluded by .aiignore. Remove this entry so AI tools can "
+            "access their guidelines." % relative_path
+        )
     else:
-        info("git    skipped .gitignore update")
+        info(f"ai     '{relative_path}' accessible to AI tools")
 
 
 # ---- Command ----
@@ -331,22 +450,26 @@ def setup(
         err(f"Unknown tool '{tool}'. Supported: {', '.join(sorted(TOOL_MAP))}")
         raise typer.Exit(code=1)
 
-    tool_path = Path(TOOL_MAP[tool])
+    spec = TOOL_MAP[tool]
 
     # 1) Ensure base + empty README
     readme = ensure_base_and_empty_readme(dry_run)
 
     # 2) Ensure tool's directory exists (under PROJECT_DIR)
-    tool_dir = (PROJECT_DIR / tool_path.parent).resolve()
+    tool_dir = PROJECT_DIR if spec.single_file_root else _project_path(spec.root)
     ensure_dir(tool_dir, dry_run)
 
     # 3) Create primary link from tool map path to README
-    primary_path = (PROJECT_DIR / tool_path).resolve()
+    if spec.single_file_root:
+        primary_path = PROJECT_DIR / Path(spec.primary_link).name
+    else:
+        primary_path = _project_path(spec.primary_link)
     ensure_dir(primary_path.parent, dry_run)
     create_or_update_link(primary_path, readme, dry_run=dry_run)
 
-    if tool == "gemini":
-        info("note   gemini special case: skipping additional links.")
+    if spec.single_file_root:
+        log_gitignore_status(primary_path, directory=False)
+        info(f"note   {tool} configured as single-file root; skipping tree mirroring.")
         info("done.")
         return
 
@@ -358,8 +481,9 @@ def setup(
     # 5) Clean broken symlinks pointing into BASE_DIR within tool's directory
     clean_broken_symlinks_pointing_into_base(tool_dir, dry_run)
 
-    # 6) Ask about .gitignore for the tool's directory
-    ask_gitignore_for_dir(tool_dir, dry_run)
+    # 6) Report ignore status for the tool's directory
+    log_gitignore_status(tool_dir, directory=True)
+    log_aiignore_status(tool_dir)
 
     info("done.")
 

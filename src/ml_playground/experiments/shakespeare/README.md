@@ -59,7 +59,7 @@ uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sa
 ```bash
 # experiment documentation (this file)
 src/ml_playground/experiments/shakespeare/
-├── Readme.md        
+├── README.md        
 # sample/preset config for real runs
 ├── config.toml      
 # tiny defaults for tests
@@ -84,7 +84,7 @@ src/ml_playground/experiments/shakespeare/
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).

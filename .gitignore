@@ -66,6 +66,7 @@ tools/llama_cpp/llama-quantize
 # Local editor/workspace folders
 .windsurf/
 .junie/
+.aiassistant/
 .github
 !.github/workflows
 .vscode
