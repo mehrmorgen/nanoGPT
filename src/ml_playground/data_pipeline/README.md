@@ -8,13 +8,14 @@ tokenization, data loading, and batch sampling with strict typing and validation
 ## Structure
 
 - `preparer.py` - Main data preparation workflow
-- `tokenizers.py` - Tokenizer interface and implementations
+- `transforms/io.py` - Dataset artifact I/O helpers
+- `transforms/streaming.py` - Append-only helpers for online/self-play data
 
 ## Key APIs
 
 - `create_pipeline()` - Data pipeline factory
-- `prepare_dataset()` - Run preparation workflow
-- `write_metadata()` - Persist standardized metadata
+- `write_bin_and_meta()` - Persist train/val bins with metadata
+- `append_bin_and_meta()` - Append-only updates with metadata refresh
 
 ## Usage Example
 
