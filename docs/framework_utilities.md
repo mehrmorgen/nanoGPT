@@ -11,6 +11,7 @@ operations:
 1. `error_handling.py` - Centralized exception classes and error handling utilities
 1. `tokenizer.py` - Unified tokenizer protocol and implementations
 1. `prepare.py` - Standardized data preparation utilities
+1. `runtime_context.py` - Shared runtime setup for device, dtype, seeding, and logging
 1. Updated `configuration/` package, `trainer.py`, and `sampler.py` with enhanced functionality
 
 ## Error Handling Utilities
@@ -89,6 +90,14 @@ re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transf
   using a tokenizer
 - `write_bin_and_meta(ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict)` - Write train.bin, val.bin, and
   meta.pkl atomically
+
+## Runtime Context Helper
+
+The `src/ml_playground/core/runtime_context.py` module provides a shared helper for runtime setup that custom loops
+should call instead of duplicating device, dtype, seed, and logging configuration:
+
+- `runtime_context(runtime: RuntimeConfig, ...)` - Configure seeding, TF32 toggles, autocast context, and logging format
+  from a runtime config.
 
 ## CLI Utilities
 
