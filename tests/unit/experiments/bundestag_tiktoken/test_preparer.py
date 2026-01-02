@@ -59,7 +59,16 @@ def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> N
     (ds_dir / "train.bin").write_bytes(b"old")
     (ds_dir / "val.bin").write_bytes(b"old")
     with (ds_dir / "meta.pkl").open("wb") as f:
-        pickle.dump({"meta_version": 1}, f)
+        pickle.dump(
+            {
+                "meta_version": 1,
+                "tokenizer_type": "tiktoken",
+                "encoding_name": "cl100k_base",
+                "train_tokens": 1,
+                "val_tokens": 1,
+            },
+            f,
+        )
 
     preparer = BundestagTiktokenPreparer()
 

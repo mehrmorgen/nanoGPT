@@ -44,6 +44,8 @@ def _write_char_meta(meta_path: Path) -> None:
         "kind": "char",
         "dtype": "uint32",
         "tokenizer_type": "char",
+        "train_tokens": 0,
+        "val_tokens": 0,
         "stoi": stoi,
         "itos": itos,
     }

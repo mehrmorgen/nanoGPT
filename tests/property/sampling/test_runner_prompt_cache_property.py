@@ -53,6 +53,8 @@ def _create_shared(tmp_path: Path) -> tuple[SharedConfig, Path]:
         "kind": "char",
         "dtype": "uint16",
         "tokenizer_type": "char",
+        "train_tokens": 0,
+        "val_tokens": 0,
         "stoi": {"A": 1},
         "itos": {1: "A"},
     }

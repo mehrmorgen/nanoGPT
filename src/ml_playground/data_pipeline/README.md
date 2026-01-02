@@ -16,6 +16,7 @@ tokenization, data loading, and batch sampling with strict typing and validation
 - `create_pipeline()` - Data pipeline factory
 - `write_bin_and_meta()` - Persist train/val bins with metadata
 - `append_bin_and_meta()` - Append-only updates with metadata refresh
+- `validate_metadata_contract()` - Enforce metadata schema requirements
 
 ## Usage Example
 

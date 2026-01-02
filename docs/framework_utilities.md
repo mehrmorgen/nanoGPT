@@ -82,6 +82,7 @@ re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transf
 
 - `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None)` - Create
   standardized metadata for dataset preparation
+- `validate_metadata_contract(meta: Mapping[str, Any])` - Enforce required metadata fields and tokenizer-specific layout
 
 ### Data Preparation Example
 
@@ -90,6 +91,8 @@ re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transf
   using a tokenizer
 - `write_bin_and_meta(ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict)` - Write train.bin, val.bin, and
   meta.pkl atomically
+- `seed_text_file_with_policy(dst: Path, candidates: list[Path], policy: Literal["auto", "fail_fast"])` - Apply the seed
+  policy (auto-seed or fail-fast)
 
 ## Runtime Context Helper
 
