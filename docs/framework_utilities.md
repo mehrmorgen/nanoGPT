@@ -78,6 +78,22 @@ re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transf
 - `diff_file_states(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]])` - Compare file states and determine
   what changed
 
+## Metrics Registry
+
+The `src/ml_playground/analysis/metrics_registry.py` module provides a lightweight registry for experiment metrics.
+
+Naming convention:
+
+- Use lowercase segments separated by dots.
+- Each segment starts with a letter and uses `[a-z0-9_]`.
+- Avoid leading/trailing dots or empty segments.
+
+Registry helpers:
+
+- `MetricsRegistry.register()` - register `MetricSpec` entries with validation.
+- `MetricsRegistry.to_markdown()` - render a markdown table for docs.
+- `MetricsRegistry.to_dashboard_spec()` - return a simple JSON-compatible spec for dashboards.
+
 ### Metadata Creation
 
 - `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None)` - Create
