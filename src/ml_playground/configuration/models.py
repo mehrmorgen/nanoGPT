@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.self_play.pool_size import derive_pool_size
 
 if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
     pass
@@ -263,6 +264,20 @@ class RuntimeConfig(_FrozenStrictModel):
         return int(self.max_games // self.eval_interval_games)
 
 
+class PoolSizePolicy(_FrozenStrictModel):
+    target_labeled_positions: NonNegativeStrictInt
+    avg_positions_per_game: AtLeastOneInt
+    oversample_factor: PositiveStrictFloat = 1.0
+
+    @computed_field(return_type=int)
+    def pool_size(self) -> int:
+        return derive_pool_size(
+            self.target_labeled_positions,
+            self.avg_positions_per_game,
+            oversample_factor=self.oversample_factor,
+        )
+
+
 class TrainerConfig(_FrozenStrictModel):
     @model_validator(mode="before")
     @classmethod
@@ -331,6 +346,7 @@ class TrainerConfig(_FrozenStrictModel):
     optim: "OptimConfig"
     schedule: "LRSchedule"
     runtime: RuntimeConfig
+    pool_size_policy: PoolSizePolicy | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
     hf_model: HFModelConfig | None = None
     peft: PeftConfig | None = None
