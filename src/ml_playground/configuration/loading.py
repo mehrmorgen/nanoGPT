@@ -78,20 +78,62 @@ def _ensure_mapping(value: Any, context: str) -> TomlMapping:
     return dict(value)
 
 
+def _validate_budget(extras: Mapping[str, Any]) -> dict[str, Any] | None:
+    if "budget" not in extras:
+        return None
+    budget = extras.get("budget")
+    if budget is None:
+        return None
+    if not isinstance(budget, Mapping):
+        raise ValueError("extras.budget must be a mapping")
+
+    allowed_keys = {"max_hours", "max_games"}
+    unknown_keys = set(budget) - allowed_keys
+    if unknown_keys:
+        raise ValueError(f"extras.budget has unknown keys: {sorted(unknown_keys)}")
+
+    cleaned: dict[str, Any] = {}
+    if "max_hours" in budget:
+        value = budget["max_hours"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("extras.budget.max_hours must be a number")
+        if value < 0:
+            raise ValueError("extras.budget.max_hours must be >= 0")
+        cleaned["max_hours"] = float(value)
+    if "max_games" in budget:
+        value = budget["max_games"]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("extras.budget.max_games must be an integer")
+        if value < 0:
+            raise ValueError("extras.budget.max_games must be >= 0")
+        cleaned["max_games"] = value
+    return cleaned
+
+
 def _validate_extras(experiment_name: str, section: str, data: TomlMapping) -> None:
     load_extras_models(experiment_name)
     model = get_extras_model(experiment_name, section)
     extras = data.get("extras", {})
     if extras is None:
         extras = {}
+    if not isinstance(extras, Mapping):
+        raise TypeError("extras must be a mapping")
+    extras_payload = dict(extras)
+    budget = _validate_budget(extras_payload)
+    extras_payload.pop("budget", None)
     if model is None:
-        if extras:
+        if extras_payload:
             raise ValueError(
                 f"Missing extras model registration for '{experiment_name}.{section}'"
             )
+        if budget is not None:
+            data["extras"] = {"budget": budget}
         return
-    validated = model.model_validate(extras)
-    data["extras"] = validated.model_dump()
+    validated = model.model_validate(extras_payload)
+    merged = validated.model_dump()
+    if budget is not None:
+        merged["budget"] = budget
+    data["extras"] = merged
 
 
 def read_toml_dict(
