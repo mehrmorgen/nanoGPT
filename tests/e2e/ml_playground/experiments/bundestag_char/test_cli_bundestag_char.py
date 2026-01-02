@@ -29,6 +29,8 @@ def tmp_dataset(tmp_path: Path) -> Path:
         "kind": "char",
         "tokenizer_type": "char",
         "dtype": "uint16",
+        "train_tokens": len(arr),
+        "val_tokens": len(arr),
         "stoi": {chr(i): i for i in range(256)},
         "itos": {i: chr(i) for i in range(256)},
     }

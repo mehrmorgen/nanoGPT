@@ -8,8 +8,9 @@ from ml_playground.data_pipeline.transforms.tokenization import (
     split_train_val,
 )
 from ml_playground.data_pipeline.transforms.io import (
+    coerce_seed_policy,
     diff_file_states,
-    seed_text_file,
+    seed_text_file_with_policy,
     snapshot_file_states,
     write_bin_and_meta,
 )
@@ -45,7 +46,8 @@ class BundestagTiktokenPreparer(_PreparerProto):
             exp_dir / "page1.txt",
             bundled,
         ]
-        seed_text_file(input_file_path, candidates)
+        seed_policy = coerce_seed_policy(extras.get("seed_policy"))
+        seed_text_file_with_policy(input_file_path, candidates, policy=seed_policy)
 
         validate_file_exists(input_file_path, "Input text file")
 

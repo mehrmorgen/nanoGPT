@@ -13,6 +13,7 @@ from ml_playground.core.error_handling import DataError
 from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.core.file_state import diff_file_states, snapshot_file_states
 from ml_playground.data_pipeline.transforms.io import write_bin_and_meta
+from ml_playground.data_pipeline.transforms.metadata import validate_metadata_contract
 
 __all__ = [
     "REQUIRED_STREAM_FIELDS",
@@ -68,12 +69,7 @@ def _load_meta(meta_path: Path) -> dict[str, Any]:
             reason=f"Unable to deserialize metadata due to {exc.__class__.__name__}",
             rationale="Streaming prep must preserve metadata to update counters",
         ) from exc
-    if not isinstance(meta, dict) or "meta_version" not in meta:
-        raise DataError(
-            f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'",
-            reason="Metadata structure missing required 'meta_version' key",
-            rationale="Streaming prep requires versioned metadata for safe updates",
-        )
+    meta = validate_metadata_contract(meta)
     return meta
 
 
@@ -116,8 +112,18 @@ def append_bin_and_meta(
     before = snapshot_file_states([train_path, val_path, meta_path])
 
     if not meta_path.exists():
-        write_bin_and_meta(ds_dir, train, val, meta, logger=logger, data_cfg=data_cfg)
-        return meta
+        seeded_meta = validate_metadata_contract(meta)
+        seeded_meta["train_tokens"] = int(train.size)
+        seeded_meta["val_tokens"] = int(val.size)
+        write_bin_and_meta(
+            ds_dir,
+            train,
+            val,
+            seeded_meta,
+            logger=logger,
+            data_cfg=data_cfg,
+        )
+        return seeded_meta
 
     existing_meta = _load_meta(meta_path)
 

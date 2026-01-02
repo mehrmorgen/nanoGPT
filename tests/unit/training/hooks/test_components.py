@@ -19,6 +19,8 @@ from ml_playground.models.core.model import GPT
 from ml_playground.training.hooks.components import initialize_components
 from ml_playground.training.hooks.runtime import RuntimeContext
 
+_RUNTIME_LOGGER = logging.getLogger("test_components.runtime")
+
 
 def _make_model() -> GPT:
     """Create a minimal GPT model for testing."""
@@ -79,7 +81,11 @@ def test_initialize_components_without_optional_features(tmp_path: Path) -> None
     """initialize_components should work without compile, EMA, or TensorBoard."""
     model = _make_model()
     cfg = _make_config()
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -99,7 +105,11 @@ def test_initialize_components_with_ema(tmp_path: Path) -> None:
     """initialize_components should create EMA when ema_decay > 0."""
     model = _make_model()
     cfg = _make_config(ema_decay=0.999)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -114,7 +124,11 @@ def test_initialize_components_with_tensorboard(tmp_path: Path) -> None:
     """initialize_components should create TensorBoard writer when enabled."""
     model = _make_model()
     cfg = _make_config(tensorboard_enabled=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     log_dir = tmp_path / "logs"
     compiled_model, scaler, ema, writer = initialize_components(
@@ -133,7 +147,11 @@ def test_initialize_components_scaler_enabled_for_cuda_float16(tmp_path: Path) -
     """initialize_components should enable GradScaler for CUDA + float16."""
     model = _make_model()
     cfg = _make_config(device="cuda", dtype="float16")
-    runtime = RuntimeContext(device_type="cuda", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cuda",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -148,7 +166,11 @@ def test_initialize_components_scaler_disabled_for_cpu(tmp_path: Path) -> None:
     """initialize_components should disable GradScaler for CPU."""
     model = _make_model()
     cfg = _make_config(device="cpu", dtype="float32")
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     compiled_model, scaler, ema, writer = initialize_components(
         model, cfg, runtime, log_dir=str(tmp_path)
@@ -169,7 +191,11 @@ def test_initialize_components_with_all_features(tmp_path: Path) -> None:
         device="cpu",
         dtype="float32",
     )
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     log_dir = tmp_path / "logs"
     compiled_model, scaler, ema, writer = initialize_components(
@@ -192,7 +218,11 @@ def test_initialize_components_with_compile(tmp_path: Path) -> None:
     """initialize_components should attempt to compile model when enabled."""
     model = _make_model()
     cfg = _make_config(compile=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     compiled_calls: list[object] = []
 
@@ -214,7 +244,11 @@ def test_initialize_components_compile_missing(tmp_path: Path) -> None:
     """Requesting torch.compile without availability should raise."""
     model = _make_model()
     cfg = _make_config(compile=True)
-    runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
+    runtime = RuntimeContext(
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=_RUNTIME_LOGGER,
+    )
 
     with pytest.raises(RuntimeError, match="torch.compile requested but unavailable"):
         initialize_components(

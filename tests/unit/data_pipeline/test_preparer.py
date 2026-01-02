@@ -61,7 +61,13 @@ class DummyTok:
 def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, dict]:
     train: np.ndarray = np.arange(n, dtype=np.uint16)
     val: np.ndarray = np.arange(n, dtype=np.uint16)
-    meta = {"meta_version": 1}
+    meta = {
+        "meta_version": 1,
+        "tokenizer_type": "char",
+        "train_tokens": n,
+        "val_tokens": n,
+        "stoi": {"a": 0},
+    }
     return train, val, meta
 
 
@@ -196,7 +202,16 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
     (ds / "train.bin").write_bytes(np.arange(4, dtype=np.uint16).tobytes())
     (ds / "val.bin").write_bytes(np.arange(4, dtype=np.uint16).tobytes())
     with (ds / "meta.pkl").open("wb") as f:
-        pickle.dump({"meta_version": 1}, f)
+        pickle.dump(
+            {
+                "meta_version": 1,
+                "tokenizer_type": "char",
+                "train_tokens": 4,
+                "val_tokens": 4,
+                "stoi": {"a": 0},
+            },
+            f,
+        )
 
     class ListLogger:
         def __init__(self) -> None:
@@ -208,7 +223,13 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
     logger = ListLogger()
     train: np.ndarray = np.arange(2, dtype=np.uint16)
     val: np.ndarray = np.arange(2, dtype=np.uint16)
-    meta = {"meta_version": 1}
+    meta = {
+        "meta_version": 1,
+        "tokenizer_type": "char",
+        "train_tokens": 2,
+        "val_tokens": 2,
+        "stoi": {"a": 0},
+    }
 
     write_bin_and_meta(ds, train, val, meta, logger=logger, data_cfg=None)
 

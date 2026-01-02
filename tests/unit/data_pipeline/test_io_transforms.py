@@ -17,7 +17,13 @@ from ml_playground.data_pipeline.transforms.io import (
 def _arrays() -> tuple[np.ndarray, np.ndarray, dict]:
     train = np.arange(4, dtype=np.uint16)
     val = np.arange(4, dtype=np.uint16)
-    meta = {"meta_version": 1, "tokenizer_type": "char"}
+    meta = {
+        "meta_version": 1,
+        "tokenizer_type": "char",
+        "train_tokens": 4,
+        "val_tokens": 4,
+        "stoi": {"a": 0},
+    }
     return train, val, meta
 
 
@@ -59,7 +65,16 @@ def test_write_bin_and_meta_existing_meta_swallow_logger_errors(tmp_path: Path) 
     (ds / "train.bin").write_bytes(b"train")
     (ds / "val.bin").write_bytes(b"val")
     with (ds / "meta.pkl").open("wb") as f:
-        pickle.dump({"meta_version": 1}, f)
+        pickle.dump(
+            {
+                "meta_version": 1,
+                "tokenizer_type": "char",
+                "train_tokens": 1,
+                "val_tokens": 1,
+                "stoi": {"a": 0},
+            },
+            f,
+        )
 
     class RaisingLogger:
         def info(self, _message: str) -> None:
@@ -76,6 +91,8 @@ def test_setup_tokenizer_returns_char_tokenizer(tmp_path: Path) -> None:
         "tokenizer_type": "char",
         "stoi": {"a": 0},
         "meta_version": 1,
+        "train_tokens": 0,
+        "val_tokens": 0,
     }
     with (tmp_path / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
@@ -103,6 +120,8 @@ def test_setup_tokenizer_uses_tiktoken_encoding(tmp_path: Path) -> None:
         "tokenizer_type": "tiktoken",
         "encoding_name": "dummy",
         "meta_version": 1,
+        "train_tokens": 0,
+        "val_tokens": 0,
     }
     with (tmp_path / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
@@ -118,6 +137,8 @@ def test_setup_tokenizer_word_branch(tmp_path: Path) -> None:
         "tokenizer_type": "word",
         "stoi": {"hello": 0},
         "meta_version": 1,
+        "train_tokens": 0,
+        "val_tokens": 0,
     }
     with (tmp_path / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from types import MethodType, SimpleNamespace
@@ -622,7 +623,9 @@ def test_default_trainer_dependencies_returns_callables(tmp_path: Path) -> None:
         }
     )
     runtime = runner_mod.RuntimeContext(
-        device_type="cpu", autocast_context=nullcontext()
+        device_type="cpu",
+        autocast_context=nullcontext(),
+        logger=logging.getLogger("test_training_runner.runtime"),
     )
     model = _FakeModel()
     compiled, scaler, ema, writer = deps.initialize_components(

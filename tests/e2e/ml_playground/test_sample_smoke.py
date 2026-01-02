@@ -40,6 +40,8 @@ def test_sample_smoke(tmp_path: Path) -> None:
         "kind": "char",
         "tokenizer_type": "char",
         "dtype": "uint16",
+        "train_tokens": 0,
+        "val_tokens": 0,
         "stoi": stoi,
         "itos": itos,
     }
