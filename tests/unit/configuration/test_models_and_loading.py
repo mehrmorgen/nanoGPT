@@ -604,6 +604,9 @@ def test_runtime_config_when_initialized_then_defaults_match() -> None:
     assert runtime.ckpt_greater_is_better is False
     assert runtime.ckpt_atomic is True
     assert runtime.ckpt_write_metadata is True
+    assert runtime.ckpt_naming_policy == "steps"
+    assert runtime.ckpt_domain_label is None
+    assert runtime.ckpt_naming_strict is False
     assert runtime.ckpt_time_interval_minutes == 0
 
 
