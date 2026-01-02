@@ -80,6 +80,9 @@ def _refresh_metadata(
     val_tokens_added: int,
     updates: dict[str, Any],
 ) -> dict[str, Any]:
+    def _is_numeric(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
     if not isinstance(existing.get("train_tokens"), int) or not isinstance(
         existing.get("val_tokens"), int
     ):
@@ -92,7 +95,12 @@ def _refresh_metadata(
     refreshed["train_tokens"] = existing["train_tokens"] + train_tokens_added
     refreshed["val_tokens"] = existing["val_tokens"] + val_tokens_added
     for key, value in updates.items():
-        if key not in {"train_tokens", "val_tokens"}:
+        if key in {"train_tokens", "val_tokens"}:
+            continue
+        existing_value = refreshed.get(key)
+        if _is_numeric(value) and _is_numeric(existing_value):
+            refreshed[key] = existing_value + value
+        else:
             refreshed[key] = value
     return refreshed
 
