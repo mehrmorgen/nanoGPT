@@ -93,6 +93,8 @@ re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transf
   meta.pkl atomically
 - `seed_text_file_with_policy(dst: Path, candidates: list[Path], policy: Literal["auto", "fail_fast"])` - Apply the seed
   policy (auto-seed or fail-fast)
+- `stream_csv_column(path: Path, column: str = "text")` - Stream text from CSV columns
+- `stream_jsonl(path: Path)` - Stream JSONL records with layout validation
 
 ## Runtime Context Helper
 
