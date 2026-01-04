@@ -7,6 +7,14 @@
 # - Checkpoint selection uses ckpt_metric with optional smoothing and EMA if configured.
 
 [prepare]
+# - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
+
+[experience_storage]
+strategy = "memory"
+flush_on_store = false
+path = ""
+
+[prepare]
 # Default locations used by preparers; resolved relative to this experiment dir
 dataset_dir = "./datasets"
 raw_dir = "./raw"

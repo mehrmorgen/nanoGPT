@@ -15,6 +15,15 @@
 # Experiments can override any subset of keys in their config TOML; at startup the
 # loader logs where each effective value came from (default vs experiment override vs env override).
 
+[experience_storage]
+# Default to in-memory storage. Supported strategies:
+# - "memory": in-process only (no persistence)
+# - "json_file": persisted to a JSON file at [experience_storage].path
+strategy = "memory"
+flush_on_store = false
+# For json_file, set an absolute or experiment-relative path. Empty for memory.
+path = ""
+
 [prepare]
 # Default locations used by preparers; paths are resolved relative to the experiment.
 dataset_dir = "./datasets"

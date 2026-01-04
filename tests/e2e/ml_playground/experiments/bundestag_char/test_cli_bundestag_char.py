@@ -58,6 +58,10 @@ def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
     dataset_dir_str = str(dataset_dir).replace("\\", "\\\\")
     out_dir_str = str(out_dir).replace("\\", "\\\\")
     cfg = f'''
+[experience_storage]
+strategy = "memory"
+flush_on_store = false
+
 [prepare]
 dataset_dir = "{dataset_dir_str}"
 tokenizer_type = "char"

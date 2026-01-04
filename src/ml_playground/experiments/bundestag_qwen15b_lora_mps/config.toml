@@ -8,6 +8,11 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (prepare.raw_dir, prepare.dataset_dir, train.runtime.out_dir, sample.runtime.out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
+[experience_storage]
+strategy = "memory"
+flush_on_store = false
+path = ""
+
 [prepare]
 # Path to a folder of raw .txt files (recursively scanned) or a single input.txt in this folder.
 raw_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/raw/plenarprotokolle"

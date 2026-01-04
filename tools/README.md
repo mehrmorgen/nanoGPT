@@ -24,7 +24,6 @@ is invoked via UV CLIs—no raw `pip`, no manual venv activation.
 - `setup_ai_guidelines.py` — configure symlinks for AI pair-programming workflow per guideline docs.
 - `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
 
-
 ## GitHub CLI setup
 
 The GitHub CLI (`gh`) is the preferred way to open pull requests, review diffs, and inspect CI from the terminal.

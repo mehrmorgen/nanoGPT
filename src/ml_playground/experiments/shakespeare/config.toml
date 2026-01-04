@@ -6,6 +6,11 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
+[experience_storage]
+strategy = "memory"
+flush_on_store = false
+path = ""
+
 [prepare]
 dataset_dir = "./datasets"
 raw_dir = "./raw"

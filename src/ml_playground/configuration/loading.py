@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Mapping, TypedDict, cast
 import tomllib
 
 from ml_playground.configuration.models import (
+    ExperienceStorageConfig,
     ExperimentConfig,
     PreparerConfig,
     SamplerConfig,
@@ -36,6 +37,7 @@ class ExperimentPayload(TypedDict, total=False):
     prepare: TomlMapping
     train: TomlMapping
     sample: TomlMapping
+    experience_storage: TomlMapping
 
 
 def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
@@ -218,6 +220,14 @@ def load_full_experiment_config(
     shared["project_home"] = project_home
     shared["experiment"] = experiment_name
     effective_config["shared"] = shared
+
+    storage_config = _ensure_mapping(
+        effective_config.setdefault("experience_storage", {}), "[experience_storage]"
+    )
+    storage_model = ExperienceStorageConfig.model_validate(
+        storage_config, context={"config_path": config_path}
+    )
+    effective_config["experience_storage"] = storage_model.model_dump()
 
     return ExperimentConfig.model_validate(
         effective_config,

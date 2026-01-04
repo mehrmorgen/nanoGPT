@@ -120,6 +120,40 @@ should call instead of duplicating device, dtype, seed, and logging configuratio
 - `runtime_context(runtime: RuntimeConfig, ...)` - Configure seeding, TF32 toggles, autocast context, and logging format
   from a runtime config.
 
+## Experience Storage (Caching Utilities)
+
+We provide a reusable experience storage abstraction to cache training/sampling experiences across experiments.
+
+- **Config model**: `experience_storage` section in every experiment config (defaults in `experiments/default_config.toml`):
+  - `strategy`: `"memory"` (in-process) or `"json_file"` (persists to a JSON file at `path`)
+  - `path`: required for `json_file`; may be relative to the config file
+  - `flush_on_store`: when true, flushes to disk on each store (safe but slower)
+- **Data model**: `ExperienceEntry` (frozen dataclass) with canonical hash and multi-objective annotations.
+- **Persistence**: `PersistenceStrategy` abstraction with `JSONFilePersistenceStrategy` implementation.
+- **Storage implementations**: `ExperienceStorage` ABC and `InMemoryExperienceStorage`; factory builds from `ExperienceStorageConfig`.
+
+### Design decisions
+
+- **Strict config validation**: Uses `_FrozenStrictModel` to forbid extras and enforce immutability/typing.
+- **Separation of concerns**: Pydantic for external/config validation; immutable dataclasses for internal value objects.
+- **Opt-in persistence**: Default is memory-only; experiments can enable JSON persistence per run.
+- **Hash stability**: Canonical hashing over moves ensures deduplication across runs.
+
+### CLI usage
+
+1. Set `[experience_storage]` in your experiment config. Example:
+
+   ```toml
+   [experience_storage]
+   strategy = "json_file"
+   path = "./out/experience.json"
+   flush_on_store = false
+   ```
+
+1. Build storage via the factory (see `core/experience_storage.py`) using the validated config.
+
+1. Store/load `ExperienceEntry` instances; JSON persistence can be replayed across processes or runs.
+
 ## CLI Utilities
 
 The `src/ml_playground/cli.py` module provides the command-line interface for the framework. It uses a standardized

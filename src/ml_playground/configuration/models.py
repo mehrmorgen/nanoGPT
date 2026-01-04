@@ -20,7 +20,6 @@ from pydantic import (
 )
 
 from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.self_play.pool_size import derive_pool_size
 
 if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
     pass
@@ -141,7 +140,40 @@ class _FrozenStrictModel(BaseModel):
         arbitrary_types_allowed=True,
     )
 
-    logger: LoggerLike = Field(default_factory=lambda: logging.getLogger(__name__))
+    logger: LoggerLike = Field(
+        default_factory=lambda: logging.getLogger(__name__), exclude=True
+    )
+
+
+class ExperienceStorageConfig(_FrozenStrictModel):
+    """Configuration for experiment experience storage and caching."""
+
+    strategy: Literal["memory", "json_file"] = "memory"
+    path: Path | None = None
+    flush_on_store: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_path(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+        base_dir = config_path.parent
+        if "path" in data:
+            data["path"] = _resolve_if_relative(data["path"], base_dir)
+        return data
+
+    @model_validator(mode="after")
+    def _validate_strategy(self) -> "ExperienceStorageConfig":
+        if self.strategy == "json_file" and self.path is None:
+            raise ValueError(
+                "experience storage path is required for strategy json_file"
+            )
+        if self.strategy == "memory" and self.path:
+            self.logger.warning("experience storage path ignored for strategy memory")
+        return self
 
 
 def _no_nan(v: float) -> float:
@@ -290,12 +322,16 @@ class RuntimeConfig(_FrozenStrictModel):
 
 
 class PoolSizePolicy(_FrozenStrictModel):
-    target_labeled_positions: NonNegativeStrictInt
-    avg_positions_per_game: AtLeastOneInt
+    """Sampling pool sizing policy for self-play."""
+
+    target_labeled_positions: NonNegativeStrictInt = 0
+    avg_positions_per_game: PositiveStrictInt = 1
     oversample_factor: PositiveStrictFloat = 1.0
 
     @computed_field(return_type=int)
     def pool_size(self) -> int:
+        from ml_playground.self_play.pool_size import derive_pool_size
+
         return derive_pool_size(
             self.target_labeled_positions,
             self.avg_positions_per_game,
@@ -493,6 +529,7 @@ class ExperimentConfig(_FrozenStrictModel):
     train: TrainerConfig
     sample: SamplerConfig
     shared: "SharedConfig"
+    experience_storage: ExperienceStorageConfig = ExperienceStorageConfig()
 
     @model_validator(mode="before")
     @classmethod
@@ -628,6 +665,8 @@ __all__ = [
     "READ_POLICY_LATEST",
     "READ_POLICY_BEST",
     "DEFAULT_READ_POLICY",
+    "ExperienceStorageConfig",
+    "PoolSizePolicy",
     # DI type aliases
     "ReadTextFn",
     "TokenizerFactoryFn",
