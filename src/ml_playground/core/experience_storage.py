@@ -136,9 +136,15 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
         }
 
     @staticmethod
-    def _validate_payload_core(
-        key: str, payload: Mapping
-    ) -> tuple[list[int], int, int]:
+    def _decode_entry(key: str, payload: object) -> ExperienceEntry:
+        if not isinstance(payload, Mapping):
+            raise DataError(
+                f"Experience entry {key} must be a mapping",
+                reason="Entry payload is not a mapping",
+                rationale="Experience storage expects dict payload per entry",
+            )
+
+        # 1. Core game state
         try:
             moves = payload["moves"]
             winner = payload["winner"]
@@ -162,14 +168,47 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 reason="winner/start_player must be integers",
                 rationale="Experience storage tracks players using integer identifiers",
             )
-        return moves, winner, start_player
 
-    @staticmethod
-    def _validate_payload_targets(
-        key: str, payload: Mapping
-    ) -> tuple[Mapping, Mapping]:
+        # 2. Targets (policy/value)
         policy_targets = payload.get("policy_targets", {})
         value_targets = payload.get("value_targets", {})
+        JSONFilePersistenceStrategy._validate_targets(
+            key, policy_targets, value_targets
+        )
+
+        # 3. Metadata
+        entry = ExperienceEntry(
+            moves=tuple(int(m) for m in moves),
+            winner=winner,
+            start_player=start_player,
+            policy_targets={k: list(v) for k, v in policy_targets.items()},
+            value_targets={k: float(v) for k, v in value_targets.items()},
+            first_seen_step=JSONFilePersistenceStrategy._get_int(
+                key, payload, "first_seen_step"
+            ),
+            last_seen_step=JSONFilePersistenceStrategy._get_int(
+                key, payload, "last_seen_step"
+            ),
+            visit_count=JSONFilePersistenceStrategy._get_int(
+                key, payload, "visit_count"
+            ),
+            priority_score=JSONFilePersistenceStrategy._get_float(
+                key, payload, "priority_score"
+            ),
+        )
+
+        if entry.get_hash() != key:
+            raise DataError(
+                f"Experience entry {key} failed hash verification",
+                reason="Canonical hash mismatch",
+                rationale="Experience storage requires stable identity hashes",
+            )
+        return entry
+
+    @staticmethod
+    def _validate_targets(
+        key: str, policy_targets: object, value_targets: object
+    ) -> None:
         if not isinstance(policy_targets, Mapping) or not all(
             isinstance(k, str) and isinstance(v, list)
             for k, v in policy_targets.items()
@@ -188,72 +227,28 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 reason="value_targets must be mapping[str, float]",
                 rationale="Experience storage annotates value targets per depth",
             )
-        return policy_targets, value_targets
 
     @staticmethod
-    def _validate_payload_metadata(
-        key: str, payload: Mapping
-    ) -> tuple[int, int, int, float]:
-        def _get_int(field: str) -> int:
-            value = payload.get(field, 0)
-            if not isinstance(value, int):
-                raise DataError(
-                    f"Experience entry {key} has non-integer {field}",
-                    reason="Metadata fields must be integers",
-                    rationale="Experience metadata tracks steps and counts as integers",
-                )
-            return value
-
-        def _get_float(field: str) -> float:
-            value = payload.get(field, 0.0)
-            if not isinstance(value, (int, float)):
-                raise DataError(
-                    f"Experience entry {key} has non-numeric {field}",
-                    reason="Metadata fields must be numeric",
-                    rationale="Experience metadata tracks priority as numeric values",
-                )
-            return float(value)
-
-        return (
-            _get_int("first_seen_step"),
-            _get_int("last_seen_step"),
-            _get_int("visit_count"),
-            _get_float("priority_score"),
-        )
-
-    @classmethod
-    def _decode_entry(cls, key: str, payload: object) -> ExperienceEntry:
-        if not isinstance(payload, Mapping):
+    def _get_int(key: str, payload: Mapping, field: str) -> int:
+        value = payload.get(field, 0)
+        if not isinstance(value, int):
             raise DataError(
-                f"Experience entry {key} must be a mapping",
-                reason="Entry payload is not a mapping",
-                rationale="Experience storage expects dict payload per entry",
+                f"Experience entry {key} has non-integer {field}",
+                reason="Metadata fields must be integers",
+                rationale="Experience metadata tracks steps and counts as integers",
             )
+        return value
 
-        moves, winner, start_player = cls._validate_payload_core(key, payload)
-        policy_targets, value_targets = cls._validate_payload_targets(key, payload)
-        first_step, last_step, count, priority = cls._validate_payload_metadata(
-            key, payload
-        )
-
-        entry = ExperienceEntry(
-            moves=tuple(int(m) for m in moves),
-            winner=winner,
-            start_player=start_player,
-            policy_targets={k: list(v) for k, v in policy_targets.items()},
-            value_targets={k: float(v) for k, v in value_targets.items()},
-            first_seen_step=first_step,
-            last_seen_step=last_step,
-            visit_count=count,
-            priority_score=priority,
-        )
-        if entry.get_hash() != key:
+    @staticmethod
+    def _get_float(key: str, payload: Mapping, field: str) -> float:
+        value = payload.get(field, 0.0)
+        if not isinstance(value, (int, float)):
             raise DataError(
-                f"Experience entry {key} failed hash verification",
-                reason="Canonical hash mismatch",
-                rationale="Experience storage requires stable identity hashes",
+                f"Experience entry {key} has non-numeric {field}",
+                reason="Metadata fields must be numeric",
+                rationale="Experience metadata tracks priority as numeric values",
             )
-        return entry
+        return float(value)
 
 
 class ExperienceStorage(ABC):
@@ -340,7 +335,11 @@ def build_experience_storage(config: "ExperienceStorageConfig") -> ExperienceSto
 
     persistence: PersistenceStrategy | None = None
     if config.strategy == "json_file":
-        persistence = JSONFilePersistenceStrategy(config.path)  # type: ignore
+        if config.path is None:
+            raise ValueError(
+                "experience storage path is required for strategy json_file"
+            )
+        persistence = JSONFilePersistenceStrategy(config.path)
 
     return InMemoryExperienceStorage(
         persistence=persistence,

@@ -154,15 +154,6 @@ class ExperienceStorageConfig(_FrozenStrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalize_empty_path(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            p = data.get("path")
-            if isinstance(p, str) and not p.strip():
-                data["path"] = None
-        return data
-
-    @model_validator(mode="before")
-    @classmethod
     def _resolve_path(cls, data: Any, info: ValidationInfo) -> Any:
         if not isinstance(data, dict) or not info.context:
             return data

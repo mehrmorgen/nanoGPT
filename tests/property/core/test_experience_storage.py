@@ -306,31 +306,33 @@ def test_build_experience_storage_with_json(tmp_path: Path) -> None:
     assert storage.get(key) == entry
     assert (tmp_path / "store.json").exists()
 
-    def test_json_persistence_save_invalid_key(tmp_path: Path) -> None:
-        """save() raises DataError if a non-string key is encountered."""
-        strategy = JSONFilePersistenceStrategy(tmp_path / "test.json")
-        with pytest.raises(DataError, match="Invalid entry key"):
-            strategy.save({123: ExperienceEntry((1,), 1, 1)})  # type: ignore
 
-    def test_in_memory_storage_flush_no_persistence() -> None:
-        """flush() does nothing if no persistence strategy is set."""
-        storage = InMemoryExperienceStorage()
-        storage.flush()  # Should not raise
+def test_json_persistence_save_invalid_key_top_level(tmp_path: Path) -> None:
+    """save() raises DataError if a non-string key is encountered."""
+    strategy = JSONFilePersistenceStrategy(tmp_path / "test.json")
+    with pytest.raises(DataError, match="Invalid entry key"):
+        strategy.save({123: ExperienceEntry((1,), 1, 1)})  # type: ignore
 
-    def test_in_memory_storage_load_no_persistence() -> None:
-        """load() does nothing if no persistence strategy is set."""
-        storage = InMemoryExperienceStorage()
-        storage.load()  # Should not raise
 
-    def test_build_experience_storage_factory_json_missing_path() -> None:
-        """Factory check for missing path (safety check)."""
-        from ml_playground.configuration.models import ExperienceStorageConfig
+def test_in_memory_storage_flush_no_persistence_top_level() -> None:
+    """flush() does nothing if no persistence strategy is set."""
+    storage = InMemoryExperienceStorage()
+    storage.flush()  # Should not raise
 
-        # We bypass Pydantic validation by creating a dict and passing to factory if possible,
-        # but the factory takes the config object.
-        # Since ExperienceStorageConfig is strict, we can't easily pass None if strategy="json_file"
-        # without triggering Pydantic's validator first.
-        # However, we can use .model_construct() or just test the factory logic directly if we can.
-        cfg = ExperienceStorageConfig.model_construct(strategy="json_file", path=None)
-        with pytest.raises(ValueError, match="experience storage path is required"):
-            build_experience_storage(cfg)
+
+def test_in_memory_storage_load_no_persistence_top_level() -> None:
+    """load() does nothing if no persistence strategy is set."""
+    storage = InMemoryExperienceStorage()
+    storage.load()  # Should not raise
+
+
+def test_build_experience_storage_factory_json_missing_path_top_level() -> None:
+    """Factory check for missing path (safety check)."""
+    # We bypass Pydantic validation by creating a dict and passing to factory if possible,
+    # but the factory takes the config object.
+    # Since ExperienceStorageConfig is strict, we can't easily pass None if strategy="json_file"
+    # without triggering Pydantic's validator first.
+    # However, we can use .model_construct() or just test the factory logic directly if we can.
+    cfg = ExperienceStorageConfig.model_construct(strategy="json_file", path=None)
+    with pytest.raises(ValueError, match="experience storage path is required"):
+        build_experience_storage(cfg)
