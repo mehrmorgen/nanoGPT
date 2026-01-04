@@ -136,13 +136,9 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
         }
 
     @staticmethod
-    def _decode_entry(key: str, payload: object) -> ExperienceEntry:
-        if not isinstance(payload, Mapping):
-            raise DataError(
-                f"Experience entry {key} must be a mapping",
-                reason="Entry payload is not a mapping",
-                rationale="Experience storage expects dict payload per entry",
-            )
+    def _validate_payload_core(
+        key: str, payload: Mapping
+    ) -> tuple[list[int], int, int]:
         try:
             moves = payload["moves"]
             winner = payload["winner"]
@@ -166,7 +162,12 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 reason="winner/start_player must be integers",
                 rationale="Experience storage tracks players using integer identifiers",
             )
+        return moves, winner, start_player
 
+    @staticmethod
+    def _validate_payload_targets(
+        key: str, payload: Mapping
+    ) -> tuple[Mapping, Mapping]:
         policy_targets = payload.get("policy_targets", {})
         value_targets = payload.get("value_targets", {})
         if not isinstance(policy_targets, Mapping) or not all(
@@ -187,7 +188,12 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 reason="value_targets must be mapping[str, float]",
                 rationale="Experience storage annotates value targets per depth",
             )
+        return policy_targets, value_targets
 
+    @staticmethod
+    def _validate_payload_metadata(
+        key: str, payload: Mapping
+    ) -> tuple[int, int, int, float]:
         def _get_int(field: str) -> int:
             value = payload.get(field, 0)
             if not isinstance(value, int):
@@ -208,16 +214,38 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 )
             return float(value)
 
+        return (
+            _get_int("first_seen_step"),
+            _get_int("last_seen_step"),
+            _get_int("visit_count"),
+            _get_float("priority_score"),
+        )
+
+    @classmethod
+    def _decode_entry(cls, key: str, payload: object) -> ExperienceEntry:
+        if not isinstance(payload, Mapping):
+            raise DataError(
+                f"Experience entry {key} must be a mapping",
+                reason="Entry payload is not a mapping",
+                rationale="Experience storage expects dict payload per entry",
+            )
+
+        moves, winner, start_player = cls._validate_payload_core(key, payload)
+        policy_targets, value_targets = cls._validate_payload_targets(key, payload)
+        first_step, last_step, count, priority = cls._validate_payload_metadata(
+            key, payload
+        )
+
         entry = ExperienceEntry(
             moves=tuple(int(m) for m in moves),
             winner=winner,
             start_player=start_player,
             policy_targets={k: list(v) for k, v in policy_targets.items()},
             value_targets={k: float(v) for k, v in value_targets.items()},
-            first_seen_step=_get_int("first_seen_step"),
-            last_seen_step=_get_int("last_seen_step"),
-            visit_count=_get_int("visit_count"),
-            priority_score=_get_float("priority_score"),
+            first_seen_step=first_step,
+            last_seen_step=last_step,
+            visit_count=count,
+            priority_score=priority,
         )
         if entry.get_hash() != key:
             raise DataError(
@@ -312,11 +340,7 @@ def build_experience_storage(config: "ExperienceStorageConfig") -> ExperienceSto
 
     persistence: PersistenceStrategy | None = None
     if config.strategy == "json_file":
-        if config.path is None:
-            raise ValueError(
-                "experience storage path is required for strategy json_file"
-            )
-        persistence = JSONFilePersistenceStrategy(config.path)
+        persistence = JSONFilePersistenceStrategy(config.path)  # type: ignore
 
     return InMemoryExperienceStorage(
         persistence=persistence,
