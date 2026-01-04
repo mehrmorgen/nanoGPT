@@ -167,10 +167,16 @@ class ExperienceStorageConfig(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _validate_strategy(self) -> "ExperienceStorageConfig":
-        if self.strategy == "json_file" and self.path is None:
-            raise ValueError(
-                "experience storage path is required for strategy json_file"
-            )
+        if self.strategy == "json_file":
+            if self.path is None:
+                raise ValueError(
+                    "experience storage path is required for strategy json_file"
+                )
+            # Treat empty strings (resolved to directory) or existing directories as missing/invalid
+            if str(self.path).strip() == "" or self.path.is_dir():
+                raise ValueError(
+                    f"experience storage path must point to a file, got: {self.path}"
+                )
         if self.strategy == "memory" and self.path:
             self.logger.warning("experience storage path ignored for strategy memory")
         return self

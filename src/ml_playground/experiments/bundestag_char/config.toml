@@ -6,9 +6,6 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Checkpoint selection uses ckpt_metric with optional smoothing and EMA if configured.
 
-[prepare]
-# - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
-
 [experience_storage]
 strategy = "memory"
 flush_on_store = false
