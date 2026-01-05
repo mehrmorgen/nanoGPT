@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Literal
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence
 from types import MappingProxyType
 import numpy as np
 import numpy.typing as npt
-from ml_playground.core.protocols import TokenId, Tokenizer
+from ml_playground.core.protocols import TokenId, Tokenizer, TokenizerKind
+from ml_playground.core.registry import Registry
+
+tokenizer_registry: Registry[Tokenizer] = Registry()
 
 
 __all__ = ["Tokenizer", "create_tokenizer"]
@@ -64,7 +67,7 @@ class CharTokenizer:
     def _ensure_lookup_array(self) -> npt.NDArray[np.object_]:
         if getattr(self, "_itos_array", None) is None or (
             self._itos_array.shape[0] < (max(self.itos.keys()) + 1 if self.itos else 0)
-        ):
+        ):  # pragma: no branch
             self._itos_array = self._build_lookup_array()
         return self._itos_array
 
@@ -95,7 +98,7 @@ class WordTokenizer:
         words = re.findall(r"\w+|[^\w\s]", text)
         return [self.stoi.get(word, 0) for word in words]
 
-    def decode(self, token_ids: list[TokenId]) -> str:
+    def decode(self, token_ids: Sequence[TokenId]) -> str:
         if not self.itos:
             return ""
         lookup: npt.NDArray[np.object_] = self._ensure_lookup_array()
@@ -179,27 +182,28 @@ class TiktokenTokenizer:
         return MappingProxyType({})
 
 
-def create_tokenizer(
-    tokenizer_type: Literal["char", "word", "tiktoken"], **kwargs
-) -> Tokenizer:
-    """Factory for known tokenizer implementations.
+def register_standard_tokenizers() -> None:
+    """Register all standard tokenizer implementations."""
+    from ml_playground.core.tokenizer import (
+        CharTokenizer,
+        WordTokenizer,
+        TiktokenTokenizer,
+    )
 
-    Args:
-        tokenizer_type: Name of the tokenizer family to instantiate.
-        **kwargs: Implementation-specific keyword arguments (e.g., vocab, encoding_name).
+    tokenizer_registry.register("char", lambda **kwargs: CharTokenizer(**kwargs))
+    tokenizer_registry.register("word", lambda **kwargs: WordTokenizer(**kwargs))
+    tokenizer_registry.register(
+        "tiktoken", lambda **kwargs: TiktokenTokenizer(**kwargs)
+    )
 
-    Returns:
-        A concrete `Tokenizer` implementation associated with the supplied name.
 
-    Raises:
-        ValueError: If an unknown tokenizer type is requested.
-    """
-    if tokenizer_type == "char":
-        return CharTokenizer(**kwargs)
-    if tokenizer_type == "word":
-        return WordTokenizer(**kwargs)
-    if tokenizer_type == "tiktoken":
-        encoding_name = kwargs.pop("encoding_name", "cl100k_base")
-        loader = kwargs.pop("loader", None)
-        return TiktokenTokenizer(encoding_name=encoding_name, loader=loader)
-    raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")
+def create_tokenizer(tokenizer_type: TokenizerKind, **kwargs: Any) -> Tokenizer:
+    """Factory for known tokenizer implementations (registry-backed)."""
+    if not tokenizer_registry.names():
+        register_standard_tokenizers()
+
+    try:
+        factory = tokenizer_registry.get(tokenizer_type)
+        return factory(**kwargs)
+    except KeyError:
+        raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")

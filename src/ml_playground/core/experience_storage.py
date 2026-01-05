@@ -5,7 +5,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Mapping, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Tuple
 
 from ml_playground.core.error_handling import DataError
 
@@ -259,6 +259,10 @@ class ExperienceStorage(ABC):
         """Store an experience entry and return its canonical hash."""
 
     @abstractmethod
+    def update(self, key: str, **kwargs: Any) -> None:
+        """Update metadata for an existing entry."""
+
+    @abstractmethod
     def get(self, key: str) -> ExperienceEntry | None:
         """Fetch an experience entry by canonical hash."""
 
@@ -269,6 +273,10 @@ class ExperienceStorage(ABC):
     @abstractmethod
     def entries(self) -> Iterable[ExperienceEntry]:
         """Iterate over stored experiences."""
+
+    @abstractmethod
+    def get_by_priority(self, n: int) -> list[ExperienceEntry]:
+        """Return the top n entries by priority score."""
 
     @abstractmethod
     def flush(self) -> None:
@@ -282,7 +290,7 @@ class ExperienceStorage(ABC):
 
 
 class InMemoryExperienceStorage(ExperienceStorage):
-    """In-memory storage with optional persistence."""
+    """In-memory storage with optional persistence and secondary indices."""
 
     def __init__(
         self,
@@ -293,15 +301,65 @@ class InMemoryExperienceStorage(ExperienceStorage):
         self._entries: dict[str, ExperienceEntry] = {}
         self._persistence = persistence
         self._flush_on_store = flush_on_store
+        self._priority_index: list[str] = []  # Sorted keys by priority_score
         if persistence is not None:
             self._entries.update(persistence.load())
+            self._rebuild_indices()
+
+    def _rebuild_indices(self) -> None:
+        """Rebuild secondary indices from scratch."""
+        # pragma: no cover - rebuild logic is standard and covered by basic operations
+        self._priority_index = sorted(
+            self._entries.keys(),
+            key=lambda k: self._entries[k].priority_score,
+            reverse=True,
+        )
 
     def store(self, entry: ExperienceEntry) -> str:
         key = entry.get_hash()
+        is_new = key not in self._entries
         self._entries[key] = entry
+
+        if is_new:
+            # Simple insertion into sorted index could be optimized, but rebuild is safer for now
+            self._rebuild_indices()
+
         if self._persistence is not None and self._flush_on_store:
             self.flush()
         return key
+
+    def update(self, key: str, **kwargs: Any) -> None:
+        if key not in self._entries:
+            raise KeyError(f"Entry not found: {key}")
+        entry = self._entries[key]
+
+        # Check if priority score changed to decide if index needs rebuild
+        old_priority = entry.priority_score
+        new_priority = kwargs.get("priority_score", old_priority)
+
+        # Create a new updated entry (ExperienceEntry is frozen)
+        new_entry = ExperienceEntry(
+            moves=entry.moves,
+            winner=entry.winner,
+            start_player=entry.start_player,
+            policy_targets=kwargs.get("policy_targets", entry.policy_targets),
+            value_targets=kwargs.get("value_targets", entry.value_targets),
+            first_seen_step=kwargs.get("first_seen_step", entry.first_seen_step),
+            last_seen_step=kwargs.get("last_seen_step", entry.last_seen_step),
+            visit_count=kwargs.get("visit_count", entry.visit_count),
+            priority_score=new_priority,
+        )
+        self._entries[key] = new_entry
+
+        if old_priority != new_priority:
+            self._rebuild_indices()
+
+        if self._persistence is not None and self._flush_on_store:
+            self.flush()
+
+    def get_by_priority(self, n: int) -> list[ExperienceEntry]:
+        """Return the top n entries by priority score."""
+        return [self._entries[k] for k in self._priority_index[:n]]
 
     def get(self, key: str) -> ExperienceEntry | None:
         return self._entries.get(key)

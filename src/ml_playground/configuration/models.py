@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, TYPE_CHECKING
+from typing import Annotated, Any, Optional, TYPE_CHECKING, Literal
 import typing as _t
 
 from pydantic import (
@@ -20,6 +20,8 @@ from pydantic import (
 )
 
 from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.core.protocols import TokenizerKind, Telemetry
+from ml_playground.configuration.providers import ProviderBundle, get_default_providers
 
 if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
     pass
@@ -80,6 +82,14 @@ def _resolve_fields_relative(
     for key in keys:
         if key in data:
             data[key] = _resolve_if_relative(data[key], base_dir)
+
+
+def _providers_from_context(info: ValidationInfo | None) -> ProviderBundle:
+    context = info.context if info is not None else None
+    providers = context.get("providers") if isinstance(context, dict) else None
+    if isinstance(providers, dict):
+        return _t.cast(ProviderBundle, providers)
+    return get_default_providers()
 
 
 SECTION_PREPARE = "prepare"
@@ -171,6 +181,7 @@ class ExperienceStorageConfig(_FrozenStrictModel):
     strategy: Literal["memory", "json_file"] = "memory"
     path: Path | None = None
     flush_on_store: bool = False
+    extras: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -229,16 +240,32 @@ class BinRefreshPolicy(_FrozenStrictModel):
 class PreparerConfig(_FrozenStrictModel):
     raw_dir: Path = Path("./raw")
     raw_text_path: Path | None = None
-    tokenizer_type: Literal["char", "word", "tiktoken"] = "char"
+    tokenizer_type: TokenizerKind = "char"
     add_structure_tokens: bool = False
     doc_separator: str = ""
     bin_refresh_policy: BinRefreshPolicy | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI hooks (keep generic to avoid import cycles)
     # Function to read text from a path (e.g., Path -> str)
-    read_text_fn: Optional[ReadTextFn] = None
+    read_text_fn: Optional[ReadTextFn] = Field(default=None, exclude=True)
     # Factory to create a tokenizer from a kind
-    tokenizer_factory: Optional[TokenizerFactoryFn] = None
+    tokenizer_factory: Optional[TokenizerFactoryFn] = Field(default=None, exclude=True)
+    # Telemetry and performance hooks
+    telemetry: Optional[Telemetry] = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _inject_providers(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict):
+            return data
+        providers = _providers_from_context(info)
+        if data.get("read_text_fn") is None:
+            data["read_text_fn"] = providers.get("read_text_fn")
+        if data.get("tokenizer_factory") is None:
+            data["tokenizer_factory"] = providers.get("tokenizer_factory")
+        if data.get("telemetry") is None:
+            data["telemetry"] = providers.get("telemetry")
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -358,23 +385,27 @@ class PoolSizePolicy(_FrozenStrictModel):
     target_labeled_positions: NonNegativeStrictInt = 0
     avg_positions_per_game: PositiveStrictInt = 1
     oversample_factor: PositiveStrictFloat = 1.0
-    pool_size_provider: PoolSizeProvider = Field(
-        default_factory=lambda: _default_pool_size_provider(), exclude=True
-    )
+    pool_size_provider: PoolSizeProvider | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _inject_provider(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict):
+            return data
+        providers = _providers_from_context(info)
+        if data.get("pool_size_provider") is None:
+            data["pool_size_provider"] = providers.get("pool_size_provider")
+        return data
 
     @computed_field(return_type=int)
     def pool_size(self) -> int:
+        if self.pool_size_provider is None:
+            raise ValueError("pool_size_provider must be supplied via providers bundle")
         return self.pool_size_provider(
             self.target_labeled_positions,
             self.avg_positions_per_game,
             self.oversample_factor,
         )
-
-
-def _default_pool_size_provider() -> PoolSizeProvider:
-    from ml_playground.self_play.pool_size import derive_pool_size
-
-    return derive_pool_size
 
 
 class BaselineLoggingPolicy(_FrozenStrictModel):
@@ -458,11 +489,27 @@ class TrainerConfig(_FrozenStrictModel):
     checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
     # Optional DI callables (kept generic to avoid import cycles)
     # Hooks around a training step
-    before_step_hook: Optional[BeforeStepHook] = None
-    after_step_hook: Optional[AfterStepHook] = None
+    before_step_hook: Optional[BeforeStepHook] = Field(default=None, exclude=True)
+    after_step_hook: Optional[AfterStepHook] = Field(default=None, exclude=True)
     # Checkpoint save/load indirections
-    checkpoint_save_fn: Optional[CheckpointSaveFn] = None
-    checkpoint_load_fn: Optional[CheckpointLoadFn] = None
+    checkpoint_save_fn: Optional[CheckpointSaveFn] = Field(default=None, exclude=True)
+    checkpoint_load_fn: Optional[CheckpointLoadFn] = Field(default=None, exclude=True)
+    # Telemetry and performance hooks
+    telemetry: Optional[Telemetry] = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _inject_providers(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict):
+            return data
+        providers = _providers_from_context(info)
+        if data.get("checkpoint_save_fn") is None:
+            data["checkpoint_save_fn"] = providers.get("checkpoint_save_fn")
+        if data.get("checkpoint_load_fn") is None:
+            data["checkpoint_load_fn"] = providers.get("checkpoint_load_fn")
+        if data.get("telemetry") is None:
+            data["telemetry"] = providers.get("telemetry")
+        return data
 
     @model_validator(mode="after")
     def _cross_field_checks(self) -> "TrainerConfig":
@@ -488,13 +535,35 @@ class SamplerConfig(_FrozenStrictModel):
     sample: "SampleConfig"
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI callables for sampling
-    checkpoint_load_fn: Optional[CheckpointLoadFn] = None
-    model_factory: Optional[ModelFactoryFn] = None
+    checkpoint_load_fn: Optional[CheckpointLoadFn] = Field(default=None, exclude=True)
+    model_factory: Optional[ModelFactoryFn] = Field(default=None, exclude=True)
     # Optional compile hook; if provided and runtime.compile=True, this will be used
     # to compile/wrap the model. Defaults to torch.compile when available.
-    compile_model_fn: Optional[CompileModelFn] = None
-    cuda_is_available_fn: Optional[CudaIsAvailableFn] = None
-    cuda_manual_seed_fn: Optional[CudaManualSeedFn] = None
+    compile_model_fn: Optional[CompileModelFn] = Field(default=None, exclude=True)
+    cuda_is_available_fn: Optional[CudaIsAvailableFn] = Field(
+        default=None, exclude=True
+    )
+    cuda_manual_seed_fn: Optional[CudaManualSeedFn] = Field(default=None, exclude=True)
+    # Telemetry and performance hooks
+    telemetry: Optional[Telemetry] = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _inject_providers(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict):
+            return data
+        providers = _providers_from_context(info)
+        for field_name in (
+            "checkpoint_load_fn",
+            "model_factory",
+            "compile_model_fn",
+            "cuda_is_available_fn",
+            "cuda_manual_seed_fn",
+            "telemetry",
+        ):
+            if data.get(field_name) is None:
+                data[field_name] = providers.get(field_name)
+        return data
 
 
 class OptimConfig(_FrozenStrictModel):
@@ -534,7 +603,7 @@ class DataConfig(_FrozenStrictModel):
     batch_size: AtLeastOneInt = 12
     block_size: AtLeastOneInt = 1024
     grad_accum_steps: AtLeastOneInt = 40
-    tokenizer: Literal["char", "word", "tiktoken"] = "char"
+    tokenizer: TokenizerKind = "char"
     ngram_size: PositiveInt = 1
     sampler: Literal["random", "sequential"] = "random"
 

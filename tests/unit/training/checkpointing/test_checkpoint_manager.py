@@ -16,12 +16,16 @@ class _FakeLogger:
     def __init__(self) -> None:
         self.warnings: list[str] = []
         self.infos: list[str] = []
+        self.errors: list[str] = []
 
     def warning(self, msg: str, *args: object, **kwargs: object) -> None:
         self.warnings.append(msg)
 
     def info(self, msg: str, *args: object, **kwargs: object) -> None:
         self.infos.append(msg)
+
+    def error(self, msg: str, *args: object, **kwargs: object) -> None:
+        self.errors.append(msg)
 
 
 class _FakeDeps:

@@ -13,6 +13,7 @@ from ml_playground.configuration.models import (
     SamplerConfig,
     TrainerConfig,
 )
+from ml_playground.configuration.providers import get_default_providers
 from ml_playground.configuration.merge_utils import merge_mappings
 from ml_playground.experiments.extras_registry import (
     get_extras_model,
@@ -224,14 +225,15 @@ def load_full_experiment_config(
     storage_config = _ensure_mapping(
         effective_config.setdefault("experience_storage", {}), "[experience_storage]"
     )
+    context = {"config_path": config_path, "providers": get_default_providers()}
     storage_model = ExperienceStorageConfig.model_validate(
-        storage_config, context={"config_path": config_path}
+        storage_config, context=context
     )
     effective_config["experience_storage"] = storage_model.model_dump()
 
     return ExperimentConfig.model_validate(
         effective_config,
-        context={"config_path": config_path},
+        context=context,
     )
 
 
@@ -252,7 +254,7 @@ def load_train_config(
     train_data = _ensure_mapping(raw_merged.get("train", {}), "[train] section")
     _validate_extras(config_path.parent.name, "train", train_data)
 
-    context = {"config_path": config_path}
+    context = {"config_path": config_path, "providers": get_default_providers()}
     cfg = TrainerConfig.model_validate(train_data, context=context)
 
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
@@ -280,7 +282,7 @@ def load_sample_config(
     sample_data = _ensure_mapping(raw_merged.get("sample", {}), "[sample] section")
     _validate_extras(config_path.parent.name, "sample", sample_data)
 
-    context = {"config_path": config_path}
+    context = {"config_path": config_path, "providers": get_default_providers()}
     cfg = SamplerConfig.model_validate(sample_data, context=context)
 
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
@@ -308,7 +310,7 @@ def load_prepare_config(
     prepare_data = _ensure_mapping(raw_merged.get("prepare", {}), "[prepare] section")
     _validate_extras(config_path.parent.name, "prepare", prepare_data)
 
-    context = {"config_path": config_path}
+    context = {"config_path": config_path, "providers": get_default_providers()}
     cfg = PreparerConfig.model_validate(prepare_data, context=context)
 
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
