@@ -86,7 +86,9 @@ def _resolve_fields_relative(
 
 def _providers_from_context(info: ValidationInfo | None) -> ProviderBundle:
     context = info.context if info is not None else None
-    providers = context.get("providers") if isinstance(context, dict) else None
+    if context is None or not isinstance(context, dict):
+        return get_default_providers()
+    providers = context.get("providers")
     if isinstance(providers, dict):
         return _t.cast(ProviderBundle, providers)
     return get_default_providers()

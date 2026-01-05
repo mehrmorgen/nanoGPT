@@ -82,3 +82,11 @@ def test_inject_providers_non_dict():
     assert PoolSizePolicy._inject_provider([], None) == []  # type: ignore
     # _resolve_shared_paths only takes 'data' at runtime, info is injected by pydantic
     assert SharedConfig._resolve_shared_paths("not a dict") == "not a dict"  # type: ignore
+
+
+def test_providers_from_context_none():
+    # Regression test for @[Bug: Context validation bug]
+    # Should return default providers when info is None or context is None
+    from ml_playground.configuration.models import _providers_from_context
+
+    assert _providers_from_context(None) is not None
