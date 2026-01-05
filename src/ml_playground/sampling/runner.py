@@ -22,6 +22,12 @@ from ml_playground.configuration.models import (
     READ_POLICY_BEST,
     SharedConfig,
 )
+from ml_playground.core.protocols import Telemetry
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ml_playground.core.protocols import Telemetry
 from ml_playground.core.error_handling import DataError, FileOperationError
 from ml_playground.models.core.model import GPT
 from ml_playground.data_pipeline.transforms.io import setup_tokenizer
@@ -38,15 +44,33 @@ All experiments should use these utilities to ensure consistency and proper erro
 """
 
 
+@dataclass(frozen=True)
+class SamplerDependencies:
+    """Dependency bundle for the sampling pipeline."""
+
+    checkpoint_load_fn: Callable[..., Any]
+    model_factory: Callable[..., Any]
+    compile_model_fn: Optional[Callable[[Any], Any]]
+    cuda_is_available_fn: Callable[[], bool]
+    cuda_manual_seed_fn: Callable[[int], None]
+    telemetry: Telemetry
+
+
 class Sampler:
     """Generate samples from a trained `GPT` model using a strict configuration."""
 
-    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
+    def __init__(
+        self,
+        cfg: SamplerConfig,
+        shared: SharedConfig,
+        deps: SamplerDependencies | None = None,
+    ):
         """Instantiate the sampler and eagerly load required runtime state.
 
         Args:
             cfg: Fully validated sampler configuration produced by the CLI.
             shared: Shared experiment metadata, including dataset and output directories.
+            deps: Optional dependency bundle for indirections.
 
         Raises:
             ValueError: If the runtime section of the configuration is missing.
@@ -56,6 +80,7 @@ class Sampler:
         self.shared = shared
         self.runtime_cfg = cfg.runtime
         self.sample_cfg = cfg.sample
+        self.deps = deps
 
         if self.runtime_cfg is None:
             raise ValueError("Runtime configuration is missing")
@@ -75,8 +100,16 @@ class Sampler:
         """Seed global torch RNG state and prepare autocast context."""
         torch.manual_seed(self.runtime_cfg.seed)
         # Guard CUDA-specific calls for non-CUDA environments
-        cuda_is_available = self.cfg.cuda_is_available_fn or torch.cuda.is_available
-        cuda_manual_seed = self.cfg.cuda_manual_seed_fn or torch.cuda.manual_seed
+        cuda_is_available = (
+            (self.deps.cuda_is_available_fn if self.deps else None)
+            or self.cfg.cuda_is_available_fn
+            or torch.cuda.is_available
+        )
+        cuda_manual_seed = (
+            (self.deps.cuda_manual_seed_fn if self.deps else None)
+            or self.cfg.cuda_manual_seed_fn
+            or torch.cuda.manual_seed
+        )
         try:
             if cuda_is_available():
                 cuda_manual_seed(self.runtime_cfg.seed)
@@ -100,7 +133,9 @@ class Sampler:
         checkpoint = self._load_checkpoint()
         model = self._init_model_from_checkpoint(checkpoint)
         if getattr(self.runtime_cfg, "compile", False):
-            compile_fn = getattr(self.cfg, "compile_model_fn", None)
+            compile_fn = (self.deps.compile_model_fn if self.deps else None) or getattr(
+                self.cfg, "compile_model_fn", None
+            )
             if compile_fn is None:
                 raise ValueError(
                     "SamplerConfig.compile_model_fn must be provided when runtime.compile is True"
@@ -116,6 +151,10 @@ class Sampler:
         """
         ckpt_mgr = CheckpointManager(out_dir=self.out_dir)
         # DI override
+        if self.deps is not None and self.deps.checkpoint_load_fn is not None:
+            return self.deps.checkpoint_load_fn(
+                manager=ckpt_mgr, cfg=self.cfg, logger=self.logger
+            )
         if self.cfg.checkpoint_load_fn is not None:
             return self.cfg.checkpoint_load_fn(
                 manager=ckpt_mgr, cfg=self.cfg, logger=self.logger
@@ -132,7 +171,9 @@ class Sampler:
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
         model_cfg = ModelConfig(**checkpoint.model_args)
         # DI override for model factory
-        if self.cfg.model_factory is not None:
+        if self.deps is not None and self.deps.model_factory is not None:
+            model = self.deps.model_factory(model_cfg, self.logger)
+        elif self.cfg.model_factory is not None:
             model = self.cfg.model_factory(model_cfg, self.logger)
         else:
             model = GPT(model_cfg, self.logger)
@@ -189,16 +230,29 @@ class Sampler:
 
         x = self._prompt_tensor
 
+        tel = (self.deps.telemetry if self.deps else None) or getattr(
+            self.cfg, "telemetry", None
+        )
+
         self.logger.info("Sampling...")
         with torch.no_grad():
             with self.ctx:
-                for _ in range(self.sample_cfg.num_samples):
-                    y = self.model.generate(
-                        x,
-                        self.sample_cfg.max_new_tokens,
-                        temperature=self.sample_cfg.temperature,
-                        top_k=self.sample_cfg.top_k,
-                    )
+                for i in range(self.sample_cfg.num_samples):
+                    if tel:
+                        with tel.time_block(f"sample_{i}"):
+                            y = self.model.generate(
+                                x,
+                                self.sample_cfg.max_new_tokens,
+                                temperature=self.sample_cfg.temperature,
+                                top_k=self.sample_cfg.top_k,
+                            )
+                    else:
+                        y = self.model.generate(
+                            x,
+                            self.sample_cfg.max_new_tokens,
+                            temperature=self.sample_cfg.temperature,
+                            top_k=self.sample_cfg.top_k,
+                        )
                     output_tensor = y[0].detach().cpu()
                     output = self._decode_tokens(output_tensor)
                     self.logger.info(output)
@@ -218,7 +272,11 @@ class Sampler:
         return self.tokenizer.decode(token_list)
 
 
-def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
+def sample(
+    cfg: SamplerConfig,
+    shared: SharedConfig | None = None,
+    deps: SamplerDependencies | None = None,
+) -> None:
     """Run sampling with optional shared configuration fallback."""
 
     if shared is None:
@@ -235,11 +293,12 @@ def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
             sample_out_dir=out_dir,
         )
 
-    sampler_instance = Sampler(cfg, shared)
+    sampler_instance = Sampler(cfg, shared, deps=deps)
     sampler_instance.run()
 
 
 __all__ = [
     "Sampler",
+    "SamplerDependencies",
     "sample",
 ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Callable
 
 from ml_playground.configuration.models import PreparerConfig, SharedConfig
 from ml_playground.configuration.models import DataConfig
@@ -18,7 +18,16 @@ from ml_playground.data_pipeline.transforms.tokenization import (
 )
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import create_tokenizer
-from ml_playground.core.protocols import Tokenizer
+from ml_playground.core.protocols import Tokenizer, Telemetry
+
+
+@dataclass(frozen=True)
+class PreparerDependencies:
+    """Dependency bundle for the preparation pipeline."""
+
+    tokenizer_factory: Callable[[str], Tokenizer]
+    read_text_fn: Callable[[Path], str]
+    telemetry: Telemetry
 
 
 @dataclass(frozen=True)
@@ -30,9 +39,15 @@ class PreparationOutcome:
 
 
 class _PreparationPipeline:
-    def __init__(self, cfg: PreparerConfig, shared: SharedConfig) -> None:
+    def __init__(
+        self,
+        cfg: PreparerConfig,
+        shared: SharedConfig,
+        deps: PreparerDependencies | None = None,
+    ) -> None:
         self._cfg = cfg
         self._shared = shared
+        self._deps = deps
         self._logger = cfg.logger
 
     @property
@@ -45,11 +60,15 @@ class _PreparationPipeline:
 
     def run(self) -> PreparationOutcome:
         tokenizer_kind: TokenizerKind = self._resolve_tokenizer_type()
-        # Prefer DI factory if provided
-        if self._cfg.tokenizer_factory is not None:
+
+        # Resolve tokenizer using deps or fallback
+        if self._deps:
+            tokenizer = self._deps.tokenizer_factory(tokenizer_kind)
+        elif self._cfg.tokenizer_factory is not None:
             tokenizer = self._cfg.tokenizer_factory(tokenizer_kind)
         else:
             tokenizer = create_tokenizer(tokenizer_kind)
+
         raw_text = self._load_raw_text()
         return self.prepare_from_text(raw_text, tokenizer)
 
@@ -60,17 +79,33 @@ class _PreparationPipeline:
         *,
         split: float | None = None,
         meta_extras: dict[str, Any] | None = None,
+        telemetry: Telemetry | None = None,
     ) -> PreparationOutcome:
         data_cfg = self._resolve_data_config()
         outputs = self._output_paths(data_cfg)
         before = snapshot_file_states(outputs)
 
-        ratio = float(split) if split is not None else self._default_split()
-        train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(
-            text,
-            tokenizer,
-            split=ratio,
+        tel = (
+            telemetry
+            or (self._deps.telemetry if self._deps else None)
+            or getattr(self._cfg, "telemetry", None)
         )
+
+        ratio = float(split) if split is not None else self._default_split()
+
+        if tel:
+            with tel.time_block("tokenization"):
+                train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(
+                    text,
+                    tokenizer,
+                    split=ratio,
+                )
+        else:
+            train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(
+                text,
+                tokenizer,
+                split=ratio,
+            )
 
         if meta_extras:
             meta.update(meta_extras)
@@ -131,6 +166,8 @@ class _PreparationPipeline:
     def _load_raw_text(self) -> str:
         raw_text_path = self._cfg.raw_text_path
         if raw_text_path is not None:
+            if self._deps:
+                return self._deps.read_text_fn(Path(raw_text_path))
             if self._cfg.read_text_fn is not None:
                 return self._cfg.read_text_fn(Path(raw_text_path))
             return Path(raw_text_path).read_text(encoding="utf-8")
@@ -157,12 +194,15 @@ class _PreparationPipeline:
         return snapshot_file_states(paths)
 
 
-def create_pipeline(cfg: PreparerConfig, shared: SharedConfig) -> _PreparationPipeline:
-    return _PreparationPipeline(cfg, shared)
+def create_pipeline(
+    cfg: PreparerConfig, shared: SharedConfig, deps: PreparerDependencies | None = None
+) -> _PreparationPipeline:
+    return _PreparationPipeline(cfg, shared, deps)
 
 
 __all__ = [
     "PreparationOutcome",
+    "PreparerDependencies",
     "create_pipeline",
     "snapshot_file_states",
     "diff_file_states",

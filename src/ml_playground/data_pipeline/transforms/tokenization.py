@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, cast
 import re
 
 import numpy as np
 
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
-from ml_playground.core.protocols import Tokenizer
+from ml_playground.core.protocols import Tokenizer, TokenizerKind
 
 __all__ = [
     "TokenizerKind",
@@ -18,8 +18,6 @@ __all__ = [
     "prepare_with_tokenizer",
     "create_standardized_metadata",
 ]
-
-TokenizerKind = Literal["char", "word", "tiktoken"]
 
 
 def coerce_tokenizer_type(value: str) -> TokenizerKind:

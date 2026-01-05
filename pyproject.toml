@@ -224,6 +224,9 @@ filterwarnings = [
     # Hypothesis plugin warns when skipping '.hypothesis' if norecursedirs overrides defaults.
     # We centralize Hypothesis database under .cache/hypothesis; ignore this warning under -W error.
     "ignore:Skipping collection of '.hypothesis' directory.*:UserWarning",
+    # xdist disables benchmarks automatically, which triggers a warning.
+    # We ignore this under -W error to allow parallel tests to pass.
+    "ignore:Benchmarks are automatically disabled because xdist plugin is active.*:pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselected by default)",
