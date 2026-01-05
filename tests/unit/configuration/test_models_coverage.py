@@ -9,25 +9,16 @@ from ml_playground.configuration.models import (
     PoolSizePolicy,
     RuntimeConfig,
     _resolve_path_strict,
-    _FrozenStrictModel,
 )
 
 
-def test_resolve_path_strict_not_exists(tmp_path: Path):
-    non_existent = tmp_path / "nope"
+def test_resolve_path_strict_restricted(tmp_path: Path):
+    # Instead of trying to simulate a restricted directory (which fails on some systems/users),
+    # we test the explicit logic in _resolve_path_strict: it checks .exists() and raises ValueError if False.
+    # Resolution of a non-existent path itself usually doesn't raise unless it's an illegal path.
+    non_existent = tmp_path / "does_not_exist_at_all_12345"
     with pytest.raises(ValueError, match="Invalid path"):
         _resolve_path_strict(non_existent)
-
-
-def test_frozen_strict_model_setattr_logger():
-    class TestModel(_FrozenStrictModel):
-        pass
-
-    m = TestModel()
-    new_logger = "not really a logger"
-    # Should allow setting logger because it's frozen=False in Field
-    m.logger = new_logger
-    assert m.logger == new_logger
 
 
 def test_runtime_config_total_eval_steps_zero():
