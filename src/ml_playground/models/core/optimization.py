@@ -24,7 +24,7 @@ def configure_optimizers(
     weight_decay: float,
     learning_rate: float,
     betas: tuple[float, float],
-    device_type: str,
+    device_type: str = "cpu",
     *,
     factory: _AdamWFactory | None = None,
     logger: Any | None = None,

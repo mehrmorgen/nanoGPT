@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+
+import pytest
 import torch
 
 from ml_playground.models.core.model import GPT
@@ -116,3 +118,153 @@ def test_ema_update_only_updates_trainable_params() -> None:
     # (but it's not updated by the update loop since requires_grad=False)
     if first_param_name:
         assert first_param_name in ema.shadow
+
+
+def test_ema_init_with_different_devices() -> None:
+    """Test EMA initialization with different device types."""
+    model = _make_model()
+
+    ema_cpu = EMA(model, decay=0.999, device="cpu")
+    assert all(param.device.type == "cpu" for param in ema_cpu.shadow.values())
+
+    if torch.cuda.is_available():
+        ema_cuda = EMA(model, decay=0.999, device="cuda")
+        assert all(param.device.type == "cuda" for param in ema_cuda.shadow.values())
+
+
+def test_ema_init_with_zero_decay() -> None:
+    """Test EMA initialization with decay=0 (no averaging)."""
+    model = _make_model()
+    ema = EMA(model, decay=0.0, device="cpu")
+
+    assert len(ema.shadow) > 0
+    assert ema.decay == 0.0
+
+
+def test_ema_init_with_one_decay() -> None:
+    """Test EMA initialization with decay=1 (full averaging)."""
+    model = _make_model()
+    ema = EMA(model, decay=0.999, device="cpu")
+
+    assert len(ema.shadow) > 0
+    assert ema.decay == 0.999
+
+
+def test_ema_update_with_no_trainable_params() -> None:
+    """Test EMA update when model has no trainable parameters."""
+    model = _make_model()
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    ema = EMA(model, decay=0.9, device="cpu")
+    ema.update(model)
+
+    assert len(ema.shadow) > 0
+
+
+def test_ema_update_assertion_failure_coverage() -> None:
+    """Test the assertion in EMA.update for missing shadow parameter."""
+    model = _make_model()
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    first_param_name = next(iter(ema.shadow))
+    del ema.shadow[first_param_name]
+
+    with pytest.raises(AssertionError):
+        ema.update(model)
+
+
+def test_ema_apply_to_with_empty_shadow() -> None:
+    """Test EMA.apply_to when shadow is empty."""
+    model = _make_model()
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    ema.shadow.clear()
+    ema.apply_to(model)
+
+
+def test_ema_update_multiple_times() -> None:
+    """Test EMA update applied multiple times."""
+    model = _make_model()
+    decay = 0.9
+    ema = EMA(model, decay=decay, device="cpu")
+
+    original_shadow = {k: v.clone() for k, v in ema.shadow.items()}
+
+    for val in [1.0, 2.0, 3.0]:
+        with torch.no_grad():
+            for param in model.parameters():
+                if param.dtype.is_floating_point:
+                    param.data.fill_(val)
+        ema.update(model)
+
+    for name, param in model.named_parameters():
+        if param.requires_grad and param.dtype.is_floating_point:
+            assert not torch.equal(ema.shadow[name], original_shadow[name])
+
+
+def test_ema_update_with_mixed_dtypes() -> None:
+    """Test EMA update with model containing mixed data types."""
+    model = _make_model()
+
+    model.register_buffer("int_buffer", torch.tensor([1, 2, 3], dtype=torch.int32))
+    model.register_buffer(
+        "float16_buffer", torch.tensor([1.0, 2.0], dtype=torch.float16)
+    )
+    model.register_buffer(
+        "float64_buffer", torch.tensor([1.0, 2.0], dtype=torch.float64)
+    )
+
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    floating_point_names = {
+        name
+        for name, param in model.named_parameters()
+        if param.dtype.is_floating_point
+    }
+    buffer_names = {
+        name for name, buffer in model.named_buffers() if buffer.dtype.is_floating_point
+    }
+    expected_shadow_names = floating_point_names | buffer_names
+
+    assert set(ema.shadow.keys()) == expected_shadow_names
+
+
+def test_ema_update_preserves_detached_tensors() -> None:
+    """Test that EMA.update preserves detached tensors."""
+    model = _make_model()
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    ema.update(model)
+
+    for shadow_tensor in ema.shadow.values():
+        assert not shadow_tensor.requires_grad
+
+
+def test_ema_apply_to_strict_false_coverage() -> None:
+    """Test EMA.apply_to with strict=False parameter."""
+    model = _make_model()
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    model.register_buffer("extra_buffer", torch.randn(2))
+    ema.shadow["extra_buffer"] = torch.randn(2)
+
+    ema.apply_to(model)
+
+
+def test_ema_initialization_state_dict_coverage() -> None:
+    """Test EMA.__init__ uses model.state_dict() correctly."""
+    model = _make_model()
+
+    with torch.no_grad():
+        for param in model.parameters():
+            if param.dtype.is_floating_point:
+                param.data.fill_(42.0)
+
+    ema = EMA(model, decay=0.9, device="cpu")
+
+    for name, param in model.named_parameters():
+        if param.dtype.is_floating_point:
+            assert name in ema.shadow
+            torch.testing.assert_close(ema.shadow[name], param.data)

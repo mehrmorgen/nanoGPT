@@ -139,7 +139,16 @@ def integration(
     ),
 ) -> None:
     """Run integration tests."""
-    _pytest(["-m", "integration", "--no-cov", *utils.forwarded_args(args)])
+    _pytest(
+        [
+            "-m",
+            "integration",
+            "--no-cov",
+            "-p",
+            "no:benchmark",
+            *utils.forwarded_args(args),
+        ]
+    )
 
 
 @app.command()

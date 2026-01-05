@@ -46,7 +46,7 @@ The `src/ml_playground/core/error_handling.py` module provides:
 ## Tokenizer Utilities
 
 The `src/ml_playground/core/tokenizer.py` module provides a unified tokenizer protocol and implementations while
-`src/ml_playground/core/tokenizer_protocol.py` defines the `Tokenizer` protocol:
+`src/ml_playground/core/protocols.py` defines the `Tokenizer` protocol:
 
 ### Tokenizer Protocol
 
@@ -438,7 +438,7 @@ these rules immediately and update tests in lockstep.
 - **Tokenizer Protocol as the only tokenization entrypoint**
 
   - Use `src/ml_playground/core/tokenizer.py` factory `create_tokenizer()` and the protocol defined in
-    `src/ml_playground/core/tokenizer_protocol.py`.
+    `src/ml_playground/core/protocols.py`.
   - `DataConfig` controls tokenizer selection (`char`, `word`, `tiktoken`) and parameters (e.g., `ngram_size`). Do not
     re-implement tokenizers in experiments.
 

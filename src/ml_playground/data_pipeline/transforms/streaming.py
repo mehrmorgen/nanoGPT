@@ -28,14 +28,18 @@ def validate_streaming_records(
     records: Iterable[Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
     """Validate streaming record shape for self-play datasets."""
+    materialized = list(records)
     validated: list[Mapping[str, Any]] = []
-    for idx, record in enumerate(records):
+
+    for idx, record in enumerate(materialized):
         if not isinstance(record, Mapping):
             raise DataError(
                 f"Streaming record at index {idx} must be a mapping",
                 reason=f"Received {type(record).__name__}",
                 rationale="Streaming prep relies on structured record dictionaries",
             )
+
+    for idx, record in enumerate(materialized):
         missing = [field for field in REQUIRED_STREAM_FIELDS if field not in record]
         if missing:
             raise DataError(

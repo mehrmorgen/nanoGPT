@@ -45,18 +45,30 @@ CompileModelFn = _t.Callable[[Any], Any]
 # Optional runtime CUDA indirections for sampling
 CudaIsAvailableFn = _t.Callable[[], bool]
 CudaManualSeedFn = _t.Callable[[int], None]
+# Pool sizing strategy indirection for self-play
+PoolSizeProvider = _t.Callable[[int, int, float], int]
 
 
 def _resolve_path_strict(v: Path) -> Path:
     try:
-        return v.resolve()
-    except OSError as exc:  # pragma: no cover - resolution failure path
+        resolved = v.resolve()
+    except Exception as exc:  # pragma: no cover - resolution failure path
         raise ValueError(f"Invalid path: {v}") from exc
+    try:
+        exists = resolved.exists() if hasattr(resolved, "exists") else True
+    except OSError:
+        exists = False
+    if not exists:
+        raise ValueError(f"Invalid path: {v}")
+    return resolved
 
 
 def _resolve_if_relative(value: Any, base_dir: Path) -> Any:
-    if isinstance(value, str) and not value.startswith("/"):
-        return (base_dir / value).resolve()
+    if isinstance(value, str):
+        path = Path(value)
+        if not path.is_absolute():
+            return (base_dir / path).resolve()
+        return path.resolve()
     if isinstance(value, Path) and not value.is_absolute():
         return (base_dir / value).resolve()
     return value
@@ -141,8 +153,16 @@ class _FrozenStrictModel(BaseModel):
     )
 
     logger: LoggerLike = Field(
-        default_factory=lambda: logging.getLogger(__name__), exclude=True
+        default_factory=lambda: logging.getLogger(__name__), exclude=True, frozen=False
     )
+
+    def __setattr__(
+        self, name: str, value: Any
+    ) -> None:  # pragma: no cover - exercised via tests
+        if name == "logger":
+            object.__setattr__(self, name, value)
+            return
+        super().__setattr__(name, value)
 
 
 class ExperienceStorageConfig(_FrozenStrictModel):
@@ -250,6 +270,11 @@ class RuntimeConfig(_FrozenStrictModel):
     compile: bool = False
     tensorboard_enabled: bool = True
     tensorboard_update_mode: Literal["eval", "log"] = "eval"
+    mlflow_enabled: bool = False
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str | None = None
+    mlflow_run_name: str | None = None
+    mlflow_log_system_metrics: bool = True
     always_save_checkpoint: bool = False
     iters_per_epoch: Optional[EpochCount] = None
     games_per_epoch: Optional[EpochCount] = None
@@ -333,16 +358,23 @@ class PoolSizePolicy(_FrozenStrictModel):
     target_labeled_positions: NonNegativeStrictInt = 0
     avg_positions_per_game: PositiveStrictInt = 1
     oversample_factor: PositiveStrictFloat = 1.0
+    pool_size_provider: PoolSizeProvider = Field(
+        default_factory=lambda: _default_pool_size_provider(), exclude=True
+    )
 
     @computed_field(return_type=int)
     def pool_size(self) -> int:
-        from ml_playground.self_play.pool_size import derive_pool_size
-
-        return derive_pool_size(
+        return self.pool_size_provider(
             self.target_labeled_positions,
             self.avg_positions_per_game,
-            oversample_factor=self.oversample_factor,
+            self.oversample_factor,
         )
+
+
+def _default_pool_size_provider() -> PoolSizeProvider:
+    from ml_playground.self_play.pool_size import derive_pool_size
+
+    return derive_pool_size
 
 
 class BaselineLoggingPolicy(_FrozenStrictModel):

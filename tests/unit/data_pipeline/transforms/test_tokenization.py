@@ -4,7 +4,7 @@ import pytest
 
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer, TiktokenTokenizer
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.core.protocols import Tokenizer
 from ml_playground.data_pipeline.transforms.tokenization import (
     coerce_tokenizer_type,
     prepare_with_tokenizer,

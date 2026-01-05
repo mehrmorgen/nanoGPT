@@ -16,7 +16,7 @@ from ml_playground.data_pipeline.transforms.io import (
     write_bin_and_meta,
 )
 from ml_playground.core.tokenizer import create_tokenizer
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.core.protocols import Tokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,

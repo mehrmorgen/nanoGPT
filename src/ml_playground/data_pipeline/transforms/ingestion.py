@@ -47,7 +47,15 @@ def stream_csv_column(path: Path, *, column: str = "text") -> Iterable[str]:
                     reason="CSV schema missing expected column",
                     rationale="Streaming CSV ingestion needs a text column",
                 )
+            rows_seen = False
             for row in reader:
+                rows_seen = True
+                if column not in row:
+                    raise DataError(
+                        f"CSV row missing column '{column}'",
+                        reason="CSV row missing expected column",
+                        rationale="Streaming CSV ingestion requires per-row text",
+                    )
                 value = row.get(column)
                 if value is None:
                     raise DataError(
@@ -56,6 +64,12 @@ def stream_csv_column(path: Path, *, column: str = "text") -> Iterable[str]:
                         rationale="Streaming CSV ingestion requires per-row text",
                     )
                 yield value
+            if not rows_seen:
+                raise DataError(
+                    f"CSV row missing column '{column}'",
+                    reason="CSV row missing expected column",
+                    rationale="Streaming CSV ingestion requires per-row text",
+                )
     except OSError as exc:
         raise DataError(
             f"Failed to stream CSV from {path}: {exc}",

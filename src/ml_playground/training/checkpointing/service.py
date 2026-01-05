@@ -148,6 +148,7 @@ def save_checkpoint(
         counter_value=counter_value,
         is_best=is_best,
     )
+    # No stable-pointer compatibility copies; rotated filenames are authoritative.
 
 
 def propagate_metadata(

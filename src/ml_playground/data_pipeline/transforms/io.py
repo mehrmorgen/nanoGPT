@@ -15,7 +15,7 @@ from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.data_pipeline.transforms.tokenization import coerce_tokenizer_type
 from ml_playground.data_pipeline.transforms.metadata import validate_metadata_contract
 from ml_playground.core.tokenizer import create_tokenizer
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.core.protocols import Tokenizer
 
 __all__ = [
     "write_bin_and_meta",
