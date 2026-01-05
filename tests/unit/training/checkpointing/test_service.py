@@ -116,6 +116,107 @@ def _with_sample_out_dir(shared: SharedConfig, sample_out_dir: Path) -> SharedCo
     return shared.model_copy(update={"sample_out_dir": sample_out_dir})
 
 
+class _TrackingLogger:
+    def __init__(self) -> None:
+        self.warnings: list[str] = []
+        self.infos: list[str] = []
+
+    def warning(self, message: str, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.warnings.append(message)
+
+    def info(self, message: str, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.infos.append(message)
+
+
+class _ExtendedTrackingModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = torch.nn.Linear(1, 1)
+        self.state_updates: list[dict[str, Any]] = []
+
+    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> None:
+        del strict
+        self.state_updates.append(state_dict)
+
+
+class _ExtendedTrackingOptimizer:
+    def __init__(self) -> None:
+        self.param_groups = [{"lr": 0.01}]
+        self.state_updates: list[dict[str, Any]] = []
+
+    def state_dict(self) -> dict[str, Any]:
+        return {"param_groups": self.param_groups}
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.state_updates.append(state_dict)
+
+
+class _ExtendedTrackingEMA:
+    def __init__(self) -> None:
+        self.shadow: dict[str, Any] | None = None
+        self.updates: list[dict[str, Any]] = []
+
+    def __bool__(self) -> bool:
+        return True
+
+
+def _make_cfg_with_all_options(tmp_path: Path) -> TrainerConfig:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, dropout=0.0),
+        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(
+            decay_lr=False,
+            warmup_iters=0,
+            lr_decay_iters=1,
+            min_lr=0.0,
+        ),
+        runtime=RuntimeConfig(
+            out_dir=out_dir,
+            max_iters=1,
+            eval_interval=1,
+            eval_iters=1,
+            log_interval=1,
+            eval_only=False,
+            seed=1,
+            device="cpu",
+            dtype="float32",
+            compile=False,
+            tensorboard_enabled=False,
+            ema_decay=0.999,
+            checkpointing=RuntimeConfig.Checkpointing(
+                read_policy=READ_POLICY_LATEST,
+                keep=RuntimeConfig.Checkpointing.Keep(last=3, best=2),
+            ),
+            ckpt_atomic=True,
+            ckpt_naming_policy="steps",
+            ckpt_domain_label="test",
+            ckpt_naming_strict=True,
+        ),
+        hf_model=TrainerConfig.HFModelConfig(
+            model_name="hf/model",
+            gradient_checkpointing=False,
+            block_size=128,
+        ),
+        peft=TrainerConfig.PeftConfig(enabled=False),
+    )
+
+
+def _make_shared_with_sample(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
+    return SharedConfig(
+        experiment="coverage",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=cfg.runtime.out_dir,
+        sample_out_dir=cfg.runtime.out_dir / "sample",
+    )
+
+
 def test_create_manager_respects_retention(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
@@ -613,3 +714,643 @@ def test_propagate_metadata_copies_to_multiple_dirs(tmp_path: Path) -> None:
     # Both directories should have the meta file
     assert (train_dir / "meta.pkl").exists()
     assert (sample_dir / "meta.pkl").exists()
+
+
+def test_create_manager_with_all_options(tmp_path: Path) -> None:
+    """Test create_manager with all configuration options to cover line 37."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+
+    manager = service.create_manager(cfg, shared)
+
+    assert manager.keep_last == 3
+    assert manager.keep_best == 2
+    assert manager.out_dir == shared.train_out_dir
+
+
+def test_load_checkpoint_with_di_override_success(tmp_path: Path) -> None:
+    """Test load_checkpoint with successful DI override (lines 56-64)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    expected_checkpoint = Checkpoint(
+        model={"test": "data"},
+        optimizer={"opt": "state"},
+        model_args={},
+        iter_num=42,
+        best_val_loss=0.123,
+        config={},
+        ema=None,
+    )
+
+    def override_load_fn(**_kwargs: Any) -> Checkpoint:
+        return expected_checkpoint
+
+    cfg = cfg.model_copy(update={"checkpoint_load_fn": override_load_fn})
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+    result = service.load_checkpoint(_MockManager(), cfg, logger=logger)
+
+    assert result is expected_checkpoint
+    assert len(logger.warnings) == 0
+
+
+def test_load_checkpoint_with_di_override_checkpoint_error(tmp_path: Path) -> None:
+    """Test load_checkpoint with DI override that raises CheckpointError (lines 59-64)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    def failing_override(**_kwargs: Any) -> Checkpoint:
+        raise CheckpointError("DI override failed", reason="test", rationale="coverage")
+
+    cfg = cfg.model_copy(update={"checkpoint_load_fn": failing_override})
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+    result = service.load_checkpoint(_MockManager(), cfg, logger=logger)
+
+    assert result is None
+    assert len(logger.warnings) == 1
+    assert "DI override failed" in logger.warnings[0]
+
+
+def test_load_checkpoint_with_di_override_runtime_error(tmp_path: Path) -> None:
+    """Test load_checkpoint with DI override that raises RuntimeError (lines 59-64)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    def failing_override(**_kwargs: Any) -> Checkpoint:
+        raise RuntimeError("DI override runtime error")
+
+    cfg = cfg.model_copy(update={"checkpoint_load_fn": failing_override})
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+    result = service.load_checkpoint(_MockManager(), cfg, logger=logger)
+
+    assert result is None
+    assert len(logger.warnings) == 1
+    assert "DI override runtime error" in logger.warnings[0]
+
+
+def test_apply_checkpoint_with_ema_none(tmp_path: Path) -> None:
+    """Test apply_checkpoint with ema=None (lines 94-96)."""
+    checkpoint = Checkpoint(
+        model={"test": "model"},
+        optimizer={"test": "opt"},
+        model_args={},
+        iter_num=100,
+        best_val_loss=0.5,
+        config={},
+        ema=None,
+    )
+
+    model = _ExtendedTrackingModel()
+    optimizer = _ExtendedTrackingOptimizer()
+
+    iter_num, best_val_loss = service.apply_checkpoint(
+        checkpoint,
+        model=model,
+        optimizer=optimizer,
+        ema=None,
+    )
+
+    assert iter_num == 100
+    assert best_val_loss == 0.5
+    assert len(model.state_updates) == 1
+    assert len(optimizer.state_updates) == 1
+
+
+def test_apply_checkpoint_with_ema_empty_shadow(tmp_path: Path) -> None:
+    """Test apply_checkpoint with ema having empty shadow (lines 94-96)."""
+    checkpoint = Checkpoint(
+        model={"test": "model"},
+        optimizer={"test": "opt"},
+        model_args={},
+        iter_num=200,
+        best_val_loss=0.25,
+        config={},
+        ema={"shadow": {}},
+    )
+
+    model = _ExtendedTrackingModel()
+    optimizer = _ExtendedTrackingOptimizer()
+    ema = _ExtendedTrackingEMA()
+
+    iter_num, best_val_loss = service.apply_checkpoint(
+        checkpoint,
+        model=model,
+        optimizer=optimizer,
+        ema=ema,
+    )
+
+    assert iter_num == 200
+    assert best_val_loss == 0.25
+    assert ema.shadow == {"shadow": {}}
+
+
+def test_save_checkpoint_with_di_override_success(tmp_path: Path) -> None:
+    """Test save_checkpoint with successful DI override (lines 123-132)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    override_calls: list[dict[str, Any]] = []
+
+    def override_save_fn(**kwargs: Any) -> None:
+        override_calls.append(kwargs)
+
+    cfg = cfg.model_copy(update={"checkpoint_save_fn": override_save_fn})
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+        def save_checkpoint(
+            self, *args: Any, **kwargs: Any
+        ) -> None:  # pragma: no cover
+            del args, kwargs
+            raise AssertionError("Manager save should not be called")
+
+    model = _ExtendedTrackingModel()
+    optimizer = _ExtendedTrackingOptimizer()
+    ema = _ExtendedTrackingEMA()
+
+    service.save_checkpoint(
+        _MockManager(),
+        cfg,
+        model=model,
+        optimizer=optimizer,
+        ema=ema,
+        iter_num=50,
+        best_val_loss=0.75,
+        logger=logger,
+        is_best=True,
+    )
+
+    assert len(override_calls) == 1
+    call = override_calls[0]
+    assert call["is_best"] is True
+    assert call["checkpoint"].iter_num == 50
+    assert call["checkpoint"].best_val_loss == 0.75
+    assert len(logger.warnings) == 0
+
+
+def test_save_checkpoint_with_di_override_checkpoint_error(tmp_path: Path) -> None:
+    """Test save_checkpoint with DI override that raises CheckpointError (lines 133-140)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    def failing_override(**_kwargs: Any) -> None:
+        raise CheckpointError(
+            "DI override save failed", reason="test", rationale="coverage"
+        )
+
+    cfg = cfg.model_copy(update={"checkpoint_save_fn": failing_override})
+
+    manager_calls: list[dict[str, Any]] = []
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+        def save_checkpoint(self, *args: Any, **kwargs: Any) -> None:
+            manager_calls.append(kwargs)
+
+    model = _ExtendedTrackingModel()
+    optimizer = _ExtendedTrackingOptimizer()
+    ema = _ExtendedTrackingEMA()
+
+    service.save_checkpoint(
+        _MockManager(),
+        cfg,
+        model=model,
+        optimizer=optimizer,
+        ema=ema,
+        iter_num=75,
+        best_val_loss=0.6,
+        logger=logger,
+        is_best=False,
+    )
+
+    assert len(manager_calls) == 1
+    assert len(logger.warnings) == 1
+    assert "DI override save failed" in logger.warnings[0]
+
+
+def test_save_checkpoint_with_di_override_runtime_error(tmp_path: Path) -> None:
+    """Test save_checkpoint with DI override that raises RuntimeError (lines 133-140)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    def failing_override(**_kwargs: Any) -> None:
+        raise RuntimeError("DI override runtime error")
+
+    cfg = cfg.model_copy(update={"checkpoint_save_fn": failing_override})
+
+    manager_calls: list[dict[str, Any]] = []
+
+    class _MockManager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+        def save_checkpoint(self, *args: Any, **kwargs: Any) -> None:
+            manager_calls.append(kwargs)
+
+    model = _ExtendedTrackingModel()
+    optimizer = _ExtendedTrackingOptimizer()
+    ema = _ExtendedTrackingEMA()
+
+    service.save_checkpoint(
+        _MockManager(),
+        cfg,
+        model=model,
+        optimizer=optimizer,
+        ema=ema,
+        iter_num=25,
+        best_val_loss=0.8,
+        logger=logger,
+        is_best=True,
+    )
+
+    assert len(manager_calls) == 1
+    assert len(logger.warnings) == 1
+    assert "DI override runtime error" in logger.warnings[0]
+
+
+def test_propagate_metadata_with_oserror_in_meta_path(tmp_path: Path) -> None:
+    """Test propagate_metadata with OSError in meta_path resolution (lines 169-171)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    class _BadDataConfig(DataConfig):
+        def meta_path(self, base_dir: Path) -> Path:
+            raise OSError("Cannot access dataset directory")
+
+    cfg = cfg.model_copy(update={"data": _BadDataConfig(batch_size=1, block_size=4)})
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    assert len(logger.warnings) == 1
+    assert "Failed to resolve meta source path" in logger.warnings[0]
+
+
+def test_propagate_metadata_with_typeerror_in_meta_path(tmp_path: Path) -> None:
+    """Test propagate_metadata with TypeError in meta_path resolution (lines 163-167)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    class _BadDataConfig(DataConfig):
+        def meta_path(self, base_dir: Path) -> Path:
+            raise TypeError("Invalid argument type")
+
+    cfg = cfg.model_copy(update={"data": _BadDataConfig(batch_size=1, block_size=4)})
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    assert len(logger.warnings) == 1
+    assert "Failed to resolve meta source path" in logger.warnings[0]
+
+
+def test_propagate_metadata_with_ioerror_in_copy(tmp_path: Path) -> None:
+    """Test propagate_metadata with IOError during file copy (lines 185-180)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+    logger = _TrackingLogger()
+
+    meta_path = tmp_path / "data" / "meta.pkl"
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text('{"test": "data"}')
+
+    def failing_copy(src: Path, dst: Path) -> None:
+        del src
+        raise IOError(f"Cannot write to destination {dst}")
+
+    service.propagate_metadata(cfg, shared, logger=logger, copy_fn=failing_copy)
+
+    assert len(logger.warnings) >= 1
+    assert any("Cannot write to destination" in warning for warning in logger.warnings)
+
+
+def test_propagate_metadata_with_none_logger_and_exceptions(tmp_path: Path) -> None:
+    """Test propagate_metadata with None logger and exceptions (lines 169-171, 185-180)."""
+    cfg = _make_cfg_with_all_options(tmp_path)
+    shared = _make_shared_with_sample(tmp_path, cfg)
+
+    class _BadDataConfig(DataConfig):
+        def meta_path(self, base_dir: Path) -> Path:
+            raise RuntimeError("Meta path error")
+
+    cfg = cfg.model_copy(update={"data": _BadDataConfig(batch_size=1, block_size=4)})
+
+    service.propagate_metadata(cfg, shared, logger=None)
+
+
+class _FakeLogger:
+    def __init__(self) -> None:
+        self.warnings: list[str] = []
+
+    def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.warnings.append(msg)
+
+
+class _BadDataConfig(DataConfig):
+    """DataConfig that raises ValueError in meta_path to trigger exception branch."""
+
+    def meta_path(self, base_dir: Path) -> Path:
+        del base_dir
+        raise ValueError("Simulated meta_path failure")
+
+
+def test_propagate_metadata_warns_on_meta_path_resolution_failure(
+    tmp_path: Path,
+) -> None:
+    cfg = TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4),
+        data=_BadDataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    logger = _FakeLogger()
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+    assert any("Failed to resolve meta source path" in msg for msg in logger.warnings)
+
+
+def test_propagate_metadata_warns_on_copy_failure(tmp_path: Path) -> None:
+    meta_path = tmp_path / "data" / "meta.pkl"
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text('{"meta_version": 1}')
+
+    cfg = TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4),
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    logger = _FakeLogger()
+
+    (tmp_path / "train_out").write_text("not a dir")
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+    assert any("Failed to copy meta file" in msg for msg in logger.warnings)
+
+
+def test_propagate_metadata_with_none_logger(tmp_path: Path) -> None:
+    """Test that propagate_metadata handles None logger gracefully."""
+    meta_path = tmp_path / "data" / "meta.pkl"
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text('{"meta_version": 1}')
+
+    cfg = TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4),
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "sample_out",
+    )
+
+    service.propagate_metadata(cfg, shared, logger=None)
+
+
+def test_propagate_metadata_skips_duplicate_destination(tmp_path: Path) -> None:
+    """Test that propagate_metadata skips sample_out_dir when it equals train_out_dir."""
+    meta_path = tmp_path / "data" / "meta.pkl"
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text('{"meta_version": 1}')
+
+    cfg = TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4),
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "train_out",
+    )
+
+    service.propagate_metadata(cfg, shared, logger=None)
+
+
+def test_apply_checkpoint_with_ema_and_checkpoint_ema() -> None:
+    """Test apply_checkpoint when both ema and checkpoint.ema are truthy."""
+    from ml_playground.models.core.config import build_gpt_config
+    from ml_playground.models.core.model import GPT
+
+    model_cfg = ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, vocab_size=50)
+    gpt_cfg = build_gpt_config(model_cfg)
+    model = GPT(gpt_cfg, logger=None)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+
+    class _FakeEMA:
+        def __init__(self) -> None:
+            self.shadow: dict | None = None
+
+    ema = _FakeEMA()
+
+    checkpoint = Checkpoint(
+        model=model.state_dict(),
+        optimizer=optimizer.state_dict(),
+        model_args={},
+        iter_num=5,
+        best_val_loss=0.3,
+        config={},
+        ema={"param": 1.0},
+    )
+
+    iter_num, best = service.apply_checkpoint(
+        checkpoint, model=model, optimizer=optimizer, ema=ema
+    )
+
+    assert iter_num == 5
+    assert best == 0.3
+    assert ema.shadow == checkpoint.ema
+
+
+class _LoadSaveFakeLogger:
+    def __init__(self) -> None:
+        self.warnings: list[str] = []
+        self.infos: list[str] = []
+
+    def warning(self, msg: str, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.warnings.append(msg)
+
+    def info(self, msg: str, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.infos.append(msg)
+
+
+class _LoadSaveFakeEMA:
+    def __init__(self) -> None:
+        self.shadow: dict | None = None
+
+
+def test_load_checkpoint_uses_default_when_no_override(tmp_path: Path) -> None:
+    """Test load_checkpoint uses default loading when checkpoint_load_fn is None."""
+    from ml_playground.models.core.config import build_gpt_config
+    from ml_playground.models.core.model import GPT
+
+    model_cfg = ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, vocab_size=50)
+    gpt_cfg = build_gpt_config(model_cfg)
+    model = GPT(gpt_cfg, logger=None)
+    assert model is not None
+
+    cfg = TrainerConfig(
+        model=model_cfg,
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    manager = service.create_manager(cfg, shared)
+
+    checkpoint = service.load_checkpoint(manager, cfg, logger=_LoadSaveFakeLogger())
+    assert checkpoint is None
+
+
+def test_save_checkpoint_uses_default_when_no_override(tmp_path: Path) -> None:
+    """Test save_checkpoint uses default saving when checkpoint_save_fn is None."""
+    from ml_playground.models.core.config import build_gpt_config
+    from ml_playground.models.core.model import GPT
+
+    model_cfg = ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, vocab_size=50)
+    gpt_cfg = build_gpt_config(model_cfg)
+    model = GPT(gpt_cfg, logger=None)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+
+    train_out_dir = tmp_path / "train_out"
+    train_out_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg = TrainerConfig(
+        model=model_cfg,
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=train_out_dir,
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    manager = service.create_manager(cfg, shared)
+
+    service.save_checkpoint(
+        manager,
+        cfg,
+        model=model,
+        optimizer=optimizer,
+        ema=None,
+        iter_num=1,
+        best_val_loss=0.5,
+        logger=_LoadSaveFakeLogger(),
+        is_best=True,
+    )
+
+    assert any(p.name.startswith("ckpt_best") for p in train_out_dir.glob("*.pt"))
+
+
+def test_save_checkpoint_with_ema_shadow(tmp_path: Path) -> None:
+    """Test save_checkpoint includes ema.shadow when ema is present."""
+    from ml_playground.models.core.config import build_gpt_config
+    from ml_playground.models.core.model import GPT
+
+    model_cfg = ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, vocab_size=50)
+    gpt_cfg = build_gpt_config(model_cfg)
+    model = GPT(gpt_cfg, logger=None)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    ema = _LoadSaveFakeEMA()
+    ema.shadow = {"param": 1.0}
+
+    train_out_dir = tmp_path / "train_out"
+    train_out_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg = TrainerConfig(
+        model=model_cfg,
+        data=DataConfig(batch_size=1, block_size=4),
+        optim=OptimConfig(learning_rate=0.01),
+        schedule=LRSchedule(),
+        runtime=RuntimeConfig(out_dir=tmp_path / "out"),
+    )
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=train_out_dir,
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    manager = service.create_manager(cfg, shared)
+
+    service.save_checkpoint(
+        manager,
+        cfg,
+        model=model,
+        optimizer=optimizer,
+        ema=ema,
+        iter_num=1,
+        best_val_loss=0.5,
+        logger=_LoadSaveFakeLogger(),
+        is_best=False,
+    )
+
+    assert any(p.name.startswith("ckpt_last") for p in train_out_dir.glob("*.pt"))

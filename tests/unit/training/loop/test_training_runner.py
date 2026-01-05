@@ -319,17 +319,41 @@ def _build_deps(
             return get_lr_override(iteration, schedule, optim)
         return runner_mod.get_lr(iteration, schedule, optim)
 
+    def create_mlflow_manager(
+        runtime: runner_mod.RuntimeConfig,
+        shared: SharedConfig,
+        logger: Any,
+        mlflow_client: Any = None,
+        os_module: Any = None,
+        platform_module: Any = None,
+        sys_module: Any = None,
+    ) -> runner_mod.MLflowManager:
+        return runner_mod.MLflowManager(
+            runtime,
+            shared,
+            logger,
+            mlflow_client=mlflow_client,
+            os_module=os_module or runner_mod.os,
+            platform_module=platform_module or runner_mod.platform,
+            sys_module=sys_module or runner_mod.sys,
+        )
+
+    def train_step(trainer_obj: Any, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        return trainer_obj._train_step(X, Y)
+
     deps = TrainerDependencies(
         initialize_batches=init_batches,
         initialize_model=init_model,
         initialize_components=init_components,
         create_manager=create_manager,
+        create_mlflow_manager=create_mlflow_manager,
         load_checkpoint=load_checkpoint,
         apply_checkpoint=apply_checkpoint,
         save_checkpoint=save_checkpoint,
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        train_step=train_step,
         vmap=vmap_fn,
     )
     return deps, manager
@@ -674,7 +698,7 @@ def test_train_entrypoint_uses_dependencies(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path, max_iters=0)
     iters, best = runner_mod.train(cfg, deps=deps)
 
-    assert iters == 1
+    assert iters == 0
     assert best == pytest.approx(0.4)
     assert manager.saved
 

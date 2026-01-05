@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from ml_playground.configuration.models import TrainerConfig, SharedConfig
 from ml_playground.experiments.protocol import (
     Trainer as _TrainerProto,
@@ -10,7 +11,7 @@ from ml_playground.training.loop.runner import Trainer as _CoreTrainer
 
 
 class ShakespeareTrainer(_TrainerProto):
-    def train(self, cfg: TrainerConfig) -> TrainReport:  # type: ignore[override]
+    def train(self, cfg: TrainerConfig, deps: Any | None = None) -> TrainReport:  # type: ignore[override]
         out_dir: Path = cfg.runtime.out_dir
         shared = SharedConfig(
             experiment="shakespeare",
@@ -20,7 +21,7 @@ class ShakespeareTrainer(_TrainerProto):
             train_out_dir=out_dir,
             sample_out_dir=out_dir,
         )
-        _CoreTrainer(cfg, shared).run()
+        _CoreTrainer(cfg, shared, deps=deps).run()
         return TrainReport(
             created_files=(),
             updated_files=(),

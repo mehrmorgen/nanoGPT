@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import platform
+import sys
 import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -16,7 +19,9 @@ from ml_playground.configuration.models import (
     SharedConfig,
     LRSchedule,
     OptimConfig,
+    RuntimeConfig,
 )
+from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.training.ema import EMA
 from ml_playground.models.core.model import GPT
 
@@ -35,6 +40,7 @@ from ml_playground.training.hooks.logging import log_training_step
 from ml_playground.training.hooks.model import initialize_model
 from ml_playground.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.training.loop.scheduler import get_lr
+from ml_playground.training.mlflow_integration import MLflowManager
 
 
 __all__ = ["Trainer", "train", "get_lr"]
@@ -49,12 +55,18 @@ class TrainerDependencies:
         Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]],
     ]
     create_manager: Callable[[TrainerConfig, SharedConfig], Any]
+    create_mlflow_manager: Callable[
+        [RuntimeConfig, SharedConfig, LoggerLike], MLflowManager
+    ]
     load_checkpoint: Callable[..., Optional[Any]]
     apply_checkpoint: Callable[..., Tuple[int, float]]
     save_checkpoint: Callable[..., None]
     propagate_metadata: Callable[..., None]
     run_evaluation: Callable[..., Dict[str, float]]
     get_lr: Callable[[int, LRSchedule, OptimConfig], float]
+    train_step: Optional[Callable[[Any, torch.Tensor, torch.Tensor], torch.Tensor]] = (
+        None
+    )
     vmap: Optional[
         Callable[
             [Callable[[torch.Tensor, torch.Tensor], torch.Tensor]],
@@ -77,6 +89,14 @@ def default_trainer_dependencies() -> TrainerDependencies:
         initialize_model=initialize_model,
         initialize_components=_init_components,
         create_manager=create_manager,
+        create_mlflow_manager=lambda runtime, shared, logger: MLflowManager(
+            runtime,
+            shared,
+            logger,
+            os_module=os,
+            platform_module=platform,
+            sys_module=sys,
+        ),
         load_checkpoint=load_checkpoint,
         apply_checkpoint=apply_checkpoint,
         save_checkpoint=save_checkpoint,
@@ -127,7 +147,13 @@ class Trainer:
         )
 
         self.iter_num = 0
+        self.local_iter_num = 0
+        self.running_mfu = -1.0
         self.best_val_loss = 1e9
+
+        self.mlflow = self.deps.create_mlflow_manager(cfg.runtime, shared, self.logger)
+        self.mlflow.setup()
+        self.mlflow.log_config(cfg)
 
         checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
@@ -165,29 +191,27 @@ class Trainer:
     def run(self) -> Tuple[int, float]:
         """Execute the main training loop until reaching the maximum iteration count."""
         self.logger.info("Starting training loop")
-        X, Y = self.batches.get_batch("train")
-        t0 = time.time()
-        local_iter_num = 0
-        raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
-        running_mfu = -1.0
+        try:
+            X, Y = self.batches.get_batch("train")
+        except KeyboardInterrupt:
+            self.logger.info("Training loop interrupted")
+            should_save_checkpoint = False
+            self.mlflow.finish()
+            raise
 
+        t0 = time.time()
+        raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
         should_save_checkpoint = True
 
         try:
             while True:
-                lr = self.deps.get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
-                for param_group in self.optimizer.param_groups:
-                    param_group["lr"] = lr
-
-                if (
-                    self.iter_num % self.cfg.runtime.eval_interval == 0
-                    and self.cfg.runtime.eval_iters > 0
-                ):
+                # Check if we should run evaluation
+                if self.iter_num % self.cfg.runtime.eval_interval == 0:
                     losses = self.deps.run_evaluation(
                         self.cfg,
                         logger=self.logger,
                         iter_num=self.iter_num,
-                        lr=lr,
+                        lr=self.optimizer.param_groups[0]["lr"],
                         raw_model=raw_model,
                         batches=self.batches,
                         ctx=self.ctx,
@@ -208,57 +232,63 @@ class Trainer:
                                 is_best=True,
                             )
 
-                    if self.iter_num == 0 and self.cfg.runtime.eval_only:
-                        break
+                if self.iter_num == 0 and self.cfg.runtime.eval_only:
+                    break
 
-                loss = self._train_step(X, Y)
+                # Termination condition
+                if self.iter_num >= self.cfg.runtime.max_iters:
+                    break
+
+                # Optimization step
+                lr = self.deps.get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = lr
+
+                # Forward backward update
+                try:
+                    if self.deps.train_step:
+                        loss = self.deps.train_step(self, X, Y)
+                    else:
+                        loss = self._train_step(X, Y)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as exc:
+                    self.logger.error(
+                        f"Training step failed at iteration {self.iter_num}: {exc}"
+                    )
+                    raise
+
+                # Fetch next batch
                 X, Y = self.batches.get_batch("train")
 
-                t1 = time.time()
-                dt = t1 - t0
-                t0 = t1
+                # Logging
                 if self.iter_num % self.cfg.runtime.log_interval == 0:
-                    running_mfu = log_training_step(
-                        self.logger,
+                    t1 = time.time()
+                    dt = t1 - t0
+                    t0 = t1
+                    self.running_mfu = log_training_step(
+                        logger=self.logger,
                         iter_num=self.iter_num,
                         loss_value=loss.item(),
                         dt=dt,
-                        local_iter_num=local_iter_num,
+                        local_iter_num=self.local_iter_num,
                         raw_model=raw_model,
-                        running_mfu=running_mfu,
+                        running_mfu=self.running_mfu,
                         batch_size=self.cfg.data.batch_size,
                         grad_accum_steps=self.cfg.data.grad_accum_steps,
+                        writer=self.writer,
+                        update_mode=self.cfg.runtime.tensorboard_update_mode,
                     )
-                    # TensorBoard logging if update mode is 'log'
-                    try:
-                        if (
-                            self.writer
-                            and getattr(
-                                self.cfg.runtime, "tensorboard_update_mode", "eval"
-                            )
-                            == "log"
-                        ):
-                            scaled_loss = loss.item() * self.cfg.data.grad_accum_steps
-                            self.writer.add_scalar(
-                                "Loss/train", scaled_loss, self.iter_num
-                            )
-                            self.writer.add_scalar("LR", lr, self.iter_num)
-                    except (ValueError, RuntimeError, OSError) as exc:
-                        self.logger.debug(
-                            "TensorBoard logging skipped due to writer error: %s", exc
-                        )
+                    self.mlflow.log_metrics(
+                        {"loss": loss.item(), "lr": lr}, step=self.iter_num
+                    )
 
                 self.iter_num += 1
-                local_iter_num += 1
-
-                if self.iter_num > self.cfg.runtime.max_iters:
-                    break
+                self.local_iter_num += 1
 
         except KeyboardInterrupt:
             should_save_checkpoint = False
-            self.logger.info(
-                "Training loop interrupted; skipping final checkpoint save"
-            )
+            self.logger.info("Training loop interrupted")
             raise
         except BaseException:
             should_save_checkpoint = False
@@ -287,6 +317,8 @@ class Trainer:
 
             if self.writer:
                 self.writer.close()
+
+            self.mlflow.finish()
 
         return self.iter_num, self.best_val_loss
 

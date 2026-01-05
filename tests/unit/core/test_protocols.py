@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.core.protocols import Tokenizer
 
 
 class _CompliantLogger:

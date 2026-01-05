@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from ml_playground.models.core.model import GPT
+from typing import Any, Optional
 
+from torch.utils.tensorboard import SummaryWriter
+
+from ml_playground.models.core.model import GPT
 
 __all__ = ["log_training_step"]
 
 
 def log_training_step(
-    logger,
+    logger: Any,
     iter_num: int,
     loss_value: float,
     dt: float,
@@ -18,6 +21,8 @@ def log_training_step(
     running_mfu: float,
     batch_size: int,
     grad_accum_steps: int,
+    writer: Optional[SummaryWriter] = None,
+    update_mode: str = "eval",
 ) -> float:
     """Log training progress and compute updated model FLOPS utilization."""
     scaled_loss = loss_value * grad_accum_steps
@@ -31,4 +36,14 @@ def log_training_step(
     logger.info(
         f"iter {iter_num}: loss {scaled_loss:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
     )
+
+    if writer:
+        if update_mode == "log":
+            try:
+                writer.add_scalar("Loss/train", scaled_loss, iter_num)
+                lr = getattr(logger, "lr", 0.0)
+                writer.add_scalar("LR", float(lr), iter_num)
+            except Exception as exc:
+                logger.debug(f"TensorBoard logging skipped due to writer error: {exc}")
+
     return running_mfu

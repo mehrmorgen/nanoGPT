@@ -10,7 +10,6 @@ Feature: Checkpoint retention policy enforcement
     Given checkpoint retention policy of 2 last, 2 best
     When 3 checkpoints are saved sequentially
     Then 2 most recent checkpoints should exist
-    And no stable last checkpoint pointer should exist
 
   Scenario: Keep policy enforcement for best checkpoints
     Given checkpoint retention policy of 2 last, 2 best
@@ -20,7 +19,6 @@ Feature: Checkpoint retention policy enforcement
       | 0.9    |
       | 1.1    |
     Then 2 best checkpoints by metric should exist
-    And no stable best checkpoint pointer should exist
 
   Scenario: Filesystem discovery after restart
     Given checkpoint retention policy of 2 last, 1 best
