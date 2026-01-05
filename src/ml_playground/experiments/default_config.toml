@@ -99,7 +99,6 @@ dtype = "float32"
 compile = false
 # TensorBoard logging (framework-level); set false to disable
 # Default is true to keep logging enabled unless explicitly disabled.
-tensorboard_enabled = true
 # Checkpoint policy (several knobs are inert at defaults)
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"

@@ -36,7 +36,7 @@ ReadTextFn = _t.Callable[[Path], str]
 TokenizerFactoryFn = _t.Callable[[object], Any]
 # Trainer hooks around a single training step
 BeforeStepHook = _t.Callable[..., None]
-AfterStepHook = _t.Callable[..., None]
+# AfterStepHook = _t.Callable[..., None]
 # Checkpoint IO indirections
 CheckpointLoadFn = _t.Callable[..., Any]
 CheckpointSaveFn = _t.Callable[..., None]
@@ -297,9 +297,7 @@ class RuntimeConfig(_FrozenStrictModel):
     device: DeviceKind = "cpu"
     dtype: DTypeKind = "float32"
     compile: bool = False
-    tensorboard_enabled: bool = True
-    tensorboard_update_mode: Literal["eval", "log"] = "eval"
-    mlflow_enabled: bool = False
+    mlflow_enabled: bool = True
     mlflow_tracking_uri: str | None = None
     mlflow_experiment_name: str | None = None
     mlflow_run_name: str | None = None
@@ -492,7 +490,7 @@ class TrainerConfig(_FrozenStrictModel):
     # Optional DI callables (kept generic to avoid import cycles)
     # Hooks around a training step
     before_step_hook: Optional[BeforeStepHook] = Field(default=None, exclude=True)
-    after_step_hook: Optional[AfterStepHook] = Field(default=None, exclude=True)
+    # after_step_hook: Optional[AfterStepHook] = Field(default=None, exclude=True)
     # Checkpoint save/load indirections
     checkpoint_save_fn: Optional[CheckpointSaveFn] = Field(default=None, exclude=True)
     checkpoint_load_fn: Optional[CheckpointLoadFn] = Field(default=None, exclude=True)
@@ -780,7 +778,7 @@ __all__ = [
     "ReadTextFn",
     "TokenizerFactoryFn",
     "BeforeStepHook",
-    "AfterStepHook",
+    # "AfterStepHook",
     "CheckpointLoadFn",
     "CheckpointSaveFn",
     "ModelFactoryFn",

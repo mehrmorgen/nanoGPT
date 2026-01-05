@@ -6,7 +6,6 @@ from typing import Any, Callable, Optional, Tuple, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.configuration.models import TrainerConfig
 from ml_playground.training.ema import EMA
@@ -25,8 +24,8 @@ def initialize_components(
     log_dir: str,
     compile_fn: Optional[Callable[[GPT], GPT]] = None,
     torch_module: Any = torch,
-) -> Tuple[GPT, GradScaler, Optional[EMA], Optional[SummaryWriter]]:
-    """Compile model, create scaler/EMA, and initialize TensorBoard writer."""
+) -> Tuple[GPT, GradScaler, Optional[EMA]]:
+    """Compile model and create scaler/EMA."""
     compiled_model = model
     if cfg.runtime.compile:
         compiler = compile_fn
@@ -44,8 +43,4 @@ def initialize_components(
     if cfg.runtime.ema_decay > 0.0:
         ema = EMA(compiled_model, cfg.runtime.ema_decay, cfg.runtime.device)
 
-    writer: Optional[SummaryWriter] = None
-    if cfg.runtime.tensorboard_enabled:
-        writer = SummaryWriter(log_dir=log_dir)
-
-    return compiled_model, scaler, ema, writer
+    return compiled_model, scaler, ema

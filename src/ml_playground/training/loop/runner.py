@@ -12,7 +12,6 @@ from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.configuration.models import (
     TrainerConfig,
@@ -52,7 +51,7 @@ class TrainerDependencies:
     initialize_model: Callable[[TrainerConfig, Any], Tuple[Any, Any]]
     initialize_components: Callable[
         [Any, TrainerConfig, RuntimeContext, str],
-        Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]],
+        Tuple[Any, GradScaler, Optional[EMA]],
     ]
     create_manager: Callable[[TrainerConfig, SharedConfig], Any]
     create_mlflow_manager: Callable[
@@ -81,7 +80,7 @@ def default_trainer_dependencies() -> TrainerDependencies:
         cfg: TrainerConfig,
         runtime: RuntimeContext,
         log_dir: str,
-    ) -> Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]]:
+    ) -> Tuple[Any, GradScaler, Optional[EMA]]:
         return initialize_components(model, cfg, runtime, log_dir=log_dir)
 
     return TrainerDependencies(
@@ -138,7 +137,6 @@ class Trainer:
             self.model,
             self.scaler,
             self.ema,
-            self.writer,
         ) = self.deps.initialize_components(
             self.model,
             cfg,
@@ -180,14 +178,6 @@ class Trainer:
     def ema(self, value: Optional[EMA]) -> None:
         self._ema = value
 
-    @property
-    def writer(self) -> Optional[SummaryWriter]:
-        return self._writer
-
-    @writer.setter
-    def writer(self, value: Optional[SummaryWriter]) -> None:
-        self._writer = value
-
     def run(self) -> Tuple[int, float]:
         """Execute the main training loop until reaching the maximum iteration count."""
         self.logger.info("Starting training loop")
@@ -215,7 +205,6 @@ class Trainer:
                         raw_model=raw_model,
                         batches=self.batches,
                         ctx=self.ctx,
-                        writer=self.writer,
                     )
                     if losses["val"] < self.best_val_loss:
                         self.best_val_loss = losses["val"]
@@ -276,8 +265,6 @@ class Trainer:
                         running_mfu=self.running_mfu,
                         batch_size=self.cfg.data.batch_size,
                         grad_accum_steps=self.cfg.data.grad_accum_steps,
-                        writer=self.writer,
-                        update_mode=self.cfg.runtime.tensorboard_update_mode,
                     )
                     self.mlflow.log_metrics(
                         {"loss": loss.item(), "lr": lr}, step=self.iter_num
@@ -314,9 +301,6 @@ class Trainer:
                 self.deps.propagate_metadata(self.cfg, self.shared, logger=self.logger)
             except Exception as exc:
                 self.logger.warning(f"Failed to propagate meta file: {exc}")
-
-            if self.writer:
-                self.writer.close()
 
             self.mlflow.finish()
 
