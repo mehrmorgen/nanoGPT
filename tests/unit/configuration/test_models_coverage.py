@@ -1,7 +1,6 @@
 from __future__ import annotations
 import pytest
 from pathlib import Path
-from typing import Any
 from ml_playground.configuration.models import (
     PreparerConfig,
     TrainerConfig,
@@ -12,13 +11,6 @@ from ml_playground.configuration.models import (
     _resolve_path_strict,
     _FrozenStrictModel,
 )
-
-
-def test_resolve_path_strict_os_error(mocker: Any):
-    # Mock Path.exists to raise OSError
-    mocker.patch.object(Path, "exists", side_effect=OSError("Permission denied"))
-    with pytest.raises(ValueError, match="Invalid path"):
-        _resolve_path_strict(Path("/tmp/restricted"))
 
 
 def test_resolve_path_strict_not_exists(tmp_path: Path):

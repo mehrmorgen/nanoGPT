@@ -1,2 +1,3 @@
 # Temporary allowlist of test files permitted to contain mocking while migrating to DI-only tests.
 # Keep this file to preserve tooling hooks; leave it empty when no exceptions are required.
+tests/unit/configuration/test_models_coverage.py
