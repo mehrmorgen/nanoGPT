@@ -139,15 +139,20 @@ def integration(
     ),
 ) -> None:
     """Run integration tests."""
-    _pytest(
-        [
-            "-m",
-            "integration",
-            "--no-cov",
-            "-p",
-            "no:benchmark",
-            *utils.forwarded_args(args),
-        ]
+    # Disable xdist for benchmark integration tests by using -n 0
+    utils.uv_run(
+        "pytest",
+        "-q",
+        "-n",
+        "0",
+        "-W",
+        "error",
+        "--strict-markers",
+        "--strict-config",
+        "-m",
+        "integration",
+        "--no-cov",
+        *utils.forwarded_args(args),
     )
 
 
