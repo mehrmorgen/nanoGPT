@@ -298,7 +298,8 @@ class RuntimeConfig(_FrozenStrictModel):
     dtype: DTypeKind = "float32"
     compile: bool = False
     mlflow_enabled: bool = True
-    mlflow_tracking_uri: str | None = None
+    mlflow_tracking_uri: str | Path | None = ".cache/mlflow"
+    mlflow_artifact_root: str | Path | None = "mlflow"
     mlflow_experiment_name: str | None = None
     mlflow_run_name: str | None = None
     mlflow_log_system_metrics: bool = True
@@ -424,7 +425,11 @@ class TrainerConfig(_FrozenStrictModel):
             return data
         base_dir = config_path.parent
         if "runtime" in data and isinstance(data["runtime"], dict):
-            _resolve_fields_relative(data["runtime"], ["out_dir"], base_dir)
+            _resolve_fields_relative(
+                data["runtime"],
+                ["out_dir", "mlflow_tracking_uri", "mlflow_artifact_root"],
+                base_dir,
+            )
         return data
 
     class HFModelConfig(_FrozenStrictModel):
@@ -528,7 +533,11 @@ class SamplerConfig(_FrozenStrictModel):
             return data
         base_dir = config_path.parent
         if "runtime" in data and isinstance(data["runtime"], dict):
-            _resolve_fields_relative(data["runtime"], ["out_dir"], base_dir)
+            _resolve_fields_relative(
+                data["runtime"],
+                ["out_dir", "mlflow_tracking_uri", "mlflow_artifact_root"],
+                base_dir,
+            )
         return data
 
     runtime: RuntimeConfig

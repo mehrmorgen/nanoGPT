@@ -36,6 +36,9 @@ class MLflowClient(Protocol):
         self, _local_dir: str, /, *, artifact_path: Optional[str] = None
     ) -> None: ...
     def set_tag(self, _key: str, _value: Any, /) -> None: ...
+    def create_experiment(
+        self, _name: str, /, *, artifact_location: Optional[str] = None
+    ) -> str: ...
 
 
 @runtime_checkable
@@ -97,12 +100,27 @@ class MLflowManager:
 
         try:
             if self.cfg.mlflow_tracking_uri:
-                self._mlflow.set_tracking_uri(self.cfg.mlflow_tracking_uri)
+                self._mlflow.set_tracking_uri(str(self.cfg.mlflow_tracking_uri))
 
             if self.cfg.mlflow_experiment_name:
                 self._mlflow.set_experiment(self.cfg.mlflow_experiment_name)
             else:
                 self._mlflow.set_experiment(self.shared.experiment)
+            # Set artifact root if configured
+            if (
+                hasattr(self._mlflow, "create_experiment")
+                and not self.cfg.mlflow_experiment_name
+            ):
+                try:
+                    exp_name = self.shared.experiment
+                    artifact_location = str(
+                        Path(self.cfg.mlflow_artifact_root).resolve()
+                    )
+                    self._mlflow.create_experiment(
+                        exp_name, artifact_location=artifact_location
+                    )
+                except Exception:
+                    pass  # Already exists or not supported
 
             self._active_run = self._mlflow.start_run(
                 run_name=self.cfg.mlflow_run_name,

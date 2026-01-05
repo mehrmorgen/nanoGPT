@@ -96,9 +96,10 @@ seed = 1337
 # CPU-first defaults
 device = "cpu"
 dtype = "float32"
+# MLflow storage: temporary tracking data in .cache, artifacts in experiment dir
+mlflow_tracking_uri = "../../../.cache/mlflow"
+mlflow_artifact_root = "mlflow"
 compile = false
-# TensorBoard logging (framework-level); set false to disable
-# Default is true to keep logging enabled unless explicitly disabled.
 # Checkpoint policy (several knobs are inert at defaults)
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"
@@ -119,6 +120,8 @@ out_dir = "./out"
 # CPU-first sampling defaults
 device = "cpu"
 dtype = "float32"
+mlflow_tracking_uri = "../../../.cache/mlflow"
+mlflow_artifact_root = "mlflow"
 compile = false
 seed = 1337
 

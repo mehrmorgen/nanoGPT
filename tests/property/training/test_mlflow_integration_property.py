@@ -56,6 +56,11 @@ class FakeMLflowClient:
         self.experiment_name = experiment_name
         return None
 
+    def create_experiment(
+        self, _name: str, /, *, artifact_location: Optional[str] = None
+    ) -> str:
+        return "id"
+
     def start_run(self, **kwargs: Any) -> Any:
         if self.fail_start:
             raise RuntimeError("start failed")
@@ -141,7 +146,7 @@ class FakeSys:
 def _make_runtime(
     out_dir: Path,
     enabled: bool,
-    tracking_uri: Optional[str],
+    tracking_uri: Optional[str | Path],
     experiment_name: Optional[str],
     run_name: Optional[str],
     log_system_metrics: bool,
@@ -149,7 +154,8 @@ def _make_runtime(
     return RuntimeConfig(
         out_dir=out_dir,
         mlflow_enabled=enabled,
-        mlflow_tracking_uri=tracking_uri,
+        mlflow_tracking_uri=tracking_uri or Path(".cache/mlflow"),
+        mlflow_artifact_root=Path("mlflow"),
         mlflow_experiment_name=experiment_name,
         mlflow_run_name=run_name,
         mlflow_log_system_metrics=log_system_metrics,
@@ -239,7 +245,10 @@ def test_setup_property_handles_paths_and_failures(
         expected_experiment = experiment_name or shared.experiment
         assert mlflow_client.experiment_name == expected_experiment
         if tracking_uri:
-            assert mlflow_client.tracking_uri == tracking_uri
+            # Handle potential // to / conversion in URI string comparison
+            actual = str(mlflow_client.tracking_uri).replace("//", "/")
+            expected = str(tracking_uri).replace("//", "/")
+            assert actual == expected
         if log_system_metrics:
             # Tag may fail when fail_tag is True
             tag_attempted = "mlflow.note.content" in mlflow_client.tags or fail_tag
