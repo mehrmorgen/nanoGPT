@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import pytest
 import torch
@@ -168,7 +168,7 @@ class FakeDepsAcceptance:
         return FakeModel(), FakeOptimizer()
 
     def initialize_components(self, model, cfg, runtime, log_dir):
-        return model, FakeScaler(), None, None
+        return model, FakeScaler(), None
 
     def create_manager(self, cfg, shared):
         return object()
@@ -223,16 +223,18 @@ def test_trainer_mlflow_lifecycle_acceptance(fake_mlflow, tmp_path):
 
     fake_logger = FakeLoggerAcceptance()
     trainer_cfg = TrainerConfig(
-        model=ModelConfig(n_layer=1, n_head=1, n_embd=32, block_size=32),
+        model=ModelConfig(
+            n_layer=1, n_head=1, n_embd=32, block_size=32, vocab_size=100
+        ),
         data=DataConfig(block_size=32, batch_size=1, grad_accum_steps=1),
         optim=OptimConfig(),
-        schedule=LRSchedule(),
+        schedule=LRSchedule(warmup_iters=0),
         runtime=runtime,
-        logger=fake_logger,  # type: ignore
+        logger=cast(Any, fake_logger),
     )
 
     deps = FakeDepsAcceptance(fake_mlflow)
-    trainer = Trainer(trainer_cfg, shared, deps=deps)  # type: ignore
+    trainer = Trainer(trainer_cfg, shared, deps=cast(Any, deps))
 
     # Verify setup was called
     assert fake_mlflow.experiment_name == "acceptance_test"
@@ -274,15 +276,17 @@ def test_trainer_mlflow_disabled_acceptance(fake_mlflow, tmp_path):
     )
 
     trainer_cfg = TrainerConfig(
-        model=ModelConfig(n_layer=1, n_head=1, n_embd=32, block_size=32),
+        model=ModelConfig(
+            n_layer=1, n_head=1, n_embd=32, block_size=32, vocab_size=100
+        ),
         data=DataConfig(block_size=32, batch_size=1, grad_accum_steps=1),
         optim=OptimConfig(),
-        schedule=LRSchedule(),
+        schedule=LRSchedule(warmup_iters=0),
         runtime=runtime,
     )
 
     deps = FakeDepsAcceptance(fake_mlflow)
-    Trainer(trainer_cfg, shared, deps=deps)  # type: ignore
+    Trainer(trainer_cfg, shared, deps=cast(Any, deps))
 
     # Verify no MLflow calls
     assert fake_mlflow.start_run_called == 0

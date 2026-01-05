@@ -74,7 +74,7 @@ decay_lr = true
 # warmup_iters: number of iterations to linearly increase LR from 0 to learning_rate.
 # Recommended: a few thousand iterations (e.g., 1k-5k) depending on dataset size and batch config.
 # Warmup stabilizes early training by avoiding large updates from initial noisy gradients.
-warmup_iters = 2000
+warmup_iters = 0
 # lr_decay_iters: total iterations over which LR decays toward min_lr after warmup.
 # For cosine or linear decay, set this near your expected max_iters to get a smooth decay over training.
 # If set much smaller than max_iters, LR will hit min_lr early and stay there; if much larger, decay will be slow.

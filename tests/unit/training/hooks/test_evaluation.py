@@ -1,113 +1,60 @@
 from __future__ import annotations
 
-from pathlib import Path
+from typing import cast
 
-from ml_playground.configuration.models import (
-    DataConfig,
-    LRSchedule,
-    ModelConfig,
-    OptimConfig,
-    RuntimeConfig,
-    TrainerConfig,
-)
-from ml_playground.training.hooks import evaluation
+import torch
+
+from ml_playground.configuration.models import TrainerConfig, ModelConfig
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
+from ml_playground.models.core.model import GPT
+from ml_playground.training.hooks.evaluation import run_evaluation
 
 
-class _Logger:
-    def __init__(self) -> None:
-        self.messages: list[str] = []
+class MockLogger:
+    def __init__(self):
+        self.infos = []
 
-    def info(self, msg: str) -> None:
-        self.messages.append(msg)
-
-
-class _Writer:
-    def __init__(self) -> None:
-        self.entries: list[tuple[str, float, int]] = []
-
-    def add_scalar(self, name: str, value: float, step: int) -> None:
-        self.entries.append((name, value, step))
+    def info(self, msg):
+        self.infos.append(msg)
 
 
-def _cfg() -> TrainerConfig:
-    return TrainerConfig(
-        model=ModelConfig(n_layer=1, n_head=1, n_embd=4, block_size=4, dropout=0.0),
-        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
-        optim=OptimConfig(learning_rate=0.01),
-        schedule=LRSchedule(
-            decay_lr=False, warmup_iters=0, lr_decay_iters=0, min_lr=0.0
-        ),
-        runtime=RuntimeConfig(
-            out_dir=Path("."),
-            max_iters=1,
-            eval_interval=1,
-            eval_iters=1,
-            log_interval=1,
-            eval_only=False,
-            seed=1,
-            device="cpu",
-            dtype="float32",
-            compile=False,
-            tensorboard_enabled=True,
-            ema_decay=0.0,
-        ),
-        hf_model=TrainerConfig.HFModelConfig(
-            model_name="hf/model",
-            gradient_checkpointing=False,
-            block_size=128,
-        ),
-        peft=TrainerConfig.PeftConfig(enabled=False),
+def test_run_evaluation_basic() -> None:
+    model_cfg = ModelConfig(
+        n_layer=1, n_head=1, n_embd=32, block_size=16, vocab_size=100
     )
+    model = GPT(model_cfg, logger=None)
 
+    class MockConfig:
+        def __init__(self):
+            class Runtime:
+                def __init__(self):
+                    self.eval_iters = 1
 
-def test_run_evaluation_records_scalars() -> None:
-    cfg = _cfg()
-    logger = _Logger()
+            self.runtime = Runtime()
 
-    def fake_estimate(model, batches, eval_iters, ctx):
-        del model, batches, eval_iters, ctx
-        return {"train": 0.5, "val": 0.4}
+    class MockBatches:
+        def get_batch(self, split: str):
+            return torch.zeros((1, 16), dtype=torch.long), torch.zeros(
+                (1, 16), dtype=torch.long
+            )
 
-    writer = _Writer()
-    losses = evaluation.run_evaluation(
-        cfg,
+    def mock_estimate_loss(model, batches, iters, ctx):
+        return {"train": 0.5, "val": 0.6}
+
+    logger = MockLogger()
+
+    losses = run_evaluation(
+        cast(TrainerConfig, MockConfig()),
         logger=logger,
-        iter_num=1,
-        lr=0.01,
-        raw_model=None,
-        batches=None,
+        iter_num=100,
+        lr=0.001,
+        raw_model=model,
+        batches=cast(SimpleBatches, MockBatches()),
         ctx=None,
-        writer=writer,
-        estimate_loss_fn=fake_estimate,
+        estimate_loss_fn=mock_estimate_loss,
     )
 
-    assert losses == {"train": 0.5, "val": 0.4}
-    assert any("train loss" in msg for msg in logger.messages)
-    assert ("Loss/train", 0.5, 1) in writer.entries
-    assert ("Loss/val", 0.4, 1) in writer.entries
-    assert ("LR", 0.01, 1) in writer.entries
-
-
-def test_run_evaluation_without_writer() -> None:
-    """run_evaluation should work without a TensorBoard writer."""
-    cfg = _cfg()
-    logger = _Logger()
-
-    def fake_estimate(model, batches, eval_iters, ctx):
-        del model, batches, eval_iters, ctx
-        return {"train": 0.6, "val": 0.5}
-
-    losses = evaluation.run_evaluation(
-        cfg,
-        logger=logger,
-        iter_num=2,
-        lr=0.02,
-        raw_model=None,
-        batches=None,
-        ctx=None,
-        writer=None,
-        estimate_loss_fn=fake_estimate,
+    assert losses == {"train": 0.5, "val": 0.6}
+    assert any(
+        "step 100: train loss 0.5000, val loss 0.6000" in m for m in logger.infos
     )
-
-    assert losses == {"train": 0.6, "val": 0.5}
-    assert any("train loss" in msg for msg in logger.messages)

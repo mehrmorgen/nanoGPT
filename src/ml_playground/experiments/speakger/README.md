@@ -31,7 +31,7 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ```bash
 uv run setup
 # Install PEFT/Transformers if not already present in your env
-uv add peft transformers torch tensorboard
+uv add peft transformers torch
 ```
 
 ## Strict configuration injection

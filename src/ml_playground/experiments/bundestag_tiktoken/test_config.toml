@@ -51,7 +51,6 @@ seed = 42
 device = "cpu"
 dtype = "float32"
 compile = false
-tensorboard_enabled = false
 ckpt_time_interval_minutes = 0
 best_smoothing_alpha = 0.0
 early_stop_patience = 0

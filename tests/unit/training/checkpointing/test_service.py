@@ -80,7 +80,6 @@ def _make_cfg(tmp_path: Path, *, read_policy: str = READ_POLICY_BEST) -> Trainer
             device="cpu",
             dtype="float32",
             compile=False,
-            tensorboard_enabled=False,
             ema_decay=0.0,
             checkpointing=RuntimeConfig.Checkpointing(read_policy=read_policy),
         ),
@@ -186,7 +185,6 @@ def _make_cfg_with_all_options(tmp_path: Path) -> TrainerConfig:
             device="cpu",
             dtype="float32",
             compile=False,
-            tensorboard_enabled=False,
             ema_decay=0.999,
             checkpointing=RuntimeConfig.Checkpointing(
                 read_policy=READ_POLICY_LATEST,

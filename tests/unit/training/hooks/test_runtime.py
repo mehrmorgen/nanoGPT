@@ -41,7 +41,6 @@ def _make_config(
             device=device,
             dtype=dtype,
             compile=False,
-            tensorboard_enabled=False,
             ema_decay=0.0,
         ),
         hf_model=TrainerConfig.HFModelConfig(

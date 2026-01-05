@@ -430,11 +430,9 @@ def test_sample_runtime_when_explicit_then_overrides_defaults(tmp_path: Path) ->
         extra_train="""
 eval_interval = 100
 eval_iters = 20
-tensorboard_enabled = true
 """,
         extra_sample="""
 eval_interval = 200
-tensorboard_enabled = false
 """,
         extra_sample_sample='start = "\\n"',
     )
@@ -445,7 +443,6 @@ tensorboard_enabled = false
     assert str(runtime.out_dir).endswith("out")
     assert runtime.eval_interval == 200
     assert runtime.eval_iters == 200
-    assert runtime.tensorboard_enabled is False
 
 
 def test_data_config_when_tokenizer_choices_then_accepts() -> None:
@@ -593,7 +590,6 @@ def test_runtime_config_when_initialized_then_defaults_match() -> None:
     assert runtime.device == "cpu"
     assert runtime.dtype == "float32"
     assert runtime.compile is False
-    assert runtime.tensorboard_enabled is True
     assert runtime.games_per_epoch is None
 
     checkpoint = runtime.checkpointing
@@ -1231,7 +1227,6 @@ def test_runtime_config_when_log_interval_invalid_then_raises(tmp_path: Path) ->
             device="cpu",
             dtype="float32",
             compile=False,
-            tensorboard_enabled=False,
         )
 
 
@@ -1275,7 +1270,6 @@ def _base_trainer_kwargs(tmp_path: Path) -> dict[str, Any]:
             device="cpu",
             dtype="float32",
             compile=False,
-            tensorboard_enabled=False,
         ),
     }
 
