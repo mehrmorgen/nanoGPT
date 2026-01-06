@@ -193,8 +193,9 @@ cache_dir = ".cache/mypy"
 
 
 [tool.pytest.ini_options]
-# Updated pytest settings for ml_playground
-addopts = "-W error --strict-markers --strict-config -v -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
+# Updated pytest settings for ml_playground. Benchmarks are disabled in gate runs to avoid
+# warnings under xdist when `-W error` is enabled.
+addopts = "-W error --strict-markers --strict-config -v -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\" -p no:benchmark"
 pythonpath = ["src", "."]
 testpaths = [
     "tests",

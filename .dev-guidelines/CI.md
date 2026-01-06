@@ -40,6 +40,11 @@ Operational policies for authoring, maintaining, and monitoring CI workflows in 
 - Configure explicit timeouts that reflect realistic upper bounds for each job to prevent runaway compute consumption.
 - Provide manual triggers for investigative or long-running suites so they can be dispatched on demand without impacting the primary gate.
 
+## Benchmark Handling
+
+- Gate workflows disable the `pytest-benchmark` plugin (`-p no:benchmark`) to avoid xdist-related warning noise under `-W error`.
+- Run benchmarks explicitly (e.g., `pytest -p benchmark tests/benchmark`) outside the gate when performance data is required.
+
 ## Caching Strategy
 
 - Cache compiled dependencies (virtual environments, wheels, etc.) using keys derived from immutable inputs such as lock files, runtime versions, and operating system.
