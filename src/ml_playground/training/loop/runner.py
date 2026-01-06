@@ -310,9 +310,6 @@ class Trainer:
         """Perform a gradient accumulation step and update EMA if configured."""
 
         grad_steps = int(self.cfg.data.grad_accum_steps)
-        if grad_steps <= 0:
-            raise ValueError("grad_accum_steps must be a positive integer")
-
         loss_tensor: torch.Tensor
         if grad_steps == 1:
             loss_tensor = self._train_step_single(X, Y)

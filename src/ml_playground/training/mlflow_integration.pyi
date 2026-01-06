@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, Optional, Protocol
+
+from ml_playground.configuration.models import (
+    RuntimeConfig,
+    SharedConfig,
+    TrainerConfig,
+)
+from ml_playground.core.logging_protocol import LoggerLike
+
+class MLflowClient(Protocol):
+    def set_tracking_uri(self, _uri: str, /) -> None: ...
+    def set_experiment(self, _experiment_name: str, /) -> Any: ...
+    def start_run(self, **kwargs: Any) -> Any: ...
+    def end_run(self) -> None: ...
+    def log_params(self, _params: Dict[str, Any], /) -> None: ...
+    def log_metrics(
+        self, _metrics: Dict[str, float], /, *, step: Optional[int] = None
+    ) -> None: ...
+    def log_artifact(
+        self, _local_path: str, /, *, artifact_path: Optional[str] = None
+    ) -> None: ...
+    def log_artifacts(
+        self, _local_dir: str, /, *, artifact_path: Optional[str] = None
+    ) -> None: ...
+    def set_tag(self, _key: str, _value: Any, /) -> None: ...
+    def create_experiment(
+        self, _name: str, /, *, artifact_location: Optional[str] = None
+    ) -> str: ...
+
+class OSModule(Protocol):
+    def getcwd(self) -> str: ...
+    def getlogin(self) -> str: ...
+
+class PlatformModule(Protocol):
+    def platform(self) -> str: ...
+    def processor(self) -> str: ...
+
+class SysModule(Protocol):
+    version: str
+    argv: list[str]
+
+class MLflowManager:
+    cfg: RuntimeConfig
+    shared: SharedConfig
+    logger: LoggerLike
+
+    def __init__(
+        self,
+        cfg: RuntimeConfig,
+        shared: SharedConfig,
+        logger: LoggerLike,
+        mlflow_client: Optional[MLflowClient] = None,
+        os_module: Optional[OSModule] = None,
+        platform_module: Optional[PlatformModule] = None,
+        sys_module: Optional[SysModule] = None,
+    ): ...
+    def setup(self) -> None: ...
+    def log_config(self, trainer_cfg: TrainerConfig) -> None: ...
+    def log_metrics(self, metrics: Dict[str, float], step: int) -> None: ...
+    def log_artifact(
+        self, local_path: Path, artifact_path: Optional[str] = None
+    ) -> None: ...
+    def finish(self) -> None: ...

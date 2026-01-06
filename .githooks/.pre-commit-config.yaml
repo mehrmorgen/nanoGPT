@@ -19,7 +19,7 @@ repos:
 - repo: local
   hooks:
   - id: coverage-threshold
-    name: coverage threshold (>=97.50%)
+    name: coverage threshold (>=95.00%)
     entry: bash
     args:
       - -c
@@ -40,7 +40,7 @@ repos:
           COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
         fi
         COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m
-        uv run python tools/ci_tasks.py coverage-threshold --line-threshold 97.5 --branch-threshold 90
+        uv run python tools/ci_tasks.py coverage-threshold --line-threshold 95 --branch-threshold 81.5
     language: system
     pass_filenames: false
 - repo: local

@@ -6,63 +6,21 @@ import os
 import platform
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, cast, runtime_checkable
+from typing import Any, Dict, Optional, TypeAlias, cast
 
 import mlflow
 from ml_playground.configuration.models import (
     RuntimeConfig,
-    TrainerConfig,
     SharedConfig,
+    TrainerConfig,
 )
 from ml_playground.core.logging_protocol import LoggerLike
 
 
-@runtime_checkable
-class MLflowClient(Protocol):
-    """Protocol for MLflow client operations."""
-
-    def set_tracking_uri(self, _uri: str, /) -> None: ...
-    def set_experiment(self, _experiment_name: str, /) -> Any: ...
-    def start_run(self, **kwargs: Any) -> Any: ...
-    def end_run(self) -> None: ...
-    def log_params(self, _params: Dict[str, Any], /) -> None: ...
-    def log_metrics(
-        self, _metrics: Dict[str, float], /, *, step: Optional[int] = None
-    ) -> None: ...
-    def log_artifact(
-        self, _local_path: str, /, *, artifact_path: Optional[str] = None
-    ) -> None: ...
-    def log_artifacts(
-        self, _local_dir: str, /, *, artifact_path: Optional[str] = None
-    ) -> None: ...
-    def set_tag(self, _key: str, _value: Any, /) -> None: ...
-    def create_experiment(
-        self, _name: str, /, *, artifact_location: Optional[str] = None
-    ) -> str: ...
-
-
-@runtime_checkable
-class OSModule(Protocol):
-    """Protocol for OS operations."""
-
-    def getcwd(self) -> str: ...
-    def getlogin(self) -> str: ...
-
-
-@runtime_checkable
-class PlatformModule(Protocol):
-    """Protocol for platform operations."""
-
-    def platform(self) -> str: ...
-    def processor(self) -> str: ...
-
-
-@runtime_checkable
-class SysModule(Protocol):
-    """Protocol for system operations."""
-
-    version: str
-    argv: list[str]
+MLflowClient: TypeAlias = Any
+OSModule: TypeAlias = Any
+PlatformModule: TypeAlias = Any
+SysModule: TypeAlias = Any
 
 
 class MLflowManager:
@@ -99,28 +57,20 @@ class MLflowManager:
             return
 
         try:
-            if self.cfg.mlflow_tracking_uri:
-                self._mlflow.set_tracking_uri(str(self.cfg.mlflow_tracking_uri))
+            self._mlflow.set_tracking_uri(str(self.cfg.mlflow_tracking_uri))
 
-            if self.cfg.mlflow_experiment_name:
-                self._mlflow.set_experiment(self.cfg.mlflow_experiment_name)
-            else:
-                self._mlflow.set_experiment(self.shared.experiment)
-            # Set artifact root if configured
-            if (
-                hasattr(self._mlflow, "create_experiment")
-                and not self.cfg.mlflow_experiment_name
-            ):
-                try:
-                    exp_name = self.shared.experiment
-                    artifact_location = str(
-                        Path(self.cfg.mlflow_artifact_root).resolve()
-                    )
+            exp_name = self.cfg.mlflow_experiment_name or self.shared.experiment
+            self._mlflow.set_experiment(exp_name)
+
+            try:
+                artifact_root = self.cfg.mlflow_artifact_root
+                if artifact_root is not None:
+                    artifact_location = str(Path(artifact_root).resolve())
                     self._mlflow.create_experiment(
-                        exp_name, artifact_location=artifact_location
+                        self.shared.experiment, artifact_location=artifact_location
                     )
-                except Exception:
-                    pass  # Already exists or not supported
+            except Exception:
+                pass
 
             self._active_run = self._mlflow.start_run(
                 run_name=self.cfg.mlflow_run_name,
@@ -154,7 +104,7 @@ class MLflowManager:
         self._mlflow.log_params(params)
         self._mlflow.set_tag("mlflow.source.name", self._sys.argv[0])
         try:
-            user = self._os.getlogin() if hasattr(self._os, "getlogin") else "unknown"
+            user = self._os.getlogin()
         except (AttributeError, OSError, RuntimeError):
             user = "unknown"
         self._mlflow.set_tag("mlflow.user", user)

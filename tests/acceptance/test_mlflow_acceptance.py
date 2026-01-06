@@ -107,6 +107,12 @@ class FakeMLflowClientAcceptance:
     def set_experiment(self, experiment_name: str) -> Any:
         self.experiment_name = experiment_name
 
+    def create_experiment(
+        self, _name: str, /, *, artifact_location: Optional[str] = None
+    ) -> str:
+        _ = artifact_location
+        return "exp_id"
+
     def start_run(self, run_name=None, description=None) -> Any:
         if self.should_fail_start:
             raise RuntimeError("MLflow down")

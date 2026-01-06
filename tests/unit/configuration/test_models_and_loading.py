@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -464,6 +465,203 @@ def test_data_config_when_positive_ints_then_accepts() -> None:
         DataConfig(ngram_size=0)
     cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
     assert cfg.batch_size == 1
+
+
+def test_resolve_path_strict_when_missing_then_raises(tmp_path: Path) -> None:
+    from ml_playground.configuration.models import _resolve_path_strict
+
+    with pytest.raises(ValueError, match="Invalid path"):
+        _resolve_path_strict(tmp_path / "does_not_exist")
+
+
+def test_trainer_config_inject_providers_does_not_override_explicit() -> None:
+    from ml_playground.configuration.models import TrainerConfig
+
+    class _Telemetry:
+        def log_metric(self, name: str, value: float, step: int | None = None) -> None:
+            _ = name
+            _ = value
+            _ = step
+
+        def time_block(self, name: str) -> Any:
+            _ = name
+
+            class _Ctx:
+                def __enter__(self) -> None:
+                    return None
+
+                def __exit__(
+                    self,
+                    exc_type: type[BaseException] | None,
+                    exc: BaseException | None,
+                    tb: Any,
+                ) -> None:
+                    _ = exc_type
+                    _ = exc
+                    _ = tb
+                    return None
+
+            return _Ctx()
+
+    sentinel_telemetry = _Telemetry()
+
+    def explicit_save(*_a: object, **_k: object) -> None:
+        return None
+
+    def provided_save(*_a: object, **_k: object) -> None:
+        return None
+
+    cfg = TrainerConfig.model_validate(
+        {
+            "model": {
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+                "block_size": 8,
+                "vocab_size": 32,
+            },
+            "data": {
+                "batch_size": 1,
+                "block_size": 8,
+                "grad_accum_steps": 1,
+                "tokenizer": "char",
+                "ngram_size": 1,
+            },
+            "optim": {"learning_rate": 1e-4},
+            "schedule": {"warmup_iters": 0},
+            "runtime": {"out_dir": Path(".")},
+            "checkpoint_save_fn": explicit_save,
+            "telemetry": sentinel_telemetry,
+        },
+        context={
+            "providers": {
+                "checkpoint_save_fn": provided_save,
+                "telemetry": _Telemetry(),
+            }
+        },
+    )
+
+    assert cfg.checkpoint_save_fn is explicit_save
+    assert cfg.telemetry is sentinel_telemetry
+
+
+def test_experiment_config_resolve_paths_handles_path_values(tmp_path: Path) -> None:
+    from ml_playground.configuration.models import ExperimentConfig
+
+    exp = ExperimentConfig.model_validate(
+        {
+            "prepare": {
+                "raw_dir": "./raw",
+                "dataset_dir": tmp_path / "data",
+            },
+            "train": {
+                "model": {
+                    "n_layer": 1,
+                    "n_head": 1,
+                    "n_embd": 8,
+                    "block_size": 8,
+                    "vocab_size": 32,
+                },
+                "data": {
+                    "batch_size": 1,
+                    "block_size": 8,
+                    "grad_accum_steps": 1,
+                    "tokenizer": "char",
+                    "ngram_size": 1,
+                },
+                "optim": {"learning_rate": 1e-4},
+                "schedule": {"warmup_iters": 0},
+                "runtime": {
+                    "out_dir": tmp_path / "train_out",
+                    "eval_interval": 1,
+                    "log_interval": 1,
+                    "max_iters": 0,
+                    "eval_only": True,
+                },
+            },
+            "sample": {
+                "runtime": {
+                    "out_dir": tmp_path / "sample_out",
+                    "max_iters": 0,
+                    "eval_only": True,
+                },
+                "sample": {"start": "\n"},
+            },
+            "shared": {
+                "experiment": "exp",
+                "config_path": tmp_path / "cfg.toml",
+                "project_home": tmp_path,
+                "dataset_dir": tmp_path / "data",
+                "train_out_dir": "./train_out",
+                "sample_out_dir": "./sample_out",
+            },
+        }
+    )
+
+    assert exp.shared.train_out_dir.is_absolute()
+    assert exp.shared.sample_out_dir.is_absolute()
+
+
+def test_frozen_models_allow_setting_logger(tmp_path: Path) -> None:
+    cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
+    cfg.logger = logging.getLogger("test")
+    assert cfg.logger.name == "test"
+
+
+def test_experience_storage_resolve_path_ignores_invalid_context(
+    tmp_path: Path,
+) -> None:
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    cfg = ExperienceStorageConfig.model_validate(
+        {"strategy": "json_file", "path": Path("./store.json")},
+        context={"config_path": "not-a-path"},
+    )
+    assert cfg.path == Path("./store.json")
+
+
+def test_experiment_config_resolve_paths_runtime_not_dict_branches(
+    tmp_path: Path,
+) -> None:
+    from ml_playground.configuration.models import ExperimentConfig
+
+    with pytest.raises(ValidationError):
+        ExperimentConfig.model_validate(
+            {
+                "prepare": {"raw_dir": "./raw"},
+                "train": {
+                    "model": {
+                        "n_layer": 1,
+                        "n_head": 1,
+                        "n_embd": 8,
+                        "block_size": 8,
+                        "vocab_size": 32,
+                    },
+                    "data": {
+                        "batch_size": 1,
+                        "block_size": 8,
+                        "grad_accum_steps": 1,
+                        "tokenizer": "char",
+                        "ngram_size": 1,
+                    },
+                    "optim": {"learning_rate": 1e-4},
+                    "schedule": {"warmup_iters": 0},
+                    "runtime": "not-a-dict",
+                },
+                "sample": {
+                    "runtime": "not-a-dict",
+                    "sample": {"start": "\n"},
+                },
+                "shared": {
+                    "experiment": "exp",
+                    "config_path": tmp_path / "cfg.toml",
+                    "project_home": tmp_path,
+                    "dataset_dir": tmp_path / "data",
+                    "train_out_dir": "./train_out",
+                    "sample_out_dir": "./sample_out",
+                },
+            }
+        )
 
 
 def test_sample_config_when_out_of_range_then_raises() -> None:

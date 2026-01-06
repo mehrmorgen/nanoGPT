@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Annotated, Any, Optional, TYPE_CHECKING, Literal
+from typing import Annotated, Any, Optional, Literal
 import typing as _t
 
 from pydantic import (
@@ -23,8 +23,6 @@ from ml_playground.core.logging_protocol import LoggerLike
 from ml_playground.core.protocols import TokenizerKind, Telemetry
 from ml_playground.configuration.providers import ProviderBundle, get_default_providers
 
-if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
-    pass
 READ_POLICY_LATEST: Literal["latest"] = "latest"
 READ_POLICY_BEST: Literal["best"] = "best"
 DEFAULT_READ_POLICY: Literal["best"] = READ_POLICY_BEST
@@ -367,15 +365,11 @@ class RuntimeConfig(_FrozenStrictModel):
 
     @computed_field(return_type=int)
     def total_eval_steps(self) -> int:
-        if self.eval_interval <= 0:
-            return 0
         return int(self.max_iters // self.eval_interval)
 
     @computed_field(return_type=int)
     def total_eval_games(self) -> int:
         if self.eval_interval_games is None or self.max_games is None:
-            return 0
-        if self.eval_interval_games <= 0:
             return 0
         return int(self.max_games // self.eval_interval_games)
 
@@ -697,7 +691,11 @@ class ExperimentConfig(_FrozenStrictModel):
                 if isinstance(v, str):
                     shared_data[key] = Path(v)
 
-            train_runtime_data = data.get("train", {}).get("runtime", {})
+            train_runtime_data = (
+                data["train"].get("runtime", {})
+                if isinstance(data.get("train"), dict)
+                else {}
+            )
             if isinstance(train_runtime_data, dict):
                 train_out_dir = train_runtime_data.get("out_dir")
                 if train_out_dir:
@@ -707,7 +705,11 @@ class ExperimentConfig(_FrozenStrictModel):
                         else train_out_dir
                     )
 
-            sample_runtime_data = data.get("sample", {}).get("runtime", {})
+            sample_runtime_data = (
+                data["sample"].get("runtime", {})
+                if isinstance(data.get("sample"), dict)
+                else {}
+            )
             if isinstance(sample_runtime_data, dict):
                 sample_out_dir = sample_runtime_data.get("out_dir")
                 if sample_out_dir:
@@ -717,7 +719,9 @@ class ExperimentConfig(_FrozenStrictModel):
                         else sample_out_dir
                     )
 
-            prepare_data = data.get("prepare")
+            prepare_data = (
+                data["prepare"] if isinstance(data.get("prepare"), dict) else None
+            )
             if isinstance(prepare_data, dict):
                 dataset_dir = prepare_data.pop("dataset_dir", None)
                 if dataset_dir:
