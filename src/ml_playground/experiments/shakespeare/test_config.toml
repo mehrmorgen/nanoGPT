@@ -32,6 +32,8 @@ grad_clip = 1.0
 
 [train.runtime]
 out_dir = "./out/test_run"
+mlflow_enabled = true
+mlflow_tracking_uri = "sqlite:///../out/mlflow.db"
 max_iters = 1
 eval_interval = 1
 eval_iters = 1

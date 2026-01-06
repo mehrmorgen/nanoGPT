@@ -1,4 +1,5 @@
 # Minimal test configuration for bundestag_tiktoken to keep CLI tests fast.
+# MLflow is disabled to avoid artifacts during automated tests.
 
 #[ Minimal test configuration aligned with ExperimentConfig schema ]
 
@@ -41,6 +42,7 @@ min_lr = 0.0001
 
 [train.runtime]
 out_dir = "./out/test_run"
+mlflow_enabled = false
 max_iters = 1
 eval_interval = 1
 eval_iters = 1
