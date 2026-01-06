@@ -1,0 +1,222 @@
+from __future__ import annotations  # pragma: no cover
+
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    Literal,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Protocol,
+    Sequence,
+    TypeVar,
+    runtime_checkable,
+)
+
+T = TypeVar("T")
+TokenId = int
+TokenSequence = list[TokenId]
+TokenMapping = Mapping[str, TokenId]
+MutableTokenMapping = MutableMapping[str, TokenId]
+
+__all__ = [
+    "TokenId",
+    "TokenSequence",
+    "TokenMapping",
+    "MutableTokenMapping",
+    "TokenizerKind",
+    "Tokenizer",
+    "PersistenceStrategy",
+    "ExperienceStorage",
+    "CheckpointManager",
+    "Telemetry",
+    "MLflowRun",
+    "MLflowClient",
+    "OSModule",
+    "PlatformModule",
+    "SysModule",
+]
+
+
+@runtime_checkable
+class Tokenizer(Protocol):
+    """Unified interface for all tokenizers in ml_playground."""
+
+    @property
+    def name(self) -> str:
+        """Name of the tokenizer."""
+        ...  # pragma: no cover
+
+    @property
+    def vocab_size(self) -> int:
+        """Number of tokens in the vocabulary."""
+        ...  # pragma: no cover
+
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        """Mapping from tokens to integer ids."""
+        ...  # pragma: no cover
+
+    def encode(self, text: str) -> list[TokenId]:
+        """Encode text into a sequence of token ids."""
+        ...  # pragma: no cover
+
+    def decode(self, token_ids: Sequence[TokenId]) -> str:
+        """Decode a sequence of token ids into text."""
+        ...  # pragma: no cover
+
+
+TokenizerKind = Literal["char", "word", "tiktoken"]
+
+
+@runtime_checkable
+class PersistenceStrategy(Protocol):
+    """Protocol for experience storage persistence strategies."""
+
+    def load(self) -> Mapping[str, Any]:
+        """Load stored experiences."""
+        ...  # pragma: no cover
+
+    def save(self, entries: Mapping[str, Any]) -> None:
+        """Save experiences to the backend."""
+        _ = entries
+        ...  # pragma: no cover
+
+
+@runtime_checkable
+class ExperienceStorage(Protocol):
+    """Protocol for experience storage backends."""
+
+    def store(self, entry: Any) -> str:
+        """Store an experience entry."""
+        ...  # pragma: no cover
+
+    def get(self, key: str) -> Optional[Any]:
+        """Fetch an entry by key."""
+        ...  # pragma: no cover
+
+    def has(self, key: str) -> bool:
+        """Check if an entry exists."""
+        ...  # pragma: no cover
+
+    def entries(self) -> Iterator[Any]:
+        """Iterate over all entries."""
+        ...  # pragma: no cover
+
+    def flush(self) -> None:
+        """Persist pending changes."""
+        ...  # pragma: no cover
+
+    def __len__(self) -> int: ...  # pragma: no cover
+
+    def __iter__(self) -> Iterator[Any]: ...  # pragma: no cover
+
+
+@runtime_checkable
+class CheckpointManager(Protocol):
+    """Protocol for managing experiment checkpoints."""
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Save a checkpoint."""
+        ...  # pragma: no cover
+
+    def load(self, *args: Any, **kwargs: Any) -> Optional[Any]:
+        """Load a checkpoint."""
+        ...  # pragma: no cover
+
+    def get_latest_path(self) -> Optional[Path]:
+        """Get path to the latest checkpoint."""
+        ...  # pragma: no cover
+
+    def get_best_path(self) -> Optional[Path]:
+        """Get path to the best checkpoint."""
+        ...  # pragma: no cover
+
+
+@runtime_checkable
+class Telemetry(Protocol):
+    """Protocol for experiment telemetry and performance hooks."""
+
+    def log_metric(self, name: str, value: float, step: int | None = None) -> None:
+        """Log a numerical metric."""
+        ...  # pragma: no cover
+
+    def time_block(self, name: str) -> Any:
+        """Context manager to time a block of code."""
+        ...  # pragma: no cover
+
+
+@runtime_checkable
+class MLflowRun(Protocol):
+    """Minimal MLflow run handle."""
+
+    def __enter__(self) -> Any: ...  # pragma: no cover
+
+    def __exit__(self, *exc: Any) -> bool | None: ...  # pragma: no cover
+
+    def __iter__(self) -> Iterator[Any]: ...  # pragma: no cover
+
+
+@runtime_checkable
+class MLflowClient(Protocol):
+    """Protocol describing the subset of MLflow we depend on.
+
+    This keeps the integration testable and type-checkable without relying on
+    MLflow's dynamic runtime types.
+    """
+
+    def set_tracking_uri(self, _uri: str, /) -> None: ...  # pragma: no cover
+
+    def get_experiment_by_name(self, _name: str, /) -> Any: ...  # pragma: no cover
+
+    def set_experiment(self, _experiment_name: str, /) -> Any: ...  # pragma: no cover
+
+    def create_experiment(
+        self, _name: str, /, **kwargs: Any
+    ) -> str: ...  # pragma: no cover
+
+    def start_run(self, **kwargs: Any) -> MLflowRun: ...  # pragma: no cover
+
+    def end_run(self) -> None: ...  # pragma: no cover
+
+    def log_params(self, _params: Dict[str, Any], /) -> None: ...  # pragma: no cover
+
+    def log_metrics(
+        self, _metrics: Dict[str, float], /, *, step: Optional[int] = None
+    ) -> None: ...  # pragma: no cover
+
+    def log_artifact(
+        self, _local_path: str, /, *, artifact_path: Optional[str] = None
+    ) -> None:
+        _ = artifact_path
+        ...  # pragma: no cover
+
+    def log_artifacts(
+        self, _local_dir: str, /, *, artifact_path: Optional[str] = None
+    ) -> None:
+        _ = artifact_path
+        ...  # pragma: no cover
+
+    def set_tag(self, _key: str, _value: Any, /) -> None: ...  # pragma: no cover
+
+
+@runtime_checkable
+class OSModule(Protocol):
+    def getcwd(self) -> str: ...  # pragma: no cover
+
+    def getlogin(self) -> str: ...  # pragma: no cover
+
+
+@runtime_checkable
+class PlatformModule(Protocol):
+    def platform(self) -> str: ...  # pragma: no cover
+
+    def processor(self) -> str: ...  # pragma: no cover
+
+
+@runtime_checkable
+class SysModule(Protocol):
+    version: str
+    argv: list[str]
