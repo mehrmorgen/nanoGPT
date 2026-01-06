@@ -26,9 +26,8 @@ REQUIRED_STREAM_FIELDS = ("start", "winner", "moves", "policy_targets")
 
 def validate_streaming_records(
     records: Iterable[Mapping[str, Any]],
-) -> list[Mapping[str, Any]]:
-    """Validate streaming record shape for self-play datasets."""
-    validated: list[Mapping[str, Any]] = []
+) -> Iterable[Mapping[str, Any]]:
+    """Validate streaming record shape for self-play datasets in a single pass."""
     for idx, record in enumerate(records):
         if not isinstance(record, Mapping):
             raise DataError(
@@ -43,8 +42,7 @@ def validate_streaming_records(
                 reason="Record schema incomplete",
                 rationale="Streaming prep requires 'start', 'winner', 'moves', and 'policy_targets'",
             )
-        validated.append(record)
-    return validated
+        yield record
 
 
 def _resolve_paths(
