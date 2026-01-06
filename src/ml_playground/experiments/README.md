@@ -22,6 +22,7 @@ Conventions
 - Config location: TOML lives at the experiment root (no configs/ subfolder).
 - Data location: experiment‑local prepared data lives under `<experiment>/datasets/`.
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
+- MLflow defaults: enabled for training runs; tracking URI resolves relative to the experiment config (`sqlite:///../out/mlflow.db`) with artifacts under `experiments/out/mlruns`. Disable via `[train.runtime].mlflow_enabled = false`.
 - Typing/UV: everything follows the project’s strict typing and UV‑only workflow (see repo README for commands).
 
 Universal meta policy
@@ -172,6 +173,7 @@ uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml sample 
 
 - Use the shared defaults in `src/ml_playground/experiments/default_config.toml` and adjust via experiment configs under `src/ml_playground/experiments/<name>/config.toml`.
 - For tiny test defaults, see `tests/e2e/ml_playground/experiments/test_default_config.toml`.
+- MLflow defaults: enabled for train/sample runtimes; tracking URI defaults to `sqlite:///../out/mlflow.db` resolved relative to the experiment config; artifacts stored under `experiments/out/mlruns`; disable per experiment via `mlflow_enabled = false`.
 
 ## Outputs
 
