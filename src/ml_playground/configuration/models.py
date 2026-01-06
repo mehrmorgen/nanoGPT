@@ -71,6 +71,19 @@ def _resolve_fields_relative(
             data[key] = _resolve_if_relative(data[key], base_dir)
 
 
+def _resolve_mlflow_tracking_uri(value: Any, base_dir: Path) -> Any:
+    if not isinstance(value, str):
+        return value
+    prefix = "sqlite:///"
+    if value.startswith(prefix) and not value.startswith("sqlite:////"):
+        sqlite_path = value[len(prefix) :]
+        if not sqlite_path:
+            return value
+        resolved = (base_dir / sqlite_path).resolve()
+        return f"sqlite:///{resolved.as_posix()}"
+    return value
+
+
 SECTION_PREPARE = "prepare"
 SECTION_TRAIN = "train"
 SECTION_SAMPLE = "sample"
@@ -196,7 +209,29 @@ class PreparerConfig(_FrozenStrictModel):
 
 
 class RuntimeConfig(_FrozenStrictModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+        base_dir = config_path.parent
+        if "out_dir" in data:
+            data["out_dir"] = _resolve_if_relative(data["out_dir"], base_dir)
+        if "mlflow_tracking_uri" in data:
+            data["mlflow_tracking_uri"] = _resolve_mlflow_tracking_uri(
+                data["mlflow_tracking_uri"], base_dir
+            )
+        return data
+
     out_dir: Path
+    mlflow_enabled: bool = False
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str | None = None
+    mlflow_run_name: str | None = None
+    mlflow_log_system_metrics: bool = False
     max_iters: NonNegativeStrictInt = 600_000
     max_games: Optional[NonNegativeStrictInt] = None
     eval_interval: AtLeastOneInt = 2_000
@@ -261,6 +296,12 @@ class RuntimeConfig(_FrozenStrictModel):
         return self
 
     @model_validator(mode="after")
+    def _disable_mlflow_when_flag_false(self) -> "RuntimeConfig":
+        if not self.mlflow_enabled:
+            object.__setattr__(self, "mlflow_tracking_uri", None)
+        return self
+
+    @model_validator(mode="after")
     def _check_checkpoint_naming(self) -> "RuntimeConfig":
         if self.ckpt_naming_policy == "domain":
             label = self.ckpt_domain_label
@@ -320,6 +361,10 @@ class TrainerConfig(_FrozenStrictModel):
         base_dir = config_path.parent
         if "runtime" in data and isinstance(data["runtime"], dict):
             _resolve_fields_relative(data["runtime"], ["out_dir"], base_dir)
+            if "mlflow_tracking_uri" in data["runtime"]:
+                data["runtime"]["mlflow_tracking_uri"] = _resolve_mlflow_tracking_uri(
+                    data["runtime"]["mlflow_tracking_uri"], base_dir
+                )
         return data
 
     class HFModelConfig(_FrozenStrictModel):

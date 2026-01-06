@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -467,6 +468,345 @@ def test_data_config_when_positive_ints_then_accepts() -> None:
         DataConfig(ngram_size=0)
     cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
     assert cfg.batch_size == 1
+
+
+def test_resolve_path_strict_when_missing_then_raises(tmp_path: Path) -> None:
+    from ml_playground.configuration.models import _resolve_path_strict
+
+    with pytest.raises(ValueError, match="Invalid path"):
+        _resolve_path_strict(tmp_path / "does_not_exist")
+
+
+def test_trainer_config_inject_providers_does_not_override_explicit() -> None:
+    from ml_playground.configuration.models import TrainerConfig
+
+    class _Telemetry:
+        def log_metric(self, name: str, value: float, step: int | None = None) -> None:
+            _ = name
+            _ = value
+            _ = step
+
+        def time_block(self, name: str) -> Any:
+            _ = name
+
+            class _Ctx:
+                def __enter__(self) -> None:
+                    return None
+
+                def __exit__(
+                    self,
+                    exc_type: type[BaseException] | None,
+                    exc: BaseException | None,
+                    tb: Any,
+                ) -> None:
+                    _ = exc_type
+                    _ = exc
+                    _ = tb
+                    return None
+
+            return _Ctx()
+
+    sentinel_telemetry = _Telemetry()
+
+    def explicit_save(*_a: object, **_k: object) -> None:
+        return None
+
+    def provided_save(*_a: object, **_k: object) -> None:
+        return None
+
+    cfg = TrainerConfig.model_validate(
+        {
+            "model": {
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 1,
+                "block_size": 1,
+                "dropout": 0.0,
+                "bias": False,
+            },
+            "data": {"batch_size": 1, "block_size": 1, "grad_accum_steps": 1},
+            "optim": {
+                "learning_rate": 0.001,
+                "weight_decay": 0.0,
+                "beta1": 0.9,
+                "beta2": 0.95,
+                "grad_clip": 1.0,
+            },
+            "schedule": {
+                "decay_lr": False,
+                "warmup_iters": 0,
+                "lr_decay_iters": 1,
+                "min_lr": 0.0,
+            },
+            "runtime": {
+                "out_dir": Path("."),
+                "max_iters": 1,
+                "eval_interval": 1,
+                "eval_iters": 1,
+                "log_interval": 1,
+            },
+            "checkpoint_save_fn": explicit_save,
+            "telemetry": sentinel_telemetry,
+        },
+        context={"providers": {"checkpoint_save_fn": provided_save}},
+    )
+    assert cfg.checkpoint_save_fn is explicit_save
+    assert cfg.telemetry is sentinel_telemetry
+
+
+def test_resolve_mlflow_tracking_uri_when_sqlite_relative_then_resolves_to_absolute(
+    tmp_path: Path,
+) -> None:
+    base_dir = tmp_path / "exp"
+    base_dir.mkdir()
+    resolved = config_models._resolve_mlflow_tracking_uri(
+        "sqlite:///mlflow.db", base_dir
+    )
+    assert resolved.startswith("sqlite:////")
+    assert resolved.endswith("/mlflow.db")
+    assert str(base_dir).replace("\\", "/") in resolved
+
+
+def test_runtime_config_when_mlflow_sqlite_relative_then_resolves_relative_to_config_path(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "exp" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_text("")
+
+    cfg = RuntimeConfig.model_validate(
+        {
+            "out_dir": "./out",
+            "mlflow_enabled": True,
+            "mlflow_tracking_uri": "sqlite:///mlflow.db",
+        },
+        context={"config_path": config_path},
+    )
+    assert cfg.out_dir == (config_path.parent / "out").resolve()
+    assert cfg.mlflow_tracking_uri is not None
+    assert cfg.mlflow_tracking_uri.startswith("sqlite:////")
+    assert cfg.mlflow_tracking_uri.endswith("/mlflow.db")
+
+
+def test_load_train_config_applies_mlflow_defaults(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "exp"
+    exp_dir.mkdir()
+    config_path = exp_dir / "config.toml"
+    config_path.write_text(
+        """
+[train]
+[train.runtime]
+out_dir = "./custom"
+""",
+        encoding="utf-8",
+    )
+
+    defaults = tmp_path / "defaults.toml"
+    defaults.write_text(
+        """
+[train.runtime]
+out_dir = "./out"
+mlflow_enabled = true
+mlflow_tracking_uri = "sqlite:///../out/mlflow.db"
+[train.model]
+n_layer = 1
+n_head = 1
+n_embd = 8
+block_size = 8
+[train.data]
+batch_size = 1
+block_size = 8
+grad_accum_steps = 1
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.0
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+[train.schedule]
+decay_lr = false
+warmup_iters = 0
+lr_decay_iters = 1
+min_lr = 0.0
+""",
+        encoding="utf-8",
+    )
+
+    cfg = config_loading.load_train_config(config_path, default_config_path=defaults)
+
+    assert cfg.runtime.mlflow_enabled is True
+    expected_db = (exp_dir / ".." / "out" / "mlflow.db").resolve()
+    assert cfg.runtime.mlflow_tracking_uri is not None
+    assert cfg.runtime.mlflow_tracking_uri.startswith("sqlite:////")
+    assert cfg.runtime.mlflow_tracking_uri.endswith(expected_db.as_posix())
+
+
+def test_load_train_config_allows_overriding_mlflow_enabled(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[train]
+[train.runtime]
+out_dir = "./custom"
+mlflow_enabled = false
+""",
+        encoding="utf-8",
+    )
+
+    defaults = tmp_path / "defaults.toml"
+    defaults.write_text(
+        """
+[train.runtime]
+out_dir = "./out"
+mlflow_enabled = true
+mlflow_tracking_uri = "sqlite:///../out/mlflow.db"
+[train.model]
+n_layer = 1
+n_head = 1
+n_embd = 8
+block_size = 8
+[train.data]
+batch_size = 1
+block_size = 8
+grad_accum_steps = 1
+[train.optim]
+learning_rate = 0.001
+weight_decay = 0.0
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+[train.schedule]
+decay_lr = false
+warmup_iters = 0
+lr_decay_iters = 1
+min_lr = 0.0
+""",
+        encoding="utf-8",
+    )
+
+    cfg = config_loading.load_train_config(config_path, default_config_path=defaults)
+
+    assert cfg.runtime.mlflow_enabled is False
+    assert cfg.runtime.mlflow_tracking_uri is None
+
+
+def test_experiment_config_resolve_paths_handles_path_values(tmp_path: Path) -> None:
+    from ml_playground.configuration.models import ExperimentConfig
+
+    exp = ExperimentConfig.model_validate(
+        {
+            "prepare": {
+                "raw_dir": "./raw",
+                "dataset_dir": tmp_path / "data",
+            },
+            "train": {
+                "model": {
+                    "n_layer": 1,
+                    "n_head": 1,
+                    "n_embd": 8,
+                    "block_size": 8,
+                    "vocab_size": 32,
+                },
+                "data": {
+                    "batch_size": 1,
+                    "block_size": 8,
+                    "grad_accum_steps": 1,
+                    "tokenizer": "char",
+                    "ngram_size": 1,
+                },
+                "optim": {"learning_rate": 1e-4},
+                "schedule": {"warmup_iters": 0},
+                "runtime": {
+                    "out_dir": tmp_path / "train_out",
+                    "eval_interval": 1,
+                    "log_interval": 1,
+                    "max_iters": 0,
+                    "eval_only": True,
+                },
+            },
+            "sample": {
+                "runtime": {
+                    "out_dir": tmp_path / "sample_out",
+                    "max_iters": 0,
+                    "eval_only": True,
+                },
+                "sample": {"start": "\n"},
+            },
+            "shared": {
+                "experiment": "exp",
+                "config_path": tmp_path / "cfg.toml",
+                "project_home": tmp_path,
+                "dataset_dir": tmp_path / "data",
+                "train_out_dir": "./train_out",
+                "sample_out_dir": "./sample_out",
+            },
+        }
+    )
+
+    assert exp.shared.train_out_dir.is_absolute()
+    assert exp.shared.sample_out_dir.is_absolute()
+
+
+def test_frozen_models_allow_setting_logger(tmp_path: Path) -> None:
+    cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
+    cfg.logger = logging.getLogger("test")
+    assert cfg.logger.name == "test"
+
+
+def test_experience_storage_resolve_path_ignores_invalid_context(
+    tmp_path: Path,
+) -> None:
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    cfg = ExperienceStorageConfig.model_validate(
+        {"strategy": "json_file", "path": Path("./store.json")},
+        context={"config_path": "not-a-path"},
+    )
+    assert cfg.path == Path("./store.json")
+
+
+def test_experiment_config_resolve_paths_runtime_not_dict_branches(
+    tmp_path: Path,
+) -> None:
+    from ml_playground.configuration.models import ExperimentConfig
+
+    with pytest.raises(ValidationError):
+        ExperimentConfig.model_validate(
+            {
+                "prepare": {"raw_dir": "./raw"},
+                "train": {
+                    "model": {
+                        "n_layer": 1,
+                        "n_head": 1,
+                        "n_embd": 8,
+                        "block_size": 8,
+                        "vocab_size": 32,
+                    },
+                    "data": {
+                        "batch_size": 1,
+                        "block_size": 8,
+                        "grad_accum_steps": 1,
+                        "tokenizer": "char",
+                        "ngram_size": 1,
+                    },
+                    "optim": {"learning_rate": 1e-4},
+                    "schedule": {"warmup_iters": 0},
+                    "runtime": "not-a-dict",
+                },
+                "sample": {
+                    "runtime": "not-a-dict",
+                    "sample": {"start": "\n"},
+                },
+                "shared": {
+                    "experiment": "exp",
+                    "config_path": tmp_path / "cfg.toml",
+                    "project_home": tmp_path,
+                    "dataset_dir": tmp_path / "data",
+                    "train_out_dir": "./train_out",
+                    "sample_out_dir": "./sample_out",
+                },
+            }
+        )
 
 
 def test_sample_config_when_out_of_range_then_raises() -> None:

@@ -2,7 +2,8 @@
 #
 # Use these as a minimal, safe baseline; experiments may override any subset of
 # settings they need. Paths (dataset_dir, out_dir) are resolved
-# relative to the current experiment.
+# relative to the current experiment config when provided as relative
+# values to keep portability between checkouts.
 #
 # Common guidance and notes:
 # - Many knobs are inert at their defaults (e.g., ema_decay=0.0, best_smoothing_alpha=0.0,
@@ -73,8 +74,10 @@ lr_decay_iters = 20000
 min_lr = 0.0001
 
 [train.runtime]
-# Paths are used as-is (absolute or relative), no rewriting.
+# Relative paths are resolved against the experiment config directory.
 out_dir = "./out"
+mlflow_enabled = true
+mlflow_tracking_uri = "sqlite:///../out/mlflow.db"
 max_iters = 100000
 # Cadence tradeoffs: lower eval_interval/eval_iters increases feedback but adds overhead.
 # always_save_checkpoint ensures the last/best are persisted; ckpt_top_k=0 disables top-k pruning.

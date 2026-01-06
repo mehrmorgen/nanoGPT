@@ -32,3 +32,4 @@ final_iter, best_loss = trainer.run()
 
 - [Framework Utilities](../docs/framework_utilities.md) - Training configuration
 - [Development Guidelines](../.dev-guidelines/DEVELOPMENT.md) - Quality standards
+- MLflow defaults: enabled by default when using shared configs; tracking URI resolves relative to the experiment config (`sqlite:///../out/mlflow.db`) and artifacts are stored under `experiments/out/mlruns`. Disable per experiment via `[train.runtime].mlflow_enabled = false`.
