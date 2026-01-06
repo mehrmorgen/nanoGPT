@@ -98,8 +98,9 @@ def lint_check() -> None:
     lint()
 
 
-def _pytest(targets: List[str]) -> None:
-    utils.uv_run(*utils.pytest_command(targets))
+def _pytest(targets: List[str], *, disable_benchmark: bool = False) -> None:
+    extra = ["-p", "no:benchmark"] if disable_benchmark else []
+    utils.uv_run(*utils.pytest_command([*extra, *targets]))
 
 
 @app.command()
@@ -139,7 +140,10 @@ def integration(
     ),
 ) -> None:
     """Run integration tests."""
-    _pytest(["-m", "integration", "--no-cov", *utils.forwarded_args(args)])
+    _pytest(
+        ["-m", "integration", "--no-cov", *utils.forwarded_args(args)],
+        disable_benchmark=True,
+    )
 
 
 @app.command()
@@ -149,7 +153,7 @@ def e2e(
     ),
 ) -> None:
     """Run end-to-end tests."""
-    _pytest(["tests/e2e", *utils.forwarded_args(args)])
+    _pytest(["tests/e2e", *utils.forwarded_args(args)], disable_benchmark=True)
 
 
 @app.command()
@@ -159,7 +163,7 @@ def acceptance(
     ),
 ) -> None:
     """Run acceptance tests."""
-    _pytest(["tests/acceptance", *utils.forwarded_args(args)])
+    _pytest(["tests/acceptance", *utils.forwarded_args(args)], disable_benchmark=True)
 
 
 @app.command("coverage-test")
