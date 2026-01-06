@@ -157,6 +157,43 @@ class _FrozenStrictModel(BaseModel):
     logger: LoggerLike = Field(default_factory=lambda: logging.getLogger(__name__))
 
 
+class ExperienceStorageConfig(_FrozenStrictModel):
+    """Configuration for experiment experience storage and caching."""
+
+    strategy: Literal["memory", "json_file"] = "memory"
+    path: Path | None = None
+    flush_on_store: bool = False
+    extras: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_path(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+        base_dir = config_path.parent
+        if "path" in data:
+            data["path"] = _resolve_if_relative(data["path"], base_dir)
+        return data
+
+    @model_validator(mode="after")
+    def _validate_strategy(self) -> "ExperienceStorageConfig":
+        if self.strategy == "json_file":
+            if self.path is None:
+                raise ValueError(
+                    "experience storage path is required for strategy json_file"
+                )
+            if str(self.path).strip() == "" or self.path.is_dir():
+                raise ValueError(
+                    f"experience storage path must point to a file, got: {self.path}"
+                )
+        if self.strategy == "memory" and self.path:
+            self.logger.warning("experience storage path ignored for strategy memory")
+        return self
+
+
 def _no_nan(v: float) -> float:
     if v != v:  # NaN check
         raise ValueError("must not be NaN")
@@ -688,6 +725,7 @@ __all__ = [
     "KEY_EXTRAS",
     "DeviceKind",
     "DTypeKind",
+    "ExperienceStorageConfig",
     "PreparerConfig",
     "RuntimeConfig",
     "TrainerConfig",
