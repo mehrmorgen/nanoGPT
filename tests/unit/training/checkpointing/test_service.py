@@ -613,3 +613,46 @@ def test_propagate_metadata_copies_to_multiple_dirs(tmp_path: Path) -> None:
     # Both directories should have the meta file
     assert (train_dir / "meta.pkl").exists()
     assert (sample_dir / "meta.pkl").exists()
+
+
+def test_propagate_metadata_handles_meta_path_exception(tmp_path: Path) -> None:
+    """propagate_metadata logs and returns when meta path resolution fails."""
+
+    class _BadData:
+        def meta_path(self, _dataset_dir: Path) -> Path:
+            raise TypeError("bad path")
+
+    class _BadCfg:
+        data = _BadData()
+
+    logger = _StubLogger()
+    shared = _make_shared(tmp_path, _make_cfg(tmp_path))
+
+    service.propagate_metadata(_BadCfg(), shared, logger=logger)
+
+    assert any("Failed to resolve meta source path" in msg for msg in logger.warnings)
+
+
+def test_propagate_metadata_skips_duplicate_sample_dir(tmp_path: Path) -> None:
+    """propagate_metadata avoids duplicate copies for shared output dirs."""
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    meta_src = dataset_dir / "meta.pkl"
+    meta_src.write_bytes(b"meta content")
+
+    cfg = _make_cfg(tmp_path)
+    shared = _make_shared(tmp_path, cfg).model_copy(
+        update={
+            "dataset_dir": dataset_dir,
+            "sample_out_dir": cfg.runtime.out_dir,
+        }
+    )
+
+    copies: list[Path] = []
+
+    def _copy(src: Path, dst: Path) -> None:
+        copies.append(dst)
+
+    service.propagate_metadata(cfg, shared, logger=_StubLogger(), copy_fn=_copy)
+
+    assert len(copies) == 1

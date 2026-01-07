@@ -5,10 +5,22 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Tuple
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Tuple,
+    TYPE_CHECKING,
+)
 
 from ml_playground.core.error_handling import DataError
 
+if TYPE_CHECKING:
+    from ml_playground.configuration.models import ExperienceStorageConfig
 __all__ = [
     "ExperienceEntry",
     "ExperienceStorage",
@@ -17,9 +29,6 @@ __all__ = [
     "JSONFilePersistenceStrategy",
     "build_experience_storage",
 ]
-
-if TYPE_CHECKING:
-    from ml_playground.configuration.models import ExperienceStorageConfig
 
 
 @dataclass(frozen=True)
@@ -64,14 +73,15 @@ class PersistenceStrategy(ABC):
 class JSONFilePersistenceStrategy(PersistenceStrategy):
     """JSON-based persistence for experience storage suitable for light workloads."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, loader: Callable[[str], Any] | None = None) -> None:
         self._path = path
+        self._loader = loader or json.loads
 
     def load(self) -> Mapping[str, ExperienceEntry]:
         if not self._path.exists():
             return {}
         try:
-            payload = json.loads(self._path.read_text(encoding="utf-8"))
+            payload = self._loader(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise DataError(
                 f"Failed to read experience storage from {self._path}: {exc}",
@@ -308,7 +318,6 @@ class InMemoryExperienceStorage(ExperienceStorage):
 
     def _rebuild_indices(self) -> None:
         """Rebuild secondary indices from scratch."""
-        # pragma: no cover - rebuild logic is standard and covered by basic operations
         self._priority_index = sorted(
             self._entries.keys(),
             key=lambda k: self._entries[k].priority_score,

@@ -146,3 +146,33 @@ def test_setup_tokenizer_word_branch(tmp_path: Path) -> None:
     tokenizer = setup_tokenizer(tmp_path)
     assert tokenizer is not None
     assert tokenizer.name == "word"
+
+
+def test_setup_tokenizer_rejects_missing_tokenizer_type(tmp_path: Path) -> None:
+    """setup_tokenizer raises when tokenizer_type is unset."""
+    meta = {
+        "tokenizer_type": None,
+        "meta_version": 1,
+        "train_tokens": 0,
+        "val_tokens": 0,
+    }
+    with (tmp_path / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    with pytest.raises(DataError):
+        setup_tokenizer(tmp_path)
+
+
+def test_setup_tokenizer_rejects_unknown_tokenizer_type(tmp_path: Path) -> None:
+    """setup_tokenizer rejects unknown tokenizer types."""
+    meta = {
+        "tokenizer_type": "mystery",
+        "meta_version": 1,
+        "train_tokens": 0,
+        "val_tokens": 0,
+    }
+    with (tmp_path / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    with pytest.raises(DataError):
+        setup_tokenizer(tmp_path)

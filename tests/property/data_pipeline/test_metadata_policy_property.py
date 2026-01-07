@@ -80,3 +80,13 @@ def test_coerce_seed_policy_when_known_then_returns(policy: str) -> None:
 def test_coerce_seed_policy_when_none_then_defaults() -> None:
     """Coerce seed policy when none then defaults."""
     assert coerce_seed_policy(None) == "auto"
+
+
+@settings(max_examples=10, deadline=50, derandomize=True)
+@given(policy=st.text(min_size=1, max_size=10))
+def test_coerce_seed_policy_when_unknown_then_raises(policy: str) -> None:
+    """Coerce seed policy when unknown then raises."""
+    if policy in {"auto", "fail_fast"}:
+        return
+    with pytest.raises(DataError):
+        coerce_seed_policy(policy)

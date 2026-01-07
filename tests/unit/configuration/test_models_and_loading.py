@@ -319,6 +319,61 @@ def test_read_toml_dict_when_toml_invalid_then_raises(tmp_path: Path) -> None:
         config_loading.read_toml_dict(cfg_path)
 
 
+def test_validate_budget_returns_none_when_missing() -> None:
+    """Budget validation returns None when budget is absent or null."""
+    assert config_loading._validate_budget({}) is None
+    assert config_loading._validate_budget({"budget": None}) is None
+
+
+def test_validate_budget_rejects_non_mapping() -> None:
+    """Budget validation rejects non-mapping budget payloads."""
+    with pytest.raises(ValueError):
+        config_loading._validate_budget({"budget": "nope"})
+
+
+def test_validate_budget_rejects_invalid_max_hours() -> None:
+    """Budget validation rejects non-numeric max_hours values."""
+    with pytest.raises(ValueError):
+        config_loading._validate_budget({"budget": {"max_hours": True}})
+
+
+def test_validate_budget_rejects_negative_max_hours() -> None:
+    """Budget validation rejects negative max_hours values."""
+    with pytest.raises(ValueError):
+        config_loading._validate_budget({"budget": {"max_hours": -1}})
+
+
+def test_validate_budget_allows_max_games() -> None:
+    """Budget validation accepts max_games integer values."""
+    budget = config_loading._validate_budget({"budget": {"max_games": 3}})
+    assert budget == {"max_games": 3}
+
+
+def test_validate_budget_allows_max_hours_only() -> None:
+    """Budget validation accepts max_hours without max_games."""
+    budget = config_loading._validate_budget({"budget": {"max_hours": 2.5}})
+    assert budget == {"max_hours": 2.5}
+
+
+def test_validate_extras_allows_none_extras() -> None:
+    """Extras validation handles None extras by treating them as empty."""
+    payload: dict[str, Any] = {"extras": None}
+    config_loading._validate_extras("shakespeare", "prepare", payload)
+    assert payload["extras"] == {
+        "base_dir": None,
+        "http_get": None,
+        "tokenizer_factory": None,
+        "writer_fn": None,
+    }
+
+
+def test_validate_extras_rejects_non_mapping() -> None:
+    """Extras validation rejects non-mapping extras payloads."""
+    payload: dict[str, Any] = {"extras": "nope"}
+    with pytest.raises(TypeError):
+        config_loading._validate_extras("shakespeare", "prepare", payload)
+
+
 def test_full_loader_when_empty_config_then_raises(tmp_path: Path) -> None:
     """Full loader when empty config then raises."""
     toml_text = ""
@@ -477,36 +532,20 @@ def test_resolve_path_strict_when_missing_then_raises(tmp_path: Path) -> None:
         _resolve_path_strict(tmp_path / "does_not_exist")
 
 
+def test_resolve_path_strict_when_exists_then_returns_resolved(tmp_path: Path) -> None:
+    """Resolve path strict returns absolute paths for existing files."""
+    from ml_playground.configuration.models import _resolve_path_strict
+
+    path = tmp_path / "config.toml"
+    path.write_text("value = 1", encoding="utf-8")
+
+    resolved = _resolve_path_strict(path)
+    assert resolved.is_absolute()
+    assert resolved == path.resolve()
+
+
 def test_trainer_config_inject_providers_does_not_override_explicit() -> None:
     from ml_playground.configuration.models import TrainerConfig
-
-    class _Telemetry:
-        def log_metric(self, name: str, value: float, step: int | None = None) -> None:
-            _ = name
-            _ = value
-            _ = step
-
-        def time_block(self, name: str) -> Any:
-            _ = name
-
-            class _Ctx:
-                def __enter__(self) -> None:
-                    return None
-
-                def __exit__(
-                    self,
-                    exc_type: type[BaseException] | None,
-                    exc: BaseException | None,
-                    tb: Any,
-                ) -> None:
-                    _ = exc_type
-                    _ = exc
-                    _ = tb
-                    return None
-
-            return _Ctx()
-
-    sentinel_telemetry = _Telemetry()
 
     def explicit_save(*_a: object, **_k: object) -> None:
         return None
@@ -546,12 +585,10 @@ def test_trainer_config_inject_providers_does_not_override_explicit() -> None:
                 "log_interval": 1,
             },
             "checkpoint_save_fn": explicit_save,
-            "telemetry": sentinel_telemetry,
         },
         context={"providers": {"checkpoint_save_fn": provided_save}},
     )
     assert cfg.checkpoint_save_fn is explicit_save
-    assert cfg.telemetry is sentinel_telemetry
 
 
 def test_resolve_mlflow_tracking_uri_when_sqlite_relative_then_resolves_to_absolute(
@@ -565,6 +602,41 @@ def test_resolve_mlflow_tracking_uri_when_sqlite_relative_then_resolves_to_absol
     assert resolved.startswith("sqlite:////")
     assert resolved.endswith("/mlflow.db")
     assert str(base_dir).replace("\\", "/") in resolved
+
+
+def test_resolve_mlflow_tracking_uri_when_empty_sqlite_path_then_keeps_value(
+    tmp_path: Path,
+) -> None:
+    """Empty sqlite URIs remain unchanged."""
+    resolved = config_models._resolve_mlflow_tracking_uri("sqlite:///", tmp_path)
+    assert resolved == "sqlite:///"
+
+
+def test_resolve_mlflow_tracking_uri_when_non_string_then_returns_value(
+    tmp_path: Path,
+) -> None:
+    """Non-string tracking URIs are returned as-is."""
+    sentinel = 123
+    assert config_models._resolve_mlflow_tracking_uri(sentinel, tmp_path) == sentinel
+
+
+def test_runtime_config_resolve_paths_when_out_dir_missing(
+    tmp_path: Path,
+) -> None:
+    """Runtime path resolution ignores missing out_dir entries."""
+    config_path = tmp_path / "exp" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_text("")
+
+    class _Info:
+        def __init__(self, context: dict[str, object]) -> None:
+            self.context = context
+
+    data = {"mlflow_tracking_uri": "sqlite:///mlflow.db"}
+    resolved = config_models.RuntimeConfig._resolve_paths(
+        data, _Info({"config_path": config_path})
+    )
+    assert resolved["mlflow_tracking_uri"].startswith("sqlite:////")
 
 
 def test_runtime_config_when_mlflow_sqlite_relative_then_resolves_relative_to_config_path(
@@ -747,10 +819,10 @@ def test_experiment_config_resolve_paths_handles_path_values(tmp_path: Path) -> 
     assert exp.shared.sample_out_dir.is_absolute()
 
 
-def test_frozen_models_allow_setting_logger(tmp_path: Path) -> None:
+def test_frozen_models_reject_setting_logger(tmp_path: Path) -> None:
     cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
-    cfg.logger = logging.getLogger("test")
-    assert cfg.logger.name == "test"
+    with pytest.raises(ValidationError):
+        cfg.logger = logging.getLogger("test")
 
 
 def test_experience_storage_resolve_path_ignores_invalid_context(
@@ -763,6 +835,84 @@ def test_experience_storage_resolve_path_ignores_invalid_context(
         context={"config_path": "not-a-path"},
     )
     assert cfg.path == Path("./store.json")
+
+
+def test_experience_storage_resolve_path_uses_config_context(
+    tmp_path: Path,
+) -> None:
+    """Experience storage resolves relative paths against the config directory."""
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    config_path = tmp_path / "exp" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_text("")
+
+    cfg = ExperienceStorageConfig.model_validate(
+        {"strategy": "json_file", "path": "store.json"},
+        context={"config_path": config_path},
+    )
+    assert cfg.path == (config_path.parent / "store.json").resolve()
+
+
+def test_experience_storage_resolve_path_without_path_key(
+    tmp_path: Path,
+) -> None:
+    """Experience storage skips resolution when no path is provided."""
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    config_path = tmp_path / "exp" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_text("")
+
+    cfg = ExperienceStorageConfig.model_validate(
+        {"strategy": "memory"},
+        context={"config_path": config_path},
+    )
+    assert cfg.path is None
+
+
+def test_experience_storage_requires_path_for_json_file() -> None:
+    """Experience storage requires a path when using json_file strategy."""
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    with pytest.raises(ValidationError):
+        ExperienceStorageConfig(strategy="json_file", path=None)
+
+
+def test_experience_storage_rejects_directory_path(tmp_path: Path) -> None:
+    """Experience storage rejects directory paths for json_file strategy."""
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    with pytest.raises(ValidationError):
+        ExperienceStorageConfig(strategy="json_file", path=tmp_path)
+
+
+def test_experience_storage_warns_when_path_unused(tmp_path: Path) -> None:
+    """Experience storage warns when path is provided for memory strategy."""
+    from ml_playground.configuration.models import ExperienceStorageConfig
+
+    class _Logger:
+        def __init__(self) -> None:
+            self.warnings: list[str] = []
+
+        def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
+            del msg, args, kwargs
+
+        def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+            del msg, args, kwargs
+
+        def warning(self, msg: str) -> None:
+            self.warnings.append(msg)
+
+        def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
+            del msg, args, kwargs
+
+    logger = _Logger()
+    cfg = ExperienceStorageConfig(
+        strategy="memory", path=tmp_path / "store.json", logger=logger
+    )
+    assert cfg.path == tmp_path / "store.json"
+    assert logger.warnings == ["experience storage path ignored for strategy memory"]
 
 
 def test_experiment_config_resolve_paths_runtime_not_dict_branches(

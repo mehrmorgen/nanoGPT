@@ -54,3 +54,44 @@ def test_validate_metadata_contract_when_missing_required_then_raises(
     meta.pop(missing_key)
     with pytest.raises(DataError):
         validate_metadata_contract(meta)
+
+
+@settings(max_examples=15, deadline=50, derandomize=True)
+@given(meta=st.one_of(st.integers(), st.lists(st.integers())))
+def test_validate_metadata_contract_rejects_non_mapping(meta: object) -> None:
+    """Validate metadata contract rejects non-mapping payloads."""
+    with pytest.raises(DataError):
+        validate_metadata_contract(meta)  # type: ignore[arg-type]
+
+
+@settings(max_examples=10, deadline=50, derandomize=True)
+@given(tokenizer_type=st.sampled_from(["char", "word"]))
+def test_validate_metadata_contract_requires_vocab_mapping(
+    tokenizer_type: str,
+) -> None:
+    """Metadata contract requires vocab mapping for char/word tokenizers."""
+    meta = {
+        "meta_version": 1,
+        "tokenizer_type": tokenizer_type,
+        "train_tokens": 1,
+        "val_tokens": 1,
+    }
+    with pytest.raises(DataError):
+        validate_metadata_contract(meta)
+
+
+@settings(max_examples=10, deadline=50, derandomize=True)
+@given(encoding_name=st.one_of(st.none(), st.integers(), st.text(max_size=0)))
+def test_validate_metadata_contract_requires_encoding_name_for_tiktoken(
+    encoding_name: object,
+) -> None:
+    """Metadata contract requires encoding_name for tiktoken."""
+    meta = {
+        "meta_version": 1,
+        "tokenizer_type": "tiktoken",
+        "train_tokens": 1,
+        "val_tokens": 1,
+        "encoding_name": encoding_name,
+    }
+    with pytest.raises(DataError):
+        validate_metadata_contract(meta)
