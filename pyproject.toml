@@ -25,6 +25,7 @@ dependencies = [
     "sentencepiece>=0.2.1",
     "pandas-stubs==2.3.2.250827",
     "toml>=0.10.2",
+    "mlflow>=3.8.1",
     "hatchling>=1.27.0",
     "pip >= 25.2",
     "torch==2.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
@@ -302,4 +303,3 @@ file = ".cache/cosmic-ray/session.sqlite"
 
 [cosmic-ray.distributor]
 name = "local"
-
