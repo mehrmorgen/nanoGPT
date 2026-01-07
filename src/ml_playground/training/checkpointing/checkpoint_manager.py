@@ -320,14 +320,14 @@ class CheckpointManager:
                 )
             else:
                 parts = stem.split("_")
-                if len(parts) < 3:
+                if len(parts) < 4:
                     raise CheckpointError(
                         f"Unexpected best-checkpoint filename format: {stem}",
                         reason="Filename lacks iteration/metric segments",
                         rationale="Best-checkpoint retention requires canonical naming",
                     )
                 counter_str = parts[2]
-                metric_str = parts[3] if len(parts) >= 4 else "inf"
+                metric_str = parts[3]
         else:
             parts = stem.split("_")
             if len(parts) < 3:
@@ -337,7 +337,16 @@ class CheckpointManager:
                     rationale="Best-checkpoint retention requires canonical naming",
                 )
             counter_str = parts[2]
-            metric_str = parts[3] if len(parts) >= 4 else "inf"
+            if len(parts) == 3:
+                if not counter_str.isdigit() or len(counter_str) != 8:
+                    raise CheckpointError(
+                        f"Unexpected best-checkpoint filename format: {stem}",
+                        reason="Filename lacks iteration/metric segments",
+                        rationale="Best-checkpoint retention requires canonical naming",
+                    )
+                metric_str = "inf"
+            else:
+                metric_str = parts[3]
         try:
             counter = int(counter_str)
         except ValueError as e:

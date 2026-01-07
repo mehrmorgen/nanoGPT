@@ -50,7 +50,7 @@ CudaManualSeedFn = _t.Callable[[int], None]
 
 def _resolve_path_strict(v: Path) -> Path:
     try:
-        return v.resolve()
+        return v.resolve(strict=True)
     except OSError as exc:  # pragma: no cover - resolution failure path
         raise ValueError(f"Invalid path: {v}") from exc
 
