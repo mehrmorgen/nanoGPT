@@ -228,10 +228,10 @@ def test_parse_best_counter_domain_with_label_and_metric(tmp_path: Path) -> None
     assert mgr._parse_best_counter("ckpt_best_games_3_1.25") == (3, 1.25)
 
 
-def test_parse_best_counter_domain_missing_parts_fallback_raises(
+def test_parse_best_counter_domain_missing_parts_fallback_defaults_metric(
     tmp_path: Path,
 ) -> None:
-    """Domain fallback rejects missing metric segments."""
+    """Domain fallback defaults the metric to infinity when segments are missing."""
     mgr = CheckpointManager(
         tmp_path,
         keep_last=0,
@@ -240,15 +240,15 @@ def test_parse_best_counter_domain_missing_parts_fallback_raises(
         counter_label="games",
         strict_naming=False,
     )
-    with pytest.raises(CheckpointError):
-        mgr._parse_best_counter("ckpt_best_1")
+    assert mgr._parse_best_counter("ckpt_best_1") == (1, float("inf"))
 
 
-def test_parse_best_counter_non_domain_missing_parts_raises(tmp_path: Path) -> None:
-    """Non-domain naming rejects malformed best checkpoints."""
+def test_parse_best_counter_non_domain_missing_parts_defaults_metric(
+    tmp_path: Path,
+) -> None:
+    """Non-domain naming also treats missing metrics as infinity by default."""
     mgr = CheckpointManager(tmp_path, keep_last=0, keep_best=1)
-    with pytest.raises(CheckpointError):
-        mgr._parse_best_counter("ckpt_best_1")
+    assert mgr._parse_best_counter("ckpt_best_1") == (1, float("inf"))
 
 
 def test_parse_best_counter_defaults_metric_when_missing(tmp_path: Path) -> None:
