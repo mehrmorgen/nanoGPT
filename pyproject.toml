@@ -257,6 +257,9 @@ omit = [
     "**/.cache/*",
     "**/tools/*",
     "**/_remote_module_non_scriptable.py",
+    # CLIs are covered on the full-tool-integration branch
+    "src/ml_playground/cli.py",
+    "src/ml_playground/configuration/cli.py",
     # Temporarily exclude analysis (LIT integration) due to dependency issues
     "src/ml_playground/analysis/*",
 ]
@@ -270,6 +273,9 @@ exclude_lines = [
 ]
 show_missing = true
 omit = [
+    # CLIs are covered on the full-tool-integration branch
+    "src/ml_playground/cli.py",
+    "src/ml_playground/configuration/cli.py",
     # Temporarily exclude analysis (LIT integration) due to dependency issues
     "src/ml_playground/analysis/*",
 ]
@@ -296,5 +302,4 @@ file = ".cache/cosmic-ray/session.sqlite"
 
 [cosmic-ray.distributor]
 name = "local"
-
 

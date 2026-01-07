@@ -175,6 +175,18 @@ def test_word_tokenizer_decode_empty_vocab_returns_empty_string() -> None:
     assert tok.decode([0, 1]) == ""
 
 
+def test_char_tokenizer_ignores_negative_vocab_indices() -> None:
+    """Negative vocab indices are ignored in lookup arrays."""
+    tok = CharTokenizer({"a": -1})
+    assert tok.decode([-1]) == ""
+
+
+def test_word_tokenizer_ignores_negative_vocab_indices() -> None:
+    """Negative vocab indices are ignored in lookup arrays."""
+    tok = WordTokenizer({"hello": -1})
+    assert tok.decode([-1]) == ""
+
+
 @pytest.mark.parametrize(
     "bad", ["charz", "wordz", "tiktokenz"]
 )  # avoid real tiktoken import

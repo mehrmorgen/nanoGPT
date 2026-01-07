@@ -63,6 +63,32 @@ _PayloadMapping = Mapping[str, Any]
 ExpectedTypes = Union[type, Tuple[type, ...]]
 
 
+def _resolve_posix_path_cls(module: Any | None = None) -> type | None:
+    try:
+        if module is None:
+            import pathlib as module
+        return getattr(getattr(module, "_local", None), "PosixPath", None)
+    except Exception:
+        return None
+
+
+def _probe_unlink_missing_ok(path: Any) -> bool:
+    try:
+        path.touch(exist_ok=True)
+        path.unlink(missing_ok=True)
+    except TypeError:
+        return False
+    except OSError:
+        return False
+    finally:
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
+    return True
+
+
 @dataclass
 class CheckpointDependencies:
     torch_load: Callable[..., Any]
@@ -84,29 +110,8 @@ class CheckpointDependencies:
                 pass
 
         add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
-        posix_cls: type | None = None
-        try:
-            import pathlib
-
-            posix_cls = getattr(getattr(pathlib, "_local", None), "PosixPath", None)
-        except Exception:
-            posix_cls = None
-
-        supports_missing_ok = True
-        probe_path = Path(".checkpoint_unlink_probe")
-        try:
-            probe_path.touch(exist_ok=True)
-            probe_path.unlink(missing_ok=True)
-        except TypeError:
-            supports_missing_ok = False
-        except OSError:
-            supports_missing_ok = False
-        finally:
-            if probe_path.exists():
-                try:
-                    probe_path.unlink()
-                except OSError:
-                    pass
+        posix_cls = _resolve_posix_path_cls()
+        supports_missing_ok = _probe_unlink_missing_ok(Path(".checkpoint_unlink_probe"))
 
         return cls(
             torch_load=torch.load,

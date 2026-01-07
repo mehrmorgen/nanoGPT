@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MethodType, SimpleNamespace
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -136,6 +136,9 @@ def _make_cfg(
     *,
     eval_only: bool = False,
     max_iters: int = 2,
+    eval_interval: int = 1,
+    eval_iters: int = 1,
+    log_interval: int = 1,
     tensorboard_mode: str = "eval",
     logger: Any | None = None,
     grad_accum_steps: int = 1,
@@ -166,9 +169,9 @@ def _make_cfg(
         runtime=RuntimeConfig(
             out_dir=out_dir,
             max_iters=max_iters,
-            eval_interval=1,
-            eval_iters=1,
-            log_interval=1,
+            eval_interval=eval_interval,
+            eval_iters=eval_iters,
+            log_interval=log_interval,
             eval_only=eval_only,
             seed=42,
             device="cpu",
@@ -607,6 +610,131 @@ def test_train_step_accum_fallback_without_vmap(tmp_path: Path) -> None:
     loss = trainer._train_step(X, Y)
 
     assert isinstance(loss, torch.Tensor)
+
+
+def test_train_step_vmap_requires_vmap(tmp_path: Path) -> None:
+    """vmap-based step raises when vmap is unavailable."""
+    deps, _manager = _build_deps(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        vmap_fn=None,
+    )
+    cfg = _make_cfg(tmp_path, max_iters=0, grad_accum_steps=2)
+    shared = _shared(tmp_path, cfg)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
+
+    X = torch.zeros((2, 2))
+    Y = torch.zeros((2, 2))
+    with pytest.raises(RuntimeError):
+        trainer._train_step_vmap(X, Y, grad_steps=2)
+
+
+def test_trainer_skips_evaluation_when_interval_not_reached(tmp_path: Path) -> None:
+    """Trainer skips evaluation when the eval interval is not reached."""
+    eval_calls: list[int] = []
+    ckpt = Checkpoint(
+        model={},
+        optimizer={},
+        model_args={"n_layer": 1},
+        iter_num=1,
+        best_val_loss=1.0,
+        config={"model_args": {"n_layer": 1}},
+    )
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        load_checkpoint_result=ckpt,
+    )
+
+    def run_eval(*_args: Any, iter_num: int, **_kwargs: Any) -> Dict[str, float]:
+        eval_calls.append(iter_num)
+        return {"train": 0.5, "val": 0.4}
+
+    deps = replace(deps, run_evaluation=run_eval)
+    cfg = _make_cfg(tmp_path, eval_interval=2, max_iters=1)
+    shared = _shared(tmp_path, cfg)
+
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+    assert eval_calls == []
+
+
+def test_trainer_skips_log_interval_when_not_multiple(tmp_path: Path) -> None:
+    """Trainer skips logging when iteration is not on log interval."""
+
+    class _Logger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+            self.messages.append(msg)
+
+        def debug(self, _msg: str, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+        def warning(self, _msg: str, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+        def error(self, _msg: str, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+    ckpt = Checkpoint(
+        model={},
+        optimizer={},
+        model_args={"n_layer": 1},
+        iter_num=1,
+        best_val_loss=1.0,
+        config={"model_args": {"n_layer": 1}},
+    )
+    logger = _Logger()
+    deps, _manager = _build_deps(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        load_checkpoint_result=ckpt,
+    )
+
+    cfg = _make_cfg(
+        tmp_path,
+        max_iters=1,
+        log_interval=2,
+        eval_interval=2,
+        logger=logger,
+    )
+    shared = _shared(tmp_path, cfg)
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+    assert all("iter " not in message for message in logger.messages)
+
+
+def test_trainer_closes_writer(tmp_path: Path) -> None:
+    """Trainer closes the writer after finishing."""
+
+    class _TrackingWriter:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def add_scalar(self, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer = _TrackingWriter()
+    deps, _manager = _build_deps(
+        evaluation={-1: {"train": 0.5, "val": 0.4}},
+        writer=writer,
+    )
+    cfg = _make_cfg(tmp_path, max_iters=0)
+    shared = _shared(tmp_path, cfg)
+    runner_mod.Trainer(cfg, shared, deps=deps).run()
+
+    assert writer.closed is True
+
+
+def test_train_uses_default_shared_when_missing(tmp_path: Path) -> None:
+    """train constructs shared config when none is supplied."""
+    deps, _manager = _build_deps(evaluation={-1: {"train": 0.5, "val": 0.4}})
+    cfg = _make_cfg(tmp_path, max_iters=0)
+
+    iters, _best = runner_mod.train(cfg, shared=None, deps=deps)
+
+    assert iters == 1
 
 
 def test_default_trainer_dependencies_returns_callables(tmp_path: Path) -> None:

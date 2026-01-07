@@ -63,3 +63,5 @@ def test_pool_size_rejects_invalid_inputs() -> None:
         derive_pool_size(-1, 10)
     with pytest.raises(ValueError):
         derive_pool_size(10, 0)
+    with pytest.raises(ValueError):
+        derive_pool_size(10, 10, oversample_factor=0)

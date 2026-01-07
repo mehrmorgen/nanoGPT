@@ -85,3 +85,44 @@ def test_configure_optimizers_accepts_custom_factory() -> None:
     assert captured["lr"] == 0.001
     assert captured["betas"] == (0.8, 0.88)
     assert captured["fused"] is None
+
+
+def test_configure_optimizers_sets_fused_for_cuda() -> None:
+    """CUDA device type requests fused optimizer when supported."""
+    model = _TinyModel()
+    captured: dict[str, Any] = {}
+
+    class DummyOptimizer(torch.optim.Optimizer):
+        def __init__(self, params):  # type: ignore[override]
+            super().__init__(params, {})
+
+        def step(self, closure=None):  # type: ignore[override]
+            return None
+
+        def zero_grad(self, set_to_none: bool = True):  # type: ignore[override]
+            return None
+
+    def factory(
+        params: optimization.ParamGroups,
+        *,
+        lr: float,
+        betas: Sequence[float],
+        fused: bool | None = None,
+    ) -> DummyOptimizer:
+        captured["fused"] = fused
+        flat_params: list[torch.nn.Parameter] = []
+        for group in params:
+            flat_params.extend(group["params"])
+        return DummyOptimizer(flat_params)
+
+    optimizer = optimization.configure_optimizers(
+        model,
+        weight_decay=0.1,
+        learning_rate=0.01,
+        betas=(0.9, 0.95),
+        device_type="cuda",
+        factory=factory,
+    )
+
+    assert isinstance(optimizer, torch.optim.Optimizer)
+    assert captured["fused"] is True

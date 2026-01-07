@@ -12,6 +12,7 @@ from ml_playground.core.runtime_context import RuntimeContext
 from ml_playground.experiments.hooks import (
     ExperimentHookContext,
     ExperimentHooks,
+    ExperimentHook,
     HookEvent,
     build_hook_context,
 )
@@ -58,3 +59,17 @@ def test_build_hook_context_uses_experiment_logger_name() -> None:
         stream_handler_factory=lambda: logging.StreamHandler(stream),
     )
     assert context.runtime.logger.name == "ml_playground.experiment.demo"
+
+
+def test_experiment_hook_protocol_placeholder_executes() -> None:
+    """ExperimentHook protocol placeholder executes without error."""
+    sentinel = object()
+    context = ExperimentHookContext(
+        experiment="demo",
+        runtime=RuntimeContext(
+            device_type="cpu",
+            autocast_context=nullcontext(),
+            logger=logging.getLogger("test"),
+        ),
+    )
+    assert ExperimentHook.handle(sentinel, HookEvent.CUSTOM, context) is None  # type: ignore[arg-type]

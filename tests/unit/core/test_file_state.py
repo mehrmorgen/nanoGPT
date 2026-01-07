@@ -56,3 +56,17 @@ def test_diff_file_states_tracks_created_updated_and_skipped(tmp_path: Path) -> 
     assert updated == {updated_path}
     assert skipped == {unchanged_path}
     assert removed_path not in created | updated | skipped
+
+
+def test_diff_file_states_ignores_removed_paths(tmp_path: Path) -> None:
+    """Removed paths are excluded from created/updated/skipped results."""
+    path = tmp_path / "removed.bin"
+    path.write_bytes(b"gone")
+    before = snapshot_file_states([path])
+    path.unlink()
+
+    created, updated, skipped = diff_file_states([path], before)
+
+    assert created == set()
+    assert updated == set()
+    assert skipped == set()

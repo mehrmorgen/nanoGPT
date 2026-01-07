@@ -27,7 +27,7 @@ def test_validate_streaming_records_when_complete_then_accepts(
         "moves": moves,
         "policy_targets": policy_targets,
     }
-    validated = validate_streaming_records([record])
+    validated = list(validate_streaming_records([record]))
     assert validated == [record]
 
 
@@ -46,4 +46,4 @@ def test_validate_streaming_records_when_missing_field_then_raises(
     missing = [field for field in REQUIRED_STREAM_FIELDS if field not in payload]
     assert missing
     with pytest.raises(DataError):
-        validate_streaming_records([payload])
+        list(validate_streaming_records([payload]))

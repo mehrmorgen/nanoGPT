@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hypothesis import assume, given, settings, strategies as st
+import pytest
 
 from ml_playground.training.gating import wilson_interval
 
@@ -33,3 +34,30 @@ def test_wilson_interval_is_monotonic(
     lower_a, _ = wilson_interval(success_a, trials)
     lower_b, _ = wilson_interval(success_b, trials)
     assert lower_b >= lower_a
+
+
+@settings(max_examples=15, deadline=50, derandomize=True)
+@given(trials=st.integers(max_value=0))
+def test_wilson_interval_rejects_non_positive_trials(trials: int) -> None:
+    """Wilson interval rejects non-positive trial counts."""
+    with pytest.raises(ValueError):
+        wilson_interval(0, trials)
+
+
+@settings(max_examples=20, deadline=50, derandomize=True)
+@given(trials=st.integers(min_value=1, max_value=500), successes=st.integers())
+def test_wilson_interval_rejects_out_of_range_successes(
+    trials: int, successes: int
+) -> None:
+    """Wilson interval rejects successes outside [0, trials]."""
+    assume(successes < 0 or successes > trials)
+    with pytest.raises(ValueError):
+        wilson_interval(successes, trials)
+
+
+@settings(max_examples=15, deadline=50, derandomize=True)
+@given(z=st.floats(max_value=0.0, allow_nan=False, allow_infinity=False))
+def test_wilson_interval_rejects_non_positive_z(z: float) -> None:
+    """Wilson interval rejects non-positive z values."""
+    with pytest.raises(ValueError):
+        wilson_interval(0, 1, z=z)

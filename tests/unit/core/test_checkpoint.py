@@ -16,6 +16,8 @@ from ml_playground.training.checkpointing.checkpoint_manager import (
     CheckpointError,
     CheckpointLoadError,
     TorchUnpicklingError,
+    _probe_unlink_missing_ok,
+    _resolve_posix_path_cls,
 )
 
 
@@ -174,6 +176,178 @@ def test_keep_policy_validation() -> None:
         _ = CheckpointManager(Path("/tmp/does-not-matter"), keep_last=-1)
     with pytest.raises(CheckpointError):
         _ = CheckpointManager(Path("/tmp/does-not-matter"), keep_best=-2)
+
+
+def test_parse_last_counter_with_domain_label(tmp_path: Path) -> None:
+    """Domain naming parses labeled last counters."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=1,
+        keep_best=0,
+        naming_policy="domain",
+        counter_label="games",
+    )
+    assert mgr._parse_last_counter("ckpt_last_games_42") == 42
+
+
+def test_parse_last_counter_falls_back_without_strict(tmp_path: Path) -> None:
+    """Domain naming falls back to unlabeled counters when not strict."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=1,
+        keep_best=0,
+        naming_policy="domain",
+        counter_label="games",
+        strict_naming=False,
+    )
+    assert mgr._parse_last_counter("ckpt_last_7") == 7
+
+
+def test_parse_best_counter_domain_missing_parts_raises(tmp_path: Path) -> None:
+    """Domain naming rejects best checkpoints without metric segments."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=0,
+        keep_best=1,
+        naming_policy="domain",
+        counter_label="games",
+    )
+    with pytest.raises(CheckpointError):
+        mgr._parse_best_counter("ckpt_best_games_5")
+
+
+def test_parse_best_counter_domain_with_label_and_metric(tmp_path: Path) -> None:
+    """Domain naming parses labeled best checkpoints."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=0,
+        keep_best=1,
+        naming_policy="domain",
+        counter_label="games",
+    )
+    assert mgr._parse_best_counter("ckpt_best_games_3_1.25") == (3, 1.25)
+
+
+def test_parse_best_counter_domain_missing_parts_fallback_raises(
+    tmp_path: Path,
+) -> None:
+    """Domain fallback rejects missing metric segments."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=0,
+        keep_best=1,
+        naming_policy="domain",
+        counter_label="games",
+        strict_naming=False,
+    )
+    with pytest.raises(CheckpointError):
+        mgr._parse_best_counter("ckpt_best_1")
+
+
+def test_parse_best_counter_non_domain_missing_parts_raises(tmp_path: Path) -> None:
+    """Non-domain naming rejects malformed best checkpoints."""
+    mgr = CheckpointManager(tmp_path, keep_last=0, keep_best=1)
+    with pytest.raises(CheckpointError):
+        mgr._parse_best_counter("ckpt_best_1")
+
+
+def test_parse_best_counter_defaults_metric_when_missing(tmp_path: Path) -> None:
+    """Best checkpoint parsing defaults metric when missing."""
+    mgr = CheckpointManager(tmp_path, keep_last=0, keep_best=1)
+    assert mgr._parse_best_counter("ckpt_best_00000001") == (1, float("inf"))
+
+
+def test_parse_best_counter_domain_falls_back_without_label(tmp_path: Path) -> None:
+    """Domain naming falls back to unlabeled checkpoints when not strict."""
+    mgr = CheckpointManager(
+        tmp_path,
+        keep_last=0,
+        keep_best=1,
+        naming_policy="domain",
+        counter_label="games",
+        strict_naming=False,
+    )
+    assert mgr._parse_best_counter("ckpt_best_00000002_0.5") == (2, 0.5)
+
+
+def test_checkpoint_dependencies_path_unlink_ignores_missing(tmp_path: Path) -> None:
+    """Default path_unlink ignores missing files."""
+    deps = CheckpointDependencies.default()
+    deps.path_unlink(tmp_path / "missing.pt")
+
+
+def test_resolve_posix_path_cls_handles_valid_module() -> None:
+    """Posix path resolution returns the nested PosixPath when present."""
+
+    class _Local:
+        PosixPath = Path
+
+    class _Module:
+        _local = _Local()
+
+    assert _resolve_posix_path_cls(_Module()) is Path
+
+
+def test_resolve_posix_path_cls_handles_errors() -> None:
+    """Posix path resolution returns None on module errors."""
+
+    class _BadModule:
+        def __getattribute__(self, _name: str) -> object:
+            raise RuntimeError("boom")
+
+    assert _resolve_posix_path_cls(_BadModule()) is None
+
+
+def test_probe_unlink_missing_ok_returns_true() -> None:
+    """Probe returns True when missing_ok is supported."""
+
+    class _Path:
+        def touch(self, *, exist_ok: bool) -> None:
+            del exist_ok
+
+        def unlink(self, *, missing_ok: bool = False) -> None:
+            del missing_ok
+
+        def exists(self) -> bool:
+            return False
+
+    assert _probe_unlink_missing_ok(_Path()) is True
+
+
+def test_probe_unlink_missing_ok_handles_type_error() -> None:
+    """Probe returns False when missing_ok is unsupported."""
+
+    class _Path:
+        def touch(self, *, exist_ok: bool) -> None:
+            del exist_ok
+
+        def unlink(self) -> None:
+            return None
+
+        def exists(self) -> bool:
+            return False
+
+    assert _probe_unlink_missing_ok(_Path()) is False
+
+
+def test_probe_unlink_missing_ok_handles_os_error() -> None:
+    """Probe returns False when unlink raises OSError."""
+
+    class _Path:
+        def __init__(self) -> None:
+            self.cleaned = False
+
+        def touch(self, *, exist_ok: bool) -> None:
+            del exist_ok
+
+        def unlink(self, *, missing_ok: bool = False) -> None:
+            del missing_ok
+            raise OSError("boom")
+
+        def exists(self) -> bool:
+            return True
+
+    assert _probe_unlink_missing_ok(_Path()) is False
 
 
 # -----------------------------------------------------------------------------
