@@ -105,7 +105,6 @@ dev = [
     "pytest-xdist>=3.8.0",
     "pytest-bdd>=8.1.0",
     "pytest-cov>=6.2.1",
-    "pytest-mock>=3.14.1",
     "coverage[toml]>=7.10.6",
     "ruff>=0.12.11",
     "mypy>=1.17.1",
