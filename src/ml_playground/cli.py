@@ -23,6 +23,10 @@ from ml_playground.data_pipeline.preparer import create_pipeline
 from ml_playground.sampling.runner import Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.experiments import registry
+from ml_playground.experiments.generative_agents.sampler import (
+    run_simulation as run_generative_agents_simulation,
+)
+
 
 # (Removed unused type aliases)
 
@@ -456,6 +460,18 @@ def analyze(
 ) -> None:
     """Run analysis for an experiment (not implemented)."""
     _run_analyze(experiment, host, port, open_browser)
+
+
+@app.command()
+def generative_agents(
+    ctx: typer.Context,
+    num_steps: int = typer.Option(10, help="Number of simulation steps to run."),
+) -> None:
+    """Run the generative agents simulation."""
+    run_or_exit(
+        lambda: run_generative_agents_simulation(num_steps=num_steps),
+        keyboard_interrupt_msg="\nGenerative agents simulation cancelled.",
+    )
 
 
 def main(argv: list[str] | None = None) -> int | None:

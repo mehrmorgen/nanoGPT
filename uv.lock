@@ -1283,6 +1283,7 @@ name = "ml-playground"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "accelerate" },
     { name = "beautifulsoup4" },
     { name = "datasets" },
     { name = "hatchling" },
@@ -1329,6 +1330,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "accelerate", specifier = ">=0.32.1" },
     { name = "beautifulsoup4", specifier = ">=4.13.5" },
     { name = "datasets", specifier = ">=4.0.0" },
     { name = "hatchling", specifier = ">=1.27.0" },
