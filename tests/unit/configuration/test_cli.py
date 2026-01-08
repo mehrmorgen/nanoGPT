@@ -32,6 +32,11 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
+from ml_playground.core.checkpoint_lock import (
+    CheckpointLockError,
+    checkpoint_lock,
+    checkpoint_lock_path,
+)
 
 runner = CliRunner()
 
@@ -932,3 +937,85 @@ def test_run_sample_cmd_uses_default_deps(
         assert deps_called["get_cli_dependencies"] == 1
     finally:
         cli.get_cli_dependencies = original  # type: ignore[assignment]
+
+
+def test_run_train_cmd_holds_checkpoint_lock(
+    shared_factory: Callable[[str], SharedConfig],
+) -> None:
+    """_run_train_cmd should hold a checkpoint lock while executing run_train."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.train_out_dir, exp.train.runtime.ckpt_last_filename
+    )
+    observed: dict[str, bool] = {"locked": False}
+
+    def fake_run_train(
+        experiment: str, cfg: TrainerConfig, config_path: Path, shared_cfg: SharedConfig
+    ) -> None:
+        observed["locked"] = lock_path.exists()
+
+    deps = _make_deps(
+        load_experiment=lambda name, path: exp,
+        run_train=fake_run_train,
+    )
+    cli._run_train_cmd("demo", None, deps=deps)
+    assert observed["locked"] is True
+    assert not lock_path.exists()
+
+
+def test_run_train_cmd_respects_existing_lock(
+    shared_factory: Callable[[str], SharedConfig],
+) -> None:
+    """_run_train_cmd should raise when the checkpoint lock is already held."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.train_out_dir, exp.train.runtime.ckpt_last_filename
+    )
+
+    with checkpoint_lock(lock_path, owner="train:existing"):
+        deps = _make_deps(load_experiment=lambda name, path: exp)
+        with pytest.raises(CheckpointLockError):
+            cli._run_train_cmd("demo", None, deps=deps)
+
+
+def test_run_sample_cmd_respects_existing_lock(
+    shared_factory: Callable[[str], SharedConfig],
+) -> None:
+    """_run_sample_cmd should raise when the checkpoint lock is already held."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.sample_out_dir, exp.sample.runtime.ckpt_last_filename
+    )
+
+    with checkpoint_lock(lock_path, owner="sample:existing"):
+        deps = _make_deps(load_experiment=lambda name, path: exp)
+        with pytest.raises(CheckpointLockError):
+            cli._run_sample_cmd("demo", None, deps=deps)
+
+
+def test_run_sample_cmd_holds_checkpoint_lock(
+    shared_factory: Callable[[str], SharedConfig],
+) -> None:
+    """_run_sample_cmd should hold a checkpoint lock while executing run_sample."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.sample_out_dir, exp.sample.runtime.ckpt_last_filename
+    )
+    observed: dict[str, bool] = {"locked": False}
+
+    def fake_run_sample(
+        experiment: str, cfg: SamplerConfig, config_path: Path, shared_cfg: SharedConfig
+    ) -> None:
+        observed["locked"] = lock_path.exists()
+
+    deps = _make_deps(
+        load_experiment=lambda name, path: exp,
+        run_sample=fake_run_sample,
+    )
+    cli._run_sample_cmd("demo", None, deps=deps)
+    assert observed["locked"] is True
+    assert not lock_path.exists()

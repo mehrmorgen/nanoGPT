@@ -23,6 +23,10 @@ from ml_playground.data_pipeline.preparer import create_pipeline
 from ml_playground.sampling.runner import Sampler
 from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.experiments import registry
+from ml_playground.core.checkpoint_lock import (
+    checkpoint_lock,
+    checkpoint_lock_path,
+)
 
 # (Removed unused type aliases)
 
@@ -524,7 +528,12 @@ def _run_train_cmd(
         deps = get_cli_dependencies()
     exp = deps.load_experiment(experiment, exp_config_path)
     deps.ensure_train_prerequisites(exp)
-    deps.run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.train_out_dir, exp.train.runtime.ckpt_last_filename
+    )
+    owner = f"train:{experiment}"
+    with checkpoint_lock(lock_path, owner=owner):
+        deps.run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
 
 
 def _run_sample_cmd(
@@ -537,7 +546,12 @@ def _run_sample_cmd(
         deps = get_cli_dependencies()
     exp = deps.load_experiment(experiment, exp_config_path)
     deps.ensure_sample_prerequisites(exp)
-    deps.run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
+    lock_path = checkpoint_lock_path(
+        exp.shared.sample_out_dir, exp.sample.runtime.ckpt_last_filename
+    )
+    owner = f"sample:{experiment}"
+    with checkpoint_lock(lock_path, owner=owner):
+        deps.run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
 
 
 if __name__ == "__main__":
