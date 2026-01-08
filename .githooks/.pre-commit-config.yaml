@@ -4,7 +4,6 @@ repos:
   hooks:
   - id: ruff
     args: [--fix]
-  - id: ruff-format
 - repo: https://github.com/DavidAnson/markdownlint-cli2
   rev: v0.15.0
   hooks:
@@ -12,6 +11,7 @@ repos:
     files: '^(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$'
 - repo: https://github.com/checkmake/checkmake.git
   # Or another commit hash or version
+# Source of truth for hooks; root .pre-commit-config.yaml mirrors this for pre-commit discovery.
   rev: 0.2.2
   hooks:
   # Use this hook to let pre-commit build checkmake in its sandbox

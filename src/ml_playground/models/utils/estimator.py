@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Tuple
+from typing import Any, Dict, Literal
 
 import torch
 
@@ -17,7 +17,7 @@ def estimate_loss(
     """Estimate loss on train/val splits."""
     out: Dict[str, float] = {}
     model.eval()
-    splits: Tuple[Literal["train", "val"], Literal["train", "val"]] = ("train", "val")
+    splits: tuple[Literal["train"], Literal["val"]] = ("train", "val")
     with torch.no_grad():
         for split in splits:
             losses = torch.zeros(eval_iters, dtype=torch.float32)

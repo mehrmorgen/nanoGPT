@@ -12,15 +12,14 @@ def snapshot_file_states(paths: Iterable[Path]) -> Dict[Path, FileState]:
 
     snapshot: Dict[Path, FileState] = {}
     for path in paths:
-        path_key = path
         try:
             if path.exists():
                 stat = path.stat()
-                snapshot[path_key] = (True, stat.st_mtime, stat.st_size)
+                snapshot[path] = (True, stat.st_mtime, stat.st_size)
             else:
-                snapshot[path_key] = (False, 0.0, 0)
+                snapshot[path] = (False, 0.0, 0)
         except OSError:
-            snapshot[path_key] = (False, 0.0, 0)
+            snapshot[path] = (False, 0.0, 0)
     return snapshot
 
 
