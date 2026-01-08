@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import logging
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, ContextManager
-import logging
 from tempfile import TemporaryDirectory
+from typing import Any, ContextManager
+from types import SimpleNamespace
 
 import torch
 from hypothesis import HealthCheck, assume, given, settings, strategies as st
@@ -82,12 +83,23 @@ def test_runtime_context_when_cuda_available_then_seeds_cuda(seed: int) -> None:
         def _cuda_seed(value: int) -> None:
             called.append(value)
 
+        fake_torch = SimpleNamespace(
+            manual_seed=lambda _: None,
+            cuda=SimpleNamespace(is_available=lambda: False, manual_seed=lambda _: None),
+            backends=SimpleNamespace(
+                cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+                cudnn=SimpleNamespace(allow_tf32=False),
+            ),
+            autocast=lambda **_: nullcontext(),
+        )
+
         runtime_context(
             runtime,
             logger_name=f"ml_playground.runtime.seed.{seed}",
             cuda_available_fn=_cuda_available,
             cuda_manual_seed_fn=_cuda_seed,
             autocast_factory=lambda *_: nullcontext(),
+            torch_module=fake_torch,
         )
 
         assert called == [seed]
