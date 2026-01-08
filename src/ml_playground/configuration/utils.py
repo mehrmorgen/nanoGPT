@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .models import (
     ResolveFn,
-    ConfigCrossFieldValidator as _ModelsConfigCrossFieldValidator,
+    ConfigCrossFieldValidator,
     coerce_path as _models_coerce_path,
     resolve_if_relative as _models_resolve_if_relative,
 )
@@ -33,18 +33,3 @@ def coerce_path(value: Any) -> Path | None:
     """Convert arbitrary inputs to `Path` when possible."""
 
     return _models_coerce_path(value)
-
-
-class ConfigCrossFieldValidator(_ModelsConfigCrossFieldValidator):
-    """Expose cross-field validation helpers for configuration models."""
-
-    runtime: Callable[[Any], None] = staticmethod(
-        _ModelsConfigCrossFieldValidator.runtime
-    )
-    trainer: Callable[[Any], None] = staticmethod(
-        _ModelsConfigCrossFieldValidator.trainer
-    )
-    lr_schedule: Callable[[Any], None] = staticmethod(
-        _ModelsConfigCrossFieldValidator.lr_schedule
-    )
-    data: Callable[[Any], None] = staticmethod(_ModelsConfigCrossFieldValidator.data)

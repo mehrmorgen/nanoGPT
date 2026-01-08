@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, ContextManager
 
 import torch
-from torch import autocast
 
 from ml_playground.configuration.models import RuntimeConfig
 from ml_playground.core.error_handling import setup_logging
@@ -30,7 +29,7 @@ class RuntimeContext:
 
     device_type: str
     autocast_context: ContextManager[Any]
-    logger: LoggerLike
+    logger: LoggerLike | None = None
 
 
 def runtime_context(
@@ -42,8 +41,11 @@ def runtime_context(
     cuda_available_fn: Callable[[], bool] | None = None,
     cuda_manual_seed_fn: Callable[[int], None] | None = None,
     autocast_factory: Callable[[str, torch.dtype], ContextManager[Any]] | None = None,
+    torch_module: Any | None = None,
 ) -> RuntimeContext:
     """Configure logging, RNG seeding, and autocast context for a runtime config."""
+
+    torch_mod = torch_module if torch_module is not None else torch
 
     logger = setup_logging(
         logger_name,
@@ -51,21 +53,21 @@ def runtime_context(
         stream_handler_factory=stream_handler_factory,
     )
 
-    torch.manual_seed(runtime.seed)
+    torch_mod.manual_seed(runtime.seed)
     try:
         cuda_available = (
             cuda_available_fn()
             if cuda_available_fn is not None
-            else torch.cuda.is_available()
+            else torch_mod.cuda.is_available()
         )
         if cuda_available:
             (
                 cuda_manual_seed_fn(runtime.seed)
                 if cuda_manual_seed_fn is not None
-                else torch.cuda.manual_seed(runtime.seed)
+                else torch_mod.cuda.manual_seed(runtime.seed)
             )
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
+            torch_mod.backends.cuda.matmul.allow_tf32 = True
+            torch_mod.backends.cudnn.allow_tf32 = True
     except (RuntimeError, AssertionError, AttributeError, OSError):
         pass
 
@@ -77,7 +79,7 @@ def runtime_context(
         else (
             autocast_factory(device_type, dtype)
             if autocast_factory is not None
-            else autocast(device_type=device_type, dtype=dtype)
+            else torch_mod.autocast(device_type=device_type, dtype=dtype)
         )
     )
 

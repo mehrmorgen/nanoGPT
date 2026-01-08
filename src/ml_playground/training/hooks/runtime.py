@@ -19,6 +19,7 @@ def setup_runtime(
     cuda_available_func: Callable[[], bool] | None = None,
     cuda_seed_func: Callable[[int], None] | None = None,
     autocast_func: Callable[[str, torch.dtype], ContextManager[Any]] | None = None,
+    torch_module: Any | None = None,
 ) -> RuntimeContext:
     """Seed torch RNGs and configure autocast context based on runtime settings."""
     return runtime_context(
@@ -27,4 +28,5 @@ def setup_runtime(
         cuda_available_fn=cuda_available_func,
         cuda_manual_seed_fn=cuda_seed_func,
         autocast_factory=autocast_func,
+        torch_module=torch_module,
     )

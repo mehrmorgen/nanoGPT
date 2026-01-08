@@ -439,7 +439,9 @@ def prepare(
 
     def _do_prepare() -> None:
         exp = deps.load_experiment(experiment, exp_config_path)
-        deps.run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
+        deps.run_prepare(
+            experiment, exp.prepare, exp.shared.config_path.resolve(), exp.shared
+        )
 
     run_or_exit(
         _do_prepare,

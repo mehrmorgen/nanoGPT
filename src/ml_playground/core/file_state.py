@@ -12,14 +12,7 @@ def snapshot_file_states(paths: Iterable[Path]) -> Dict[Path, FileState]:
 
     snapshot: Dict[Path, FileState] = {}
     for path in paths:
-        inner_path = getattr(path, "_inner", None)
-        if isinstance(inner_path, Path):
-            path_key = inner_path
-        else:
-            try:
-                path_key = Path(str(path))
-            except Exception:
-                path_key = Path(repr(path))
+        path_key = path
         try:
             if path.exists():
                 stat = path.stat()

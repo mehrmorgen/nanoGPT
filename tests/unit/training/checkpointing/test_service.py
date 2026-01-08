@@ -34,6 +34,9 @@ from tests.unit.training._helpers import (
     make_optimizer,
 )
 
+# Backwards-compatible alias used in legacy tests
+_StubLogger = LoggerStub
+
 
 def _make_cfg(
     tmp_path: Path,
@@ -123,15 +126,11 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
 
     calls: list[dict[str, Any]] = []
 
-    class _SpyManager(CheckpointManager):
-        def __init__(self, on_save: Callable[[dict[str, Any]], None]) -> None:
+    class _StubManager(CheckpointManager):
+        def __init__(self, keep_last: int, keep_best: int, atomic: bool, out_dir: Path):
             super().__init__(
-                out_dir=shared.train_out_dir,
-                atomic=cfg_latest.runtime.ckpt_atomic,
-                keep_last=cfg_latest.runtime.checkpointing.keep.last,
-                keep_best=cfg_latest.runtime.checkpointing.keep.best,
+                out_dir=out_dir, keep_last=keep_last, keep_best=keep_best, atomic=atomic
             )
-            self._on_save = on_save
 
         def save_checkpoint(
             self,
@@ -140,19 +139,27 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
             metric: float,
             iter_num: int,
             logger: LoggerLike,
+            counter_value: int | None = None,
             is_best: bool = False,
         ) -> Path:
-            payload = {
-                "checkpoint": checkpoint,
-                "base_filename": base_filename,
-                "metric": metric,
-                "iter_num": iter_num,
-                "is_best": is_best,
-            }
-            self._on_save(payload)
-            return self.out_dir / "ckpt.pt"
+            del checkpoint, logger
+            calls.append(
+                {
+                    "base_filename": base_filename,
+                    "metric": metric,
+                    "iter_num": iter_num,
+                    "counter_value": counter_value,
+                    "is_best": is_best,
+                }
+            )
+            return Path(base_filename)
 
-    mgr = _SpyManager(calls.append)
+    mgr = _StubManager(
+        keep_last=cfg_latest.runtime.checkpointing.keep.last,
+        keep_best=cfg_latest.runtime.checkpointing.keep.best,
+        atomic=cfg_latest.runtime.ckpt_atomic,
+        out_dir=shared.train_out_dir,
+    )
     service.save_checkpoint(
         mgr,
         cfg_latest,
@@ -419,6 +426,7 @@ def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
             metric: float,
             iter_num: int,
             logger: LoggerLike,
+            counter_value: int | None = None,
             is_best: bool = False,
         ) -> Path:  # pragma: no cover
             self.calls.append(
@@ -428,6 +436,7 @@ def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
                     "metric": metric,
                     "iter_num": iter_num,
                     "logger": logger,
+                    "counter_value": counter_value,
                     "is_best": is_best,
                 }
             )
@@ -480,6 +489,7 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
             metric: float,
             iter_num: int,
             logger: LoggerLike,
+            counter_value: int | None = None,
             is_best: bool = False,
         ) -> Path:
             self.calls.append(
@@ -489,6 +499,7 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
                     "metric": metric,
                     "iter_num": iter_num,
                     "logger": logger,
+                    "counter_value": counter_value,
                     "is_best": is_best,
                 }
             )
@@ -647,17 +658,15 @@ def test_propagate_metadata_copies_to_multiple_dirs(tmp_path: Path) -> None:
 def test_propagate_metadata_handles_meta_path_exception(tmp_path: Path) -> None:
     """propagate_metadata logs and returns when meta path resolution fails."""
 
-    class _BadData:
-        def meta_path(self, _dataset_dir: Path) -> Path:
+    class _BadData(DataConfig):
+        def meta_path(self, dataset_dir: Path) -> Path:
             raise TypeError("bad path")
 
-    class _BadCfg:
-        data = _BadData()
-
+    cfg = _make_cfg(tmp_path).model_copy(update={"data": _BadData()})
     logger = _StubLogger()
-    shared = _make_shared(tmp_path, _make_cfg(tmp_path))
+    shared = _make_shared(tmp_path, cfg)
 
-    service.propagate_metadata(_BadCfg(), shared, logger=logger)
+    service.propagate_metadata(cfg, shared, logger=logger)
 
     assert any("Failed to resolve meta source path" in msg for msg in logger.warnings)
 

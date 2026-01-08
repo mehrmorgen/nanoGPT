@@ -46,6 +46,8 @@ CompileModelFn = _t.Callable[[Any], Any]
 # Optional runtime CUDA indirections for sampling
 CudaIsAvailableFn = _t.Callable[[], bool]
 CudaManualSeedFn = _t.Callable[[int], None]
+# Optional path resolver override used by configuration helpers
+ResolveFn = _t.Callable[[Path], Path]
 
 
 def _resolve_path_strict(v: Path) -> Path:
@@ -72,6 +74,31 @@ def _resolve_fields_relative(
     for key in keys:
         if key in data:
             data[key] = _resolve_if_relative(data[key], base_dir)
+
+
+def resolve_if_relative(
+    value: Any,
+    base_dir: Path,
+    *,
+    resolve: ResolveFn | None = None,
+) -> Any:
+    """Public wrapper around path resolution for configuration values."""
+
+    if resolve is not None and isinstance(value, (str, Path)):
+        return resolve(Path(value))
+    return _resolve_if_relative(value, base_dir)
+
+
+def coerce_path(value: Any) -> Path | None:
+    """Best-effort conversion of arbitrary inputs to Path."""
+
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, str):
+        return Path(value)
+    return None
 
 
 def _resolve_mlflow_tracking_uri(value: Any, base_dir: Path) -> Any:
@@ -144,6 +171,10 @@ class _ConfigCrossFieldValidator:
             raise ValueError(
                 "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
             )
+
+
+# Public alias for cross-field validator helpers
+ConfigCrossFieldValidator = _ConfigCrossFieldValidator
 
 
 class _FrozenStrictModel(BaseModel):

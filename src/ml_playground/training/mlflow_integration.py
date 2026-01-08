@@ -6,9 +6,12 @@ import os
 import platform
 import sys
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Any, Dict, Optional, cast
 
-import mlflow
+try:
+    import mlflow  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - optional dependency handling
+    mlflow = cast(Any, None)
 from ml_playground.configuration.models import (
     RuntimeConfig,
     SharedConfig,
