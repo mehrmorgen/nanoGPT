@@ -43,14 +43,21 @@ class SamplerDependencies:
     cuda_manual_seed: Callable[[int], None]
 
 
-def default_sampler_dependencies() -> SamplerDependencies:
+def default_sampler_dependencies(cfg: SamplerConfig | None = None) -> SamplerDependencies:
     def _cuda_is_available() -> bool:
+        override = cfg.cuda_is_available_fn if cfg is not None else None
+        if override is not None:
+            return override()
         cuda_module = getattr(torch, "cuda", None)
         if cuda_module is None:
             return False
         return bool(cuda_module.is_available())
 
     def _cuda_manual_seed(seed: int) -> None:
+        override = cfg.cuda_manual_seed_fn if cfg is not None else None
+        if override is not None:
+            override(seed)
+            return
         cuda_module = getattr(torch, "cuda", None)
         if cuda_module is None:
             return
@@ -97,7 +104,7 @@ class Sampler:
         """
         self.cfg = cfg
         self.shared = shared
-        self.deps: SamplerDependencies = deps or default_sampler_dependencies()
+        self.deps: SamplerDependencies = deps or default_sampler_dependencies(cfg)
         runtime_cfg = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
         if runtime_cfg is None:
             raise ValueError("Runtime configuration is missing")

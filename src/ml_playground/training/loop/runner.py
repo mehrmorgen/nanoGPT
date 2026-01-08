@@ -370,7 +370,13 @@ class Trainer:
 
             try:
                 self.deps.propagate_metadata(self.cfg, self.shared, logger=self.logger)
-            except Exception as exc:
+            except (
+                CheckpointError,
+                RuntimeError,
+                OSError,
+                ValueError,
+                TypeError,
+            ) as exc:
                 self.logger.warning(f"Failed to propagate meta file: {exc}")
 
             if self.writer:
