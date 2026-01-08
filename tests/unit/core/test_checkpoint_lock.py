@@ -20,7 +20,7 @@ def test_checkpoint_lock_creates_and_cleans_lock(tmp_path: Path) -> None:
     assert not lock_path.exists()
 
 
-@pytest.mark.parametrize("candidate", ["..", "."])
+@pytest.mark.parametrize("candidate", ["..", ".", "/", "//"])
 def test_checkpoint_lock_path_rejects_parent_escape(tmp_path: Path, candidate: str) -> None:
     with pytest.raises(ValueError, match=r"must not (be|resolve)"):
         checkpoint_lock_path(tmp_path, candidate)

@@ -25,9 +25,14 @@ def checkpoint_lock_path(out_dir: Path, checkpoint_filename: str) -> Path:
     candidate = checkpoint_filename.strip()
     if candidate in {".", ".."}:
         raise ValueError("checkpoint_filename must not be '.' or '..'")
-    filename = Path(candidate).name or "checkpoint.pt"
-    if filename in {".", ".."}:
-        raise ValueError("checkpoint_filename must not resolve to '.' or '..'")
+
+    candidate_path = Path(candidate)
+    if candidate_path.is_absolute():
+        raise ValueError("checkpoint_filename must not be absolute")
+
+    filename = candidate_path.name or "checkpoint.pt"
+    if filename in {".", ".."} or filename.startswith(os.sep):
+        raise ValueError("checkpoint_filename must not resolve to a root or parent path")
     return out_dir / f"{filename}.lock"
 
 
@@ -39,7 +44,7 @@ def read_lock_metadata(lock_path: Path) -> dict[str, object] | None:
         if isinstance(data, dict):
             return data
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
+        pass
     return None
 
 
@@ -130,8 +135,13 @@ def checkpoint_lock(
 
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(info, handle)
-        yield
+            try:
+                json.dump(info, handle)
+                handle.flush()
+            except Exception:
+                lock_path.unlink(missing_ok=True)
+                raise
+            yield
     finally:
         try:
             lock_path.unlink(missing_ok=True)
