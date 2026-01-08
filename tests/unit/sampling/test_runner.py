@@ -52,6 +52,9 @@ def _write_char_meta(meta_path: Path) -> None:
         "tokenizer_type": "char",
         "stoi": stoi,
         "itos": itos,
+        # minimal required counts for contract
+        "train_tokens": 3,
+        "val_tokens": 3,
     }
     meta_path.write_bytes(pickle.dumps(meta))
 

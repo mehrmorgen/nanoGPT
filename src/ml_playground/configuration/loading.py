@@ -75,11 +75,7 @@ def list_experiments_with_config(
 def _ensure_mapping(value: Any, context: str) -> TomlMapping:
     if not isinstance(value, Mapping):
         raise TypeError(f"Expected mapping for {context}")
-    mapping_value = cast(Mapping[object, Any], value)
-    typed_mapping: TomlMapping = {}
-    for key, item in mapping_value.items():
-        typed_mapping[str(key)] = item
-    return typed_mapping
+    return dict(value)
 
 
 def _validate_budget(extras: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -155,7 +151,7 @@ def read_toml_dict(
         raise Exception(f"{path.name}: {exc}")
     if not isinstance(data, dict):
         raise TypeError(f"TOML root in {path} must be a mapping")
-    return data  # type: ignore[assignment]
+    return cast(TomlMapping, data)
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
@@ -183,14 +179,10 @@ def _load_and_merge_configs(
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    raw_exp: TomlMapping = read_toml_dict(config_path)
+    raw_exp = read_toml_dict(config_path)
 
     defaults_path = _default_config_path_from_root(project_home)
-    defaults_raw: TomlMapping
-    if defaults_path.exists():
-        defaults_raw = read_toml_dict(defaults_path)
-    else:
-        defaults_raw = {}
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     ldres_config = (
         project_home
@@ -201,11 +193,7 @@ def _load_and_merge_configs(
         / experiment_name
         / "config.toml"
     )
-    ldres_raw: TomlMapping
-    if ldres_config.exists():
-        ldres_raw = read_toml_dict(ldres_config)
-    else:
-        ldres_raw = {}
+    ldres_raw = read_toml_dict(ldres_config) if ldres_config.exists() else {}
 
     merged = merge_mappings(defaults_raw, raw_exp, override_only=True)
 
@@ -240,18 +228,14 @@ def load_full_experiment_config(
 def load_train_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> TrainerConfig:
-    raw_exp: TomlMapping = read_toml_dict(config_path)
+    raw_exp = read_toml_dict(config_path)
     project_root = _project_root()
     defaults_path = (
         default_config_path
         if default_config_path is not None
         else _default_config_path_from_root(project_root)
     )
-    defaults_raw: TomlMapping
-    if defaults_path.exists():
-        defaults_raw = read_toml_dict(defaults_path)
-    else:
-        defaults_raw = {}
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = merge_mappings(defaults_raw, raw_exp)
 
@@ -269,18 +253,14 @@ def load_train_config(
 def load_sample_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> SamplerConfig:
-    raw_exp: TomlMapping = read_toml_dict(config_path)
+    raw_exp = read_toml_dict(config_path)
     project_root = _project_root()
     defaults_path = (
         default_config_path
         if default_config_path is not None
         else _default_config_path_from_root(project_root)
     )
-    defaults_raw: TomlMapping
-    if defaults_path.exists():
-        defaults_raw = read_toml_dict(defaults_path)
-    else:
-        defaults_raw = {}
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = merge_mappings(defaults_raw, raw_exp)
 
@@ -301,18 +281,14 @@ def load_sample_config(
 def load_prepare_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> PreparerConfig:
-    raw_exp: TomlMapping = read_toml_dict(config_path)
+    raw_exp = read_toml_dict(config_path)
     project_root = _project_root()
     defaults_path = (
         default_config_path
         if default_config_path is not None
         else _default_config_path_from_root(project_root)
     )
-    defaults_raw: TomlMapping
-    if defaults_path.exists():
-        defaults_raw = read_toml_dict(defaults_path)
-    else:
-        defaults_raw = {}
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = merge_mappings(defaults_raw, raw_exp)
 

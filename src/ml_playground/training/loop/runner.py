@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Dict, Optional, Protocol, Tuple, cast
 
 import torch
@@ -128,7 +128,8 @@ class TrainerDependencies:
     propagate_metadata: PropagateMetadataFn
     run_evaluation: RunEvaluationFn
     get_lr: Callable[[int, LRSchedule, OptimConfig], float]
-    vectorize: Callable[[], VectorizeFn | None]
+    vmap: VectorizeFn | None = None
+    vectorize: Callable[[], VectorizeFn | None] = field(default=lambda: None)
 
 
 def default_trainer_dependencies(
@@ -157,6 +158,7 @@ def default_trainer_dependencies(
         propagate_metadata=propagate_metadata,
         run_evaluation=run_evaluation,
         get_lr=get_lr,
+        vmap=cast(VectorizeFn | None, getattr(torch, "vmap", None)),
         vectorize=lambda: cast(VectorizeFn | None, getattr(torch, "vmap", None)),
     )
 
