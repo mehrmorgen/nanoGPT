@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, cast
 import pickle
 
 import numpy as np
 
-from ml_playground.configuration.models import DataConfig
-from ml_playground.core.error_handling import DataError
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.core.file_state import diff_file_states, snapshot_file_states
-from ml_playground.data_pipeline.transforms.io import write_bin_and_meta
-from ml_playground.data_pipeline.transforms.metadata import validate_metadata_contract
+from ml_playground.framework.configuration.models import DataConfig
+from ml_playground.framework.core.error_handling import DataError
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.core.file_state import (
+    diff_file_states,
+    snapshot_file_states,
+)
+from ml_playground.framework.data_pipeline.transforms.io import write_bin_and_meta
+from ml_playground.framework.data_pipeline.transforms.metadata import (
+    validate_metadata_contract,
+)
 
 __all__ = [
     "REQUIRED_STREAM_FIELDS",
@@ -25,8 +30,8 @@ REQUIRED_STREAM_FIELDS = ("start", "winner", "moves", "policy_targets")
 
 
 def validate_streaming_records(
-    records: Iterable[Mapping[str, Any]],
-) -> Iterable[Mapping[str, Any]]:
+    records: Iterable[object],
+) -> Iterable[Mapping[str, object]]:
     """Validate streaming record shape for self-play datasets in a single pass."""
     for idx, record in enumerate(records):
         if not isinstance(record, Mapping):
@@ -35,14 +40,17 @@ def validate_streaming_records(
                 reason=f"Received {type(record).__name__}",
                 rationale="Streaming prep relies on structured record dictionaries",
             )
-        missing = [field for field in REQUIRED_STREAM_FIELDS if field not in record]
+        record_mapping = cast(Mapping[str, object], record)
+        missing = [
+            field for field in REQUIRED_STREAM_FIELDS if field not in record_mapping
+        ]
         if missing:
             raise DataError(
                 f"Streaming record at index {idx} missing fields: {missing}",
                 reason="Record schema incomplete",
                 rationale="Streaming prep requires 'start', 'winner', 'moves', and 'policy_targets'",
             )
-        yield record
+        yield record_mapping
 
 
 def _resolve_paths(
@@ -57,30 +65,27 @@ def _resolve_paths(
     return ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"
 
 
-def _load_meta(meta_path: Path) -> dict[str, Any]:
+def _load_meta(meta_path: Path) -> dict[str, object]:
     try:
         with meta_path.open("rb") as handle:
-            meta = pickle.load(handle)
+            raw_meta = cast(Mapping[str, object], pickle.load(handle))
     except (OSError, pickle.UnpicklingError, EOFError) as exc:
         raise DataError(
             f"Failed to read existing meta.pkl at {meta_path}: {exc}",
             reason=f"Unable to deserialize metadata due to {exc.__class__.__name__}",
             rationale="Streaming prep must preserve metadata to update counters",
         ) from exc
-    meta = validate_metadata_contract(meta)
-    return meta
+    normalized_meta = dict(raw_meta)
+    return validate_metadata_contract(normalized_meta)
 
 
 def _refresh_metadata(
-    existing: dict[str, Any],
+    existing: dict[str, object],
     *,
     train_tokens_added: int,
     val_tokens_added: int,
-    updates: dict[str, Any],
-) -> dict[str, Any]:
-    def _is_numeric(value: Any) -> bool:
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-
+    updates: Mapping[str, object],
+) -> dict[str, object]:
     if not isinstance(existing.get("train_tokens"), int) or not isinstance(
         existing.get("val_tokens"), int
     ):
@@ -90,16 +95,22 @@ def _refresh_metadata(
             rationale="Streaming prep must update token counts incrementally",
         )
     refreshed = dict(existing)
-    refreshed["train_tokens"] = existing["train_tokens"] + train_tokens_added
-    refreshed["val_tokens"] = existing["val_tokens"] + val_tokens_added
+    existing_train_tokens = cast(int, existing["train_tokens"])
+    existing_val_tokens = cast(int, existing["val_tokens"])
+    refreshed["train_tokens"] = existing_train_tokens + train_tokens_added
+    refreshed["val_tokens"] = existing_val_tokens + val_tokens_added
     for key, value in updates.items():
         if key in {"train_tokens", "val_tokens"}:
             continue
         existing_value = refreshed.get(key)
-        if _is_numeric(value) and _is_numeric(existing_value):
-            refreshed[key] = existing_value + value
-        else:
-            refreshed[key] = value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            numeric_value = float(value)
+            if isinstance(existing_value, (int, float)):
+                refreshed[key] = existing_value + numeric_value
+                continue
+            refreshed[key] = numeric_value
+            continue
+        refreshed[key] = value
     return refreshed
 
 
@@ -107,18 +118,19 @@ def append_bin_and_meta(
     ds_dir: Path,
     train: np.ndarray,
     val: np.ndarray,
-    meta: dict[str, Any],
+    meta: dict[str, object],
     *,
     logger: LoggerLike,
     data_cfg: DataConfig | None = None,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Append tokens to existing bins and refresh metadata counts."""
     ds_dir.mkdir(parents=True, exist_ok=True)
     train_path, val_path, meta_path = _resolve_paths(ds_dir, data_cfg)
     before = snapshot_file_states([train_path, val_path, meta_path])
 
     if not meta_path.exists():
-        seeded_meta = validate_metadata_contract(meta)
+        seeded_payload: dict[str, Any] = dict(meta)
+        seeded_meta = validate_metadata_contract(seeded_payload)
         seeded_meta["train_tokens"] = int(train.size)
         seeded_meta["val_tokens"] = int(val.size)
         write_bin_and_meta(

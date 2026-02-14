@@ -8,9 +8,13 @@ import re
 
 import numpy as np
 
-from ml_playground.core.error_handling import DataError
-from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.framework.core.error_handling import DataError
+from ml_playground.framework.core.tokenizer import (
+    CharTokenizer,
+    WordTokenizer,
+    create_tokenizer,
+)
+from ml_playground.framework.core.tokenizer_protocol import Tokenizer
 
 __all__ = [
     "TokenizerKind",
@@ -47,18 +51,16 @@ def prepare_with_tokenizer(
     all_text = train_text + val_text
     if isinstance(tokenizer, CharTokenizer):
         if all_text:
-            char_array = np.fromiter(all_text, dtype="<U1")
-            unique_chars = np.unique(char_array)
+            unique_chars = sorted({ch for ch in all_text})
             vocab = {ch: i for i, ch in enumerate(unique_chars)}
         else:
             vocab = {}
         tokenizer = create_tokenizer("char", vocab=vocab)
     elif isinstance(tokenizer, WordTokenizer):
-        words = re.findall(r"\w+|[^\w\s]", all_text)
+        words: list[str] = re.findall(r"\w+|[^\w\s]", all_text)
         if words:
-            words_array = np.asarray(words, dtype=object)
-            unique_words = np.unique(words_array)
-            vocab = {word: i for i, word in enumerate(unique_words.tolist())}
+            unique_words = sorted({word for word in words})
+            vocab = {word: i for i, word in enumerate(unique_words)}
         else:
             vocab = {}
         tokenizer = create_tokenizer("word", vocab=vocab)
@@ -77,7 +79,7 @@ def create_standardized_metadata(
     tokenizer: Tokenizer,
     train_tokens: int,
     val_tokens: int,
-    extras: Mapping[str, Any] | None = None,
+    extras: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     meta: dict[str, Any] = {
         "meta_version": 1,
@@ -96,7 +98,7 @@ def create_standardized_metadata(
             vocab = getattr(tokenizer, "stoi", None)
             if isinstance(vocab, Mapping) and vocab:
                 vocab_mapping = cast(Mapping[object, object], vocab)
-                meta["stoi"] = _normalize_vocab_mapping(vocab_mapping)
+                meta["stoi"] = normalize_vocab_mapping(vocab_mapping)
         elif meta["tokenizer_type"] == "tiktoken":
             encoding_name = getattr(tokenizer, "encoding_name", None)
             if isinstance(encoding_name, str):
@@ -105,7 +107,7 @@ def create_standardized_metadata(
         pass
 
     if extras:
-        normalized_extras: dict[str, Any] = {
+        normalized_extras: dict[str, object] = {
             str(key): value for key, value in extras.items()
         }
         meta.update(normalized_extras)
@@ -113,7 +115,7 @@ def create_standardized_metadata(
     return meta
 
 
-def _normalize_vocab_mapping(vocab: Mapping[object, object]) -> dict[str, int]:
+def normalize_vocab_mapping(vocab: Mapping[object, object]) -> dict[str, int]:
     normalized: dict[str, int] = {}
     for key_obj, val_obj in vocab.items():
         key = str(key_obj)

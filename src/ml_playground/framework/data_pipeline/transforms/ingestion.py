@@ -5,9 +5,10 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Iterable, Mapping, cast
 
-from ml_playground.core.error_handling import DataError
+from ml_playground.framework.core.di_implementations import DefaultJsonParser
+from ml_playground.framework.core.error_handling import DataError
 
 __all__ = [
     "JSONL_OPTIONAL_FIELDS",
@@ -64,59 +65,73 @@ def stream_csv_column(path: Path, *, column: str = "text") -> Iterable[str]:
         ) from exc
 
 
-def validate_jsonl_record(record: Mapping[str, Any]) -> None:
+JsonRecord = dict[str, object]
+
+
+def _is_json_record(value: object) -> bool:
+    return isinstance(value, Mapping)
+
+
+def validate_jsonl_record(record: JsonRecord) -> None:
     """Validate a single JSONL record against the layout contract."""
-    if not isinstance(record, Mapping):
-        raise DataError(
-            "JSONL record must be a mapping",
-            reason=f"Received {type(record).__name__}",
-            rationale="JSONL layout requires mapping entries",
-        )
-    if "text" not in record or not isinstance(record.get("text"), str):
+    if "text" not in record or not isinstance(record["text"], str):
         raise DataError(
             "JSONL record missing 'text' field",
             reason="Required text field missing or invalid",
             rationale="JSONL layout requires 'text' for each record",
         )
-    if "meta" in record and not isinstance(record.get("meta"), Mapping):
+    if "meta" in record and not isinstance(record["meta"], Mapping):
         raise DataError(
             "JSONL record meta must be a mapping",
             reason="meta field present but not a mapping",
             rationale="JSONL meta must be a key/value mapping",
         )
-    if "meta_tokens" in record:
-        tokens = record.get("meta_tokens")
-        if not isinstance(tokens, list) or not all(
-            isinstance(item, str) for item in tokens
-        ):
+    meta_tokens_obj: object | None = record.get("meta_tokens")
+    if meta_tokens_obj is not None:
+        if not isinstance(meta_tokens_obj, list):
             raise DataError(
                 "JSONL record meta_tokens must be list[str]",
                 reason="meta_tokens present but invalid",
                 rationale="JSONL meta tokens must be a list of strings",
             )
+        tokens_list: list[str] = []
+        for item_obj in cast(list[object], meta_tokens_obj):
+            item = str(item_obj)
+            if not isinstance(item_obj, str):
+                raise DataError(
+                    "JSONL record meta_tokens must be list[str]",
+                    reason="meta_tokens present but invalid",
+                    rationale="JSONL meta tokens must be a list of strings",
+                )
+            tokens_list.append(item)
 
 
-def stream_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    """Stream JSONL records and validate the layout."""
+def stream_jsonl(path: Path) -> Iterable[dict[str, object]]:
+    """Stream JSONL records using DI JsonParser and validate the layout."""
+    if not path.exists():
+        return
+
+    json_parser = DefaultJsonParser()
     try:
         with path.open("r", encoding="utf-8") as handle:
             for idx, line in enumerate(handle):
                 if not line.strip():
                     continue
                 try:
-                    record = json.loads(line)
+                    raw_record = json_parser.parse_json(line)
                 except json.JSONDecodeError as exc:
                     raise DataError(
                         f"Invalid JSONL at line {idx + 1}: {exc}",
                         reason="JSON decoding failed",
                         rationale="JSONL requires one JSON object per line",
                     ) from exc
-                if not isinstance(record, dict):
+                if not _is_json_record(raw_record):
                     raise DataError(
                         "JSONL record must be an object",
                         reason="Decoded JSON is not an object",
                         rationale="JSONL requires object records",
                     )
+                record = cast(JsonRecord, raw_record)
                 validate_jsonl_record(record)
                 yield record
     except OSError as exc:
