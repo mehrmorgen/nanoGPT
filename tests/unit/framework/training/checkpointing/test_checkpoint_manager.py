@@ -21,7 +21,6 @@ from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     CheckpointDependencies,
     CheckpointError,
     CheckpointLoadError,
-    probe_unlink_missing_ok,
 )
 
 
@@ -81,7 +80,6 @@ def test_load_best_checkpoint_empty_after_discover(tmp_path: Path) -> None:
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,
-        unlink_supports_missing_ok=True,
     )
 
     manager = CheckpointManager(
@@ -129,7 +127,6 @@ def test_load_best_checkpoint_add_safe_globals_exception(tmp_path: Path) -> None
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=Path,  # Not None to trigger add_safe_globals call
-        unlink_supports_missing_ok=True,
     )
 
     manager = CheckpointManager(
@@ -181,7 +178,6 @@ def test_load_best_checkpoint_posix_path_cls_none(tmp_path: Path) -> None:
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,  # None - should skip add_safe_globals
-        unlink_supports_missing_ok=True,
     )
 
     manager = CheckpointManager(
@@ -229,7 +225,6 @@ def test_load_best_checkpoint_add_safe_globals_not_callable(tmp_path: Path) -> N
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=Path,
-        unlink_supports_missing_ok=True,
     )
 
     manager = CheckpointManager(
@@ -268,7 +263,6 @@ def test_load_best_checkpoint_torch_load_error(tmp_path: Path) -> None:
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,
-        unlink_supports_missing_ok=True,
     )
 
     manager = CheckpointManager(
@@ -287,40 +281,6 @@ def test_load_best_checkpoint_torch_load_error(tmp_path: Path) -> None:
     # Should raise CheckpointLoadError
     with pytest.raises(CheckpointLoadError, match="Failed to load"):
         manager.load_best_checkpoint("cpu", logger)
-
-
-# ---------------------------------------------------------------------------
-# _probe_unlink_missing_ok branches (lines 125, 127-130)
-# ---------------------------------------------------------------------------
-
-
-def test_probe_unlink_missing_ok_path_instance(tmp_path: Path) -> None:
-    """Line 125: path_cls is already a Path instance."""
-    probe = tmp_path / ".probe_test"
-    result = probe_unlink_missing_ok(probe)
-    assert isinstance(result, bool)
-    # Cleanup should have happened
-    assert not probe.exists()
-
-
-def test_probe_unlink_missing_ok_type_class(tmp_path: Path) -> None:
-    """Lines 127-128: path_cls is a type that accepts a string arg."""
-    # Path itself is a type that accepts a string
-    result = probe_unlink_missing_ok(Path)
-    assert isinstance(result, bool)
-
-
-def test_probe_unlink_missing_ok_type_class_typeerror() -> None:
-    """Lines 129-130: path_cls is a type whose __init__ raises TypeError on string arg."""
-
-    class BadPathType(Path):
-        def __new__(cls, *args: object, **kwargs: object) -> "BadPathType":
-            if args:
-                raise TypeError("No args allowed")
-            return super().__new__(cls)
-
-    result = probe_unlink_missing_ok(BadPathType)
-    assert isinstance(result, bool)
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +316,6 @@ def _make_manager_with_deps(
     strict_naming: bool = True,
     keep_last: int = 2,
     keep_best: int = 2,
-    unlink_supports_missing_ok: bool = True,
 ) -> CheckpointManager:
     """Helper to create a CheckpointManager with fake deps."""
 
@@ -377,7 +336,6 @@ def _make_manager_with_deps(
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,
-        unlink_supports_missing_ok=unlink_supports_missing_ok,
     )
 
     return CheckpointManager(
@@ -437,7 +395,7 @@ def test_save_checkpoint_domain_naming_last(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_best_prune_sidecar_via_path_unlink(tmp_path: Path) -> None:
-    """Line 429: sidecar deleted via path_unlink when unlink_supports_missing_ok=False."""
+    """Line 429: sidecar deleted via path_unlink."""
     unlinked: list[Path] = []
 
     def fake_torch_load(path: str, **kwargs: Any) -> Mapping[str, Any]:
@@ -458,7 +416,6 @@ def test_save_checkpoint_best_prune_sidecar_via_path_unlink(tmp_path: Path) -> N
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,
-        unlink_supports_missing_ok=False,
     )
 
     manager = CheckpointManager(
@@ -598,7 +555,6 @@ def test_load_best_checkpoint_discover_finds_checkpoints(tmp_path: Path) -> None
         path_stat=fake_path_stat,
         path_unlink=fake_path_unlink,
         posix_path_cls=None,
-        unlink_supports_missing_ok=True,
     )
 
     # Create manager with empty directory first

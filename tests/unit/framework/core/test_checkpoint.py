@@ -17,7 +17,6 @@ from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     CheckpointError,
     CheckpointLoadError,
     TorchUnpicklingError,
-    probe_unlink_missing_ok,
     resolve_posix_path_cls,
 )
 
@@ -307,64 +306,6 @@ def test_resolve_posix_path_cls_handles_errors() -> None:
             raise RuntimeError("boom")
 
     assert resolve_posix_path_cls(_BadModule()) is None
-
-
-def test_probe_unlink_missing_ok_returns_true() -> None:
-    """Probe returns True when missing_ok is supported."""
-
-    class _Path:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def touch(self, *, exist_ok: bool) -> None:
-            del exist_ok
-
-        def unlink(self, *, missing_ok: bool = False) -> None:
-            del missing_ok
-
-        def exists(self) -> bool:
-            return False
-
-    assert probe_unlink_missing_ok(_Path("")) is True
-
-
-def test_probe_unlink_missing_ok_handles_type_error() -> None:
-    """Probe returns False when missing_ok is unsupported."""
-
-    class _Path:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def touch(self, *, exist_ok: bool) -> None:
-            del exist_ok
-
-        def unlink(self) -> None:
-            return None
-
-        def exists(self) -> bool:
-            return False
-
-    assert probe_unlink_missing_ok(_Path()) is False
-
-
-def test_probe_unlink_missing_ok_handles_os_error() -> None:
-    """Probe returns False when unlink raises OSError."""
-
-    class _Path:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            self.cleaned = False
-
-        def touch(self, *, exist_ok: bool) -> None:
-            del exist_ok
-
-        def unlink(self, *, missing_ok: bool = False) -> None:
-            del missing_ok
-            raise OSError("boom")
-
-        def exists(self) -> bool:
-            return True
-
-    assert probe_unlink_missing_ok(_Path()) is False
 
 
 # -----------------------------------------------------------------------------
@@ -702,7 +643,7 @@ def test_save_checkpoint_prune_last_failure(
         atomic=False,
         keep_last=1,
         keep_best=0,
-        deps=make_deps(path_unlink=boom_unlink, unlink_supports_missing_ok=False),
+        deps=make_deps(path_unlink=boom_unlink),
     )
     mgr.save_checkpoint(
         ckpt_obj,
@@ -745,7 +686,7 @@ def test_save_checkpoint_prune_best_failure(
         atomic=False,
         keep_last=0,
         keep_best=1,
-        deps=make_deps(path_unlink=boom_unlink_best, unlink_supports_missing_ok=False),
+        deps=make_deps(path_unlink=boom_unlink_best),
     )
     mgr.save_checkpoint(
         ckpt_obj,
@@ -963,7 +904,6 @@ def test_save_checkpoint_last_retention_unlink_failure(
         raise OSError(f"cannot remove {path}")
 
     deps = make_deps(
-        unlink_supports_missing_ok=False,
         path_unlink=failing_unlink,
     )
     mgr = CheckpointManager(out, atomic=False, keep_last=1, keep_best=0, deps=deps)
@@ -996,7 +936,6 @@ def test_save_checkpoint_best_retention_unlink_failure(
         raise OSError(f"cannot remove {path}")
 
     deps = make_deps(
-        unlink_supports_missing_ok=False,
         path_unlink=failing_unlink,
     )
     mgr = CheckpointManager(out, atomic=False, keep_last=0, keep_best=1, deps=deps)

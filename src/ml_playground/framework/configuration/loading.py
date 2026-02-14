@@ -113,7 +113,7 @@ def _validate_extras(experiment_name: str, section: str, data: TomlMapping) -> N
         budget: dict[str, object] = {}
         if "max_hours" in budget_mapping:
             value = budget_mapping["max_hours"]
-            if not isinstance(value, (int, float)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError("budget.max_hours must be a number")
             if value < 0:
                 raise ValueError("budget.max_hours must be >= 0")

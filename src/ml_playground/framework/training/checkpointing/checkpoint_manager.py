@@ -34,11 +34,8 @@ __all__ = [
     "Checkpoint",
     "CheckpointManager",
     "CheckpointDependencies",
-    # Public aliases for testing and policy compliance
     "resolve_posix_path_cls",
-    "probe_unlink_missing_ok",
     "_resolve_posix_path_cls",
-    "_probe_unlink_missing_ok",
 ]
 
 
@@ -80,7 +77,6 @@ class CheckpointDependencies:
     path_stat: Callable[[Path], os.stat_result]
     path_unlink: Callable[[Path], None]
     posix_path_cls: type | None
-    unlink_supports_missing_ok: bool
 
     @classmethod
     def default(cls) -> "CheckpointDependencies":
@@ -88,14 +84,10 @@ class CheckpointDependencies:
             return path.stat()
 
         def _path_unlink(path: Path) -> None:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
+            path.unlink(missing_ok=True)
 
         add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
         posix_cls = _resolve_posix_path_cls()
-        supports_missing_ok = _probe_unlink_missing_ok()
 
         return cls(
             torch_load=torch.load,
@@ -103,7 +95,6 @@ class CheckpointDependencies:
             path_stat=_path_stat,
             path_unlink=_path_unlink,
             posix_path_cls=posix_cls,
-            unlink_supports_missing_ok=supports_missing_ok,
         )
 
 
@@ -116,42 +107,9 @@ def _resolve_posix_path_cls(module: object | None = None) -> type | None:
         return None
 
 
-def _probe_unlink_missing_ok(path_cls: object | None = None) -> bool:
-    """Detect whether Path.unlink supports missing_ok without relying on side effects."""
-    probe_path: Path
-    if path_cls is None:
-        probe_path = Path(".checkpoint_unlink_probe")
-    elif isinstance(path_cls, Path):
-        probe_path = path_cls
-    elif isinstance(path_cls, type):
-        try:
-            probe_path = path_cls(".checkpoint_unlink_probe")  # type: ignore[call-arg]
-        except TypeError:
-            probe_path = path_cls()  # type: ignore[call-arg]
-    else:
-        probe_path = cast(Path, path_cls)
-
-    try:
-        probe_path.touch(exist_ok=True)
-        probe_path.unlink(missing_ok=True)
-        return True
-    except (TypeError, OSError):
-        return False
-    finally:
-        if probe_path.exists():
-            try:
-                probe_path.unlink()
-            except OSError:
-                pass
-
-
-# Public aliases for policy compliance
+# Public alias retained for compatibility in tests and call sites.
 def resolve_posix_path_cls(module: object | None = None) -> type | None:
     return _resolve_posix_path_cls(module)
-
-
-def probe_unlink_missing_ok(path_cls: object | None = None) -> bool:
-    return _probe_unlink_missing_ok(path_cls)
 
 
 def _expect_mapping(value: object, field: str) -> Dict[str, object]:
@@ -385,10 +343,7 @@ class CheckpointManager:
             while len(self.last_checkpoints) > self.keep_last:
                 old = self.last_checkpoints.pop(0)
                 try:
-                    if self._deps.unlink_supports_missing_ok:
-                        old.path.unlink(missing_ok=False)
-                    else:
-                        self._deps.path_unlink(old.path)
+                    self._deps.path_unlink(old.path)
                     logger.info(f"Removed old last checkpoint: {old.path}")
                 except OSError as e:
                     raise CheckpointError(
@@ -416,17 +371,11 @@ class CheckpointManager:
                 # Delete the files
                 for ckpt in to_remove:
                     try:
-                        if self._deps.unlink_supports_missing_ok:
-                            ckpt.path.unlink(missing_ok=False)
-                        else:
-                            self._deps.path_unlink(ckpt.path)
+                        self._deps.path_unlink(ckpt.path)
                         # Also remove sidecar file if it exists
                         sidecar = ckpt.path.with_suffix(ckpt.path.suffix + ".json")
                         if sidecar.exists():
-                            if self._deps.unlink_supports_missing_ok:
-                                sidecar.unlink(missing_ok=False)
-                            else:
-                                self._deps.path_unlink(sidecar)
+                            self._deps.path_unlink(sidecar)
                         logger.info(f"Removed old best checkpoint: {ckpt.path}")
                     except OSError as e:
                         raise CheckpointError(
