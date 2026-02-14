@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Protocol, Sequence
 
+from ml_playground.framework.core.logging_protocol import LoggerLike
+
 import torch
 
 
@@ -27,9 +29,9 @@ def configure_optimizers(
     device_type: str,
     *,
     factory: _AdamWFactory | None = None,
-    logger: Any | None = None,
+    logger: LoggerLike | None = None,
 ) -> torch.optim.Optimizer:
-    """Create an AdamW optimizer matching the legacy GPT implementation."""
+    """Create an AdamW optimizer matching the original GPT implementation."""
 
     param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
     decay_params = [p for p in param_dict.values() if p.dim() >= 2]
@@ -41,15 +43,17 @@ def configure_optimizers(
     ]
 
     if logger is not None:
+        decayed_total = sum(p.numel() for p in decay_params)
+        nondecayed_total = sum(p.numel() for p in nodecay_params)
         logger.info(
             "num decayed parameter tensors: %d, with %s parameters",
             len(decay_params),
-            f"{sum(p.numel() for p in decay_params):,}",
+            f"{decayed_total:,}",
         )
         logger.info(
             "num non-decayed parameter tensors: %d, with %s parameters",
             len(nodecay_params),
-            f"{sum(p.numel() for p in nodecay_params):,}",
+            f"{nondecayed_total:,}",
         )
 
     if factory is None:
@@ -61,10 +65,10 @@ def configure_optimizers(
             betas: Sequence[float],
             fused: bool | None = None,
         ) -> torch.optim.Optimizer:
-            kwargs: dict[str, Any] = {"lr": lr, "betas": tuple(betas)}
+            betas_tuple = (betas[0], betas[1])
             if fused is not None:
-                kwargs["fused"] = fused
-            return torch.optim.AdamW(params, **kwargs)
+                return torch.optim.AdamW(params, lr=lr, betas=betas_tuple, fused=fused)
+            return torch.optim.AdamW(params, lr=lr, betas=betas_tuple)
 
         factory = _default_factory
 

@@ -1,8 +1,9 @@
-from __future__ import annotations  # pragma: no cover
+from __future__ import annotations
 
 from pathlib import Path
 from typing import (
     Any,
+    ContextManager,
     Dict,
     Iterator,
     Literal,
@@ -37,6 +38,11 @@ __all__ = [
     "OSModule",
     "PlatformModule",
     "SysModule",
+    "ConfigSectionExtractor",
+    "JsonParser",
+    "ModuleImporter",
+    "TestResultExtractor",
+    "CoverageDataExtractor",
 ]
 
 
@@ -47,25 +53,25 @@ class Tokenizer(Protocol):
     @property
     def name(self) -> str:
         """Name of the tokenizer."""
-        ...  # pragma: no cover
+        ...
 
     @property
     def vocab_size(self) -> int:
         """Number of tokens in the vocabulary."""
-        ...  # pragma: no cover
+        ...
 
     @property
     def vocab(self) -> Mapping[str, int]:
         """Mapping from tokens to integer ids."""
-        ...  # pragma: no cover
+        ...
 
     def encode(self, text: str) -> list[TokenId]:
         """Encode text into a sequence of token ids."""
-        ...  # pragma: no cover
+        ...
 
     def decode(self, token_ids: Sequence[TokenId]) -> str:
         """Decode a sequence of token ids into text."""
-        ...  # pragma: no cover
+        ...
 
 
 TokenizerKind = Literal["char", "word", "tiktoken"]
@@ -77,62 +83,62 @@ class PersistenceStrategy(Protocol):
 
     def load(self) -> Mapping[str, Any]:
         """Load stored experiences."""
-        ...  # pragma: no cover
+        ...
 
     def save(self, entries: Mapping[str, Any]) -> None:
         """Save experiences to the backend."""
         _ = entries
-        ...  # pragma: no cover
+        ...
 
 
 @runtime_checkable
 class ExperienceStorage(Protocol):
     """Protocol for experience storage backends."""
 
-    def store(self, entry: Any) -> str:
+    def store(self, entry: object) -> str:
         """Store an experience entry."""
-        ...  # pragma: no cover
+        ...
 
     def get(self, key: str) -> Optional[Any]:
         """Fetch an entry by key."""
-        ...  # pragma: no cover
+        ...
 
     def has(self, key: str) -> bool:
         """Check if an entry exists."""
-        ...  # pragma: no cover
+        ...
 
-    def entries(self) -> Iterator[Any]:
+    def entries(self) -> Iterator[object]:
         """Iterate over all entries."""
-        ...  # pragma: no cover
+        ...
 
     def flush(self) -> None:
         """Persist pending changes."""
-        ...  # pragma: no cover
+        ...
 
-    def __len__(self) -> int: ...  # pragma: no cover
+    def __len__(self) -> int: ...
 
-    def __iter__(self) -> Iterator[Any]: ...  # pragma: no cover
+    def __iter__(self) -> Iterator[object]: ...
 
 
 @runtime_checkable
 class CheckpointManager(Protocol):
     """Protocol for managing experiment checkpoints."""
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
+    def save(self, *args: object, **kwargs: object) -> None:
         """Save a checkpoint."""
-        ...  # pragma: no cover
+        ...
 
-    def load(self, *args: Any, **kwargs: Any) -> Optional[Any]:
+    def load(self, *args: object, **kwargs: object) -> Optional[object]:
         """Load a checkpoint."""
-        ...  # pragma: no cover
+        ...
 
     def get_latest_path(self) -> Optional[Path]:
         """Get path to the latest checkpoint."""
-        ...  # pragma: no cover
+        ...
 
     def get_best_path(self) -> Optional[Path]:
         """Get path to the best checkpoint."""
-        ...  # pragma: no cover
+        ...
 
 
 @runtime_checkable
@@ -141,22 +147,22 @@ class Telemetry(Protocol):
 
     def log_metric(self, name: str, value: float, step: int | None = None) -> None:
         """Log a numerical metric."""
-        ...  # pragma: no cover
+        ...
 
-    def time_block(self, name: str) -> Any:
+    def time_block(self, name: str) -> ContextManager[Any]:
         """Context manager to time a block of code."""
-        ...  # pragma: no cover
+        ...
 
 
 @runtime_checkable
 class MLflowRun(Protocol):
     """Minimal MLflow run handle."""
 
-    def __enter__(self) -> Any: ...  # pragma: no cover
+    def __enter__(self) -> object: ...
 
-    def __exit__(self, *exc: Any) -> bool | None: ...  # pragma: no cover
+    def __exit__(self, *exc: object) -> bool | None: ...
 
-    def __iter__(self) -> Iterator[Any]: ...  # pragma: no cover
+    def __iter__(self) -> Iterator[object]: ...
 
 
 @runtime_checkable
@@ -167,56 +173,107 @@ class MLflowClient(Protocol):
     MLflow's dynamic runtime types.
     """
 
-    def set_tracking_uri(self, _uri: str, /) -> None: ...  # pragma: no cover
+    def set_tracking_uri(self, _uri: str, /) -> None: ...
 
-    def get_experiment_by_name(self, _name: str, /) -> Any: ...  # pragma: no cover
+    def get_experiment_by_name(self, _name: str, /) -> object: ...
 
-    def set_experiment(self, _experiment_name: str, /) -> Any: ...  # pragma: no cover
+    def set_experiment(self, _experiment_name: str, /) -> object: ...
 
-    def create_experiment(
-        self, _name: str, /, **kwargs: Any
-    ) -> str: ...  # pragma: no cover
+    def create_experiment(self, _name: str, /, **kwargs: object) -> str: ...
 
-    def start_run(self, **kwargs: Any) -> MLflowRun: ...  # pragma: no cover
+    def start_run(self, **kwargs: object) -> MLflowRun: ...
 
-    def end_run(self) -> None: ...  # pragma: no cover
+    def end_run(self) -> None: ...
 
-    def log_params(self, _params: Dict[str, Any], /) -> None: ...  # pragma: no cover
+    def log_params(self, _params: Mapping[str, object], /) -> None: ...
 
     def log_metrics(
         self, _metrics: Dict[str, float], /, *, step: Optional[int] = None
-    ) -> None: ...  # pragma: no cover
+    ) -> None: ...
 
     def log_artifact(
         self, _local_path: str, /, *, artifact_path: Optional[str] = None
     ) -> None:
         _ = artifact_path
-        ...  # pragma: no cover
+        ...
 
     def log_artifacts(
         self, _local_dir: str, /, *, artifact_path: Optional[str] = None
     ) -> None:
         _ = artifact_path
-        ...  # pragma: no cover
+        ...
 
-    def set_tag(self, _key: str, _value: Any, /) -> None: ...  # pragma: no cover
+    def set_tag(self, _key: str, _value: object, /) -> None: ...
 
 
 @runtime_checkable
 class OSModule(Protocol):
-    def getcwd(self) -> str: ...  # pragma: no cover
+    def getcwd(self) -> str: ...
 
-    def getlogin(self) -> str: ...  # pragma: no cover
+    def getlogin(self) -> str: ...
 
 
 @runtime_checkable
 class PlatformModule(Protocol):
-    def platform(self) -> str: ...  # pragma: no cover
+    def platform(self) -> str: ...
 
-    def processor(self) -> str: ...  # pragma: no cover
+    def processor(self) -> str: ...
 
 
 @runtime_checkable
 class SysModule(Protocol):
     version: str
     argv: list[str]
+
+
+@runtime_checkable
+class ConfigSectionExtractor(Protocol):
+    """Protocol for extracting nested configuration sections."""
+
+    def extract_section(
+        self, config: Mapping[str, object], section: str
+    ) -> Mapping[str, object]: ...
+
+    def get_string(
+        self, mapping: Mapping[str, object], key: str, default: str
+    ) -> str: ...
+
+
+@runtime_checkable
+class JsonParser(Protocol):
+    """Protocol for parsing JSON content with typed returns."""
+
+    def parse_json(self, content: str) -> Mapping[str, object]: ...
+
+    def parse_gate_snapshot(self, content: str) -> object: ...
+
+    def parse_github_response(self, content: str) -> dict[str, object]: ...
+
+
+@runtime_checkable
+class ModuleImporter(Protocol):
+    """Protocol for importing LIT modules."""
+
+    def import_dataset_module(self) -> object: ...
+
+    def import_model_module(self) -> object: ...
+
+    def import_types_module(self) -> object: ...
+
+
+@runtime_checkable
+class TestResultExtractor(Protocol):
+    """Protocol for extracting test results."""
+
+    def extract_overall(self, results: dict[str, object]) -> dict[str, object]: ...
+
+    def extract_status(self, section: dict[str, object]) -> str: ...
+
+
+@runtime_checkable
+class CoverageDataExtractor(Protocol):
+    """Protocol for extracting coverage data."""
+
+    def extract_totals(self, coverage_data: dict[str, object]) -> dict[str, object]: ...
+
+    def get_coverage_percent(self, totals: dict[str, object]) -> float: ...

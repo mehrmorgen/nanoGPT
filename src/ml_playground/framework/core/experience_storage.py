@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    Any,
     Callable,
     Dict,
     Iterable,
@@ -15,12 +14,13 @@ from typing import (
     Mapping,
     Tuple,
     TYPE_CHECKING,
+    cast,
 )
 
-from ml_playground.core.error_handling import DataError
+from ml_playground.framework.core.error_handling import DataError
 
 if TYPE_CHECKING:
-    from ml_playground.configuration.models import ExperienceStorageConfig
+    from ml_playground.framework.configuration.models import ExperienceStorageConfig
 __all__ = [
     "ExperienceEntry",
     "ExperienceStorage",
@@ -73,7 +73,9 @@ class PersistenceStrategy(ABC):
 class JSONFilePersistenceStrategy(PersistenceStrategy):
     """JSON-based persistence for experience storage suitable for light workloads."""
 
-    def __init__(self, path: Path, loader: Callable[[str], Any] | None = None) -> None:
+    def __init__(
+        self, path: Path, loader: Callable[[str], Mapping[str, object]] | None = None
+    ) -> None:
         self._path = path
         self._loader = loader or json.loads
 
@@ -81,43 +83,45 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
         if not self._path.exists():
             return {}
         try:
-            payload = self._loader(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            payload_obj = self._path.read_text(encoding="utf-8")
+            payload = self._loader(payload_obj)
+        except (OSError, json.JSONDecodeError, TypeError) as exc:
             raise DataError(
                 f"Failed to read experience storage from {self._path}: {exc}",
                 reason="Unable to decode persisted experience store",
                 rationale="Experience storage requires a valid JSON mapping of hash -> entry payloads",
             ) from exc
 
-        if not isinstance(payload, dict):
+        if not isinstance(payload, Mapping):
             raise DataError(
                 f"Experience storage at {self._path} must be a mapping",
                 reason="Persisted payload is not a mapping",
                 rationale="Experience storage expects JSON object with hash keys",
             )
 
+        typed_payload = cast(Mapping[str, object], payload)
         entries: dict[str, ExperienceEntry] = {}
-        for key, value in payload.items():
-            if not isinstance(key, str):
-                raise DataError(
-                    f"Invalid entry key in experience storage: {key}",
-                    reason="Non-string hash key encountered",
-                    rationale="Experience storage keys must be canonical hash strings",
-                )
-            entries[key] = self._decode_entry(key, value)
+        for key, raw_value in typed_payload.items():
+            entries[key] = self._decode_entry(key, raw_value)
         return entries
 
     def save(self, entries: Mapping[str, ExperienceEntry]) -> None:
-        for key in entries:
-            if not isinstance(key, str):
+        serializable: dict[str, object] = {}
+        raw_entries = cast(Mapping[object, object], entries)
+        for key_obj, entry_obj in raw_entries.items():
+            if not isinstance(key_obj, str):
                 raise DataError(
-                    f"Invalid entry key in experience storage: {key}",
-                    reason="Non-string hash key encountered",
-                    rationale="Experience storage keys must be canonical hash strings",
+                    f"Experience storage keys must be strings, got {key_obj!r}",
+                    reason="Non-string key",
+                    rationale="Experience storage keys are canonical hashes represented as strings",
                 )
-        serializable = {
-            key: self._encode_entry(entry) for key, entry in entries.items()
-        }
+            if not isinstance(entry_obj, ExperienceEntry):
+                raise DataError(
+                    f"Invalid entry type for {key_obj}: {type(entry_obj).__name__}",
+                    reason="Entries must be ExperienceEntry instances",
+                    rationale="Experience storage persists canonical ExperienceEntry payloads",
+                )
+            serializable[key_obj] = self._encode_entry(entry_obj)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self._path.write_text(
@@ -132,7 +136,7 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
             ) from exc
 
     @staticmethod
-    def _encode_entry(entry: ExperienceEntry) -> dict:
+    def _encode_entry(entry: ExperienceEntry) -> dict[str, object]:
         return {
             "moves": list(entry.moves),
             "winner": entry.winner,
@@ -149,16 +153,16 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
     def _decode_entry(key: str, payload: object) -> ExperienceEntry:
         if not isinstance(payload, Mapping):
             raise DataError(
-                f"Experience entry {key} must be a mapping",
-                reason="Entry payload is not a mapping",
-                rationale="Experience storage expects dict payload per entry",
+                f"Invalid entry value for {key}: {payload}",
+                reason="Entry payload must be a mapping",
+                rationale="Experience storage entries are stored as dicts",
             )
-
+        payload_map = cast(Mapping[str, object], payload)
         # 1. Core game state
         try:
-            moves = payload["moves"]
-            winner = payload["winner"]
-            start_player = payload["start_player"]
+            moves = payload_map["moves"]
+            winner = payload_map["winner"]
+            start_player = payload_map["start_player"]
         except KeyError as exc:
             raise DataError(
                 f"Experience entry {key} is missing required field {exc.args[0]}",
@@ -166,7 +170,9 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
                 rationale="Experience storage requires moves, winner, and start_player",
             ) from exc
 
-        if not isinstance(moves, list) or not all(isinstance(m, int) for m in moves):
+        if not isinstance(moves, list) or not all(
+            isinstance(m, int) for m in cast(list[object], moves)
+        ):
             raise DataError(
                 f"Experience entry {key} has invalid moves payload",
                 reason="Moves are not a list of integers",
@@ -180,30 +186,33 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
             )
 
         # 2. Targets (policy/value)
-        policy_targets = payload.get("policy_targets", {})
-        value_targets = payload.get("value_targets", {})
-        JSONFilePersistenceStrategy._validate_targets(
-            key, policy_targets, value_targets
+        policy_targets_obj = payload_map.get("policy_targets", {})
+        value_targets_obj = payload_map.get("value_targets", {})
+        policy_targets, value_targets = JSONFilePersistenceStrategy._validate_targets(
+            key,
+            policy_targets_obj,
+            value_targets_obj,
         )
 
         # 3. Metadata
+        typed_moves = cast(list[int], moves)
         entry = ExperienceEntry(
-            moves=tuple(int(m) for m in moves),
+            moves=tuple(typed_moves),
             winner=winner,
             start_player=start_player,
             policy_targets={k: list(v) for k, v in policy_targets.items()},
-            value_targets={k: float(v) for k, v in value_targets.items()},
+            value_targets={k: v for k, v in value_targets.items()},
             first_seen_step=JSONFilePersistenceStrategy._get_int(
-                key, payload, "first_seen_step"
+                key, payload_map, "first_seen_step"
             ),
             last_seen_step=JSONFilePersistenceStrategy._get_int(
-                key, payload, "last_seen_step"
+                key, payload_map, "last_seen_step"
             ),
             visit_count=JSONFilePersistenceStrategy._get_int(
-                key, payload, "visit_count"
+                key, payload_map, "visit_count"
             ),
             priority_score=JSONFilePersistenceStrategy._get_float(
-                key, payload, "priority_score"
+                key, payload_map, "priority_score"
             ),
         )
 
@@ -217,29 +226,56 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
 
     @staticmethod
     def _validate_targets(
-        key: str, policy_targets: object, value_targets: object
-    ) -> None:
-        if not isinstance(policy_targets, Mapping) or not all(
-            isinstance(k, str) and isinstance(v, list)
-            for k, v in policy_targets.items()
-        ):
+        key: str,
+        policy_targets: object,
+        value_targets: object,
+    ) -> tuple[Dict[str, list[int]], Dict[str, float]]:
+        if not isinstance(policy_targets, Mapping):
             raise DataError(
                 f"Experience entry {key} has invalid policy_targets",
                 reason="policy_targets must be mapping[str, list]",
                 rationale="Experience storage annotates policy targets per depth",
             )
-        if not isinstance(value_targets, Mapping) or not all(
-            isinstance(k, str) and isinstance(v, (int, float))
-            for k, v in value_targets.items()
-        ):
+        if not isinstance(value_targets, Mapping):
             raise DataError(
                 f"Experience entry {key} has invalid value_targets",
                 reason="value_targets must be mapping[str, float]",
                 rationale="Experience storage annotates value targets per depth",
             )
+        policy_targets_map = cast(Mapping[str, object], policy_targets)
+        value_targets_map = cast(Mapping[str, object], value_targets)
+        typed_policy_targets: dict[str, list[int]] = {}
+        for raw_key, raw_value in policy_targets_map.items():
+            if not isinstance(raw_value, list):
+                raise DataError(
+                    f"Experience entry {key} has invalid policy_targets",
+                    reason="policy_targets must be mapping[str, list]",
+                    rationale="Experience storage annotates policy targets per depth",
+                )
+            validated_list: list[int] = []
+            for element in cast(list[object], raw_value):
+                if not isinstance(element, int):
+                    raise DataError(
+                        f"Experience entry {key} has invalid policy_targets",
+                        reason="policy_targets must be mapping[str, list[int]]",
+                        rationale="Experience storage annotates policy targets per depth",
+                    )
+                validated_list.append(element)
+            typed_policy_targets[str(raw_key)] = validated_list
+
+        typed_value_targets: dict[str, float] = {}
+        for raw_key, raw_value in value_targets_map.items():
+            if not isinstance(raw_value, (int, float)):
+                raise DataError(
+                    f"Experience entry {key} has invalid value_targets",
+                    reason="value_targets must be mapping[str, float]",
+                    rationale="Experience storage annotates value targets per depth",
+                )
+            typed_value_targets[raw_key] = float(raw_value)
+        return typed_policy_targets, typed_value_targets
 
     @staticmethod
-    def _get_int(key: str, payload: Mapping, field: str) -> int:
+    def _get_int(key: str, payload: Mapping[str, object], field: str) -> int:
         value = payload.get(field, 0)
         if not isinstance(value, int):
             raise DataError(
@@ -250,7 +286,7 @@ class JSONFilePersistenceStrategy(PersistenceStrategy):
         return value
 
     @staticmethod
-    def _get_float(key: str, payload: Mapping, field: str) -> float:
+    def _get_float(key: str, payload: Mapping[str, object], field: str) -> float:
         value = payload.get(field, 0.0)
         if not isinstance(value, (int, float)):
             raise DataError(
@@ -269,7 +305,7 @@ class ExperienceStorage(ABC):
         """Store an experience entry and return its canonical hash."""
 
     @abstractmethod
-    def update(self, key: str, **kwargs: Any) -> None:
+    def update(self, key: str, **kwargs: object) -> None:
         """Update metadata for an existing entry."""
 
     @abstractmethod
@@ -337,25 +373,49 @@ class InMemoryExperienceStorage(ExperienceStorage):
             self.flush()
         return key
 
-    def update(self, key: str, **kwargs: Any) -> None:
+    def update(self, key: str, **kwargs: object) -> None:
         if key not in self._entries:
             raise KeyError(f"Entry not found: {key}")
         entry = self._entries[key]
 
         # Check if priority score changed to decide if index needs rebuild
         old_priority = entry.priority_score
-        new_priority = kwargs.get("priority_score", old_priority)
+        priority_obj = kwargs.get("priority_score")
+        new_priority = (
+            float(priority_obj)
+            if isinstance(priority_obj, (int, float))
+            else old_priority
+        )
+
+        def _coerce_int(name: str, default: int) -> int:
+            value = kwargs.get(name)
+            if isinstance(value, (int, float)):
+                return int(value)
+            return default
+
+        visit_count = _coerce_int("visit_count", entry.visit_count)
+        first_seen_step = _coerce_int("first_seen_step", entry.first_seen_step)
+        last_seen_step = _coerce_int("last_seen_step", entry.last_seen_step)
+
+        policy_targets = cast(
+            Dict[str, List[int]],
+            kwargs.get("policy_targets", entry.policy_targets),
+        )
+        value_targets = cast(
+            Dict[str, float],
+            kwargs.get("value_targets", entry.value_targets),
+        )
 
         # Create a new updated entry (ExperienceEntry is frozen)
         new_entry = ExperienceEntry(
             moves=entry.moves,
             winner=entry.winner,
             start_player=entry.start_player,
-            policy_targets=kwargs.get("policy_targets", entry.policy_targets),
-            value_targets=kwargs.get("value_targets", entry.value_targets),
-            first_seen_step=kwargs.get("first_seen_step", entry.first_seen_step),
-            last_seen_step=kwargs.get("last_seen_step", entry.last_seen_step),
-            visit_count=kwargs.get("visit_count", entry.visit_count),
+            policy_targets=policy_targets,
+            value_targets=value_targets,
+            first_seen_step=first_seen_step,
+            last_seen_step=last_seen_step,
+            visit_count=visit_count,
             priority_score=new_priority,
         )
         self._entries[key] = new_entry
@@ -398,16 +458,16 @@ class InMemoryExperienceStorage(ExperienceStorage):
         self._entries.clear()
 
 
-def build_experience_storage(config: "ExperienceStorageConfig") -> ExperienceStorage:
+def build_experience_storage(config: ExperienceStorageConfig) -> ExperienceStorage:
     """Factory to construct an experience storage backend from configuration."""
-
     persistence: PersistenceStrategy | None = None
     if config.strategy == "json_file":
         if config.path is None:
             raise ValueError(
                 "experience storage path is required for strategy json_file"
             )
-        persistence = JSONFilePersistenceStrategy(config.path)
+        path = Path(config.path)
+        persistence = JSONFilePersistenceStrategy(path)
 
     return InMemoryExperienceStorage(
         persistence=persistence,

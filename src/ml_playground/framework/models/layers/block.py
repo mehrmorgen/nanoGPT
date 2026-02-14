@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+from typing import cast
 
-from ml_playground.models.core.config import GPTConfig
-from ml_playground.models.layers.attention import CausalSelfAttention
-from ml_playground.models.layers.mlp import MLP
-from ml_playground.models.layers.normalization import LayerNorm
+from ml_playground.framework.models.core.config import GPTConfig
+from ml_playground.framework.models.layers.attention import CausalSelfAttention
+from ml_playground.framework.models.layers.mlp import MLP
+from ml_playground.framework.models.layers.normalization import LayerNorm
 
 
 class Block(nn.Module):
@@ -20,9 +21,9 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
+        res = x + cast(torch.Tensor, self.attn(self.ln_1(x)))
+        res = res + cast(torch.Tensor, self.mlp(self.ln_2(res)))
+        return res
 
 
 __all__ = ["Block"]
