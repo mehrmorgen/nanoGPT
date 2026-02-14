@@ -1,0 +1,87 @@
+# Minimal CPU-safe settings for fast local/e2e validation.
+
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+raw_text_path = "./datasets/input.txt"
+tokenizer_type = "char"
+doc_separator = "\n"
+
+[training.model]
+n_layer = 1
+n_head = 1
+n_embd = 32
+block_size = 32
+dropout = 0.0
+bias = false
+vocab_size = 1
+
+[training.data]
+batch_size = 2
+block_size = 16
+grad_accum_steps = 1
+sampler = "random"
+
+[training.optim]
+learning_rate = 0.0005
+weight_decay = 0.0
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 0.0
+
+[training.schedule]
+decay_lr = false
+warmup_iters = 0
+lr_decay_iters = 1
+min_lr = 0.00001
+
+[training.runtime]
+out_dir = "./out/test_copy_stage0"
+max_iters = 4
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = true
+seed = 1
+device = "cpu"
+dtype = "float32"
+compile = false
+ckpt_write_metadata = false
+ckpt_time_interval_minutes = 0
+ckpt_atomic = false
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[training.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[sampling.runtime]
+out_dir = "./out/test_copy_stage0"
+device = "cpu"
+dtype = "float32"
+compile = false
+eval_only = false
+always_save_checkpoint = false
+seed = 1
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+
+[sampling.sample]
+start = "A"
+num_samples = 1
+max_new_tokens = 8
+temperature = 0.1
+top_k = 1
+
+[metadata]
+experiment = "copy_stage0"
+config_path = "test_config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out/test_copy_stage0"
+sample_out_dir = "./out/test_copy_stage0"
