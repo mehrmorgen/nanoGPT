@@ -10,7 +10,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
+- [Developer Guidelines Index](./README.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
 - [Documentation Guidelines](./DOCUMENTATION.md) – Standards for structure, abstraction, and formatting across documentation.
 - [Testing Standards](./TESTING.md) – Detailed requirements for TDD, coverage, and test organization.
 
@@ -29,16 +29,16 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Guiding Principles
 
-- **Quality gates and TDD discipline.** Always run `uv run ci-tasks quality` before committing and practice strict
+- **Quality gates and TDD discipline.** Always run `uv run tools ci quality-gate` before committing and practice strict
   TDD as the default workflow (see [Developer Guidelines](README.md#core-principles-non-negotiable) and the canonical
   process in [Testing Standards](TESTING.md#test-driven-development-required)).
-- **UV-first Typer CLIs.** Prefer the published Typer entry points (`env-tasks`, `test-tasks`, `ci-tasks`) over ad-hoc
+- **UV-first Typer CLIs.** Prefer the published Typer entry points (`tools env`, `tools test`, `tools ci`) over ad-hoc
   scripts so local workflows mirror CI (see the [repository README](../README.md#policy)).
 - **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
   global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
   strict Pydantic models forbid extras and enforce cross-field invariants (see
   [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
-  [`ml_playground/configuration`](../src/ml_playground/configuration/)).
+  [`ml_playground/framework/configuration`](../src/ml_playground/framework/configuration/)).
 - **Strict Typing, Immutability, and Determinism.** Use explicit type hints, treat configuration and data structures as
   immutable, and favor pure, side-effect-free functions to keep code predictable and prevent state bugs.
 - **Centralized Utilities and Explicit Device Management.** Extend shared infrastructure (tokenizers, data prep, error
@@ -53,26 +53,31 @@ Core development practices, quality standards, and workflow for ml_playground co
   [Documentation Guidelines](DOCUMENTATION.md#abstraction-policy)).
 - **Git hygiene and reviewability.** Develop on short-lived feature branches, keep commits granular and conventional,
   and maintain a linear, runnable history to streamline reviews and CI (see
-  [Developer Guidelines](Readme.md#core-principles-non-negotiable)).
+  [Developer Guidelines](README.md#core-principles-non-negotiable)).
 - **Self-contained tooling.** Run helper scripts via UV, keep them documented and explicit in their CLI contracts, and
   avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
 - **Strict API Boundaries and Dependency Scoping.** External imports must be restricted to a defined public API surface.
   Production code must only import packages from the default dependency group; development dependencies are forbidden.
 - **Explicit Error Contracts (Fail Fast).** All public functions must explicitly document the exceptions they raise.
   Catching broad exceptions (`except Exception:`, `except:`) is strictly forbidden.
+- **No test-only bypass of public APIs.** Tests must exercise the same public surface that production code uses. Public
+  injection hooks (e.g., `runtime_cli` global option overrides for echo/log/context) exist for controlled dependency
+  replacement and are the only supported seam; do not reach into private helpers or rebind module globals to avoid the
+  public API. When new hooks are required, add them to the public API explicitly and document them rather than patching
+  internals.
 
 ## Quality Gates (Mandatory)
 
-Pre-commit and CI both execute `uv run ci-tasks quality`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run ci-tasks quality PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
+Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
-For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `ci-tasks` and `env-tasks` for coverage reports, property suites, and lint-only passes.
+For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `tools ci` and `tools env` for coverage reports, property suites, and lint-only passes.
 
 ## Commit Standards
 
 ### Granular Commits Policy
 
 - **One logical change per commit** (e.g., fix a test, adjust a config, refactor a function)
-- **Keep commits under ~400 lines** unless unavoidable
+- **Keep commits under ~200 lines** unless unavoidable
 - **Ensure quality gates pass before the commit is recorded** (the pre-commit hook enforces this automatically)
 - **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit
   and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the
@@ -95,7 +100,7 @@ For focused iterations, rely on task-specific commands (e.g., `uv run pytest pat
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `uv run ci-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uv run tools ci quality-gate`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
@@ -123,12 +128,26 @@ Ruff automatically applies modern Python best practices:
 - **Type annotations**: `typing.List` → `list`, `typing.Dict` → `dict`
 - **Union syntax**: `Optional[str]` → `str | None`, `Union[A, B]` → `A | B`
 - **Import organization**: Sorted and cleaned automatically
-- **Code formatting**: Black-compatible formatting
+- **Code formatting**: Black-style formatting
 - **Whitespace cleanup**: Trailing whitespace removal
 
 ### Development Guidelines
 
 - **Strictly typed code**: Use explicit types and `pathlib.Path` for filesystem paths
+- **No Dynamic Attributes**: `hasattr`/`setattr` are banned in tests (and production code) to enforce type safety and usage of the public API.
+- **Pure functions and dependency injection**:
+  - **Prefer pure functions**: Functions should be deterministic and side-effect free
+  - **Explicit dependencies**: Pass dependencies as function parameters instead of using global state
+  - **Avoid global mutable state**: Use factory functions and explicit parameter passing instead of module-level singletons
+  - **Example**:
+    ```python
+    # ❌ Bad: Global state
+    _current_deps = None
+    def get_deps(): return _current_deps
+    
+    # ✅ Good: Explicit dependency injection
+    def run_command(deps: Dependencies, ...): ...
+    ```
 - **Pure functions**: Favor pure functions for data preparation
 - **Explicit device selection**: Make device selection explicit in code
 - **Configuration and overrides**:
@@ -189,7 +208,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Search tests only**:
 
   ```bash
-  rg --glob 'tests/**' "ml_playground.cli"
+  rg --glob 'tests/**' "ml_playground.runtime_cli"
   ```
 
 ### GitHub CLI (`gh`)

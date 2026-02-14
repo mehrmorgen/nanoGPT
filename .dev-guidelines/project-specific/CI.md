@@ -28,7 +28,7 @@ Operational policies for authoring, maintaining, and monitoring CI workflows in 
 
 ## Guiding Principles
 
-- **Parity with local workflow.** Ensure CI invokes the same Typer CLIs (`ci-tasks`, `env-tasks`, `test-tasks`) that developers run locally.
+- **Parity with local workflow.** Ensure CI invokes the same Typer CLIs (`tools ci`, `tools env`, `tools test`) that developers run locally.
 - **Fast feedback first.** Maintain a short-running gate workflow that exercises linting, typing, and smoke tests before any long-running suites.
 - **Current tooling.** Track upstream releases of the automation platform, actions, and runtime toolchains. Upgrade promptly to retain security fixes and performance improvements.
 - **Transparent control flow.** Avoid implicit skips or silent fallbacks—document conditions and surface logs when a step is bypassed.
@@ -47,9 +47,9 @@ Operational policies for authoring, maintaining, and monitoring CI workflows in 
 
 ## Caching Strategy
 
-- Cache compiled dependencies (virtual environments, wheels, etc.) using keys derived from immutable inputs such as lock files, runtime versions, and operating system.
-- Keep caches scoped to a single concern (virtual environment, lint caches, build artifacts) to avoid unnecessary invalidations and oversized uploads.
-- Prune caches as part of the workflow when they are mutated to prevent uncontrolled growth, while leaving restored environments intact.
+- Prefer `uv` wheel caches and targeted tool caches (`pre-commit`, `ruff`, etc.) keyed off immutable artifacts such as `uv.lock` or config hashes; avoid broad `.venv` caches in short-running gates so dependency syncs always reflect the lockfile.
+- Keep caches scoped to a single concern to avoid unnecessary invalidations and oversized uploads.
+- Prune caches as part of the workflow when they are mutated to prevent uncontrolled growth, while leaving restored tool caches intact.
 - Capture platform-specific prerequisites (system packages, toolchain dependencies) in reusable setup steps so cache misses remain deterministic.
 - Refer to `../.github/README.md` for the concrete cache keys and caching actions currently in use.
 

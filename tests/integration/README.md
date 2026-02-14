@@ -1,5 +1,13 @@
 # Integration Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/TESTING.md](../../.dev-guidelines/project-specific/TESTING.md) – Integration suite scope, gating rules, and fixture policies.
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../.dev-guidelines/project-specific/DOCUMENTATION.md) – README structure requirements and folder tree standards.
+
+</details>
+
 Integration tests verify that multiple components work together correctly via Python APIs (not necessarily the CLI).
 They use real code paths and small in-memory or tiny on-disk data.
 
@@ -12,15 +20,18 @@ They use real code paths and small in-memory or tiny on-disk data.
 
 ## Run Locally
 
-- Run all integration tests: `uv run test-tasks integration`
+- Run all integration tests: `uv run tools test integration`
 - Single file: `uv run pytest tests/integration/test_*.py`
 
 ## Folder structure
 
-```text
+```bash
 tests/integration/
-├── README.md                    - scope and patterns for integration tests
-├── conftest.py                  - integration pytest setup/markers
-├── test_datasets_shakespeare.py - integration of dataset helpers
-└── test_speakger_pilot.py       - integration around SpeakGer pipeline
+├── README.md                    # scope and patterns for integration tests
+├── conftest.py                  # integration pytest setup/markers
+├── experiments/                 # experiment-specific integration tests
+│   ├── test_datasets_shakespeare.py  # integration of dataset helpers
+│   └── test_speakger_pilot.py        # integration around SpeakGer pipeline
+└── framework/                   # framework-level integration tests
+    └── test_trainer_loop.py     # training loop with minimal runtime budget
 ```

@@ -3,8 +3,8 @@
 <details>
 <summary>Related documentation</summary>
 
-- [Documentation Guidelines](../../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, test, and tool content.
-- [Testing Standards](../../.dev-guidelines/TESTING.md) – Strict TDD workflow: write a failing test, implement the minimal fix, then refactor safely with green builds.
+- [Documentation Guidelines](../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, test, and tool content.
+- [Testing Standards](../../.dev-guidelines/project-specific/TESTING.md) – Strict TDD workflow: write a failing test, implement the minimal fix, then refactor safely with green builds.
 - [Unit Tests README](../unit/README.md) – Unit tests validate individual functions, classes, and small modules in isolation.
 
 </details>
@@ -17,33 +17,34 @@ configuration stays isolated.
 
 - Keep properties deterministic: set explicit `@settings(derandomize=True)` or pin the
   Hypothesis seed via environment variables.
-- Configure `@settings(max_examples=..., deadline=..., derandomize=True)` explicitly
-  to stay within unit-test runtime budgets.
 - Use dependency injection seams (e.g., `CLIDependencies`, configuration factories)
   instead of monkeypatching or mocks.
 - Prefer `TemporaryDirectory()` or other context managers over function-scoped fixtures.
-- Exercise public entry points only, per `.dev-guidelines/TESTING.md#public-vs-private-apis`.
+- Exercise public entry points only, per `.dev-guidelines/project-specific/TESTING.md#public-vs-private-apis`.
+- Prefer `run_training`/`run_sampling` with `TrainingPlan`/`SamplingPlan` when exercising runtime entrypoints.
 
 ## Folder Structure
 
-```text
+```bash
 tests/property/
-├── README.md                       - this file
-├── cli/                            - CLI-facing properties
-├── configuration/                  - TOML loading and config invariants
-├── data_pipeline/                  - data preparation/tokenization properties
-├── sampling/                       - sampling/sampler invariants
-└── training/                       - training runtime and loop invariants
+├── README.md                       # this file
+├── cli_invariants.py               # shared CLI invariant helpers
+├── experiments/                    # experiment-specific properties
+├── framework/                      # mirrors src/ml_playground/framework/
+│   ├── analysis/                   # analysis properties
+│   ├── configuration/              # TOML loading and config invariants
+│   ├── core/                       # core utility properties
+│   ├── data_pipeline/              # data preparation/tokenization properties
+│   ├── runtime/                    # framework runtime properties
+│   ├── sampling/                   # sampling properties
+│   └── training/                   # training properties
+├── runtime_cli/                    # runtime CLI properties
+└── tools/                          # tools CLI properties
 ```
-
-## Naming
-
-- **Files**: `test_<subject>_property.py` for property suites.
-- **Functions**: `test_<behavior>_<condition>_<expected>` with a one-line docstring.
 
 ## Running
 
-- Full property suite (with unit tests): `uv run ci-tasks coverage-report`
+- Full property suite (with unit tests): `uv run tools test coverage`
 - Specific property module: `uv run pytest tests/property/<path>/test_*.py`
 
 ## Capturing Shrunk Examples as Regression Tests

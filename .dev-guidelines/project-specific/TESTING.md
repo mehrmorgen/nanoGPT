@@ -5,7 +5,7 @@
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for core policies and quick-start commands.
+- [Developer Guidelines Index](./README.md) – Entry point for core policies and quick-start commands.
 - [Development Practices](./DEVELOPMENT.md) – Commit pairing rules, quality gates, and tooling workflows.
 
 </details>
@@ -52,11 +52,16 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner**: `uv run test-tasks test` (invokes pytest under the hood)
-- **Coverage**: `uv run ci-tasks coverage-badge`
-  (generates reports under `.cache/coverage` and refreshes
-  `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
+- **Runner**: `uv run tools test <suite>` (invokes pytest under the hood)
+- **Coverage**: `uv run tools test coverage`
+  (generates coverage artifacts under `.cache/coverage`)
+- **Coverage map**: `uv run tools test coverage-map`
+  (reports uncovered files with suite hints)
+- **Badges**: `uv run tools ci coverage-badge`
+  (refreshes `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
   `docs/assets/coverage-branches.svg`)
+- **Test budgets**: `uv run tools test budget`
+  (reports integration and e2e runtime budgets)
 - **Random seed**: Enforced determinism via `tests/conftest.py` with fixed seed.
 
 **Rationale**: One toolchain avoids fragmentation and flakiness.
@@ -75,21 +80,23 @@ Testing Docs
 ### 3. Directory Layout and Naming
 
 - **Structure** (canonical): `tests/unit/<package>/test_<module>.py`
-- **Packages** mirror `ml_playground/` layout, for example:
-  - `tests/unit/training/`, `tests/unit/sampling/`, `tests/unit/data_pipeline/`, `tests/unit/configuration/`,
-    `tests/unit/core/`, `tests/unit/experiments/`, `tests/unit/analysis/`
+- **Packages** mirror `src/ml_playground/` layout, for example:
+  - `tests/unit/framework/training/`, `tests/unit/framework/sampling/`, `tests/unit/framework/data_pipeline/`,
+    `tests/unit/framework/configuration/`, `tests/unit/framework/core/`, `tests/unit/framework/analysis/`
+  - `tests/unit/experiments/`, `tests/unit/runtime_cli/`, `tests/unit/tools/`
 - **Test functions**: `test_<behavior>_<condition>_<expected>()`
 - **Test classes** (if grouping needed): `Test<Subject>` only; no `__init__` in test classes.
-- **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
 
 Quick reference (examples):
 
 ```text
-ml_playground/training/checkpointing/     -> tests/unit/training/checkpointing/test_<module>.py
-ml_playground/sampling/                   -> tests/unit/sampling/test_<module>.py
-ml_playground/data_pipeline/              -> tests/unit/data_pipeline/test_<module>.py
-ml_playground/configuration/              -> tests/unit/configuration/test_<module>.py
-ml_playground/models/                     -> tests/unit/core/test_<module>.py
+ml_playground/framework/training/checkpointing/     -> tests/unit/framework/training/checkpointing/test_<module>.py
+ml_playground/framework/sampling/                   -> tests/unit/framework/sampling/test_<module>.py
+ml_playground/framework/data_pipeline/              -> tests/unit/framework/data_pipeline/test_<module>.py
+ml_playground/framework/configuration/              -> tests/unit/framework/configuration/test_<module>.py
+ml_playground/framework/models/                     -> tests/unit/framework/models/test_<module>.py
+ml_playground/runtime_cli/                          -> tests/unit/runtime_cli/test_<module>.py
+ml_playground/tools/                                -> tests/unit/tools/test_<module>.py
 ```
 
 **Rationale**: Predictable discovery and easy navigation.
@@ -103,6 +110,16 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 
 **Rationale**: Tests document contracts and prevent regressions.
 
+### 4.2 Import Boundary Regression Tests (Required)
+
+- Add AST-based tests that validate import boundaries without importing modules.
+- Enforce these constraints:
+  - framework must not import tools or experiments.
+  - tools must not import experiments.
+  - experiments must not import tools or framework CLI entrypoints.
+
+**Rationale**: Keeps layer boundaries intact while avoiding import-time side effects.
+
 ### 4.1 Property-Based Testing First
 
 - **Default posture**: Start every new test effort with a Hypothesis property.
@@ -114,8 +131,8 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
   - Identify invariants, round-trips, metamorphic relations, or conservation laws.
   - Define the input strategy (custom `@st.composite` where needed) that reflects
     production constraints.
-  - Set explicit `@settings(...)` for `max_examples`, `deadline`, and
-    `derandomize=True` to honor the runtime budgets in §2.
+  - Set explicit `@settings(...)` for `max_examples` and `derandomize=True`.
+    Use `deadline=None` by default unless a test explicitly verifies timing.
 - **When example/unit tests are acceptable**:
   - Document an explicit business rule or regression where the name tells the
     story (e.g., `test_orders_over_100_get_free_shipping`).
@@ -132,7 +149,7 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
   Example-focused suites remain in `test_<module>.py`.
 - **Determinism & performance**: Properties must pass deterministically under CI
   seeds. Tune strategies/settings so each property completes comfortably within
-  the \<10 ms unit-test budget (or justify the overage in the test docstring).
+  the \<10 ms unit-test budget.
 
 **Rationale**: A property-first mindset maximizes behavioral exploration while
 retaining example tests for narrative requirements and hard-to-oracle seams.
@@ -202,7 +219,7 @@ patching.
 ### 9. Randomness, Time, and Concurrency
 
 - **Randomness**: Seeded via `conftest.py`; inject seeds via parameters where possible.
-- **Time**: Freeze time via monkeypatching; never rely on real clocks for assertions.
+- **Time**: Use dependency injection or deterministic fakes; never rely on real clocks for assertions.
 - **Concurrency**: Avoid sleeps. Use synchronization primitives or polling with short timeout.
 
 **Rationale**: Flakes come from nondeterminism and timing.
@@ -234,7 +251,7 @@ while keeping slower integration/E2E flows outside the gating path.
 
 **Badge workflow**:
 
-- Pre-commit automatically runs `uv run ci-tasks coverage-badge` and stages the refreshed line and branch badges.
+- Pre-commit automatically runs `uv run tools ci coverage-badge` and stages the refreshed line and branch badges.
 - CI re-runs the same target and fails if any of the coverage badge SVGs differ from the committed versions.
 
 ### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
@@ -253,18 +270,18 @@ exceptions. NO second chances.
 - **Primary local command**:
 
   ```bash
-  uv run ci-tasks mutation run
+  uv run tools ci mutation run
   ```
 
   This target resets `.cache/cosmic-ray/session.sqlite`, prints the active configuration via `tools/mutation_summary.py`,
   runs `cosmic-ray init/exec`, and finishes with `tools/mutation_report.py` to display survivor counts.
 
-- **Alternative local command**: `uv run ci-tasks quality-ext` executes the broader quality suite, including mutation if desired.
+- **Alternative local command**: `uv run tools ci quality-ext` executes the broader quality suite, including mutation if desired.
 
 - **Default scope**: `module-path = "ml_playground"`, exercising the entire package with
   `pytest -q -n auto tests/unit` and a 1 s timeout per mutant/test run.
 
-- **Latest baseline (2025-10-06)**: `uv run ci-tasks mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
+- **Latest baseline (2025-10-06)**: `uv run tools ci mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
   in approximately **1 h 31 m** wall-clock time.
 
 - **Session hygiene**: Both targets delete the session DB on every run; do not commit `.cache/cosmic-ray/`.
@@ -273,7 +290,7 @@ exceptions. NO second chances.
 
 - **CI workflow**: Trigger the long-running mutation suite via GitHub Actions → *Mutation Suite* workflow. It runs weekly on Mondays at 01:00 UTC and is available on-demand through the *Run workflow* button.
 
-- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uv run env-tasks clean` if needed.
+- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uv run tools env clean` if needed.
 
 ## Running Tests
 
@@ -281,13 +298,13 @@ Use the Typer wrappers for consistency with CI:
 
 ```bash
 # Fast check
-uv run test-tasks pytest -- -q
+uv run pytest -q
 
 # With markers (exclude slow/perf)
-uv run test-tasks pytest -- -m "not slow and not perf" -q
+uv run pytest -m "not slow and not perf" -q
 
 # Full suite with coverage
-uv run ci-tasks coverage-report --fail-under 87
+uv run tools test coverage
 ```
 
 Invoke targeted suites directly with `uv run pytest path/to/test.py` when iterating on a single module, but ensure the commands above pass before committing.
@@ -296,7 +313,7 @@ Invoke targeted suites directly with `uv run pytest path/to/test.py` when iterat
 
 ```bash
 # Coverage check (CI)
-uv run ci-tasks coverage-report --fail-under 87
+uv run tools test coverage
 ```
 
 ## Example Test Patterns
@@ -335,7 +352,7 @@ vocab_size = 256
     # Act / Assert
     if expected_valid:
         exp = load_full_experiment_config(config_path)
-        assert exp.train.model.block_size == block_size
+        assert exp.training.model.block_size == block_size
     else:
         with pytest.raises(ValueError):
             load_full_experiment_config(config_path)
@@ -361,7 +378,7 @@ Create files under `tests/unit/<package>/test_<module>.py`:
 from __future__ import annotations
 from pathlib import Path
 import pytest
-from ml_playground.configuration import load_full_experiment_config
+from ml_playground.framework.configuration.loading import load_full_experiment_config
 
 
 def test_config_loading_handles_missing_file(tmp_path: Path) -> None:

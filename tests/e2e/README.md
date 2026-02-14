@@ -1,5 +1,13 @@
 # End-to-End (E2E) Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/TESTING.md](../../.dev-guidelines/project-specific/TESTING.md) – Suite scopes, gating rules, and fixture policies.
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../.dev-guidelines/project-specific/DOCUMENTATION.md) – README structure requirements and folder tree standards.
+
+</details>
+
 E2E tests exercise the application via public entry points (usually the CLI) in a realistic, but tiny, environment.
 They validate wiring across modules, configuration loading/merging, logging, and basic I/O.
 
@@ -12,7 +20,7 @@ They validate wiring across modules, configuration loading/merging, logging, and
 
 ## Configuration Guidelines
 
-- Keep datasets synthetic and reusable. `tests/e2e/ml_playground/experiments/bundestag_char/test_cli_bundestag_char.py`
+- Keep datasets synthetic and reusable. `tests/e2e/experiments/bundestag_char/test_cli_bundestag_char.py`
   writes a 512-token uint16 corpus so both `train.bin` and `val.bin` satisfy CLI preconditions while still
   fitting in memory and keeping sampling deterministic.
 - Choose the smallest model/training knobs that still trigger the behavior under test. The bundestag-char
@@ -22,7 +30,7 @@ They validate wiring across modules, configuration loading/merging, logging, and
   skip checkpoint rotation, weakening coverage.
 - Reuse artifacts when chaining commands. `test_sample_bundestag_char_quick` trains once, then points the
   sample command at the same out directory to avoid redundant work while verifying both CLI pathways.
-- Prefer dependency injection over heavyweight downloads. `tests/e2e/ml_playground/experiments/speakger/test_sampler_analysis.py`
+- Prefer dependency injection over heavyweight downloads. `tests/e2e/experiments/speakger/test_sampler_analysis.py`
   supplies `DummyTokenizer`, `DummyBaseModel`, and `DummyPeftModel` factories so the sampler produces a
   single JSON/text pair without touching external checkpoints. Its `SamplerConfig` limits work to
   `num_samples=1` and `max_new_tokens=5`, enough to exercise formatting and analysis logic.
@@ -31,18 +39,23 @@ They validate wiring across modules, configuration loading/merging, logging, and
 
 ## Run Locally
 
-- Run all E2E tests: `uv run test-tasks e2e`
+- Run all E2E tests: `uv run tools test e2e`
 - Single file: `uv run pytest tests/e2e/path/to/test_*.py`
-- Verbose logs: append `-s -vv` via `PYTEST_ADDOPTS`, e.g., `PYTEST_ADDOPTS="-s -vv" uv run test-tasks e2e`.
+- Verbose logs: append `-s -vv` via `PYTEST_ADDOPTS`, e.g., `PYTEST_ADDOPTS="-s -vv" uv run tools test e2e`.
 
 ## Folder structure
 
-```text
+```bash
 tests/e2e/
-├── README.md                - scope, patterns, and how to run E2E tests
-├── conftest.py              - E2E pytest setup and markers
-└── ml_playground/           - E2E-specific helpers and tests
-    ├── experiments/         - tiny configs/fixtures for E2E
-    ├── test_sample_smoke.py - CLI sampling smoke test
-    └── test_train_smoke.py  - CLI training smoke test
+├── README.md                # scope, patterns, and how to run E2E tests
+├── conftest.py              # E2E pytest setup and markers
+├── experiments/             # tiny configs/fixtures for E2E experiment tests
+│   ├── bundestag_char/      # bundestag-char CLI smoke tests
+│   ├── speakger/            # SpeakGer sampler analysis tests
+│   └── test_default_config.toml  # shared tiny defaults
+├── framework/               # framework-level E2E tests
+│   └── test_sample_smoke.py # CLI sampling smoke test
+└── tools/                   # tools CLI E2E tests
+    └── cli/
+        └── test_cli_flow.py # tools CLI flow test
 ```

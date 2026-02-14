@@ -3,8 +3,8 @@
 <details>
 <summary>Related documentation</summary>
 
-- [Documentation Guidelines](../../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, test, and tool content.
-- [Testing Standards](../../.dev-guidelines/TESTING.md) – Strict TDD workflow: write a failing test, implement the minimal fix, then refactor safely with green builds.
+- [Documentation Guidelines](../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, test, and tool content.
+- [Testing Standards](../../.dev-guidelines/project-specific/TESTING.md) – Strict TDD workflow: write a failing test, implement the minimal fix, then refactor safely with green builds.
 - [Property-Based Tests README](../property/README.md) – Property-based tests validate invariants across large input spaces in a dedicated suite.
 
 </details>
@@ -17,6 +17,7 @@ to run.
 - Extremely fast, deterministic, and isolated.
 - No I/O or network by default; use pure functions where possible.
 - No test-specific branches in production code.
+- Use `TrainingPlan`/`SamplingPlan` via `run_training`/`run_sampling` for runtime entrypoints; older helper wrappers are removed.
 
 ## Fixtures & collaborators
 
@@ -24,14 +25,13 @@ to run.
   mocking.
 - When shared setup is unavoidable, reuse fixtures defined in `tests/conftest.py` or a package-local `conftest.py`;
   keep them pure and deterministic.
-- Follow the canonical guidance in `.dev-guidelines/TESTING.md#fixtures-strict-usage` for scope and purity rules.
+- Follow the canonical guidance in `.dev-guidelines/project-specific/TESTING.md#fixtures-strict-usage` for scope and purity rules.
 
 ## Naming
 
 - **File names**: `test_<module>.py` within the corresponding directory (e.g.,
-  `tests/unit/training/checkpointing/test_service.py`).
+  `tests/unit/framework/training/checkpointing/test_service.py`).
 - **Test functions**: `test_<behavior>_<condition>_<expected>` (snake_case, verbs included when meaningful).
-- **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
 - **Helpers/stubs**: Prefix with `_Stub` or `_make_` to signal test-only collaborators and avoid collisions with
   production symbols.
 
@@ -49,27 +49,31 @@ Property-based tests using Hypothesis complement example-driven unit tests. They
 
 ## Run Locally
 
-- Run all unit tests: `uv run test-tasks unit`
-- Unit with coverage: `uv run test-tasks unit-cov`
+- Run all unit tests: `uv run tools test unit`
+- Unit + property with coverage: `uv run tools test coverage`
 - Single file: `uv run pytest tests/unit/path/to/test_*.py`
 
 ## Folder structure
 
-```text
+```bash
 tests/unit/
-├── README.md                       - scope and rules for unit tests
-├── analysis/                       - analysis-related unit tests
-├── configuration/                  - configuration models and loading
-├── core/                           - core utilities (tokenizer, error handling)
-├── data_pipeline/                  - data sources/transforms/sampling/preparer
-├── experiments/                    - experiment-specific unit tests
-├── sampling/                       - inference and sampling runner
-├── training/                       - training loop, hooks, checkpointing, schedulers
-├── test_public_api_policy.py       - enforcement of public API policy
-└── conftest.py                     - unit pytest fixtures and helpers
+├── README.md                       # scope and rules for unit tests
+├── conftest.py                     # unit pytest fixtures and helpers
+├── framework/                      # mirrors src/ml_playground/framework/
+│   ├── analysis/                   # analysis-related unit tests
+│   ├── configuration/              # configuration models and loading
+│   ├── core/                       # core utilities (tokenizer, error handling)
+│   ├── data_pipeline/              # data sources/transforms/sampling/preparer
+│   ├── models/                     # model architecture tests
+│   ├── sampling/                   # inference and sampling runner
+│   └── training/                   # training loop, hooks, checkpointing, schedulers
+├── experiments/                    # experiment-specific unit tests
+├── runtime_cli/                    # runtime CLI tests
+├── tools/                          # tools CLI tests
+└── test_public_api_policy.py       # enforcement of public API policy
 ```
 
 ## Documentation
 
-- **[Guidelines]** Follow `.dev-guidelines/DOCUMENTATION.md` when editing this README or adding explanatory files.
-- **[Testing alignment]** Cross-check `.dev-guidelines/TESTING.md` to keep principles and fixture guidance in sync.
+- **[Guidelines]** Follow `.dev-guidelines/project-specific/DOCUMENTATION.md` when editing this README or adding explanatory files.
+- **[Testing alignment]** Cross-check `.dev-guidelines/project-specific/TESTING.md` to keep principles and fixture guidance in sync.

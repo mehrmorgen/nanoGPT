@@ -10,9 +10,9 @@ Implementation-specific reference for the `.github/` directory, detailing how ou
 <details>
 <summary>Related documentation</summary>
 
-- [Continuous Integration Guidelines](../.dev-guidelines/CI.md) – Platform-agnostic CI policies and maintenance checklist.
-- [Development Practices](../.dev-guidelines/DEVELOPMENT.md) – Core quality gates, tooling, and workflow expectations.
-- [Testing Standards](../.dev-guidelines/TESTING.md) – Required TDD workflow and test organization.
+- [Continuous Integration Guidelines](../.dev-guidelines/project-specific/CI.md) – Platform-agnostic CI policies and maintenance checklist.
+- [Development Practices](../.dev-guidelines/project-specific/DEVELOPMENT.md) – Core quality gates, tooling, and workflow expectations.
+- [Testing Standards](../.dev-guidelines/project-specific/TESTING.md) – Required TDD workflow and test organization.
 
 </details>
 
@@ -50,24 +50,23 @@ Implementation-specific reference for the `.github/` directory, detailing how ou
   - **Purpose**: Mandatory gate executed on every push/PR to enforce linting, formatting, typing, and tiered pytest suites via `uv run ci-tasks quality`.
   - **Triggers**: `push`/`pull_request` to active branches.
   - **Timeout**: 30 minutes (default runner limit; job typically completes in ~2 minutes when caches hit).
-  - **Caching**: Restores `.venv`, pre-commit, and ruff caches; relies on `astral-sh/setup-uv@v6` for wheel caching with pruning enabled.
+  - **Caching**: Relies on `astral-sh/setup-uv@v6` for wheel caching plus standalone `pre-commit` and `ruff` caches; the job does not restore `.venv`, instead running `uv sync --frozen --group dev` each time before pruning the wheel cache.
   - **Manual use**: `gh workflow run quality.yml --ref <branch>`.
 - **`mutation-suite.yml`**
   - **Purpose**: Executes the mutation testing suite (`uv run ci-tasks mutation run`) and captures reports.
   - **Triggers**: Weekly cron (`0 1 * * 1`) and manual `workflow_dispatch` for investigative runs.
   - **Timeout**: Explicit 180-minute limit to cap long-running mutation jobs.
   - **Prerequisites**: Installs `python3-dev`, `build-essential`, `libffi-dev`, and `gfortran` before dependency sync.
-  - **Caching**: Shares the same `.venv` cache key as `quality.yml`; also prunes the uv wheel cache post-run.
+  - **Caching**: Reuses the shared `uv` wheel cache and the targeted `pre-commit`/`ruff` caches without restoring `.venv`; dependency sync always runs before invoking the mutation suite, followed by a wheel-cache prune.
   - **Artifacts**: Uploads `mutation-report.txt` and `.cache/cosmic-ray/session.sqlite` on completion.
 
 See [`workflows/README.md`](workflows/README.md) for per-file implementation details, command snippets, and change history highlights.
 
 ## Caching Implementation
 
-- **Virtual environment (`.venv`)**: Managed via `actions/cache@v4` keyed on `${{ runner.os }}-${{ python-version }}-uv-venv-${{ hashFiles('uv.lock') }}` with restore keys for broader reuse.
-- **Wheel cache (`.cache/uv`)**: Handled by `astral-sh/setup-uv@v6` using `enable-cache: true`, `cache-local-path: .cache/uv`, and `prune-cache: true`.
-- **Tool caches**: Pre-commit (`.cache/pre-commit`) and ruff (`.cache/ruff`) are cached separately to avoid invalidating the `.venv` when configs change.
-- **Pruning**: Both workflows run `uv cache prune --ci` after completing tasks that modify `.cache/uv` to keep uploads small without touching the restored `.venv`.
+- **Wheel cache (`.cache/uv`)**: Delegated to `astral-sh/setup-uv@v6` with `enable-cache: true`, `cache-local-path: .cache/uv`, and a post-step `uv cache prune --ci` to prevent growth.
+- **Targeted tool caches**: `pre-commit` (`.cache/pre-commit`) and `ruff` (`.cache/ruff`) use dedicated `actions/cache@v4` entries so config changes do not invalidate unrelated data.
+- **Virtual environment**: Not cached. Gate and mutation workflows always run `uv sync --frozen --group dev` before executing tasks so the environment mirrors the lockfile on every run.
 
 ## Operational Commands
 
@@ -83,12 +82,12 @@ Our review workflow combines shared ownership with explicit prompts so every pul
 
 - **Ownership model**: every core contributor is a code owner. Authors @-mention the most relevant teammates instead of relying on CODEOWNERS.
 - **Pull request template**: `.github/PULL_REQUEST_TEMPLATE.md` captures validation commands, *risk call-outs* (highlights for deploy, data, or performance hazards), and *reviewer notes* (files or commits that deserve focused attention). Authors must complete every section before requesting review.
-- **Review checklist**: `.dev-guidelines/CODE_REVIEW_CHECKLIST.md` is referenced by the PR template and complements author/reviewer guidelines.
+- **Review checklist**: `.dev-guidelines/project-specific/CODE_REVIEW_CHECKLIST.md` is referenced by the PR template and complements author/reviewer guidelines.
 - **Bots and tooling**: `tools/review.py` provides helper commands for triaging discussion threads. Consider adding automation hooks (e.g., GitHub Apps, Probot) to ensure checklists are completed before merging.
 
 ## Maintenance Notes
 
-- Reflect any workflow changes (new jobs, triggers, cache keys) in this README and in `../.dev-guidelines/CI.md` during the same pull request.
+- Reflect any workflow changes (new jobs, triggers, cache keys) in this README and in `../.dev-guidelines/project-specific/CI.md` during the same pull request.
 - When bumping action versions or adding system dependencies, document the change under the relevant workflow section.
 - Review scheduled workflows quarterly to validate cron cadence, credential freshness, and runtime budgets.
 - Keep this README focused on GitHub-specific implementation; platform-agnostic principles belong in the central CI guidelines.

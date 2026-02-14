@@ -10,7 +10,7 @@ Quick start guide for setting up the ml_playground development environment.
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for principles, quick-start commands, and reference links.
+- [Developer Guidelines Index](./README.md) – Entry point for principles, quick-start commands, and reference links.
 - [Development Practices](./DEVELOPMENT.md) – Quality gates, tooling workflows, and architecture notes.
 - [Documentation Guidelines](./DOCUMENTATION.md) – Shared Markdown structure and cross-referencing standards.
 
@@ -30,8 +30,30 @@ Quick start guide for setting up the ml_playground development environment.
 
 - Python version: see pyproject.toml (currently ">=3.13")
 - UV package manager installed
+- Optional but recommended for reproducible CLI environments:
+  - Nix (flakes enabled)
+  - direnv
 
 ## Environment Setup
+
+### Option A (Recommended): Nix + direnv
+
+```bash
+# Enter reproducible shell with pinned tooling (python, uv, gh, act, etc.)
+nix develop
+
+# Enable automatic shell loading for this repo
+direnv allow
+```
+
+Notes:
+
+- `.envrc` bootstraps `.venv` on first entry using UV:
+  - `uv sync --group all`
+  - `uv pip install -e .`
+- This keeps CLI behavior (`tools`, `ml-playground`, `cli`) deterministic and fail-fast across machines.
+
+### Option B: UV-only bootstrap
 
 ### 1. Create Virtual Environment
 
@@ -71,7 +93,7 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 
 Notes:
 
-- Universal meta policy: training requires `meta.pkl` to exist at `train.data.meta_path` (usually
+- Universal meta policy: training requires `meta.pkl` to exist at `training.data.meta_path` (usually
   `<dataset_dir>/meta.pkl`).
 - The CLI will fail fast with a clear error if `meta.pkl` is missing.
 
@@ -84,8 +106,8 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 
 Notes:
 
-- Sampling requires `meta.pkl` to exist either at `train.data.meta_path` or under the sample runtime output directory at
-  `<out_dir>/<experiment>/meta.pkl`.
+- Sampling requires `meta.pkl` to exist either at `training.data.meta_path` or under the sampling runtime output
+  directory at `<out_dir>/<experiment>/meta.pkl`.
 - The CLI will fail fast with a clear error if `meta.pkl` cannot be found in one of the expected locations.
 
 ### End-to-End Workflow
@@ -119,10 +141,10 @@ Notes:
 
 ```bash
 # Full gate: ruff (lint+format), pyright, mypy, pytest
-uv run ci-tasks quality
+uv run tools ci quality-gate
 
 # Extended: optional mutation testing (Cosmic Ray)
-uv run ci-tasks quality-ext
+uv run tools ci quality-ext
 ```
 
 ## Quick Troubleshooting
