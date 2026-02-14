@@ -2,16 +2,16 @@ from __future__ import annotations
 from pathlib import Path
 import torch
 import logging
-from ml_playground.models.core.config import GPTConfig
-from ml_playground.models.core.model import GPT
-from ml_playground.sampling.runner import Sampler
-from ml_playground.configuration.models import (
+from ml_playground.framework.models.core.config import GPTConfig
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.sampling.runner import Sampler
+from ml_playground.framework.configuration.models import (
     SamplerConfig,
     SampleConfig,
     RuntimeConfig,
     RuntimeConfig as RC,
     READ_POLICY_BEST,
-    SharedConfig,
+    MetadataConfig,
 )
 
 
@@ -94,7 +94,7 @@ def test_sample_smoke(tmp_path: Path) -> None:
             start="\n", num_samples=1, max_new_tokens=4, temperature=1.0, top_k=10
         ),
     )
-    shared = SharedConfig(
+    shared = MetadataConfig(
         experiment="smoke",
         config_path=out_dir / "cfg.toml",
         project_home=tmp_path,
