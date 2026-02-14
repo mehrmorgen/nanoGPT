@@ -20,7 +20,7 @@ Minimal Stage 0 curriculum experiment: learn deterministic identity mapping on a
 
 ## Data
 
-- Input source: bundled deterministic seed at `datasets/input.txt` (no network dependency).
+- Input source: deterministic one-symbol seed file expected at `datasets/input.txt` (no network dependency).
 - Prepared artifacts:
   - `train.bin`
   - `val.bin`
@@ -61,7 +61,7 @@ src/ml_playground/experiments/copy_stage0/
 ├── config.toml     # default stage configuration
 ├── test_config.toml# minimal fast settings for local/e2e checks
 ├── preparer.py     # deterministic one-symbol dataset preparation
-└── datasets/       # bundled input seed + generated train.bin, val.bin, meta.pkl
+└── datasets/       # generated train.bin, val.bin, meta.pkl
 ```
 
 ## Notes
