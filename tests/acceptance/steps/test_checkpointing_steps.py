@@ -1,11 +1,13 @@
 from __future__ import annotations
 from pathlib import Path
+import logging
 import time
+from typing import Sequence
 
 import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
 
-from ml_playground.training.checkpointing.checkpoint_manager import (
+from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
 )
@@ -14,8 +16,8 @@ from ml_playground.training.checkpointing.checkpoint_manager import (
 scenarios("../features/checkpointing.feature")
 
 # Constants
-_TEST_LOGGER = __import__("logging").getLogger("test")
-_MODEL_ARGS = {
+_TEST_LOGGER: logging.Logger = logging.getLogger("test")
+_MODEL_ARGS: dict[str, object] = {
     "n_layer": 1,
     "n_head": 1,
     "n_embd": 4,
@@ -48,7 +50,6 @@ def _dummy_checkpoint(iter_num: int, best_val: float) -> Checkpoint:
 def _save_checkpoint(
     manager: CheckpointManager,
     ckpt: Checkpoint,
-    filename: str,
     metric: float,
     iter_num: int,
     is_best: bool,
@@ -56,7 +57,6 @@ def _save_checkpoint(
     """Helper to save a checkpoint with consistent parameters."""
     manager.save_checkpoint(
         ckpt,
-        filename,
         metric=metric,
         iter_num=iter_num,
         logger=_TEST_LOGGER,
@@ -92,24 +92,26 @@ def save_checkpoints_sequentially(manager: CheckpointManager, count: int):
     assert count > 0, f"count must be positive, got {count}"
     for i in range(count):
         ckpt = _dummy_checkpoint(i, 1e9)
-        _save_checkpoint(manager, ckpt, "ckpt_last.pt", 1e9, i, False)
+        _save_checkpoint(manager, ckpt, 1e9, i, False)
         time.sleep(0.01)
 
 
 @when("checkpoints are saved with the following metrics:")
-def save_checkpoints_with_metrics(manager: CheckpointManager, datatable):
+def save_checkpoints_with_metrics(
+    manager: CheckpointManager, datatable: Sequence[Sequence[str]]
+) -> None:
     assert manager is not None, "CheckpointManager required"
     assert datatable, "Expected datatable with metrics data"
     assert len(datatable) >= 2, "Expected header row + data rows in datatable"
 
-    headers = datatable[0]
-    rows = datatable[1:]
+    headers: Sequence[str] = datatable[0]
+    rows: Sequence[Sequence[str]] = datatable[1:]
     metrics_table = [dict(zip(headers, row)) for row in rows]
 
     for i, row in enumerate(metrics_table):
         metric = float(row["metric"])
         ckpt = _dummy_checkpoint(i, metric)
-        _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, i, True)
+        _save_checkpoint(manager, ckpt, metric, i, True)
         time.sleep(0.01)
 
 
@@ -134,10 +136,10 @@ def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
     assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
     metric = 0.5 if iter_num == 0 else 0.4
     ckpt = _dummy_checkpoint(iter_num, metric)
-    _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, iter_num, True)
+    _save_checkpoint(manager, ckpt, metric, iter_num, True)
     # Only save last checkpoint if it's the first improvement
     if iter_num == 0:
-        _save_checkpoint(manager, ckpt, "ckpt_last.pt", metric, iter_num, False)
+        _save_checkpoint(manager, ckpt, metric, iter_num, False)
 
 
 def _checkpoint_exists(manager: CheckpointManager, pattern: str, iter_num: int) -> bool:
