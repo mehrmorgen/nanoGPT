@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import re
-from typing import Iterable
+import typing as _t
+from collections.abc import Iterable
 
 _SEGMENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -70,10 +71,14 @@ class MetricsRegistry:
     def get(self, name: str) -> MetricSpec:
         return self._metrics[name]
 
-    def list(self) -> tuple[MetricSpec, ...]:
+    def fetch_all_specs(self) -> _t.Tuple[MetricSpec, ...]:
         return tuple(self._metrics[name] for name in sorted(self._metrics))
 
-    def to_dashboard_spec(self) -> dict[str, list[dict[str, str]]]:
+    def to_dashboard_spec(self) -> _t.Dict[str, _t.List[_t.Dict[str, str]]]:
+        # Narrow the type of self.fetch_all_specs call result to avoid mypy confusion with the 'list' type
+        # in the comprehension below. Use a different name to avoid any shadow.
+        # Use _t.cast to satisfy strict typing and help mypy.
+        all_specs: _t.Sequence[MetricSpec] = self.fetch_all_specs()
         return {
             "metrics": [
                 {
@@ -82,7 +87,7 @@ class MetricsRegistry:
                     "unit": "" if spec.unit is None else spec.unit,
                     "description": spec.description,
                 }
-                for spec in self.list()
+                for spec in all_specs
             ]
         }
 
@@ -93,7 +98,7 @@ class MetricsRegistry:
             "| Name | Kind | Unit | Description |",
             "| --- | --- | --- | --- |",
         ]
-        for spec in self.list():
+        for spec in self.fetch_all_specs():
             unit = "" if spec.unit is None else spec.unit
             lines.append(
                 f"| {spec.name} | {spec.kind.value} | {unit} | {spec.description} |"

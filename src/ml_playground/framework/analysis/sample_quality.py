@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter, defaultdict
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Iterator, Sequence, cast
 import re
 
 
@@ -68,7 +68,7 @@ class SampleAnalysis:
 def _iter_tokens(lines: Iterable[str]) -> Iterator[str]:
     token_re = re.compile(r"\w+|[^\w\s]")
     for line in lines:
-        for tok in token_re.findall(line):
+        for tok in cast(list[str], token_re.findall(line)):
             yield tok
 
 
@@ -156,9 +156,10 @@ def _find_anomalies(lines: list[str]) -> Anomalies:
         s = ln.strip()
         if s.startswith("Jahr:"):
             continue
-        for _m in year_pat.findall(s):
+        # Use findall with a non-capturing group to avoid Any leaks from re.findall
+        for _m in cast(list[str], year_pat.findall(s)):
             # m comes from grouped regex; we want the full year. Adjust:
-            for full in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", s):
+            for full in cast(list[str], re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", s)):
                 stray.append(full)
             break
     return Anomalies(
