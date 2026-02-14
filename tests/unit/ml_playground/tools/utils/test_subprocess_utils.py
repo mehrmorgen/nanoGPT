@@ -252,9 +252,11 @@ class TestRealSubprocessRunner:
         class RecordingRunner(RealSubprocessRunner):
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
+                self.envs: list[dict[str, str] | None] = []
 
             def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
                 self.commands.append(command)
+                self.envs.append(kwargs.get("env"))
                 return ToolResult(
                     success=True,
                     exit_code=0,
@@ -267,6 +269,7 @@ class TestRealSubprocessRunner:
         operation_id = OperationId(
             namespace="tools", category="test", command="uv-project"
         )
+        (tmp_path / "src").mkdir()
 
         runner.run_uv_command(["echo", "hi"], cwd=tmp_path, operation_id=operation_id)
 
@@ -274,14 +277,20 @@ class TestRealSubprocessRunner:
         assert recorded[:2] == ["uv", "run"]
         assert "--project" in recorded
         assert str(tmp_path) in recorded
+        assert runner.envs[0] is not None
+        assert runner.envs[0]["PYTHONPATH"].split(os.pathsep)[0] == str(
+            tmp_path / "src"
+        )
 
     def test_run_uv_command_no_project(self) -> None:
         class RecordingRunner(RealSubprocessRunner):
             def __init__(self) -> None:
                 self.commands: list[list[str]] = []
+                self.envs: list[dict[str, str] | None] = []
 
             def run_subprocess(self, command, *args, **kwargs):  # type: ignore[override]
                 self.commands.append(command)
+                self.envs.append(kwargs.get("env"))
                 return ToolResult(
                     success=True,
                     exit_code=0,
@@ -302,6 +311,7 @@ class TestRealSubprocessRunner:
         recorded = runner.commands[0]
         assert "--no-project" in recorded
         assert "--project" not in recorded
+        assert runner.envs[0] in ({}, None)
 
     def test_run_uv_command_python_flag(self) -> None:
         class RecordingRunner(RealSubprocessRunner):

@@ -170,13 +170,25 @@ class RealSubprocessRunner:
         """
         # Build uv command
         command = ["uv", "run"]
+        project_root = Path(cwd) if cwd is not None else Path.cwd()
+        uv_env = dict(env) if env is not None else {}
 
         if no_project:
             command.append("--no-project")
         else:
-            # Default to project root if cwd not specified
-            project_root = cwd or Path.cwd()
             command.extend(["--project", str(project_root)])
+            src_path = project_root / "src"
+            if src_path.is_dir():
+                # Ensure src-layout imports resolve deterministically for spawned tools.
+                existing_pythonpath = uv_env.get("PYTHONPATH") or os.environ.get(
+                    "PYTHONPATH", ""
+                )
+                src_entry = str(src_path)
+                uv_env["PYTHONPATH"] = (
+                    src_entry
+                    if not existing_pythonpath
+                    else f"{src_entry}{os.pathsep}{existing_pythonpath}"
+                )
 
         if python:
             command.extend(["--python", python])
@@ -186,7 +198,7 @@ class RealSubprocessRunner:
         return self.run_subprocess(
             command,
             cwd=cwd,
-            env=env,
+            env=uv_env or env,
             timeout=timeout,
             operation_id=operation_id,
         )

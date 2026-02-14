@@ -141,6 +141,64 @@ class TestCoverageCommand:
         assert (captured[0].stderr or "") == "coverage failed"
 
 
+class TestCoverageThresholdCommand:
+    def test_coverage_threshold_runs_with_thresholds(self) -> None:
+        captured: list[ToolResult] = []
+
+        class StubTestingTools:
+            def coverage_threshold(
+                self,
+                args: List[str],
+                *,
+                line_threshold: float,
+                branch_threshold: float,
+                verbose: bool,
+                learning_mode: bool,
+                verbosity_level: int,
+                force_regen: bool,
+            ) -> ToolResult:
+                self.args = args
+                self.line_threshold = line_threshold
+                self.branch_threshold = branch_threshold
+                self.verbose = verbose
+                self.learning_mode = learning_mode
+                self.verbosity_level = verbosity_level
+                self.force_regen = force_regen
+                return _tool_result("coverage-threshold", stdout="threshold-ran")
+
+        stub = StubTestingTools()
+
+        def _capture_run_tool_command(
+            command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
+        ) -> None:
+            result = command_func(*args, **kwargs)
+            captured.append(result)
+
+        with override_state(learning_mode=True, verbosity=2):
+            with override_attr(testing_commands, "get_testing_tools", lambda: stub):
+                with override_attr(
+                    testing_commands,
+                    "run_tool_command",
+                    _capture_run_tool_command,
+                ):
+                    testing_commands.test_coverage_threshold(
+                        line_threshold=80.0,
+                        branch_threshold=70.0,
+                        force_regen=True,
+                        verbose=True,
+                        args=["--fast"],
+                    )
+
+        assert stub.args == ["--fast"]
+        assert stub.line_threshold == 80.0
+        assert stub.branch_threshold == 70.0
+        assert stub.verbose is True
+        assert stub.learning_mode is True
+        assert stub.verbosity_level == 2
+        assert stub.force_regen is True
+        assert captured and captured[0].stdout == "threshold-ran"
+
+
 class TestSuiteCommands:
     @pytest.mark.parametrize(
         ("command", "test_dir"),
