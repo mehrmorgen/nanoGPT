@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Mapping,
@@ -14,9 +15,20 @@ from typing import (
     TypedDict,
     cast,
 )
+from urllib.parse import urlparse
 
+import requests
 import yaml
+from bs4 import BeautifulSoup
+from bs4.element import Tag
+import html2text
+from playwright.sync_api import (
+    Error as PlaywrightError,
+    TimeoutError as PlaywrightTimeoutError,
+    sync_playwright,
+)
 
+from ml_playground.framework.core.di_implementations import DefaultJsonParser
 from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
@@ -1064,6 +1076,307 @@ This is a machine learning playground project with the following key components:
 
         return result
 
+    def scrape_chat_share(
+        self,
+        url: str,
+        output_path: Path | None = None,
+        *,
+        timeout: float = 15.0,
+        learning_mode: bool = False,
+        verbosity_level: int = 1,
+        fetcher: Callable[[str, float], str] | None = None,
+        parser: Callable[[str, str], tuple[str, str]] | None = None,
+    ) -> ToolResult:
+        """Scrape a shared ChatGPT conversation and convert it to Markdown."""
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="share"
+        )
+
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in {"http", "https"}:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    f"Invalid URL scheme '{parsed_url.scheme}'. "
+                    "Only http and https URLs are supported."
+                ),
+            )
+
+        fetch_html = fetcher or self._fetch_chat_share_html
+        parse_html = parser or self._parse_chat_share_html
+
+        try:
+            html_content = fetch_html(url, timeout)
+        except requests.exceptions.RequestException as exc:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=f"Failed to fetch conversation: {exc}",
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=f"Unexpected error fetching conversation: {exc}",
+            )
+
+        try:
+            title, markdown_content = parse_html(html_content, url)
+        except ImportError:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    "html2text is required for Markdown conversion. "
+                    "Install project dependencies with `uv sync`."
+                ),
+            )
+        except ValueError as exc:
+            try:
+                rendered_html = self._render_dynamic_page(
+                    url=url,
+                    wait_until="domcontentloaded",
+                    timeout_ms=30_000,
+                    selector="main",
+                )
+                title, markdown_content = parse_html(rendered_html, url)
+            except ImportError:
+                return ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace=operation_id.namespace,
+                    category=operation_id.category,
+                    command=operation_id.command,
+                    stderr=(
+                        f"{exc} Playwright fallback is unavailable. "
+                        "Install dependencies with `uv sync` and run "
+                        "`uv run playwright install`."
+                    ),
+                )
+            except Exception:
+                return ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace=operation_id.namespace,
+                    category=operation_id.category,
+                    command=operation_id.command,
+                    stderr=str(exc),
+                )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=f"Failed to parse conversation content: {exc}",
+            )
+
+        stdout = markdown_content
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(markdown_content, encoding="utf-8")
+                stdout = f"Conversation '{title}' saved to {output_path}"
+            except OSError as exc:
+                return ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace=operation_id.namespace,
+                    category=operation_id.category,
+                    command=operation_id.command,
+                    stderr=f"Failed to write Markdown output: {exc}",
+                )
+
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stdout=stdout,
+        )
+
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="share",
+                context="Transforming a shared ChatGPT conversation into Markdown",
+                category=self.category,
+                executed_commands=[
+                    f"HTTP GET {url}",
+                    "Parsed conversation with BeautifulSoup",
+                    "Converted HTML transcript to Markdown via html2text",
+                ],
+            )
+
+        return result
+
+    def website_to_markdown(
+        self,
+        url: str,
+        output_path: Path | None = None,
+        *,
+        wait_until: str = "networkidle",
+        timeout_ms: int = 30_000,
+        selector: str | None = None,
+        learning_mode: bool = False,
+        verbosity_level: int = 1,
+        fetcher: Callable[[str, str, int, str | None], str] | None = None,
+        converter: Callable[[str], str] | None = None,
+    ) -> ToolResult:
+        """Render a dynamic website and convert the resulting HTML to Markdown."""
+        operation_id = OperationId(
+            namespace="tools",
+            category=self.category,
+            command="website-to-markdown",
+        )
+
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in {"http", "https"}:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    f"Invalid URL scheme '{parsed_url.scheme}'. "
+                    "Only http and https URLs are supported."
+                ),
+            )
+
+        wait_condition = wait_until.lower()
+        allowed_waits = {"load", "domcontentloaded", "networkidle", "commit"}
+        if wait_condition not in allowed_waits:
+            allowed_display = ", ".join(sorted(allowed_waits))
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    f"Invalid wait condition '{wait_until}'. "
+                    f"Choose one of: {allowed_display}"
+                ),
+            )
+
+        render_page = fetcher or self._render_dynamic_page
+
+        try:
+            html_content = render_page(url, wait_condition, timeout_ms, selector)
+        except ImportError:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    "Playwright is required for dynamic page rendering. "
+                    "Install dependencies with `uv sync` and run "
+                    "`uv run playwright install` to fetch browser binaries."
+                ),
+            )
+        except RuntimeError as exc:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=str(exc),
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=f"Failed to render web page: {exc}",
+            )
+
+        convert_html = converter or self._html_to_markdown
+
+        try:
+            markdown_content = convert_html(html_content)
+        except ImportError:
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=(
+                    "html2text is required for Markdown conversion. "
+                    "Install project dependencies with `uv sync`."
+                ),
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace=operation_id.namespace,
+                category=operation_id.category,
+                command=operation_id.command,
+                stderr=f"Failed to convert HTML to Markdown: {exc}",
+            )
+
+        stdout = markdown_content
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(markdown_content, encoding="utf-8")
+                stdout = f"Rendered content saved to {output_path}"
+            except OSError as exc:
+                return ToolResult.create(
+                    success=False,
+                    exit_code=1,
+                    namespace=operation_id.namespace,
+                    category=operation_id.category,
+                    command=operation_id.command,
+                    stderr=f"Failed to write Markdown output: {exc}",
+                )
+
+        result = ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stdout=stdout,
+        )
+
+        if learning_mode:
+            self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
+            result.learning_info = self.learning_engine.explain_command(
+                command="website-to-markdown",
+                context="Rendering a dynamic website with Playwright before converting it to Markdown",
+                category=self.category,
+                executed_commands=[
+                    f"Playwright chromium.goto {url} (wait_until={wait_condition})",
+                    "Captured rendered HTML content",
+                    "Converted HTML to Markdown via html2text",
+                ],
+            )
+
+        return result
+
     def _run_validation_batch(self, config: Mapping[str, object]) -> dict[str, object]:
         """Run validation batch based on configuration."""
         results: dict[str, object] = {
@@ -1436,11 +1749,6 @@ This is a machine learning playground project with the following key components:
 
     def _extract_coverage_percentage(self, output: str, coverage_type: str) -> float:
         """Extract coverage percentage from coverage JSON data."""
-        # Import required dependencies
-        from ml_playground.framework.core.di_implementations import (
-            DefaultJsonParser,
-        )
-
         # Try to parse coverage data from JSON
         try:
             # Get the path to the coverage JSON file
@@ -1597,6 +1905,157 @@ This is a machine learning playground project with the following key components:
                 output += f"  • {issue_str}\n"
 
         return output
+
+    def _fetch_chat_share_html(
+        self, url: str, timeout: float
+    ) -> str:  # pragma: no cover
+        """Fetch raw HTML for a shared ChatGPT conversation URL."""
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        response = requests.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+
+    def _parse_chat_share_html(self, html: str, url: str) -> tuple[str, str]:
+        """Convert shared ChatGPT page HTML to markdown transcript."""
+        import re
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        title_tag = soup.find("title")
+        raw_title = (
+            title_tag.get_text(strip=True) if title_tag else "ChatGPT Conversation"
+        )
+        title = raw_title.replace(" | ChatGPT", "").strip() or "ChatGPT Conversation"
+
+        conversation_container = soup.find("body")
+        if conversation_container is None:
+            raise ValueError("Could not locate conversation body in shared page.")
+        if not isinstance(conversation_container, Tag):
+            raise ValueError("Could not parse conversation body as HTML element.")
+
+        message_blocks = conversation_container.find_all(
+            "div", class_=re.compile(r"text-base")
+        )
+        if not message_blocks:
+            raise ValueError(
+                "Could not locate conversation messages in shared page structure."
+            )
+
+        conversation_sections: list[tuple[str, str]] = []
+        for block in message_blocks:
+            if not isinstance(block, Tag):
+                continue
+            content_element = block.find(
+                "div", class_=re.compile(r"(markdown|prose|rich-text)")
+            )
+            if content_element is None or not isinstance(content_element, Tag):
+                continue
+
+            inner_html = content_element.decode_contents()
+            markdown = self._html_to_markdown(inner_html).strip()
+            if not markdown:
+                continue
+
+            role = self._extract_share_role(block)
+            conversation_sections.append((role, markdown))
+
+        if not conversation_sections:
+            raise ValueError("Conversation content is empty after parsing the page.")
+
+        markdown_lines: list[str] = [
+            f"# {title}",
+            "",
+            f"**Source URL:** {url}",
+            "",
+        ]
+
+        for index, (role, message_markdown) in enumerate(conversation_sections):
+            markdown_lines.append(f"## {role}")
+            markdown_lines.append("")
+            markdown_lines.append(message_markdown)
+            if index != len(conversation_sections) - 1:
+                markdown_lines.append("")
+                markdown_lines.append("---")
+                markdown_lines.append("")
+
+        return title, "\n".join(markdown_lines).strip()
+
+    def _extract_share_role(self, block: Any) -> str:
+        """Infer conversation role for a shared-chat message block."""
+        data_role = block.get("data-role")
+        if isinstance(data_role, str):
+            normalized = data_role.strip().lower()
+            if normalized == "user":
+                return "User"
+            if normalized == "assistant":
+                return "Assistant"
+
+        data_testid = block.get("data-testid")
+        if isinstance(data_testid, str):
+            lowered = data_testid.lower()
+            if "user" in lowered:
+                return "User"
+            if "assistant" in lowered:
+                return "Assistant"
+
+        classes = block.get("class", [])
+        for class_name in classes:
+            if isinstance(class_name, str):
+                lowered = class_name.lower()
+                if "user" in lowered:
+                    return "User"
+                if "assistant" in lowered:
+                    return "Assistant"
+
+        return "Assistant"
+
+    def _html_to_markdown(self, html: str) -> str:
+        """Convert HTML to markdown content."""
+        converter = html2text.HTML2Text()
+        converter.ignore_links = False
+        converter.ignore_images = False
+        converter.body_width = 0
+        return converter.handle(html)
+
+    def _render_dynamic_page(
+        self, url: str, wait_until: str, timeout_ms: int, selector: str | None = None
+    ) -> str:  # pragma: no cover
+        """Render a page with Playwright and return final HTML."""
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    context = browser.new_context(
+                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    )
+                    page = context.new_page()
+                    page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                    if selector:
+                        page.wait_for_selector(selector, timeout=timeout_ms)
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(2000)
+                    page.wait_for_load_state(wait_until, timeout=timeout_ms)  # type: ignore[arg-type]
+                    html_content = page.content()
+                finally:
+                    browser.close()
+        except PlaywrightTimeoutError as exc:
+            raise RuntimeError(
+                f"Page load timed out after {timeout_ms} ms while loading {url}"
+            ) from exc
+        except PlaywrightError as exc:
+            raise RuntimeError(
+                f"Playwright error while capturing {url}: {exc}"
+            ) from exc
+
+        return html_content
 
     def _get_timestamp(self) -> str:
         """Get current timestamp for structured output."""

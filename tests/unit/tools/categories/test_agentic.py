@@ -1050,3 +1050,102 @@ class TestErrorHandling:
         # Should complete even if some status checks fail
         assert result.success is True
         assert isinstance(result.stdout, str)
+
+
+class TestScrapeAndMarkdown:
+    """Test scraping and website-to-markdown helpers."""
+
+    def test_scrape_chat_share_success(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        url = "https://chatgpt.com/share/test"
+
+        def fake_fetcher(_: str, __: float) -> str:
+            return "<html></html>"
+
+        def fake_parser(_: str, source: str) -> tuple[str, str]:
+            return "Test Title", f"# Test Title\n\nSource: {source}"
+
+        result = agentic_tools.scrape_chat_share(
+            url, fetcher=fake_fetcher, parser=fake_parser
+        )
+
+        assert result.success is True
+        assert result.exit_code == 0
+        assert "Test Title" in result.stdout
+        assert "Source:" in result.stdout
+
+    def test_scrape_chat_share_fetch_error(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        import requests
+
+        def failing_fetcher(_: str, __: float) -> str:
+            raise requests.exceptions.RequestException("network down")
+
+        result = agentic_tools.scrape_chat_share(
+            "https://chatgpt.com/share/test",
+            fetcher=failing_fetcher,
+        )
+
+        assert result.success is False
+        assert "Failed to fetch conversation" in result.stderr
+
+    def test_scrape_chat_share_uses_playwright_fallback_on_parse_error(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        calls = {"count": 0}
+
+        def fake_fetcher(_: str, __: float) -> str:
+            return "<html>initial</html>"
+
+        def fake_parser(html: str, _: str) -> tuple[str, str]:
+            calls["count"] += 1
+            if "initial" in html:
+                raise ValueError(
+                    "Could not locate conversation messages in shared page structure."
+                )
+            return "Recovered", "# Recovered"
+
+        with swap_attr(
+            agentic_tools,
+            "_render_dynamic_page",
+            lambda **_: "<html>rendered</html>",
+        ):
+            result = agentic_tools.scrape_chat_share(
+                "https://chatgpt.com/share/test",
+                fetcher=fake_fetcher,
+                parser=fake_parser,
+            )
+
+        assert result.success is True
+        assert result.stdout == "# Recovered"
+        assert calls["count"] == 2
+
+    def test_website_to_markdown_success(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def fake_fetcher(_: str, __: str, ___: int, ____: str | None = None) -> str:
+            return "<html><body><h1>Hello</h1></body></html>"
+
+        def fake_converter(_: str) -> str:
+            return "# Hello"
+
+        result = agentic_tools.website_to_markdown(
+            "https://example.com",
+            fetcher=fake_fetcher,
+            converter=fake_converter,
+        )
+
+        assert result.success is True
+        assert result.stdout == "# Hello"
+
+    def test_website_to_markdown_rejects_invalid_wait(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        result = agentic_tools.website_to_markdown(
+            "https://example.com", wait_until="invalid"
+        )
+
+        assert result.success is False
+        assert "Invalid wait condition" in result.stderr

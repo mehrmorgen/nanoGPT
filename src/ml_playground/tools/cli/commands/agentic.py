@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -158,6 +159,89 @@ def agentic_workflow_status(
         result = tools.workflow_status(
             args or [],
             output_format=output_format,
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
+        cli_helpers.handle_tool_result(result)
+    except ToolExecutionError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("scrape-chat-share")
+def agentic_scrape_chat_share(
+    url: Annotated[str, typer.Argument(help="Shared ChatGPT conversation URL")],
+    output: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--output",
+            "-o",
+            help="Write markdown output to file instead of stdout",
+        ),
+    ] = None,
+    timeout: Annotated[
+        float,
+        typer.Option("--timeout", help="HTTP timeout in seconds"),
+    ] = 15.0,
+) -> None:
+    """Scrape a shared ChatGPT conversation and emit Markdown."""
+    try:
+        tools = cli_helpers.get_agentic_tools()
+        result = tools.scrape_chat_share(
+            url,
+            output_path=output,
+            timeout=timeout,
+            learning_mode=state.learning_mode,
+            verbosity_level=state.verbosity,
+        )
+        cli_helpers.handle_tool_result(result)
+    except ToolExecutionError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("website-to-markdown")
+def agentic_website_to_markdown(
+    url: Annotated[str, typer.Argument(help="Website URL to render and convert")],
+    output: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--output",
+            "-o",
+            help="Write markdown output to file instead of stdout",
+        ),
+    ] = None,
+    wait_until: Annotated[
+        str,
+        typer.Option(
+            "--wait-until",
+            help="Playwright wait condition (load, domcontentloaded, networkidle, commit)",
+        ),
+    ] = "networkidle",
+    timeout_ms: Annotated[
+        int,
+        typer.Option(
+            "--timeout-ms",
+            help="Navigation timeout in milliseconds",
+        ),
+    ] = 30_000,
+    selector: Annotated[
+        Optional[str],
+        typer.Option(
+            "--selector",
+            help="Optional CSS selector to wait for before capture",
+        ),
+    ] = None,
+) -> None:
+    """Render a dynamic website via Playwright and emit Markdown."""
+    try:
+        tools = cli_helpers.get_agentic_tools()
+        result = tools.website_to_markdown(
+            url,
+            output_path=output,
+            wait_until=wait_until,
+            timeout_ms=timeout_ms,
+            selector=selector,
             learning_mode=state.learning_mode,
             verbosity_level=state.verbosity,
         )
