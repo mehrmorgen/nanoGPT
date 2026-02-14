@@ -16,6 +16,12 @@ This directory hosts self‑contained experiments. Each experiment bundles:
 - a focused README.md with step‑by‑step instructions,
 - and, where applicable, trainer/integration code.
 
+Curriculum
+
+Experiments also participate in a staged didactic ladder that translates concepts across computer science, statistics,
+mathematics, and ML engineering. See [CURRICULUM.md](./CURRICULUM.md) for the cross-disciplinary vocabulary bridge and
+the stage roadmap (0-6).
+
 Why self‑contained?
 
 - Portability: copy a single folder to reuse an experiment.
@@ -46,9 +52,11 @@ All experiments now use the centralized framework utilities for error handling, 
 ```bash
 src/ml_playground/experiments/
 ├── README.md                    # overview and conventions (this file)
+├── CURRICULUM.md                # cross-disciplinary curriculum and staged roadmap
 ├── __init__.py                  # package marker/registry setup
 ├── default_config.toml          # baseline config used by templates/examples
 ├── protocol.py                  # typed protocol/contracts for preparers
+├── copy_stage0/                 # Stage 0 one-symbol learned copying experiment
 ├── shakespeare/                 # Tiny Shakespeare experiment
 ├── bundestag_char/              # Bundestag character-level experiment
 ├── bundestag_tiktoken/          # Bundestag BPE (tiktoken) experiment
@@ -69,6 +77,10 @@ Common CLI patterns
 
 Implemented experiments (current)
 
+- copy_stage0 — Stage 0 one-symbol learned copy (deterministic curriculum POC)
+  - README: src/ml_playground/experiments/copy_stage0/README.md
+  - Config: src/ml_playground/experiments/copy_stage0/config.toml
+  - Prepare name: `copy_stage0`
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
   - README: src/ml_playground/experiments/shakespeare/README.md
   - Config: src/ml_playground/experiments/shakespeare/config.toml
