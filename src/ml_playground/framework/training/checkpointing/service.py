@@ -4,22 +4,24 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional, cast
 
-from ml_playground.training.checkpointing.checkpoint_manager import (
+import torch
+from torch.optim import Optimizer
+
+from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
 )
-from ml_playground.configuration.models import (
+from ml_playground.framework.configuration.models import (
     TrainerConfig,
-    SharedConfig,
+    MetadataConfig,
     READ_POLICY_BEST,
 )
-from ml_playground.core.error_handling import CheckpointError
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.models.core.model import GPT
-from ml_playground.training.ema import EMA
-from ml_playground.training.types import OptimizerLike
+from ml_playground.framework.core.error_handling import CheckpointError
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.training.ema import EMA
 
 
 __all__ = [
@@ -35,16 +37,13 @@ DEFAULT_COPY_FN: Callable[[Path, Path], None] = cast(
 )
 
 
-def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> CheckpointManager:
+def create_manager(cfg: TrainerConfig, metadata: MetadataConfig) -> CheckpointManager:
     """Construct a checkpoint manager respecting the retention policy."""
     return CheckpointManager(
-        out_dir=shared.train_out_dir,
+        out_dir=metadata.train_out_dir,
         atomic=cfg.runtime.ckpt_atomic,
         keep_last=cfg.runtime.checkpointing.keep.last,
         keep_best=cfg.runtime.checkpointing.keep.best,
-        naming_policy=cfg.runtime.ckpt_naming_policy,
-        counter_label=cfg.runtime.ckpt_domain_label,
-        strict_naming=cfg.runtime.ckpt_naming_strict,
     )
 
 
@@ -58,11 +57,15 @@ def load_checkpoint(
     # DI override if provided
     if cfg.checkpoint_load_fn is not None:
         try:
-            return cfg.checkpoint_load_fn(manager=manager, cfg=cfg, logger=logger)
+            # Use explicit cast on the call result to satisfy basedpyright strict mode
+            raw_ckpt = cast(
+                object, cfg.checkpoint_load_fn(manager=manager, cfg=cfg, logger=logger)
+            )
+            return cast(Optional[Checkpoint], raw_ckpt)
         except (
             CheckpointError,
             RuntimeError,
-        ) as exc:  # pragma: no cover - DI override path is user-supplied
+        ) as exc:
             logger.warning(f"checkpoint_load_fn failed: {exc}")
             return None
 
@@ -86,16 +89,16 @@ def apply_checkpoint(
     checkpoint: Checkpoint,
     *,
     model: GPT,
-    optimizer: OptimizerLike,
-    ema: EMA | None,
+    optimizer: Optimizer,
+    ema: Optional[EMA],
 ) -> tuple[int, float]:
     """Apply checkpoint state to the model/optimizer and return iteration metrics."""
     model.load_state_dict(checkpoint.model, strict=False)
-    optimizer.load_state_dict(checkpoint.optimizer)
+    optimizer.load_state_dict(cast(dict[str, Any], checkpoint.optimizer))
     iter_num = checkpoint.iter_num
     best_val_loss = checkpoint.best_val_loss
     if ema and checkpoint.ema:
-        ema.shadow = checkpoint.ema
+        ema.shadow = cast(dict[str, torch.Tensor], checkpoint.ema)
     return iter_num, best_val_loss
 
 
@@ -104,23 +107,22 @@ def save_checkpoint(
     cfg: TrainerConfig,
     *,
     model: GPT,
-    optimizer: OptimizerLike,
-    ema: EMA | None,
+    optimizer: Optimizer,
+    ema: Optional[EMA],
     iter_num: int,
-    counter_value: int | None = None,
     best_val_loss: float,
     logger: LoggerLike,
     is_best: bool,
 ) -> None:
     """Persist the current training state via the checkpoint manager."""
     checkpoint = Checkpoint(
-        model=model.state_dict(),
-        optimizer=optimizer.state_dict(),
+        model=dict(model.state_dict()),
+        optimizer=dict(optimizer.state_dict()),
         model_args=cfg.model.model_dump(),
         iter_num=iter_num,
         best_val_loss=best_val_loss,
         config=cfg.model_dump(),
-        ema=ema.shadow if ema else None,
+        ema=dict(ema.shadow) if ema else None,
     )
     # DI override if provided
     if cfg.checkpoint_save_fn is not None:
@@ -136,39 +138,36 @@ def save_checkpoint(
         except (
             CheckpointError,
             RuntimeError,
-        ) as exc:  # pragma: no cover - DI override path is user-supplied
+        ) as exc:
             logger.warning(
                 f"checkpoint_save_fn failed, falling back to default save: {exc}"
             )
 
-    base_filename = "ckpt_best.pt" if is_best else "ckpt_last.pt"
     manager.save_checkpoint(
         checkpoint,
-        base_filename=base_filename,
         metric=best_val_loss,
         iter_num=iter_num,
         logger=logger,
-        counter_value=counter_value,
         is_best=is_best,
     )
 
 
 def propagate_metadata(
     cfg: TrainerConfig,
-    shared: SharedConfig,
+    metadata: MetadataConfig,
     *,
     logger: LoggerLike,
     copy_fn: Callable[[Path, Path], None] = DEFAULT_COPY_FN,
 ) -> None:
     """Copy dataset metadata into train and sample output directories when available."""
     try:
-        meta_src = cfg.data.meta_path(shared.dataset_dir)
+        meta_src = cfg.data.meta_path(metadata.dataset_dir)
     except (
         OSError,
         ValueError,
         TypeError,
         RuntimeError,
-    ) as exc:  # pragma: no cover - defensive
+    ) as exc:
         if logger:
             logger.warning(f"Failed to resolve meta source path: {exc}")
         return
@@ -176,9 +175,9 @@ def propagate_metadata(
     if not meta_src or not meta_src.exists():
         return
 
-    destinations = [shared.train_out_dir]
-    if shared.sample_out_dir not in destinations:
-        destinations.append(shared.sample_out_dir)
+    destinations = [metadata.train_out_dir]
+    if metadata.sample_out_dir not in destinations:
+        destinations.append(metadata.sample_out_dir)
 
     for dst_dir in destinations:
         try:

@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
 from typing import Any, Callable, Dict
+from contextlib import AbstractContextManager
 
-from ml_playground.configuration.models import TrainerConfig
-from ml_playground.training.types import BatchProvider
-from ml_playground.models.utils.estimator import estimate_loss
-from ml_playground.models.core.model import GPT
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.training.types import TensorboardWriter
+from ml_playground.framework.configuration.models import TrainerConfig
+from ml_playground.framework.data_pipeline.sampling.batches import SimpleBatches
+from ml_playground.framework.models.utils.estimator import estimate_loss
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.training.types import TensorboardWriter
 
 
 __all__ = ["run_evaluation"]
 
 
-EstimateLossFn = Callable[[GPT, BatchProvider, int, Any], Dict[str, float]]
+EstimateLossFn = Callable[[GPT, SimpleBatches, int, Any], Dict[str, float]]
 
 
 def run_evaluation(
@@ -26,8 +26,8 @@ def run_evaluation(
     iter_num: int,
     lr: float,
     raw_model: GPT,
-    batches: BatchProvider,
-    ctx: AbstractContextManager[object],
+    batches: SimpleBatches,
+    ctx: AbstractContextManager[Any],
     writer: TensorboardWriter | None,
     estimate_loss_fn: EstimateLossFn | None = None,
 ) -> dict[str, float]:
