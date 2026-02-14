@@ -949,6 +949,11 @@ def test_cli_adapters_load_and_validate(tmp_path: Path) -> None:
     assert exp.metadata.dataset_dir.is_absolute()
 
 
+def test_cli_project_home_points_to_src_root() -> None:
+    """CLI loader resolves project home to repository src root."""
+    assert config_cli._PROJECT_HOME.name == "src"  # pyright: ignore[reportPrivateUsage]
+
+
 def test_cli_adapters_prerequisites(tmp_path: Path) -> None:
     """Test cli adapters prerequisites."""
     cfg_path = tmp_path / "exp.toml"

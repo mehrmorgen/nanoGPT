@@ -7,7 +7,7 @@ from ml_playground.framework.configuration.loading import (
 )
 from ml_playground.framework.configuration.models import ExperimentConfig
 
-_PROJECT_HOME = Path(__file__).resolve().parent.parent.parent
+_PROJECT_HOME = Path(__file__).resolve().parents[3]
 
 
 def cfg_path_for(experiment: str, exp_config: Path | None) -> Path:

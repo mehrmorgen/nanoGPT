@@ -87,6 +87,21 @@ def test_validate_extras_budget_max_hours_not_number(tmp_path: Path) -> None:
         load_train_config(cfg_path, default_config_path=tmp_path / "no.toml")
 
 
+def test_validate_extras_budget_max_hours_bool_rejected(tmp_path: Path) -> None:
+    """Boolean max_hours is rejected instead of being coerced to 1.0/0.0."""
+    cfg_path = tmp_path / "exp" / "config.toml"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(
+        "[training]\n[training.extras.budget]\nmax_hours = true\n"
+        "[training.model]\n[training.data]\n[training.optim]\n"
+        "[training.schedule]\n[training.runtime]\nout_dir = '/tmp/out'\n"
+    )
+    with pytest.raises(
+        (ValueError, Exception), match="budget.max_hours must be a number"
+    ):
+        load_train_config(cfg_path, default_config_path=tmp_path / "no.toml")
+
+
 def test_validate_extras_budget_max_hours_negative(tmp_path: Path) -> None:
     """Branch [118→119]: budget.max_hours < 0 → ValueError."""
     cfg_path = tmp_path / "exp" / "config.toml"

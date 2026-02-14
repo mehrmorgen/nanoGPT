@@ -12,7 +12,6 @@ from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
     resolve_posix_path_cls,
-    probe_unlink_missing_ok,
 )
 
 from tests.unit.framework.training._helpers import LoggerStub
@@ -203,10 +202,6 @@ def test_public_api_functions() -> None:
     result = resolve_posix_path_cls()
     # Result could be None or a class depending on the Python version
     assert result is None or isinstance(result, type)
-
-    # Test probe_unlink_missing_ok
-    supports_missing = probe_unlink_missing_ok()
-    assert isinstance(supports_missing, bool)
 
 
 def test_checkpoint_manager_error_handling(tmp_path: Path) -> None:
