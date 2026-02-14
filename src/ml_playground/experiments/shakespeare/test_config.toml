@@ -8,7 +8,7 @@ raw_dir = "./raw"
 raw_text_path = "./raw/input.txt"
 tokenizer_type = "char"
 
-[train.model]
+[training.model]
 n_layer = 1
 n_head = 2
 n_embd = 32
@@ -16,21 +16,21 @@ block_size = 32
 dropout = 0.0
 bias = false
 
-[train.data]
+[training.data]
 batch_size = 1
 grad_accum_steps = 1
 block_size = 32
 ngram_size = 1
 sampler = "sequential"
 
-[train.optim]
+[training.optim]
 learning_rate = 0.001
 weight_decay = 0.0
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
 
-[train.runtime]
+[training.runtime]
 out_dir = "./out/test_run"
 mlflow_enabled = true
 mlflow_tracking_uri = "sqlite:///../out/mlflow.db"
@@ -49,11 +49,11 @@ best_smoothing_alpha = 0.0
 early_stop_patience = 0
 ema_decay = 0.0
 
-[train.runtime.checkpointing.keep]
+[training.runtime.checkpointing.keep]
 last = 1
 best = 1
 
-[train.extras]
+[training.extras]
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"
 ckpt_metric = "val_loss"
@@ -61,21 +61,21 @@ ckpt_greater_is_better = false
 ckpt_atomic = true
 ckpt_write_metadata = false
 
-[sample.runtime]
+[sampling.runtime]
 out_dir = "./out/test_run"
 device = "cpu"
 dtype = "float32"
 compile = false
 seed = 42
 
-[sample.sample]
+[sampling.sample]
 start = ""
 num_samples = 1
 max_new_tokens = 4
 temperature = 0.8
 top_k = 0
 
-[shared]
+[metadata]
 experiment = "shakespeare"
 config_path = "test_config.toml"
 project_home = "."

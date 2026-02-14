@@ -7,8 +7,8 @@ from typing import Callable, ContextManager, Protocol, Any
 
 import torch
 
-from ml_playground.configuration.models import RuntimeConfig
-from ml_playground.core.runtime_context import RuntimeContext, runtime_context
+from ml_playground.framework.configuration.models import RuntimeConfig
+from ml_playground.framework.core.runtime_context import RuntimeContext, runtime_context
 
 __all__ = [
     "HookEvent",

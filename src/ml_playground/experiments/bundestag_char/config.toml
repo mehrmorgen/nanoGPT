@@ -2,8 +2,8 @@
 # Notes on interplay:
 # - Effective batch (in tokens) per optimizer update = batch_size * grad_accum_steps * block_size.
 # - Memory roughly scales with n_layer * n_head and quadratically with block_size, and linearly with batch_size.
-# - [train.data].block_size must be <= [train.model].block_size (model context capacity).
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - [training.data].block_size must be <= [training.model].block_size (model context capacity).
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Checkpoint selection uses ckpt_metric with optional smoothing and EMA if configured.
 
 [prepare]
@@ -14,7 +14,7 @@ raw_text_path = "./raw/input.txt"
 tokenizer_type = "char"
 doc_separator = "\n\n"
 
-[train.model]
+[training.model]
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
 
 # Number of Transformer layers (blocks); increases capacity and compute/memory cost.
@@ -23,7 +23,7 @@ n_layer = 4
 n_head = 8
 # Embedding/hidden size; larger increases model capacity and compute.
 n_embd = 384
-# Maximum context length the model is built for (positional embeddings); must be >= [train.data].block_size.
+# Maximum context length the model is built for (positional embeddings); must be >= [training.data].block_size.
 # Increasing this raises memory/time roughly ~ O(block_size^2) per layer due to attention.
 block_size = 256
 # Dropout rate for regularization during training; set >0 to regularize, 0.0 for deterministic/fast runs.
@@ -32,7 +32,7 @@ dropout = 0.2
 bias = false
 vocab_size = 256
 
-[train.data]
+[training.data]
 # Folder containing the preprocessed dataset files referenced below.
 # Tokenizer selection: "char" (default) or "word" for word-level vocabulary
 tokenizer = "char"
@@ -40,14 +40,14 @@ tokenizer = "char"
 ngram_size = 1
 # Micro-batch size per optimization step (per device); tuned for MPS memory
 batch_size = 8
-# Sequence length; ensure <= [train.model].block_size
+# Sequence length; ensure <= [training.model].block_size
 block_size = 256
 # Number of gradient accumulation steps to increase effective batch without extra memory
 grad_accum_steps = 4
 # Sampling policy: deterministic sequential coverage for char dataset
 sampler = "random"
 
-[train.optim]
+[training.optim]
 # Optimizer hyperparameters (copied from defaults and tuned as needed)
 learning_rate = 0.001
 weight_decay = 0.1
@@ -55,7 +55,7 @@ beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # Whether to apply a learning-rate schedule (typically warmup + decay).
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate; ignored if decay_lr = false.
@@ -65,7 +65,7 @@ lr_decay_iters = 100_000
 # Lower bound (floor) for the learning rate during decay; helps avoid stalling late in training.
 min_lr = 0.00003
 
-[train.runtime]
+[training.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
 out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
@@ -92,10 +92,10 @@ dtype = "bfloat16"
 compile = false
 
 # Prefer reading the best checkpoint during sampling by default
-[sample.runtime.checkpointing]
+[sampling.runtime.checkpointing]
 read_policy = "best"
 
-[sample.runtime]
+[sampling.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
 out_dir = "./out"
@@ -120,7 +120,7 @@ dtype = "bfloat16"
 # Whether to compile/optimize the model for inference (if supported); usually false for quick runs.
 compile = false
 
-[sample.sample]
+[sampling.sample]
 # Prompt to prime the model; generation continues after this text.
 start = "\n(Beifall bei der FDP): \n"
 # Number of independent samples to generate for the same prompt/settings.
@@ -134,9 +134,9 @@ temperature = 0.8
 top_k = 100
 
 
-# Export config is not supported by the strict schema at the top level; removed for compatibility
+# Export config is not supported by the strict schema at the top level; use a runtime-specific config instead
 
-[shared]
+[metadata]
 experiment = "bundestag_char"
 config_path = "config.toml"
 project_home = "."

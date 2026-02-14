@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration.models import SamplerConfig, SharedConfig
-from ml_playground.experiments.protocol import (
+from ml_playground.framework.configuration.models import SamplerConfig, MetadataConfig
+from ml_playground.framework.experiment_registry.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
 )
-from ml_playground.sampling.runner import Sampler as _CoreSampler
+from ml_playground.framework.sampling.runner import Sampler as _CoreSampler
 
 
 class BundestagTiktokenSampler(_SamplerProto):
     def sample(self, cfg: SamplerConfig) -> SampleReport:  # type: ignore[override]
         out_dir: Path = cfg.runtime.out_dir
-        shared = SharedConfig(
+        shared = MetadataConfig(
             experiment="bundestag_tiktoken",
             config_path=out_dir / "cfg.toml",
             project_home=out_dir.parent,

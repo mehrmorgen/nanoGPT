@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration.models import TrainerConfig
-from ml_playground.experiments.protocol import Trainer as _TrainerProto, TrainReport
+from ml_playground.framework.configuration.models import TrainerConfig
+from ml_playground.framework.experiment_registry.protocol import (
+    Trainer as _TrainerProto,
+    TrainReport,
+)
 
 
 __all__ = ["SpeakGerTrainer", "config_path"]

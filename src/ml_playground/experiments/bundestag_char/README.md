@@ -1,5 +1,13 @@
 # Bundestag (Char-Level)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, progress reporting, and training.
+
+</details>
+
 Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
 
 ## Overview
@@ -23,12 +31,13 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
-  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
+  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+uv run tools env setup
+uv run tools env verify
 ```
 
 ## Strict configuration injection
@@ -59,16 +68,16 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 
 ## Configuration Highlights
 
-- `[train.data]`
+- `[training.data]`
   - `dataset_dir` = "src/ml_playground/experiments/bundestag_char/datasets"
   - `train_bin` = "train.bin", `val_bin` = "val.bin", `meta_pkl` = "meta.pkl"
   - `batch_size`, `block_size`, `grad_accum_steps`
-- `[train.runtime]`
+- `[training.runtime]`
   - `out_dir` = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
   - `device` = "cpu" (or "mps"/"cuda" if available), `dtype` = "float32"
-- `[sample.runtime]`
-  - `out_dir` should match `[train.runtime].out_dir`
-- `[sample.sample]`
+- `[sampling.runtime]`
+  - `out_dir` should match `[training.runtime].out_dir`
+- `[sampling.sample]`
   - `start` prompt text, `num_samples`, `max_new_tokens`
 
 ## Outputs
@@ -96,13 +105,13 @@ src/ml_playground/experiments/bundestag_char/
 
 ## Troubleshooting
 
-- If sampling fails with a missing `meta.pkl`, ensure it exists at `[train.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sample.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
+- If sampling fails with a missing `meta.pkl`, ensure it exists at `[training.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sampling.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
 - Ensure your input text is UTF-8 encoded.
 
 ## Word Tokenizer Option
 
 - This experiment now supports a word-level tokenizer in addition to char/n-gram.
-- To enable, set in config under `[train.data]`:
+- To enable, set in config under `[training.data]`:
 
 ```toml
 # Tokenizer selection: "char" (default) or "word"
@@ -114,9 +123,9 @@ tokenizer = "word"
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
+- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

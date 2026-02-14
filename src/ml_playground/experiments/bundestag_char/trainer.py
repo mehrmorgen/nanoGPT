@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration.models import TrainerConfig, SharedConfig
-from ml_playground.experiments.protocol import (
+from ml_playground.framework.configuration.models import TrainerConfig, MetadataConfig
+from ml_playground.framework.experiment_registry.protocol import (
     Trainer as _TrainerProto,
     TrainReport,
 )
-from ml_playground.training.loop.runner import Trainer as _CoreTrainer
+from ml_playground.framework.training.loop.runner import Trainer as _CoreTrainer
 
 
 class BundestagCharTrainer(_TrainerProto):
     def train(self, cfg: TrainerConfig) -> TrainReport:  # type: ignore[override]
         out_dir: Path = cfg.runtime.out_dir
-        shared = SharedConfig(
+        shared = MetadataConfig(
             experiment="bundestag_char",
             config_path=out_dir / "cfg.toml",
             project_home=out_dir.parent,

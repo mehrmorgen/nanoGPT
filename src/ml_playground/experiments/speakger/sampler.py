@@ -4,35 +4,49 @@ from pathlib import Path
 from datetime import datetime
 from collections.abc import Mapping, Sequence
 import json
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, TypedDict, cast
 
-from ml_playground.configuration.models import RuntimeConfig, SamplerConfig
-from ml_playground.experiments.protocol import (
+from ml_playground.framework.configuration.models import RuntimeConfig, SamplerConfig
+from ml_playground.framework.experiment_registry.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
 )
-from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.framework.core.logging_protocol import LoggerLike
 
 
 TokenBatch = Mapping[str, object | None]
 
 
+class AnalysisResult(TypedDict):
+    header: dict[str, str | None]
+    lines: list[str]
+    ngrams: dict[str, list[tuple[str, int]]]
+    anomalies: list[str]
+
+
 class _Tokenizer(Protocol):
-    def __call__(self, text: str, **kwargs: object) -> TokenBatch: ...
+    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch: ...
 
     def decode(
         self,
         token_ids: object,
-        **kwargs: object,
+        *,
+        skip_special_tokens: bool,
+        clean_up_tokenization_spaces: bool,
     ) -> str: ...
 
 
 class _Model(Protocol):
-    def generate(self, **kwargs: object) -> Sequence[object]: ...
+    def generate(
+        self,
+        *,
+        input_ids: object,
+        attention_mask: object | None = ...,
+    ) -> Sequence[object]: ...
 
 
 class _TokenizerFactory(Protocol):
-    def __call__(self, model_path: Path, **kwargs: object) -> _Tokenizer: ...
+    def __call__(self, model_path: Path, *, use_fast: bool) -> _Tokenizer: ...
 
 
 class _BaseModelFactory(Protocol):
@@ -40,31 +54,111 @@ class _BaseModelFactory(Protocol):
 
 
 class _PeftFactory(Protocol):
-    def __call__(self, _base_model: _Model, _adapters_path: Path) -> _Model: ...
+    def __call__(self, base_model: _Model, adapters_path: Path) -> _Model: ...
 
 
-# Expose names for monkeypatching in tests (compat with previous integration)
-try:  # pragma: no cover - optional heavy deps
+# Optional heavy dependencies with fallbacks for environments without transformers/peft.
+try:
     from transformers import AutoTokenizer as AutoTokenizer  # type: ignore
     from transformers import AutoModelForCausalLM as AutoModelForCausalLM  # type: ignore
-except ImportError:  # pragma: no cover
+except ImportError:
+
+    class _FallbackTokenizer:
+        def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
+            encoded = list(text.encode("utf-8"))
+            return {
+                "input_ids": encoded,
+                "attention_mask": None,
+                "return_tensors": return_tensors,
+            }
+
+        def decode(
+            self,
+            token_ids: object,
+            *,
+            skip_special_tokens: bool,
+            clean_up_tokenization_spaces: bool,
+        ) -> str:
+            del skip_special_tokens, clean_up_tokenization_spaces
+            if isinstance(token_ids, (bytes, bytearray)):
+                return bytes(token_ids).decode("utf-8", errors="ignore")
+            if isinstance(token_ids, Sequence):
+                ints: list[int] = []
+                for value in cast(Sequence[object], token_ids):
+                    if isinstance(value, int):
+                        ints.append(int(value))
+                return bytes(ints).decode("utf-8", errors="ignore")
+            return str(token_ids)
 
     class AutoTokenizer:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackTokenizer:
+            return _FallbackTokenizer()
+
+    class _FallbackModel:
+        def generate(
+            self,
+            *,
+            input_ids: object,
+            attention_mask: object | None = None,
+        ) -> Sequence[object]:
+            del attention_mask
+            return [input_ids]
 
     class AutoModelForCausalLM:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackModel:
+            return _FallbackModel()
 
 
-try:  # pragma: no cover - optional peft
+try:
     from peft import PeftModel as PeftModel  # type: ignore
-except ImportError:  # pragma: no cover
+except ImportError:
 
     class PeftModel:  # type: ignore[no-redef]
-        ...
+        @staticmethod
+        def from_pretrained(base_model: _Model, adapters_path: Path) -> _Model:
+            del adapters_path
+            return base_model
 
 
-__all__ = ["SpeakGerSampler", "config_path"]
+def _resolve_tokenizer_factory(
+    factory: _TokenizerFactory | None,
+) -> _TokenizerFactory:
+    if factory is not None:
+        return factory
+
+    def _default(model_path: Path, *, use_fast: bool) -> _Tokenizer:
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(model_path),
+            use_fast=use_fast,  # type: ignore[arg-type]
+        )
+        return cast(_Tokenizer, tokenizer)
+
+    return _default
+
+
+def _resolve_base_model_factory(
+    factory: _BaseModelFactory | None,
+) -> _BaseModelFactory:
+    if factory is not None:
+        return factory
+
+    def _default(model_name: str) -> _Model:
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        return cast(_Model, model)
+
+    return _default
+
+
+def _resolve_peft_factory(factory: _PeftFactory | None) -> _PeftFactory:
+    if factory is not None:
+        return factory
+
+    def _default(base_model: _Model, adapters_path: Path) -> _Model:
+        return PeftModel.from_pretrained(base_model, adapters_path)  # type: ignore[arg-type]
+
+    return _default
 
 
 def _config_path() -> Path:
@@ -95,15 +189,15 @@ def _load_best_stats(out_dir: Path) -> tuple[float | None, int | None]:
             best_val = None
     else:
         best_val = None
-    raw_iter = obj.get("iter_num", 0)
+    raw_iter: object | None = obj.get("iter_num")
     try:
-        iter_num: int = int(raw_iter)  # type: ignore[arg-type]
+        iter_num: int = int(cast(Any, raw_iter))  # type: ignore[arg-type]
     except (TypeError, ValueError):
         iter_num = 0
     return best_val, iter_num
 
 
-def _analyze_text(text: str) -> dict[str, Any]:
+def analyze_text(text: str) -> AnalysisResult:
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     header: dict[str, str | None] = {"speaker": None, "topic": None, "year": None}
     # Simple header extraction
@@ -126,7 +220,12 @@ def _analyze_text(text: str) -> dict[str, Any]:
             anomalies.append(f"repeated: {ln}")
         if ln.isdigit():
             anomalies.append(f"numeric_line: {ln}")
-    return {"header": header, "lines": lines, "ngrams": ngrams, "anomalies": anomalies}
+    return AnalysisResult(
+        header=header,
+        lines=lines,
+        ngrams=ngrams,
+        anomalies=anomalies,
+    )
 
 
 def _run_sampling(
@@ -143,27 +242,13 @@ def _run_sampling(
     samples_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve factories with sensible defaults (heavy deps if available)
-    _tok_factory = cast(
-        _TokenizerFactory,
-        tokenizer_factory
-        if tokenizer_factory is not None
-        else AutoTokenizer.from_pretrained,  # type: ignore[attr-defined]
-    )
-    _base_factory = cast(
-        _BaseModelFactory,
-        base_model_factory
-        if base_model_factory is not None
-        else AutoModelForCausalLM.from_pretrained,  # type: ignore[attr-defined]
-    )
-    _peft_factory = cast(
-        _PeftFactory,
-        peft_model_factory
-        if peft_model_factory is not None
-        else PeftModel.from_pretrained,  # type: ignore[attr-defined]
-    )
+    _tok_factory = _resolve_tokenizer_factory(tokenizer_factory)
+    _base_factory = _resolve_base_model_factory(base_model_factory)
+    _peft_factory = _resolve_peft_factory(peft_model_factory)
 
-    tok: _Tokenizer = _tok_factory(out_dir / "tokenizer", use_fast=True)
-    base = _base_factory(model_name)
+    tokenizer_dir = out_dir / "tokenizer"
+    tok: _Tokenizer = _tok_factory(tokenizer_dir, use_fast=True)
+    base: _Model = _base_factory(model_name)
     model: _Model
     try:
         # build adapters path using Path joining, not bitwise and
@@ -171,12 +256,12 @@ def _run_sampling(
     except (FileNotFoundError, NotADirectoryError):
         model = base
 
-    enc = tok(prompt, return_tensors="pt")
+    enc: TokenBatch = tok(prompt, return_tensors="pt")
     input_ids = enc.get("input_ids")
     attn = enc.get("attention_mask")
     if input_ids is None:
         raise ValueError("Tokenizer output missing input_ids")
-    out = model.generate(input_ids=input_ids, attention_mask=attn)
+    out: Sequence[object] = model.generate(input_ids=input_ids, attention_mask=attn)
     decoded_input = out[0]
     text = tok.decode(
         decoded_input,
@@ -195,8 +280,8 @@ def _run_sampling(
     txt_path = samples_dir / f"{base_name}.txt"
     txt_path.write_text(text, encoding="utf-8")
 
-    analysis = _analyze_text(text)
-    payload = {
+    analysis = analyze_text(text)
+    payload: dict[str, Any] = {
         "dataset": "speakger",
         "best_val_loss": best_val_loss,
         "iter_num": _iter,
@@ -222,7 +307,8 @@ class SpeakGerSampler(_SamplerProto):
             )
         out_dir = runtime.out_dir
         # Model name is expected to be provided via extras for this experiment
-        model_name = str(cfg.extras.get("hf_model_name", "dummy"))
+        extras = cast(Mapping[str, object], getattr(cfg, "extras", {}) or {})
+        model_name = str(extras.get("hf_model_name", "dummy"))
         prompt = cfg.sample.start
         # Optional DI factories provided via cfg.extras for tests
         txt_path, json_path = _run_sampling(
@@ -230,9 +316,15 @@ class SpeakGerSampler(_SamplerProto):
             model_name,
             prompt,
             cfg.logger,
-            tokenizer_factory=cfg.extras.get("tokenizer_factory"),
-            base_model_factory=cfg.extras.get("base_model_factory"),
-            peft_model_factory=cfg.extras.get("peft_model_factory"),
+            tokenizer_factory=cast(
+                _TokenizerFactory | None, extras.get("tokenizer_factory")
+            ),
+            base_model_factory=cast(
+                _BaseModelFactory | None, extras.get("base_model_factory")
+            ),
+            peft_model_factory=cast(
+                _PeftFactory | None, extras.get("peft_model_factory")
+            ),
         )
         return SampleReport(
             created_files=(txt_path, json_path),

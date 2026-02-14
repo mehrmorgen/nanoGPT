@@ -1,5 +1,13 @@
 # Bundestag Finetuning (Qwen2.5‑1.5B + LoRA on MPS)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, error handling, and runtime orchestration.
+
+</details>
+
 Preset of the generic HF+PEFT integration to fine‑tune Qwen2.5‑1.5B on Bundestag speeches. Uses LoRA adapters and is optimized for Apple Silicon (MPS). CUDA also supported.
 
 ## Overview
@@ -23,13 +31,13 @@ Preset of the generic HF+PEFT integration to fine‑tune Qwen2.5‑1.5B on Bunde
 - Evaluation runs periodically; TensorBoard logs at `out_dir/logs/tb`
 - Adapters saved to `out_dir/adapters/{best,last,final}`
 
-For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run env-tasks setup
-uv run env-tasks verify
+uv run tools env setup
+uv run tools env verify
 ```
 
 ## How to Run
@@ -57,11 +65,11 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps
 ## Configuration Highlights
 
 - `[prepare]`: `dataset = "bundestag_finetuning_mps"`, set `raw_dir`, `dataset_dir`, `add_structure_tokens`, `doc_separator`
-- `[train.hf_model]`: `model_name = "Qwen/Qwen2.5-1.5B"`, `gradient_checkpointing = true`, `block_size = 256`
-- `[train.peft]`: `enabled`, `r`, `lora_alpha`, `lora_dropout`, `bias`, `target_modules`, `extend_mlp_targets`
-- `[train.data]`: `dataset_dir`, `batch_size`, `grad_accum_steps`, `block_size`, `shuffle`
-- `[train.runtime]`: `out_dir`, `max_iters`, `eval_interval`, `eval_iters`, `device`, `dtype`, `compile`, checkpoint policy
-- `[sample.runtime]`, `[sample.sample]` for generation
+- `[training.hf_model]`: `model_name = "Qwen/Qwen2.5-1.5B"`, `gradient_checkpointing = true`, `block_size = 256`
+- `[training.peft]`: `enabled`, `r`, `lora_alpha`, `lora_dropout`, `bias`, `target_modules`, `extend_mlp_targets`
+- `[training.data]`: `dataset_dir`, `batch_size`, `grad_accum_steps`, `block_size`, `shuffle`
+- `[training.runtime]`: `out_dir`, `max_iters`, `eval_interval`, `eval_iters`, `device`, `dtype`, `compile`, checkpoint policy
+- `[sampling.runtime]`, `[sampling.sample]` for generation
 
 ## Outputs
 
@@ -101,13 +109,13 @@ src/ml_playground/experiments/bundestag_qwen15b_lora_mps/
 ## Notes
 
 - This preset rides on the generic integration at `src/ml_playground/experiments/bundestag_finetuning_mps`.
-- Swap the base model by changing `[train.hf_model].model_name`.
+- Swap the base model by changing `[training.hf_model].model_name`.
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
+- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

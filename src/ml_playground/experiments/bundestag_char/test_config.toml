@@ -1,7 +1,7 @@
 # Minimal test configuration for bundestag_char experiment to keep CLI tests fast.
 # MLflow is disabled to avoid artifacts during automated tests.
 
-[train.model]
+[training.model]
 n_layer = 1
 n_head = 2
 n_embd = 32
@@ -9,13 +9,13 @@ beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 decay_lr = false
 warmup_iters = 1
 lr_decay_iters = 1
 min_lr = 0.0001
 
-[train.runtime]
+[training.runtime]
 out_dir = "./out/test_run"
 mlflow_enabled = false
 max_iters = 1
@@ -34,11 +34,11 @@ best_smoothing_alpha = 0.0
 early_stop_patience = 0
 ema_decay = 0.0
 
-[train.runtime.checkpointing.keep]
+[training.runtime.checkpointing.keep]
 last = 1
 best = 1
 
-[train.extras]
+[training.extras]
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"
 ckpt_top_k = 0
@@ -47,24 +47,24 @@ ckpt_greater_is_better = false
 ckpt_atomic = true
 ckpt_write_metadata = false
 
-[sample.runtime]
+[sampling.runtime]
 out_dir = "./out/test_run"
 device = "cpu"
 dtype = "float32"
 compile = false
 seed = 42
 
-[sample.extras]
+[sampling.extras]
 require_adapters = false
 
-[sample.sample]
+[sampling.sample]
 start = ""
 num_samples = 1
 max_new_tokens = 4
 temperature = 0.8
 top_k = 0
 
-[shared]
+[metadata]
 experiment = "bundestag_char"
 config_path = "test_config.toml"
 project_home = "."

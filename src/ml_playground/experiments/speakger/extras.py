@@ -5,7 +5,9 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict
 
-from ml_playground.experiments.extras_registry import register_extras_model
+from ml_playground.framework.experiment_registry.extras_registry import (
+    register_extras_model,
+)
 
 
 class SpeakGerPrepareExtras(BaseModel):
@@ -33,5 +35,5 @@ class SpeakGerSampleExtras(BaseModel):
 
 
 register_extras_model("speakger", "prepare", SpeakGerPrepareExtras)
-register_extras_model("speakger", "train", SpeakGerTrainExtras)
-register_extras_model("speakger", "sample", SpeakGerSampleExtras)
+register_extras_model("speakger", "training", SpeakGerTrainExtras)
+register_extras_model("speakger", "sampling", SpeakGerSampleExtras)

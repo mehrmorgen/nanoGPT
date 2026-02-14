@@ -4,8 +4,8 @@
 # Notes on interplay:
 # - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
 # - Memory roughly scales with model size and quadratically with block_size; also linearly with batch_size.
-# - [train.data].block_size should be <= [train.hf_model].block_size (usually equal).
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - [training.data].block_size should be <= [training.hf_model].block_size (usually equal).
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (prepare.raw_dir, prepare.dataset_dir, train.runtime.out_dir, sample.runtime.out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
@@ -21,7 +21,7 @@ doc_separator = "<DOC_SEP>"
 [prepare.extras]
 dataset = "bundestag_qwen15b_lora_mps"
 
-[train.hf_model]
+[training.hf_model]
 # Hugging Face base model to fine-tune with LoRA.
 model_name = "Qwen/Qwen2.5-1.5B"
 # Enable gradient checkpointing to reduce memory at the cost of additional compute.
@@ -29,8 +29,8 @@ gradient_checkpointing = true
 # Logical sequence length for data packing/truncation during training (tokens per training block).
 block_size = 256
 
-[train.model]
-# Mirror the base transformer dimensions for compatibility with TrainerConfig.
+[training.model]
+# Mirror the base transformer dimensions to align with TrainerConfig.
 n_layer = 24
 n_head = 24
 n_embd = 2048
@@ -39,7 +39,7 @@ dropout = 0.0
 bias = false
 vocab_size = 151936
 
-[train.peft]
+[training.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
 enabled = true
 # Intrinsic rank of LoRA matrices (capacity of the adapter).
@@ -55,7 +55,7 @@ target_modules = ["q_proj","v_proj","o_proj"]
 # If true, also apply LoRA to MLP projections (up_proj/down_proj/gate_proj).
 extend_mlp_targets = false
 
-[train.data]
+[training.data]
 # Per-step batch size (before gradient accumulation).
 batch_size = 8
 # Number of micro-steps to accumulate gradients before an optimizer step.
@@ -65,7 +65,7 @@ block_size = 256
 # Sampling policy for training blocks: "random" (default) or "sequential" for deterministic order.
 sampler = "sequential"
 
-[train.optim]
+[training.optim]
 # Base learning rate for AdamW optimizer.
 learning_rate = 0.00002
 # L2 weight decay strength (0 disables).
@@ -77,7 +77,7 @@ beta2 = 0.95
 # Clip global gradient norm to this value (0 or null to disable).
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # Enable cosine decay schedule (with warmup).
 decay_lr = true
 # Number of warmup iterations at the start of training.
@@ -87,7 +87,7 @@ lr_decay_iters = 200000
 # Minimum learning rate at the end of decay.
 min_lr = 0.000002
 
-[train.runtime]
+[training.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
 out_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
 # Total number of optimizer steps to run (across all epochs/data passes).
@@ -106,7 +106,7 @@ always_save_checkpoint = true
 seed = 1337
 # Compute device: "mps" (Apple), "cuda" (NVIDIA), or "cpu".
 device = "mps"
-# Compute dtype: "float32" recommended on mps for stability; "float16" only on cuda.
+# Compute dtype: using float32 on mps for stability; float16 is only advisable on cuda if memory-bound.
 dtype = "float32"
 # If true, compile the model (PyTorch 2.x) to potentially speed up training.
 compile = false
@@ -121,11 +121,11 @@ early_stop_patience = 5
 # Exponential moving average decay for model parameters (0 disables EMA).
 ema_decay = 0.0
 
-[train.extras]
+[training.extras]
 save_merged_on_best = true
 keep_last_n = 3
 
-[sample.runtime]
+[sampling.runtime]
 # Directory from which to read adapters/tokenizer and where to write generated samples.
 out_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
 # Compute device for sampling: "mps", "cuda", or "cpu".
@@ -137,10 +137,10 @@ compile = false
 # Random seed applied before sampling to make runs reproducible (when do_sample=true).
 seed = 1337
 
-[sample.extras]
+[sampling.extras]
 require_adapters = true
 
-[sample.sample]
+[sampling.sample]
 # Prompt text to start generation; can also be "FILE:/path/to/prompt.txt".
 start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
 # Number of samples to generate per run.
@@ -154,7 +154,7 @@ top_k = 200
 # Nucleus sampling: restrict to smallest set of tokens whose cumulative prob >= top_p (1.0 disables).
 top_p = 0.9
 
-[shared]
+[metadata]
 experiment = "bundestag_qwen15b_lora_mps"
 config_path = "config.toml"
 project_home = "."

@@ -4,7 +4,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from ml_playground.experiments.extras_registry import register_extras_model
+from ml_playground.framework.experiment_registry.extras_registry import (
+    register_extras_model,
+)
 
 
 class BundestagCharPrepareExtras(BaseModel):
@@ -33,5 +35,5 @@ class BundestagCharSampleExtras(BaseModel):
 
 
 register_extras_model("bundestag_char", "prepare", BundestagCharPrepareExtras)
-register_extras_model("bundestag_char", "train", BundestagCharTrainExtras)
-register_extras_model("bundestag_char", "sample", BundestagCharSampleExtras)
+register_extras_model("bundestag_char", "training", BundestagCharTrainExtras)
+register_extras_model("bundestag_char", "sampling", BundestagCharSampleExtras)

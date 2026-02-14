@@ -2,8 +2,8 @@
 # Notes on interplay:
 # - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
 # - Memory roughly scales with n_layer and quadratically with block_size; also linearly with batch_size.
-# - [train.data].block_size must be <= [train.model].block_size (model context capacity).
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - [training.data].block_size must be <= [training.model].block_size (model context capacity).
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
@@ -13,14 +13,14 @@ raw_text_path = "./datasets/input.txt"
 tokenizer_type = "char"
 doc_separator = "\n\n"
 
-[train.model]
+[training.model]
 # Number of Transformer blocks; increases capacity and compute/memory cost.
 n_layer = 2
 # Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
 n_head = 2
 # Embedding/hidden size; larger increases model capacity and compute.
 n_embd = 64
-# Model context length (positional embeddings); must be >= [train.data].block_size.
+# Model context length (positional embeddings); must be >= [training.data].block_size.
 block_size = 64
 # Dropout rate for regularization during training; 0.0 for deterministic/fast runs.
 dropout = 0.0
@@ -28,16 +28,16 @@ dropout = 0.0
 bias = false
 vocab_size = 50257
 
-[train.data]
+[training.data]
 # Micro-batch size per optimization step; memory ~ batch_size * block_size^2.
 batch_size = 8
-# Sequence length of each training sample; must be <= [train.model].block_size.
+# Sequence length of each training sample; must be <= [training.model].block_size.
 block_size = 64
 # Number of gradient accumulation steps; effective batch (samples) = batch_size * grad_accum_steps.
 # Effective tokens per optimizer update = (batch_size * grad_accum_steps) * block_size.
 grad_accum_steps = 2
 
-[train.optim]
+[training.optim]
 # Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
 learning_rate = 0.0006
 # L2-style weight decay for regularization; often excluded for LayerNorm/bias in AdamW.
@@ -49,18 +49,18 @@ beta2 = 0.95
 # Global gradient norm clipping threshold to prevent exploding gradients (0 disables if supported).
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # Enable learning-rate schedule (warmup + decay). If false, other fields are ignored.
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate.
 warmup_iters = 20
 # Iterations over which LR decays from learning_rate down toward min_lr.
-# Interplay with [train.runtime].max_iters: if much smaller, LR stays at min for long.
+# Interplay with [training.runtime].max_iters: if much smaller, LR stays at min for long.
 lr_decay_iters = 200
 # Lower bound (floor) for the learning rate during decay.
 min_lr = 0.00006
 
-[train.runtime]
+[training.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
 out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
@@ -88,11 +88,11 @@ early_stop_patience = 0
 # Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
 ema_decay = 0.0
 
-[train.runtime.checkpointing.keep]
+[training.runtime.checkpointing.keep]
 last = 1
 best = 1
 
-[sample.runtime]
+[sampling.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
 out_dir = "./out/samples"
@@ -117,7 +117,7 @@ dtype = "float32"
 # Whether to compile/optimize the model for inference (if supported); usually false for quick runs.
 compile = false
 
-[sample.sample]
+[sampling.sample]
 # Prompt to prime the model; generation continues after this text.
 start = "\n"
 # Number of independent samples to generate for the same prompt/settings.
@@ -129,7 +129,7 @@ temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 top_k = 200
 
-[shared]
+[metadata]
 experiment = "shakespeare"
 config_path = "config.toml"
 project_home = "."

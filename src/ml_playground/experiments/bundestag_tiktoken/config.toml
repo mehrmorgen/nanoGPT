@@ -2,8 +2,8 @@
 # Notes on interplay:
 # - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
 # - Memory roughly scales with n_layer and quadratically with block_size; also linearly with batch_size.
-# - [train.data].block_size must be <= [train.model].block_size (model context capacity).
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - [training.data].block_size must be <= [training.model].block_size (model context capacity).
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
@@ -16,7 +16,7 @@ doc_separator = "\n\n"
 [prepare.extras]
 dataset = "bundestag_tiktoken"
 
-[train.model]
+[training.model]
 # token-level / tiktoken workflow - small model for fast experiments
 # n_layer: number of Transformer blocks. More layers => more capacity and memory/compute.
 n_layer = 4
@@ -25,7 +25,7 @@ n_head = 4
 # n_embd: hidden/embedding size. Increases representation capacity; scales memory linearly.
 n_embd = 128
 # block_size: model's maximum context length (in tokens). Attention memory/time scales ~O(block_size^2).
-# Keep this >= [train.data].block_size.
+# Keep this >= [training.data].block_size.
 block_size = 256
 # dropout: dropout probability applied during training for regularization (0.0 = disabled).
 dropout = 0.1
@@ -34,13 +34,13 @@ bias = false
 # vocab_size: reserve to 4096 based on ~3825 discovered tokens (+headroom for specials)
 vocab_size = 4096
 
-[train.data]
+[training.data]
 # Character-level n-gram size used during dataset preparation (1 = single/chars, >1 = n-grams).
 # For tiktoken/BPE workflows set this to 1 (preparer treats n <= 1 as token mode).
 ngram_size = 1
 # Micro-batch size per optimization step (per device)
 batch_size = 8
-# Sequence length; ensure <= [train.model].block_size
+# Sequence length; ensure <= [training.model].block_size
 block_size = 256
 # Number of gradient accumulation steps to increase effective batch without extra memory
 grad_accum_steps = 4
@@ -48,7 +48,7 @@ grad_accum_steps = 4
 sampler = "random"
 
 
-[train.optim]
+[training.optim]
 # learning_rate: base LR for optimizer. Larger models often require smaller LR; tune for stability.
 learning_rate = 0.0005
 # weight_decay: L2-style regularization applied to weights (not typically to LayerNorm/bias).
@@ -63,7 +63,7 @@ beta2 = 0.95
 # grad_clip: clip gradient norm to this value (prevents exploding gradients). 0 or None disables if supported.
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # decay_lr: enable/disable LR schedule. True uses warmup + decay (recommended).
 decay_lr = true
 # warmup_iters: number of iterations to linearly increase LR from 0 to learning_rate.
@@ -78,7 +78,7 @@ lr_decay_iters = 200_000
 # Typical values: 1e-5 .. 1e-6 for mid-sized training runs; lower for very long schedules.
 min_lr = 1e-4
 
-[train.runtime]
+[training.runtime]
 # Output directory for training artifacts.
 out_dir = "./out"
 # max_iters: total optimizer steps (after accumulation) to run.
@@ -116,11 +116,11 @@ best_smoothing_alpha = 0.9
 # early_stop_patience: number of evals without improvement before early stopping; 0 disables.
 early_stop_patience = 0
 
-[train.runtime.checkpointing.keep]
+[training.runtime.checkpointing.keep]
 last = 1
 best = 1
 
-[sample.runtime]
+[sampling.runtime]
 # Output directory for sampling artifacts (typically same as training out_dir).
 out_dir = "./out"
 # max_iters, eval_interval, eval_iters: retained for symmetry with training interface; often unused during pure sampling.
@@ -142,7 +142,7 @@ dtype = "bfloat16"
 # compile: compile/optimize the model for inference (if supported).
 compile = false
 
-[sample.sample]
+[sampling.sample]
 # Prompt to prime the model; generation continues after this text.
 start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
 # Number of independent samples to generate for the same prompt/settings.
@@ -154,7 +154,7 @@ temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 top_k = 10
 
-[shared]
+[metadata]
 experiment = "bundestag_tiktoken"
 config_path = "config.toml"
 project_home = "."

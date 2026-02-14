@@ -8,8 +8,8 @@
 # Notes on interplay:
 # - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
 # - Memory roughly scales with model size and quadratically with block_size; also linearly with batch_size.
-# - [train.data].block_size should be <= [train.hf_model].block_size.
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - [training.data].block_size should be <= [training.hf_model].block_size.
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (raw_dir, dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
@@ -28,7 +28,7 @@ doc_separator = "<DOC_SEP>"
 [prepare.extras]
 dataset = "gemma_finetuning_mps"
 
-[train.hf_model]
+[training.hf_model]
 # Hugging Face Gemma model to fine-tune with LoRA.
 # Options: google/gemma-2-2b (2B params, recommended), google/gemma-2-9b-it (9B params), etc.
 model_name = "google/gemma-3-270m-it"
@@ -38,7 +38,7 @@ gradient_checkpointing = true
 # Conservative setting for 32GB RAM.
 block_size = 128
 
-[train.peft]
+[training.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
 enabled = true
 # Intrinsic rank of LoRA matrices (capacity of the adapter).
@@ -55,14 +55,9 @@ target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
 # If true, also apply LoRA to MLP projections (up_proj/down_proj/gate_proj).
 extend_mlp_targets = false
 
-[train.model]
+[training.model]
 
-[train.data]
-<<<<<<< HEAD:ml_playground/experiments/speakger/config.toml
-=======
-# Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "src/ml_playground/experiments/speakger/datasets"
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/speakger/config.toml
+[training.data]
 # Per-step batch size (before gradient accumulation). Conservative for 32GB RAM + MPS.
 batch_size = 6
 # Number of micro-steps to accumulate gradients before an optimizer step.
@@ -71,7 +66,7 @@ grad_accum_steps = 10
 block_size = 128
 # Whether to shuffle training blocks each epoch (set false for reproducible debug runs).
 
-[train.optim]
+[training.optim]
 # Base learning rate for AdamW optimizer. Slightly lower for Gemma than Qwen.
 learning_rate = 0.15
 # L2 weight decay strength (0 disables).
@@ -83,7 +78,7 @@ beta2 = 0.95
 # Clip global gradient norm to this value (0 or null to disable).
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # Enable cosine decay schedule (with warmup).
 decay_lr = true
 # Number of warmup iterations at the start of training.
@@ -94,7 +89,7 @@ lr_decay_iters = 10000
 # Minimum learning rate at the end of decay.
 min_lr = 0.015
 
-[train.runtime]
+[training.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
 out_dir = "out/speakger_gemma3_270m_lora_mps"
 # Total number of optimizer steps to run. Conservative for local training.
@@ -114,7 +109,7 @@ seed = 1337
 # Compute device: "mps" (Apple Silicon), "cuda" (NVIDIA), or "cpu".
 device = "mps"
 # Compute dtype: "float16" recommended on mps/cuda for memory and speed; "float32" for numerical stability.
-dtype = "float16"
+dtype = "float32"
 # If true, compile the model (PyTorch 2.x) to potentially speed up training.
 # May cause issues on MPS, recommended to keep false for now.
 compile = false
@@ -128,11 +123,11 @@ early_stop_patience = 3
 # Exponential moving average decay for model parameters (0 disables EMA).
 ema_decay = 0.0
 
-[train.extras]
+[training.extras]
 save_merged_on_best = false
 keep_last_n = 2
 
-[sample.runtime]
+[sampling.runtime]
 # Directory from which to read adapters/tokenizer and where to write generated samples.
 out_dir = "out/speakger_gemma3_270m_lora_mps"
 # Compute device for sampling: "mps", "cuda", or "cpu".
@@ -142,10 +137,10 @@ dtype = "float16"
 compile = false
 # Random seed applied before sampling to make runs reproducible (when do_sample=true).
 seed = 1337
-[sample.extras]
+[sampling.extras]
 require_adapters = true
 
-[sample.sample]
+[sampling.sample]
 # Prompt text to start generation; can also be "FILE:/path/to/prompt.txt".
 # Example prompt showcasing SpeakGer metadata conditioning for historic debate style.
 start = "\nSprecher: Jan Korte (DIE LINKE)\nThema: Kampf gegen den Plüschtier-Terrorismus\nJahr: 2018\n\nMeine Damen und Herren,"
@@ -159,7 +154,7 @@ top_k = 200
 # Nucleus sampling: restrict to smallest set of tokens whose cumulative prob >= top_p (1.0 disables).
 top_p = 0.9
 
-[shared]
+[metadata]
 experiment = "speakger"
 config_path = "config.toml"
 project_home = "."

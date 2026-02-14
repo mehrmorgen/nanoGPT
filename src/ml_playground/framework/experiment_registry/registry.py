@@ -1,7 +1,11 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Type, cast
 from importlib import import_module
 from importlib import resources
+
+from ml_playground.framework.experiment_registry.protocol import (
+    Preparer as _PreparerProto,
+)
 
 # Registry for experiment-level dataset preparers (mirrors previous datasets.PREPARERS)
 PREPARERS: Dict[str, Callable[[], None]] = {}
@@ -28,8 +32,6 @@ def load_preparers(
     try:
         root = _resources.files(pkg)
     except (ImportError, FileNotFoundError, OSError, RuntimeError):
-        # If discovery fails (e.g., frozen environments), do nothing; callers may
-        # have injected PREPARERS via tests or alternative mechanisms.
         return
 
     for entry in root.iterdir():
@@ -38,36 +40,39 @@ def load_preparers(
                 continue
             exp_name = entry.name
 
-            # Strict API: preparer.py with a class exposing .prepare
             prep_file = entry / "preparer.py"
             if not prep_file.is_file():
                 continue
             try:
                 mod = _import(f"{pkg}.{exp_name}.preparer")
-                # Find first class with a 'prepare' attribute
-                cls = None
-                for attr_name in dir(mod):
-                    attr = getattr(mod, attr_name)
-                    if isinstance(attr, type) and hasattr(attr, "prepare"):
-                        cls = attr
-                        break
-                if cls is None:
-                    continue
-                from ml_playground.configuration.models import (
-                    PreparerConfig,
-                )  # local import
+            except Exception as e:
+                raise SystemExit(f"Failed to load experiment '{exp_name}': {e}") from e
 
-                def _make_fn(_cls=cls) -> None:  # type: ignore[no-redef]
-                    inst = _cls()
-                    try:
-                        inst.prepare(PreparerConfig())  # type: ignore[attr-defined]
-                    except TypeError:
-                        # Some preparers may accept no args
-                        inst.prepare()  # type: ignore[call-arg, attr-defined]
+            cls = None
+            for attr_name in dir(mod):
+                attr_candidate: object = cast(object, getattr(mod, attr_name))
+                if isinstance(attr_candidate, type) and hasattr(
+                    attr_candidate, "prepare"
+                ):
+                    attr_ty = cast(Type[_PreparerProto], attr_candidate)
+                    cls = attr_ty
+                    break
+            if cls is None:
+                continue
 
-                PREPARERS.setdefault(exp_name, _make_fn)
-            except (ImportError, AttributeError, RuntimeError) as e:
-                raise SystemExit(f"Failed to load experiment '{exp_name}': {e}")
+            from ml_playground.framework.configuration.models import (
+                PreparerConfig,
+            )  # local import
+
+            def _make_fn(_cls: Type[_PreparerProto] | None = cls) -> None:  # type: ignore[no-redef]
+                if _cls is None:
+                    return
+                inst = _cls()  # type: ignore[call-arg]
+                try:
+                    inst.prepare(PreparerConfig())  # type: ignore[attr-defined]
+                except TypeError:
+                    inst.prepare()  # type: ignore[call-arg, attr-defined]
+
+            PREPARERS.setdefault(exp_name, _make_fn)
         except (OSError, RuntimeError):
-            # Defensive: ignore any unexpected filesystem/resource issues per entry
             continue
