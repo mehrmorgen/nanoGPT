@@ -4,7 +4,24 @@
 set -euo pipefail
 
 # Hard enforcement BEFORE pre-commit's isolated staging: scan working tree tests/ for mocks
-if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
+allowlist_file="tests/.no-mock-allowlist"
+allowlisted=()
+if [ -f "$allowlist_file" ]; then
+  mapfile -t allowlisted < <(
+    sed -e 's/#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$allowlist_file" | sed '/^$/d'
+  )
+fi
+is_allowlisted() {
+  local path="$1"
+  for item in "${allowlisted[@]:-}"; do
+    if [ "$path" = "$item" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if files=$(find tests -type f -name '*.py' -print 2>/dev/null) && [ -n "$files" ]; then
   if [ -n "$files" ]; then
     found=0
     tokens=(
@@ -17,8 +34,12 @@ if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
       'patch('
     )
     while IFS= read -r f; do
+      relpath="$f"
+      if is_allowlisted "$relpath"; then
+        continue
+      fi
       for t in "${tokens[@]}"; do
-        lines=$(grep -n "$t" "$f" || true)
+        lines=$(grep -n -F "$t" "$f" || true)
         # Drop matches where the actual file content (after the colon) is a comment
         # or where the token only appears inside string literals (e.g., "patch(")
         lines=$(echo "$lines" | awk -F: -v tok="$t" '
@@ -48,9 +69,7 @@ if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
           found=1
         fi
       done
-    done <<EOF
-$(echo "$files")
-EOF
+    done <<< "$files"
     if [ "$found" -eq 1 ]; then
       echo 'Error: found disallowed mocking APIs in tests. Use fixtures/DI per .dev-guidelines/TESTING.md.' >&2
       exit 1
@@ -58,7 +77,8 @@ EOF
   fi
 fi
 
-echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)"
+# shellcheck disable=SC2016
+echo '[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)'
 uv run pre-commit run --config .githooks/.pre-commit-config.yaml
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.
