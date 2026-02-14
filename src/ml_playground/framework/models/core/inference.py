@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
+from torch import Tensor
 from torch.nn import functional as F
+
+from ml_playground.framework.models.core.config import GPTConfig
+
+if TYPE_CHECKING:
+    from ml_playground.framework.models.core.model import GPT
 
 
 def estimate_model_mfu(
@@ -10,9 +18,10 @@ def estimate_model_mfu(
     """Estimate model flops utilization (MFU) relative to A100 peak FLOPs."""
 
     n_params = sum(p.numel() for p in model.parameters())
-    cfg = getattr(model, "config")
-    if cfg is None:
+    cfg_candidate = getattr(model, "config", None)
+    if not isinstance(cfg_candidate, GPTConfig):
         raise AttributeError("model is expected to expose a `config` attribute")
+    cfg = cfg_candidate
 
     L = cfg.n_layer
     H = cfg.n_head
@@ -28,7 +37,7 @@ def estimate_model_mfu(
 
 
 def generate_tokens(
-    model: torch.nn.Module,
+    model: GPT,
     idx: torch.Tensor,
     *,
     max_new_tokens: int,
@@ -48,9 +57,10 @@ def generate_tokens(
     if temperature < 0.0:
         raise ValueError("temperature must be >= 0.0")
 
-    cfg = getattr(model, "config")
-    if cfg is None:
+    cfg_candidate = getattr(model, "config", None)
+    if not isinstance(cfg_candidate, GPTConfig):
         raise AttributeError("model is expected to expose a `config` attribute")
+    cfg = cfg_candidate
 
     max_vocab_idx = cfg.vocab_size - 1
 
@@ -59,17 +69,19 @@ def generate_tokens(
 
     for _ in range(max_new_tokens):
         idx_cond = idx if idx.size(1) <= cfg.block_size else idx[:, -cfg.block_size :]
-        logits, _ = model(idx_cond)
-        logits = logits[:, -1, :]
-
+        logits_tuple: tuple[Tensor, Tensor | None] = model.forward(idx_cond)
+        logits_tensor: Tensor = logits_tuple[0]
+        logits: Tensor = logits_tensor[:, -1, :]
         if temperature == 0.0:
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)
         else:
-            logits = logits / temperature
+            scaled_logits: Tensor = logits / temperature
             if top_k is not None and top_k > 0:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float("inf")
-            probs = F.softmax(logits, dim=-1)
+                dims = scaled_logits.size(-1)
+                k = min(top_k, dims)
+                v, _ = torch.topk(scaled_logits, k)
+                scaled_logits[scaled_logits < v[:, [-1]]] = -float("inf")
+            probs = F.softmax(scaled_logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
 
         idx_next = torch.clamp(idx_next, 0, max_vocab_idx)

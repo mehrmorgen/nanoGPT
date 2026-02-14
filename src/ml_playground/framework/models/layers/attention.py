@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+from typing import cast
 from torch.nn import functional as F
 
-from ml_playground.models.core.config import GPTConfig
+from ml_playground.framework.models.core.config import GPTConfig
 
 
 class CausalSelfAttention(nn.Module):
@@ -26,18 +27,21 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, seq_len, embed_dim = x.size()
 
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(
-            batch_size, seq_len, self.n_head, embed_dim // self.n_head
-        ).transpose(1, 2)
-        q = q.view(
-            batch_size, seq_len, self.n_head, embed_dim // self.n_head
-        ).transpose(1, 2)
-        v = v.view(
-            batch_size, seq_len, self.n_head, embed_dim // self.n_head
-        ).transpose(1, 2)
+        attn_out = cast(torch.Tensor, self.c_attn(x))
+        reshaped = torch.reshape(
+            attn_out,
+            (batch_size, seq_len, 3, self.n_head, embed_dim // self.n_head),
+        )
+        q_tensor, k_tensor, v_tensor = cast(
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+            torch.unbind(reshaped, dim=2),
+        )
 
-        y = F.scaled_dot_product_attention(
+        k = torch.permute(k_tensor, (0, 2, 1, 3))
+        q = torch.permute(q_tensor, (0, 2, 1, 3))
+        v = torch.permute(v_tensor, (0, 2, 1, 3))
+
+        y_raw = F.scaled_dot_product_attention(
             q,
             k,
             v,
@@ -45,9 +49,11 @@ class CausalSelfAttention(nn.Module):
             dropout_p=self.dropout if self.training else 0.0,
             is_causal=True,
         )
-        y = y.transpose(1, 2).contiguous().view(batch_size, seq_len, embed_dim)
-        y = self.c_proj(y)
-        return y
+        y = torch.reshape(
+            torch.transpose(y_raw, 1, 2).contiguous(), (batch_size, seq_len, embed_dim)
+        )
+        res = cast(torch.Tensor, self.c_proj(y))
+        return res
 
 
 __all__ = ["CausalSelfAttention"]

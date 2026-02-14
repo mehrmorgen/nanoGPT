@@ -6,7 +6,7 @@ import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Mapping, cast
 
 __all__ = [
     "CheckpointLockError",
@@ -32,7 +32,9 @@ def checkpoint_lock_path(out_dir: Path, checkpoint_filename: str) -> Path:
 
     filename = candidate_path.name or "checkpoint.pt"
     if filename in {".", ".."} or filename.startswith(os.sep):
-        raise ValueError("checkpoint_filename must not resolve to a root or parent path")
+        raise ValueError(
+            "checkpoint_filename must not resolve to a root or parent path"
+        )
     return out_dir / f"{filename}.lock"
 
 
@@ -40,9 +42,11 @@ def read_lock_metadata(lock_path: Path) -> dict[str, object] | None:
     """Best-effort read of lock metadata for diagnostics."""
     try:
         raw = lock_path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return data
+        data = cast(object, json.loads(raw))
+        if isinstance(data, Mapping):
+            # materialize to plain dict[str, object]
+            typed_data = cast(dict[str, object], data)
+            return {str(k): v for k, v in typed_data.items()}
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         pass
     return None

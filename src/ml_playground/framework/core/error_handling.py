@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 import sys
 import traceback
-from typing import Any, Callable, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, TypeVar, cast, runtime_checkable
 from pathlib import Path
-from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.framework.core.logging_protocol import LoggerLike
 
 # Type variable for generic error handling
 T = TypeVar("T")
@@ -155,12 +155,12 @@ def setup_logging(
 
 
 def handle_exception(
-    exc_type: Type[BaseException],
+    exc_type: type[BaseException],
     exc_value: BaseException,
-    exc_traceback: Any,
+    exc_traceback: object,
     logger: LoggerLike,
     *,
-    excepthook: Callable[[Type[BaseException], BaseException, Any], None] | None = None,
+    excepthook: Callable[[type[BaseException], BaseException, Any], None] | None = None,
 ) -> None:
     """Log uncaught exceptions while preserving keyboard interrupt semantics."""
 
@@ -168,18 +168,20 @@ def handle_exception(
     if issubclass(exc_type, KeyboardInterrupt):
         # Handle keyboard interrupt gracefully
         logger.info("Received keyboard interrupt, exiting...")
-        hook(exc_type, exc_value, exc_traceback)
+        hook(exc_type, exc_value, cast(Any, exc_traceback))  # type: ignore[reportAny]
         return
 
-    logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    logger.error(
+        "Uncaught exception", exc_info=(exc_type, exc_value, cast(Any, exc_traceback))
+    )
 
 
 def safe_call(
     func: Callable[..., T],
-    *args: Any,
+    *args: object,
     default: Optional[T] = None,
     logger: LoggerLike,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> T:
     """Invoke ``func`` and capture exceptions, optionally returning a default."""
 
@@ -195,9 +197,9 @@ def safe_call(
 
 def safe_file_operation(
     func: Callable[..., T],
-    *args: Any,
+    *args: object,
     logger: LoggerLike,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> T:
     """Execute a file operation and wrap IO errors in ``FileOperationError``."""
     try:
@@ -251,7 +253,7 @@ def validate_directory_exists(path: Path, description: str = "Directory") -> Non
 
 
 def validate_config_value(
-    value: Any, name: str, expected_type: Type[Any], required: bool = True
+    value: object, name: str, expected_type: type[Any], required: bool = True
 ) -> None:
     """Validate presence and type of a configuration entry."""
     if required and value is None:
@@ -351,11 +353,3 @@ def log_operation_complete(
 def log_operation_error(logger: LoggerLike, operation: str, error: Exception) -> None:
     """Log an error during an operation."""
     logger.error(f"Error during {operation}: {error}")
-
-
-# Expose the progress reporting utilities
-ProgressReporter = ProgressReporter
-log_operation_start = log_operation_start
-log_operation_progress = log_operation_progress
-log_operation_complete = log_operation_complete
-log_operation_error = log_operation_error

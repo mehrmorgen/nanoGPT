@@ -1,26 +1,29 @@
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
+from typing import cast
+import torch.nn.functional as F
 
-from ml_playground.configuration.models import ModelConfig
-from ml_playground.models.core.config import GPTConfig, build_gpt_config
-from ml_playground.models.core.inference import estimate_model_mfu, generate_tokens
-from ml_playground.models.core.optimization import (
+from ml_playground.framework.configuration.models import ModelConfig
+from ml_playground.framework.models.core.config import GPTConfig, build_gpt_config
+from ml_playground.framework.models.core.inference import (
+    estimate_model_mfu,
+    generate_tokens,
+)
+from ml_playground.framework.models.core.optimization import (
     configure_optimizers as _configure_optimizers,
 )
-from ml_playground.models.layers.block import Block
-from ml_playground.models.layers.normalization import LayerNorm
-from ml_playground.models.utils.init import init_transformer_weights
-from ml_playground.core.logging_protocol import LoggerLike
+from ml_playground.framework.models.layers.block import Block
+from ml_playground.framework.models.layers.normalization import LayerNorm
+from ml_playground.framework.models.utils.init import init_transformer_weights
+from ml_playground.framework.core.logging_protocol import LoggerLike
 
 
 class GPT(nn.Module):
-    """GPT model backed by the modular `ml_playground.models` hierarchy."""
+    """GPT model backed by the modular `ml_playground.framework.models` hierarchy."""
 
     def __init__(
         self,
@@ -47,13 +50,17 @@ class GPT(nn.Module):
 
         self.token_embeddings.weight.requires_grad_(True)
 
-        self.apply(init_transformer_weights)
+        init_std = getattr(config, "init_std", 0.02)
+        self.apply(lambda m: init_transformer_weights(m, init_std=init_std))
         for pn, param in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
                     param,
                     mean=0.0,
-                    std=0.02 / math.sqrt(2 * config.n_layer),
+                    std=init_std
+                    / math.sqrt(
+                        getattr(config, "init_std_c_proj_scale", 2.0) * config.n_layer
+                    ),
                 )
 
         if self.logger:
@@ -80,18 +87,23 @@ class GPT(nn.Module):
 
         positions = torch.arange(0, seq_len, dtype=torch.long, device=idx.device)
 
-        tok_emb = self.token_embeddings(idx)
-        pos_emb = self.position_embeddings(positions)
-        x = self.dropout(tok_emb + pos_emb)
+        tok_emb: torch.Tensor = cast(torch.Tensor, self.token_embeddings(idx))
+        pos_emb: torch.Tensor = cast(torch.Tensor, self.position_embeddings(positions))
+        combined = tok_emb + pos_emb
+        x = cast(torch.Tensor, self.dropout(combined))
         for block in self.blocks:
-            x = block(x)
-        x = self.ln_f(x)
+            x = cast(torch.Tensor, block(x))  # type: ignore[reportUnknownMemberType]
+        x = cast(torch.Tensor, self.ln_f(x))
 
+        logits = cast(
+            torch.Tensor,
+            self.lm_head(x[:, [-1], :]) if targets is None else self.lm_head(x),
+        )
+        vocab_dim = logits.shape[-1]
+        logits_flat = logits.view(-1, vocab_dim)
         if targets is not None:
-            logits = self.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss = F.cross_entropy(logits_flat, targets.view(-1))
         else:
-            logits = self.lm_head(x[:, [-1], :])
             loss = None
 
         return logits, loss
@@ -106,9 +118,9 @@ class GPT(nn.Module):
     @classmethod
     def from_pretrained(
         cls,
-        *args: Any,
-        **kwargs: Any,
-    ) -> "GPT":  # pragma: no cover - legacy API parity
+        *args: object,
+        **kwargs: object,
+    ) -> "GPT":
         raise NotImplementedError("from_pretrained is not supported in this port")
 
     def configure_optimizers(

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+from typing import cast
 
-from ml_playground.models.core.config import GPTConfig
+from ml_playground.framework.models.core.config import GPTConfig
 
 
 class MLP(nn.Module):
@@ -16,10 +17,10 @@ class MLP(nn.Module):
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        return x
+        res = cast(torch.Tensor, self.c_fc(x))
+        res = cast(torch.Tensor, self.gelu(res))
+        res = cast(torch.Tensor, self.c_proj(res))
+        return res
 
 
 __all__ = ["MLP"]
