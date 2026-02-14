@@ -40,13 +40,9 @@ dependencies = [
 ]
 
 [project.scripts]
-ci-tasks = "tools.ci_tasks:main"
-cli = "ml_playground.cli:main"
-env-tasks = "tools.env_tasks:main"
-lint-tasks = "tools.lint_tasks:main"
-lit-tasks = "tools.lit_tasks:main"
-ml-playground = "ml_playground.cli:main"
-test-tasks = "tools.test_tasks:main"
+cli = "ml_playground.runtime_cli.main:main_entry"
+ml-playground = "ml_playground.runtime_cli.main:main_entry"
+tools = "ml_playground.tools.cli.main:main_entry"
 
 [project.optional-dependencies]
 
@@ -78,29 +74,28 @@ HYPOTHESIS_STORAGE_DIRECTORY = ".cache/hypothesis"
 
 
 [tool.hatch.build.targets.wheel]
+allow-implicit-namespace = true
 packages = ["src/ml_playground"]
 include = [
     "src/ml_playground",
     "src/ml_playground/**",
 ]
 
-[tool.hatch.build.targets.wheel.force-include]
-"tools" = "tools"
+# No additional files to force-include
 
 [tool.hatch.build.targets.sdist]
+allow-implicit-namespace = true
 include = [
     "pyproject.toml",
     "src/ml_playground",
     "src/ml_playground/**",
-    "tools",
-    "tools/**",
 ]
 
 
 [dependency-groups]
 # Mandatory dev tooling available in the project venv
-# Sync with: uv sync --group dev to install these extras when needed.
-dev = [
+# Sync with: uv sync --group all to install these extras when needed.
+all = [
     "pytest>=8.4.2",
     "pytest-xdist>=3.8.0",
     "pytest-bdd>=8.1.0",
@@ -111,6 +106,10 @@ dev = [
     "basedpyright>=1.32.1",
     "types-requests>=2.32.4.20250913",
     "types-PyYAML>=6.0.12.20250915",
+    "types-tqdm>=4.66.0.20240106",
+    "types-psutil>=5.9.5.17",
+    "types-beautifulsoup4>=4.12.0.20240106",
+    "types-toml>=0.10.8.7",
     "vulture>=2.14",
     "cosmic-ray>=8.4.3",
     "hypothesis>=6.142.4",
@@ -120,16 +119,29 @@ dev = [
     "mdformat>=0.7.17",
     "mdformat-gfm>=0.3.5",
     "mdformat-frontmatter>=0.4.1",
+    "tox-toml-fmt>=1.1.0",
+    "yamlfix>=1.18.0",
     "psutil>=6.0.0",
 ]
-
-
 
 [tool.mdformat]
 wrap = 120
 number = false
 
+[tool.markdownlint]
+disable = ["MD033"]
 
+[tool.tox-toml-fmt]
+# The canonical formatter enforces deterministic TOML style. No additional options required.
+
+[tool.yamlfix]
+line_length = 120
+sequence_style = "block_style"
+mapping_style = "block_style"
+whitelines = 1
+explicit_start = false
+explicit_end = false
+preserve_quotes = true
 
 [tool.ruff]
 respect-gitignore = true
@@ -137,28 +149,21 @@ respect-gitignore = true
 cache-dir = ".cache/ruff"
 
 [tool.ruff.lint]
-extend-select = [
-  "TID251", # flake8-tidy-imports banned API
-]
 
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"unittest.mock" = { msg = "Do not use mocks; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
-"pytest_mock" = { msg = "Do not use pytest-mock; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
-"mock" = { msg = "Do not use mock; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
-"pytest.MonkeyPatch" = { msg = "Do not use monkeypatch; inject dependencies via fixtures and DI hooks." }
+
 
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
-# When invoked without explicit targets, analyze only the project code.
-files = ["src/ml_playground"]
+files = [
+    "src/ml_playground",
+]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-# Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
-# that slow down type checking and are not part of core runtime.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|src/ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
+ exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
 explicit_package_bases = true
-mypy_path = ["src"]
+mypy_path = ["src", "tests"]
 namespace_packages = true
+incremental = true
 
 # Speed up type checking by not following imports into third-party libraries
 follow_imports = "skip"
@@ -169,35 +174,21 @@ cache_dir = ".cache/mypy"
 
 [tool.basedpyright]
 pythonVersion = "3.13"
+# Global defaults: standard. Execution environments below set src to strict and keep tests standard.
 typeCheckingMode = "standard"
-include = [
-    "src/ml_playground",
-    "tests",
-]
-exclude = [
-    "src/ml_playground/tools",
-    "src/ml_playground/cli.py",
-    "tests/unit/tools",
-    "tests/property/tools",
-    "tests/acceptance/tools",
-    "src/ml_playground/runtime",
-    "tests/unit/runtime",
-    "tests/property/runtime",
-    "tests/acceptance/runtime",
-    "tests/unit/cli",
-    "tests/property/cli",
-    "tests/acceptance/cli",
-]
 stubPath = "typings"
 
 [[tool.basedpyright.executionEnvironments]]
-root = "."
+root = "src"
 extraPaths = ["src"]
 
+[[tool.basedpyright.executionEnvironments]]
+root = "tests"
+extraPaths = [".", "src", "tests"]
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-qq -W error --strict-markers --strict-config -r fEsxX -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
+addopts = "-qq -W error --strict-markers --strict-config --import-mode=importlib -r fEsxX -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
 pythonpath = ["src", "."]
 testpaths = [
     "tests",
@@ -240,8 +231,21 @@ deadline = "200 ms"
 database = ".cache/hypothesis"
 derandomize = true
 
+[tool.vulture]
+paths = [
+    "src/ml_playground",
+    "tests",
+]
+min_confidence = 90
+ignore_names = [
+    "exc_info",
+    "stack_info",
+    "stacklevel",
+    "extra",
+]
+
 [tool.ruff.lint.isort]
-known-first-party = ["ml_playground", "tests", "tools"]
+known-first-party = ["ml_playground", "tests"]
 classes = []
 
 [tool.coverage.run]
@@ -262,28 +266,57 @@ omit = [
     "**/mlruns/*",
     "**/.hf_cache/*",
     "**/.cache/*",
+    "**/.git/*",
+    "*/ml_playground/tools/*",
+    "ml_playground/tools/*",
+    "**/ml_playground/tools/*",
 ]
 
 [tool.coverage.report]
-# Require 87% coverage to match combined unit+property gate while keeping reports strict
+# Use line/branch thresholds as the gate; keep report strict but do not double-gate on total
 exclude_lines = [
     # Only allow exclusion for truly impossible-to-test code
+    "pragma: no cover",
     "if 0:",
     "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@overload",
+    "def __repr__",
+    "raise NotImplementedError",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
 show_missing = true
 omit = [
-    # No exclusions needed - tools are now part of the main codebase
 ]
 skip_covered = false
-# Align with CI gate threshold for unit+property suites  
-fail_under = 86.0
+# Enforce a raised total coverage gate aligned with current project coverage
+fail_under = 97.0
 precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 90.0
-branch_threshold = 70.0
+line_threshold = 97.0
+branch_threshold = 94.0
+
+[tool.ml_playground.testing.budgets]
+integration_seconds = 5.0
+e2e_seconds = 15.0
+
+[tool.ml_playground.server]
+default_host = "127.0.0.1"
+
+[tool.ml_playground.regression.policy]
+# Standard repo configuration files permitted to exist outside pyproject.toml
+allowed_config_files = [
+    "pyproject.toml",
+    "uv.lock",
+    "LICENSE",
+    "README.md",
+    "gap_analysis.md",
+    "GEMINI.md",
+    "AGENTS.md",
+]
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"

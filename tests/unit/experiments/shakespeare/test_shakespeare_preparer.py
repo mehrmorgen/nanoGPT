@@ -1,32 +1,42 @@
 from __future__ import annotations
 
-import contextlib
 import logging
-import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
 import pytest
 import requests.exceptions
 
-import ml_playground.experiments.shakespeare.preparer as shakespeare_module
-from ml_playground.configuration.models import PreparerConfig
-from ml_playground.core.error_handling import DataError
+from ml_playground.framework.configuration.models import PreparerConfig
+from ml_playground.framework.core.error_handling import DataError
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
+from ml_playground.framework.core.tokenizer_protocol import Tokenizer
 
 
-class _FakeTokenizer:
+class _FakeTokenizer(Tokenizer):
     def __init__(self) -> None:
         self.calls: list[str] = []
-        self.vocab_size = 256
-        self.name = "fake"
+        self._stoi: dict[str, int] = {chr(i + 97): i for i in range(26)}
+        self._itos: dict[int, str] = {idx: ch for ch, idx in self._stoi.items()}
 
     def encode(self, text: str) -> list[int]:
         self.calls.append(text)
-        return list(range(len(text)))
+        return [self._stoi.get(ch, 0) for ch in text]
 
-    def decode(self, ids: list[int]) -> str:
-        return "".join(chr((i % 26) + 97) for i in ids)
+    def decode(self, token_ids: list[int]) -> str:
+        return "".join(self._itos.get(i, "?") for i in token_ids)
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self._stoi)
+
+    @property
+    def name(self) -> str:
+        return "fake"
+
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        return self._stoi
 
 
 class _FakeResponse:
@@ -39,6 +49,13 @@ class _FakeResponse:
         if not self._ok:
             raise requests.exceptions.HTTPError("boom")
         self.called = True
+
+
+def _make_tokenizer_factory(tokenizer: _FakeTokenizer) -> Callable[[], Tokenizer]:
+    def _factory() -> Tokenizer:
+        return tokenizer
+
+    return _factory
 
 
 def _make_cfg(
@@ -59,11 +76,11 @@ def _make_cfg(
 
     def _writer(
         ds_dir: Path,
-        train_ids,
-        val_ids,
-        meta,
+        train_ids: list[int],
+        val_ids: list[int],
+        meta: dict[str, Any],
         *,
-        logger,
+        logger: Any,
     ) -> None:
         if writer_calls is not None:
             writer_calls.append(
@@ -82,7 +99,7 @@ def _make_cfg(
     extras: dict[str, Any] = {
         "base_dir": str(base_dir),
         "http_get": _http_get if http_response or http_error else None,
-        "tokenizer_factory": lambda: tok,
+        "tokenizer_factory": _make_tokenizer_factory(tok),
     }
     if writer_calls is not None:
         extras["writer_fn"] = _writer
@@ -126,8 +143,8 @@ def test_shakespeare_preparer_downloads_when_missing(tmp_path: Path) -> None:
     assert any("prepared dataset" in msg for msg in report.messages)
 
 
-def test_shakespeare_preparer_uses_module_directory(tmp_path: Path) -> None:
-    """Test shakespeare preparer uses module directory."""
+def test_shakespeare_preparer_uses_base_dir_extra(tmp_path: Path) -> None:
+    """Test shakespeare preparer uses base_dir from extras."""
     exp_dir = tmp_path / "shakespeare_default"
     exp_dir.mkdir()
     ds_dir = exp_dir / "datasets"
@@ -137,36 +154,14 @@ def test_shakespeare_preparer_uses_module_directory(tmp_path: Path) -> None:
 
     tokenizer = _FakeTokenizer()
 
-    cfg = PreparerConfig(
-        tokenizer_type="tiktoken",
-        logger=logging.getLogger("shakespeare-default"),
-        extras={},
-    )
+    cfg = _make_cfg(exp_dir, tokenizer=tokenizer)
 
-    original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
-    shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
-
-    try:
-        report = ShakespearePreparer().prepare(cfg)
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-        assert len(tokenizer.calls) == 2
-        assert any("prepared dataset" in msg for msg in report.messages)
-    finally:
-        shakespeare_module.__file__ = original_file
-        shakespeare_module.create_tokenizer = original_tokenizer_factory
-        with contextlib.suppress(FileNotFoundError):
-            for path in sorted(ds_dir.glob("*")):
-                if path.is_file() or path.is_symlink():
-                    path.unlink()
-                elif path.is_dir():
-                    shutil.rmtree(path)
-            ds_dir.rmdir()
-        with contextlib.suppress(FileNotFoundError):
-            input_file.unlink()
+    report = ShakespearePreparer().prepare(cfg)
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
+    assert len(tokenizer.calls) == 2
+    assert any("prepared dataset" in msg for msg in report.messages)
 
 
 def test_shakespeare_preparer_http_failure_raises(tmp_path: Path) -> None:
@@ -203,12 +198,14 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
         def __init__(self, text: str) -> None:
             self.text = text
 
-    extras = {
+    def _http_get(*_args: Any, **_kwargs: Any) -> MinimalResponse:
+        return MinimalResponse("all the world's a stage")
+
+    tokenizer = _FakeTokenizer()
+    extras: dict[str, Any] = {
         "base_dir": str(base_dir),
-        "http_get": lambda *_args, **_kwargs: MinimalResponse(
-            "all the world's a stage"
-        ),
-        "tokenizer_factory": "noop",
+        "http_get": _http_get,
+        "tokenizer_factory": _make_tokenizer_factory(tokenizer),
         "writer_fn": "noop",
     }
 
@@ -218,14 +215,7 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
         extras=extras,
     )
 
-    tokenizer = _FakeTokenizer()
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
-
-    try:
-        report = ShakespearePreparer().prepare(cfg)
-    finally:
-        shakespeare_module.create_tokenizer = original_tokenizer_factory
+    report = ShakespearePreparer().prepare(cfg)
 
     assert (ds_dir / "train.bin").exists()
     assert (ds_dir / "val.bin").exists()
@@ -234,8 +224,10 @@ def test_shakespeare_preparer_non_callable_hooks(tmp_path: Path) -> None:
     assert any("prepared dataset" in msg for msg in report.messages)
 
 
-def test_shakespeare_preparer_handles_config_without_extras(tmp_path: Path) -> None:
-    """Test shakespeare preparer handles config without extras."""
+def test_shakespeare_preparer_handles_config_with_minimal_extras(
+    tmp_path: Path,
+) -> None:
+    """Test shakespeare preparer handles config with minimal extras."""
     exp_dir = tmp_path / "shakespeare_stub"
     exp_dir.mkdir()
     ds_dir = exp_dir / "datasets"
@@ -243,40 +235,22 @@ def test_shakespeare_preparer_handles_config_without_extras(tmp_path: Path) -> N
     input_file = ds_dir / "input.txt"
     input_file.write_text("friends romans countrymen", encoding="utf-8")
 
-    class _StubCfg:
-        def __init__(self) -> None:
-            self.tokenizer_type = "tiktoken"
-            self.logger = logging.getLogger("shakespeare-stub")
-            self.extras = None
-            self.raw_text_path = None
-
-    cfg = _StubCfg()
     tokenizer = _FakeTokenizer()
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger("shakespeare-stub"),
+        extras={
+            "base_dir": str(exp_dir),
+            "tokenizer_factory": _make_tokenizer_factory(tokenizer),
+        },
+    )
 
-    original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
-    shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
-
-    try:
-        report = ShakespearePreparer().prepare(cfg)  # type: ignore[arg-type]
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-        assert len(tokenizer.calls) == 2
-        assert any("prepared dataset" in msg for msg in report.messages)
-    finally:
-        shakespeare_module.__file__ = original_file
-        shakespeare_module.create_tokenizer = original_tokenizer_factory
-        with contextlib.suppress(FileNotFoundError):
-            for path in sorted(ds_dir.glob("*")):
-                if path.is_file() or path.is_symlink():
-                    path.unlink()
-                elif path.is_dir():
-                    shutil.rmtree(path)
-            ds_dir.rmdir()
-        with contextlib.suppress(FileNotFoundError):
-            input_file.unlink()
+    report = ShakespearePreparer().prepare(cfg)
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
+    assert len(tokenizer.calls) == 2
+    assert any("prepared dataset" in msg for msg in report.messages)
 
 
 def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
@@ -293,38 +267,30 @@ def test_shakespeare_preparer_default_http_get(tmp_path: Path) -> None:
         def raise_for_status(self) -> None:
             self._called = True
 
+        @property
+        def called(self) -> bool:
+            return self._called
+
     tokenizer = _FakeTokenizer()
     response = ResponseWithRaise("lend me your ears")
+
+    def _requests_get(*_args: Any, **_kwargs: Any) -> ResponseWithRaise:
+        return response
 
     cfg = PreparerConfig(
         tokenizer_type="tiktoken",
         logger=logging.getLogger("shakespeare-http"),
-        extras={},
+        extras={
+            "base_dir": str(exp_dir),
+            "http_get": _requests_get,
+            "tokenizer_factory": _make_tokenizer_factory(tokenizer),
+        },
     )
 
-    original_file = shakespeare_module.__file__
-    original_tokenizer_factory = shakespeare_module.create_tokenizer
-    original_requests_get = shakespeare_module.requests.get
-    shakespeare_module.__file__ = str(exp_dir / "preparer.py")
-    shakespeare_module.create_tokenizer = lambda *_a, **_k: tokenizer
-    shakespeare_module.requests.get = lambda *_a, **_k: response
-
-    try:
-        report = ShakespearePreparer().prepare(cfg)
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-        assert len(tokenizer.calls) == 2
-        assert response._called is True
-        assert any("prepared dataset" in msg for msg in report.messages)
-    finally:
-        shakespeare_module.__file__ = original_file
-        shakespeare_module.create_tokenizer = original_tokenizer_factory
-        shakespeare_module.requests.get = original_requests_get
-        with contextlib.suppress(FileNotFoundError):
-            for path in sorted(ds_dir.glob("*")):
-                if path.is_file() or path.is_symlink():
-                    path.unlink()
-                elif path.is_dir():
-                    shutil.rmtree(path)
-            ds_dir.rmdir()
+    report = ShakespearePreparer().prepare(cfg)
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
+    assert len(tokenizer.calls) == 2
+    assert response.called is True
+    assert any("prepared dataset" in msg for msg in report.messages)

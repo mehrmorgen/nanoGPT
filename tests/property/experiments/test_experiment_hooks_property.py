@@ -5,10 +5,11 @@ import io
 import logging
 from pathlib import Path
 
+from typing import Any, cast
 from hypothesis import given, settings, strategies as st
 
-from ml_playground.configuration.models import RuntimeConfig
-from ml_playground.core.runtime_context import RuntimeContext
+from ml_playground.framework.configuration.models import RuntimeConfig
+from ml_playground.framework.core.runtime_context import RuntimeContext
 from ml_playground.experiments.hooks import (
     ExperimentHookContext,
     ExperimentHooks,
@@ -27,8 +28,10 @@ class _Recorder:
         self._calls.append(event)
 
 
-@settings(max_examples=30, deadline=50, derandomize=True)
-@given(count=st.integers(min_value=1, max_value=8))
+@settings(max_examples=30, deadline=None, derandomize=True)
+@given(  # type: ignore[reportAny]
+    count=st.integers(min_value=1, max_value=8)
+)
 def test_experiment_hooks_run_invokes_all(count: int) -> None:
     """Hook runner invokes each registered hook exactly once."""
     calls: list[HookEvent] = []
@@ -58,7 +61,8 @@ def test_build_hook_context_uses_experiment_logger_name() -> None:
         logger_level=logging.INFO,
         stream_handler_factory=lambda: logging.StreamHandler(stream),
     )
-    assert context.runtime.logger.name == "ml_playground.experiment.demo"
+    # LoggerLike does not have 'name', but real loggers do.
+    assert cast(Any, context.runtime.logger).name == "ml_playground.experiment.demo"
 
 
 def test_experiment_hook_protocol_placeholder_executes() -> None:

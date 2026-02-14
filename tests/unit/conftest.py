@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from typing import Any, Callable
 import pytest
 
 
@@ -13,11 +13,11 @@ class ListLogger(logging.Logger):
         self.infos: list[str] = []
         self.warnings: list[str] = []
 
-    def info(self, msg, *args, **kwargs) -> None:  # noqa: D401
+    def info(self, msg: object, *args: object, **kwargs: Any) -> None:  # noqa: D401
         self.infos.append(str(msg))
         super().info(msg, *args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs) -> None:  # noqa: D401
+    def warning(self, msg: object, *args: object, **kwargs: Any) -> None:  # noqa: D401
         self.warnings.append(str(msg))
         super().warning(msg, *args, **kwargs)
 
@@ -36,3 +36,16 @@ def list_logger_factory() -> Callable[[], ListLogger]:
         return ListLogger()
 
     return _factory
+
+
+@pytest.fixture(autouse=True)
+def _set_terminal_width() -> None:
+    """Set terminal width for Typer CLI tests to ensure consistent help output.
+
+    This fixture runs automatically for all unit tests to ensure that Typer
+    renders help text properly even when COLUMNS environment variable is not set.
+    """
+    import os
+
+    if "COLUMNS" not in os.environ:
+        os.environ["COLUMNS"] = "80"

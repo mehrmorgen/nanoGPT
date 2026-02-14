@@ -6,21 +6,27 @@ to all tests in the ml_playground test suite.
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
-from typing import Callable, ContextManager
+from typing import Callable, ContextManager, Iterator
 import random
 import numpy as np
 import pytest
 from hypothesis import settings
 from hypothesis.database import DirectoryBasedExampleDatabase
 
-from ml_playground.configuration.models import SharedConfig
+from ml_playground.framework.configuration.models import MetadataConfig
+from tests.support.config_builders import create_metadata_config
+
+# Set Hypothesis storage directory before any Hypothesis imports or usage
+os.environ["HYPOTHESIS_STORAGE_DIRECTORY"] = ".cache/hypothesis"
 
 
-@pytest.fixture(autouse=True, scope="session")
-def _seed_randomness() -> None:
+# Pyright struggles with pytest's decorator typing when using keyword arguments.
+@pytest.fixture(autouse=True, scope="session")  # type: ignore[arg-type]
+def _seed_randomness() -> None:  # pyright: ignore[reportUnusedFunction]
     """Seed random number generators for deterministic test runs.
 
     This fixture automatically runs once per test session to ensure
@@ -28,6 +34,20 @@ def _seed_randomness() -> None:
     """
     random.seed(1337)
     np.random.seed(1337)
+
+
+@pytest.fixture(autouse=True)
+def _reset_global_cli_dependency_overrides() -> None:  # pyright: ignore[reportUnusedFunction]
+    """Reset global dependency overrides between tests.
+
+    The tools CLIs maintain overrideable dependency singletons.
+    Resetting them here keeps tests isolated even if earlier tests reconfigure
+    dependencies without restoring.
+    """
+    from ml_playground.tools.cli.dependencies import reset_tools_dependencies
+
+    reset_tools_dependencies()
+    return None
 
 
 # ----------------------------------------------------------------------------
@@ -43,38 +63,12 @@ settings.register_profile(
 settings.load_profile("repo-default")
 
 
-def pytest_load_initial_conftests(args, early_config, parser) -> None:  # type: ignore[override]
-    """Early hook: ensure no top-level .hypothesis dir exists before collection.
-
-    Pre-commit runs pytest with -W error; Hypothesis plugin warns when it sees
-    a top-level .hypothesis dir skipped by norecursedirs. We remove it here to
-    avoid the warning entirely.
-    """
-    top = Path.cwd() / ".hypothesis"
-    try:
-        if top.exists():
-            # Safety: only remove if it's a directory inside repo root
-            if top.is_dir():
-                for p in sorted(top.rglob("*"), reverse=True):
-                    try:
-                        if p.is_file() or p.is_symlink():
-                            p.unlink(missing_ok=True)
-                        elif p.is_dir():
-                            p.rmdir()
-                    except Exception:
-                        pass
-                top.rmdir()
-    except Exception:
-        # Non-fatal: better to proceed than fail early
-        pass
-
-
 # ----------------------------------------------------------------------------
 # Global path fixture(s)
 # ----------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def out_dir(tmp_path: Path) -> Path:
     """Provide a conventionally named output directory under tmp_path.
 
@@ -90,38 +84,19 @@ def out_dir(tmp_path: Path) -> Path:
 # ----------------------------------------------------------------------------
 
 
-@pytest.fixture()
-def shared_config_factory() -> Callable[[Path], SharedConfig]:
-    """Return a factory that builds a `SharedConfig` rooted at the provided path."""
-
-    def _factory(base_dir: Path) -> SharedConfig:
-        dataset_dir = base_dir / "dataset"
-        dataset_dir.mkdir(exist_ok=True)
-        train_dir = base_dir / "train"
-        train_dir.mkdir(exist_ok=True)
-        sample_dir = base_dir / "sample"
-        sample_dir.mkdir(exist_ok=True)
-        config_path = base_dir / "config.toml"
-        config_path.write_text("{}", encoding="utf-8")
-        return SharedConfig(
-            experiment="demo",
-            config_path=config_path,
-            project_home=base_dir,
-            dataset_dir=dataset_dir,
-            train_out_dir=train_dir,
-            sample_out_dir=sample_dir,
-        )
-
-    return _factory
+@pytest.fixture
+def metadata_config_factory() -> Callable[[Path], MetadataConfig]:
+    """Return a factory that builds a `MetadataConfig` rooted at the provided path."""
+    return create_metadata_config
 
 
-@pytest.fixture()
+@pytest.fixture
 def override_attr() -> Callable[[object, str, object], ContextManager[None]]:
     """Provide a context manager for temporarily overriding attributes on objects."""
 
     @contextmanager
-    def _override(target: object, attr: str, value: object) -> ContextManager[None]:
-        original = getattr(target, attr)
+    def _override(target: object, attr: str, value: object) -> Iterator[None]:
+        original: object = getattr(target, attr)
         setattr(target, attr, value)
         try:
             yield
@@ -161,36 +136,36 @@ def minimal_full_experiment_toml(
     base = """
     [prepare]
 
-    [train.model]
+    [training.model]
     """
     if include_train_data:
         base += """
-        [train.data]
+        [training.data]
         """
     base += f"""
-    [train.optim]
+    [training.optim]
     {extra_optim}
 
-    [train.schedule]
+    [training.schedule]
     """
     if include_train_runtime:
         base += f"""
-        [train.runtime]
+        [training.runtime]
         out_dir = "{_fmt_path(out_dir)}"
         {extra_train}
         """
     if include_sample:
         base += f"""
-        [sample]
-        [sample.runtime]
+        [sampling]
+        [sampling.runtime]
         out_dir = "{_fmt_path(out_dir)}"
         {extra_sample}
-        [sample.sample]
+        [sampling.sample]
         {extra_sample_sample}
         """
-    # Add shared section: tied to provided dataset_dir/out_dir; generic experiment metadata
+    # Add metadata section: tied to provided dataset_dir/out_dir; generic experiment metadata
     base += f"""
-    [shared]
+    [metadata]
     experiment = "exp"
     config_path = "{_fmt_path(out_dir.parent / "cfg.toml")}"
     project_home = "{_fmt_path(out_dir.parent)}"
@@ -199,18 +174,3 @@ def minimal_full_experiment_toml(
     sample_out_dir = "{_fmt_path(out_dir)}"
     """
     return dedent(base)
-
-
-@pytest.fixture()
-def toml_minimal_factory() -> Callable[[Path, Path], str]:
-    """Factory returning a minimal full ExperimentConfig TOML string.
-
-    Usage:
-        text = toml_minimal_factory(dataset_dir, out_dir)
-    For overrides, call minimal_full_experiment_toml directly if needed.
-    """
-
-    def _factory(dataset_dir: Path, out_dir: Path) -> str:
-        return minimal_full_experiment_toml(dataset_dir, out_dir)
-
-    return _factory

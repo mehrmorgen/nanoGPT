@@ -29,10 +29,6 @@ __pycache__/
 out/
 .coverage
 coverage.xml
-# MLflow artifacts
-mlruns/
-**/mlruns/
-**/mlflow.db
 # Allow documentation under docs/coverage while keeping raw coverage outputs ignored
 coverage/
 !docs/coverage/
@@ -45,6 +41,14 @@ htmlcov/
 
 # Prevent stray Hypothesis cache at repo root (we use .cache/hypothesis instead)
 .hypothesis/
+
+# Ignore dist directory by default
+dist/
+
+# MLflow artifacts (can be large; keep ignored)
+mlruns/
+**/mlruns/
+**/mlflow.db
 
 # Mutation testing
 tb_logs/
@@ -64,8 +68,8 @@ events.out.tfevents.*
 **/out/
 
 # Vendor llama.cpp binaries and build artifacts (do not commit)
-tools/llama_cpp/llama-gguf
-tools/llama_cpp/llama-quantize
+scripts/llama_cpp/llama-gguf
+scripts/llama_cpp/llama-quantize
 
 # Local editor/workspace folders
 .windsurf/
@@ -75,5 +79,7 @@ tools/llama_cpp/llama-quantize
 !.github/workflows
 .vscode
 .idea
-# Local developer resources
+.kiro/
+# Local developer resources (never share)
 .ldres/
+.direnv/

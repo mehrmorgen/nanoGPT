@@ -8,16 +8,16 @@ from typing import cast
 import pytest
 import torch
 
-from ml_playground.configuration.models import (
+from ml_playground.framework.configuration.models import (
     ModelConfig,
     RuntimeConfig,
     SamplerConfig,
     SampleConfig,
-    SharedConfig,
+    MetadataConfig,
 )
-from ml_playground.sampling.runner import Sampler
-from ml_playground.models.core.model import GPT
-from ml_playground.training.checkpointing.checkpoint_manager import (
+from ml_playground.framework.sampling.runner import Sampler
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
 )
@@ -34,8 +34,8 @@ def _write_minimal_meta(out_dir: Path) -> None:
         pickle.dump(meta, f)
 
 
-def _shared_for_out_dir(out_dir: Path) -> SharedConfig:
-    return SharedConfig(
+def _shared_for_out_dir(out_dir: Path) -> MetadataConfig:
+    return MetadataConfig(
         experiment="regression",
         config_path=out_dir / "config.toml",
         project_home=out_dir,

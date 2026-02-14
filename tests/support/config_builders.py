@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ml_playground.configuration.models import (
+from ml_playground.framework.configuration.models import (
     DataConfig,
     LRSchedule,
     ModelConfig,
@@ -11,19 +11,19 @@ from ml_playground.configuration.models import (
     RuntimeConfig,
     SampleConfig,
     SamplerConfig,
-    SharedConfig,
+    MetadataConfig,
     TrainerConfig,
 )
 
 __all__ = [
     "create_basic_configs",
-    "create_experiment_shared_config",
+    "create_metadata_config",
 ]
 
 
 def create_basic_configs(
     tmp_path: Path,
-) -> tuple[PreparerConfig, TrainerConfig, SamplerConfig, SharedConfig]:
+) -> tuple[PreparerConfig, TrainerConfig, SamplerConfig, MetadataConfig]:
     """Create strict-ready configs for prepare/train/sample flows."""
 
     raw_dir = tmp_path / "raw"
@@ -39,7 +39,9 @@ def create_basic_configs(
     sample_out = tmp_path / "sample"
     sample_out.mkdir(parents=True, exist_ok=True)
 
-    prep_cfg = PreparerConfig(raw_dir=raw_dir, raw_text_path=raw_text)
+    prep_cfg = PreparerConfig.model_validate(
+        {"raw_dir": raw_dir, "raw_text_path": raw_text}
+    )
 
     tcfg = TrainerConfig(
         model=ModelConfig(),
@@ -58,7 +60,7 @@ def create_basic_configs(
         runtime=RuntimeConfig(out_dir=sample_out),
         sample=SampleConfig(),
     )
-    shared = SharedConfig(
+    shared = MetadataConfig(
         experiment="exp",
         config_path=tmp_path / "cfg.toml",
         project_home=tmp_path,
@@ -70,23 +72,46 @@ def create_basic_configs(
     return prep_cfg, tcfg, scfg, shared
 
 
-def create_experiment_shared_config(
-    tmp_path: Path, experiment: str = "test_exp"
-) -> SharedConfig:
-    """Create a SharedConfig for experiment testing.
+def create_metadata_config(
+    base_dir: Path,
+    *,
+    experiment: str = "demo",
+    mkdir: bool = True,
+    train_out_dir: Path | None = None,
+    sample_out_dir: Path | None = None,
+) -> MetadataConfig:
+    """Build a ``MetadataConfig`` rooted at *base_dir*.
 
     Args:
-        tmp_path: Temporary directory path.
-        experiment: Experiment name.
+        base_dir: Root temporary directory (typically ``tmp_path``).
+        experiment: Experiment name stored in the config.
+        mkdir: When ``True`` (default), create subdirectories and write a
+            stub ``config.toml``.  Set to ``False`` if the caller manages
+            the directory layout itself.
+        train_out_dir: Override for ``train_out_dir``; defaults to
+            ``base_dir / "train"``.
+        sample_out_dir: Override for ``sample_out_dir``; defaults to
+            ``base_dir / "sample"``.
 
     Returns:
-        SharedConfig instance.
+        A fully-populated ``MetadataConfig``.
     """
-    return SharedConfig(
+    dataset_dir = base_dir / "dataset"
+    _train = train_out_dir or base_dir / "train"
+    _sample = sample_out_dir or base_dir / "sample"
+    config_path = base_dir / "config.toml"
+
+    if mkdir:
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+        _train.mkdir(parents=True, exist_ok=True)
+        _sample.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("{}", encoding="utf-8")
+
+    return MetadataConfig(
         experiment=experiment,
-        config_path=tmp_path / "config.toml",
-        project_home=tmp_path,
-        dataset_dir=tmp_path / "datasets",
-        train_out_dir=tmp_path / "train",
-        sample_out_dir=tmp_path / "sample",
+        config_path=config_path,
+        project_home=base_dir,
+        dataset_dir=dataset_dir,
+        train_out_dir=_train,
+        sample_out_dir=_sample,
     )

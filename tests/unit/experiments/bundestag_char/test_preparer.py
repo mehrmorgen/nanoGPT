@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.configuration.models import PreparerConfig
+from ml_playground.framework.configuration.models import PreparerConfig
 import ml_playground.experiments.bundestag_char.preparer as bundestag_char_module
 from ml_playground.experiments.bundestag_char.preparer import (
     BundestagCharPreparer,
-    _artifacts_look_valid,
+    artifacts_look_valid,
 )
 
 
@@ -130,7 +130,7 @@ def test_artifacts_look_valid_returns_true_for_valid_files(tmp_path: Path) -> No
     file1.write_bytes(b"data")
     file2.write_bytes(b"more data")
 
-    assert _artifacts_look_valid([file1, file2]) is True
+    assert artifacts_look_valid([file1, file2]) is True
 
 
 def test_artifacts_look_valid_returns_false_for_missing_file(tmp_path: Path) -> None:
@@ -139,7 +139,7 @@ def test_artifacts_look_valid_returns_false_for_missing_file(tmp_path: Path) -> 
     file2 = tmp_path / "missing.bin"
     file1.write_bytes(b"data")
 
-    assert _artifacts_look_valid([file1, file2]) is False
+    assert artifacts_look_valid([file1, file2]) is False
 
 
 def test_artifacts_look_valid_returns_false_for_empty_file(tmp_path: Path) -> None:
@@ -149,7 +149,7 @@ def test_artifacts_look_valid_returns_false_for_empty_file(tmp_path: Path) -> No
     file1.write_bytes(b"data")
     file2.write_bytes(b"")  # Empty file
 
-    assert _artifacts_look_valid([file1, file2]) is False
+    assert artifacts_look_valid([file1, file2]) is False
 
 
 def test_bundestag_char_preparer_uses_module_directory(tmp_path: Path) -> None:
