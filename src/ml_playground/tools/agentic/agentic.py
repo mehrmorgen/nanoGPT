@@ -36,6 +36,12 @@ from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, DEFAULT
 
 testing_module = importlib.import_module("ml_playground.tools.testing.testing")
 
+_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
+
 
 class QualityBatchItem(TypedDict, total=False):
     """Structured result for a single quality check."""
@@ -1166,14 +1172,14 @@ This is a machine learning playground project with the following key components:
                         "`uv run playwright install`."
                     ),
                 )
-            except Exception:
+            except Exception as fallback_exc:
                 return ToolResult.create(
                     success=False,
                     exit_code=1,
                     namespace=operation_id.namespace,
                     category=operation_id.category,
                     command=operation_id.command,
-                    stderr=str(exc),
+                    stderr=f"Playwright fallback failed: {fallback_exc}",
                 )
         except Exception as exc:  # pragma: no cover - defensive guard
             return ToolResult.create(
@@ -1911,11 +1917,7 @@ This is a machine learning playground project with the following key components:
     ) -> str:  # pragma: no cover
         """Fetch raw HTML for a shared ChatGPT conversation URL."""
         headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/126.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": _DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
@@ -2033,16 +2035,18 @@ This is a machine learning playground project with the following key components:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch()
                 try:
-                    context = browser.new_context(
-                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    )
+                    context = browser.new_context(user_agent=_DEFAULT_USER_AGENT)
                     page = context.new_page()
-                    page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+
+                    initial_wait = (
+                        "commit" if wait_until == "commit" else "domcontentloaded"
+                    )
+                    page.goto(url, wait_until=initial_wait, timeout=timeout_ms)
                     if selector:
                         page.wait_for_selector(selector, timeout=timeout_ms)
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    page.wait_for_timeout(2000)
-                    page.wait_for_load_state(wait_until, timeout=timeout_ms)  # type: ignore[arg-type]
+                    if wait_until != "commit":
+                        page.wait_for_load_state(wait_until, timeout=timeout_ms)  # type: ignore[arg-type]
                     html_content = page.content()
                 finally:
                     browser.close()
