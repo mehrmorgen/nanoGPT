@@ -1,32 +1,32 @@
 """ml_playground.sampler: sampling utilities.
 
 Device seeding/TF32 is centrally handled in the CLI. This module constructs
-device, dtype, and autocast contexts locally without exposing legacy shims.
+device, dtype, and autocast contexts locally without exposing shims.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
-from typing import Callable, Iterable, List, Protocol, Sequence, cast
+from typing import Callable, Iterable, List, Mapping, Optional, Protocol, Sequence, cast
 import logging
 import torch
 from torch import autocast
 
-from ml_playground.training.checkpointing.checkpoint_manager import (
+from ml_playground.framework.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
 )
-from ml_playground.configuration.models import (
+from ml_playground.framework.configuration.models import (
     ModelConfig,
     SamplerConfig,
     READ_POLICY_BEST,
     RuntimeConfig,
-    SharedConfig,
+    MetadataConfig,
 )
-from ml_playground.core.error_handling import DataError, FileOperationError
-from ml_playground.models.core.model import GPT
-from ml_playground.data_pipeline.transforms.io import setup_tokenizer
+from ml_playground.framework.core.error_handling import DataError, FileOperationError
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.data_pipeline.transforms.io import setup_tokenizer
 
 
 class TokenizerProtocol(Protocol):
@@ -35,40 +35,6 @@ class TokenizerProtocol(Protocol):
     def decode(self, token_ids: Sequence[int]) -> str: ...
 
     def decode_tensor(self, token_tensor: torch.Tensor) -> str: ...
-
-
-@dataclass(frozen=True)
-class SamplerDependencies:
-    cuda_is_available: Callable[[], bool]
-    cuda_manual_seed: Callable[[int], None]
-
-
-def default_sampler_dependencies(cfg: SamplerConfig | None = None) -> SamplerDependencies:
-    def _cuda_is_available() -> bool:
-        override = cfg.cuda_is_available_fn if cfg is not None else None
-        if override is not None:
-            return override()
-        cuda_module = getattr(torch, "cuda", None)
-        if cuda_module is None:
-            return False
-        return bool(cuda_module.is_available())
-
-    def _cuda_manual_seed(seed: int) -> None:
-        override = cfg.cuda_manual_seed_fn if cfg is not None else None
-        if override is not None:
-            override(seed)
-            return
-        cuda_module = getattr(torch, "cuda", None)
-        if cuda_module is None:
-            return
-        manual_seed = getattr(cuda_module, "manual_seed", None)
-        if callable(manual_seed):
-            manual_seed(seed)
-
-    return SamplerDependencies(
-        cuda_is_available=_cuda_is_available,
-        cuda_manual_seed=_cuda_manual_seed,
-    )
 
 
 """
@@ -82,13 +48,51 @@ All experiments should use these utilities to ensure consistency and proper erro
 """
 
 
+@dataclass(frozen=True)
+class SamplerDependencies:
+    cuda_is_available: Callable[[], bool]
+    cuda_manual_seed: Callable[[int], None]
+
+
+class CudaAvailableFn(Protocol):
+    def __call__(self) -> bool: ...
+
+
+class CudaSeedFn(Protocol):
+    def __call__(self, seed: int) -> None: ...
+
+
+class CudaModule(Protocol):
+    is_available: CudaAvailableFn
+    manual_seed: CudaSeedFn
+
+
+def default_sampler_dependencies() -> SamplerDependencies:
+    # Use torch.cuda directly but wrapped to conform to SamplerDependencies
+    # This avoids dynamic getattr and relies on stubs/imports
+
+    def _cuda_is_available() -> bool:
+        if torch.cuda.is_available():
+            return True
+        return False
+
+    def _cuda_manual_seed(seed: int) -> None:
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+
+    return SamplerDependencies(
+        cuda_is_available=_cuda_is_available,
+        cuda_manual_seed=_cuda_manual_seed,
+    )
+
+
 class Sampler:
     """Generate samples from a trained `GPT` model using a strict configuration."""
 
     def __init__(
         self,
         cfg: SamplerConfig,
-        shared: SharedConfig,
+        metadata: MetadataConfig,
         *,
         deps: SamplerDependencies | None = None,
     ):
@@ -96,22 +100,23 @@ class Sampler:
 
         Args:
             cfg: Fully validated sampler configuration produced by the CLI.
-            shared: Shared experiment metadata, including dataset and output directories.
+            metadata: Experiment metadata, including dataset and output directories.
 
         Raises:
             ValueError: If the runtime section of the configuration is missing.
             DataError: If tokenizer metadata cannot be located.
         """
         self.cfg = cfg
-        self.shared = shared
-        self.deps: SamplerDependencies = deps or default_sampler_dependencies(cfg)
+        self.metadata = metadata
+        self.deps: SamplerDependencies = deps or default_sampler_dependencies()
+        # Use cast(object, ...) to satisfy basedpyright strict mode
         runtime_cfg = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
         if runtime_cfg is None:
             raise ValueError("Runtime configuration is missing")
         self.runtime_cfg = runtime_cfg
         self.sample_cfg = cfg.sample
 
-        self.out_dir = shared.sample_out_dir
+        self.out_dir = metadata.sample_out_dir
         # Use a stable, module-level logger name for predictable capture in tests
         self.logger = logging.getLogger("ml_playground.sampler")
 
@@ -129,7 +134,7 @@ class Sampler:
         # Guard CUDA-specific calls for non-CUDA environments
         try:
             if self.deps.cuda_is_available():
-                self.deps.cuda_manual_seed(self.runtime_cfg.seed)
+                self.deps.cuda_manual_seed(int(self.runtime_cfg.seed))
         except (RuntimeError, AssertionError, AttributeError):
             pass
 
@@ -151,12 +156,13 @@ class Sampler:
         checkpoint = self._load_checkpoint()
         model = self._init_model_from_checkpoint(checkpoint)
         if getattr(self.runtime_cfg, "compile", False):
-            compile_fn = getattr(self.cfg, "compile_model_fn", None)
-            if compile_fn is None:
+            raw_compile_fn: object = getattr(self.cfg, "compile_model_fn", None)
+            if raw_compile_fn is None:
                 raise ValueError(
                     "SamplerConfig.compile_model_fn must be provided when runtime.compile is True"
                 )
-            model = cast(GPT, compile_fn(model))  # type: ignore[call-arg]
+            compile_fn = cast(Callable[[GPT], GPT], raw_compile_fn)
+            model = compile_fn(model)
         return model
 
     def _load_checkpoint(self) -> Checkpoint:
@@ -168,9 +174,13 @@ class Sampler:
         ckpt_mgr = CheckpointManager(out_dir=self.out_dir)
         # DI override
         if self.cfg.checkpoint_load_fn is not None:
-            return self.cfg.checkpoint_load_fn(
-                manager=ckpt_mgr, cfg=self.cfg, logger=self.logger
+            raw_ckpt_obj: object = cast(
+                object,
+                self.cfg.checkpoint_load_fn(
+                    manager=ckpt_mgr, cfg=self.cfg, logger=self.logger
+                ),
             )
+            return cast(Checkpoint, raw_ckpt_obj)
 
         if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
             return ckpt_mgr.load_best_checkpoint(
@@ -181,18 +191,32 @@ class Sampler:
         )
 
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
-        model_cfg = ModelConfig(**checkpoint.model_args)
+        model_args = checkpoint.model_args
+        model_cfg = ModelConfig(
+            n_layer=cast(int, model_args.get("n_layer")),
+            n_head=cast(int, model_args.get("n_head")),
+            n_embd=cast(int, model_args.get("n_embd")),
+            block_size=cast(int, model_args.get("block_size")),
+            bias=bool(model_args.get("bias", True)),
+            vocab_size=cast(Optional[int], model_args.get("vocab_size")),
+            dropout=cast(float, model_args.get("dropout", 0.0)),
+        )
         # DI override for model factory
         if self.cfg.model_factory is not None:
-            model = self.cfg.model_factory(model_cfg, self.logger)
+            raw_factory_res_obj: object = cast(
+                object, self.cfg.model_factory(model_cfg, self.logger)
+            )
+            model = cast(GPT, raw_factory_res_obj)
         else:
             model = GPT(model_cfg, self.logger)
-        model.load_state_dict(checkpoint.model, strict=False)
+
+        checkpoint_model = cast(Mapping[str, torch.Tensor], checkpoint.model)
+        model.load_state_dict(checkpoint_model, strict=False)
         model.eval()
         model.to(self.runtime_cfg.device)
         return model
 
-    def _setup_tokenizer(self) -> TokenizerProtocol:
+    def _setup_tokenizer(self):
         """Load tokenizer metadata from the sampling output directory."""
         tokenizer = setup_tokenizer(self.out_dir)
         if tokenizer:
@@ -288,35 +312,8 @@ class Sampler:
         return self._cached_prompt_ids
 
 
-def sample(
-    cfg: SamplerConfig,
-    shared: SharedConfig | None = None,
-    *,
-    deps: SamplerDependencies | None = None,
-) -> None:
-    """Run sampling with optional shared configuration fallback."""
-
-    if shared is None:
-        runtime = cast(RuntimeConfig | None, getattr(cfg, "runtime", None))
-        if runtime is None:
-            raise ValueError("Runtime configuration is missing")
-        out_dir = runtime.out_dir
-        shared = SharedConfig(
-            experiment="unknown",
-            config_path=out_dir / "config.toml",
-            project_home=out_dir.parent if out_dir.parent else out_dir,
-            dataset_dir=out_dir,
-            train_out_dir=out_dir,
-            sample_out_dir=out_dir,
-        )
-
-    sampler_instance = Sampler(cfg, shared, deps=deps)
-    sampler_instance.run()
-
-
 __all__ = [
     "Sampler",
     "SamplerDependencies",
     "default_sampler_dependencies",
-    "sample",
 ]
