@@ -75,7 +75,7 @@ repos:
           - run
           - tools
           - test
-          - coverage
+          - coverage-threshold
           - --verbose
         language: system
         pass_filenames: false

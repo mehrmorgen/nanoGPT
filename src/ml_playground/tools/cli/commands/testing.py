@@ -141,6 +141,41 @@ def test_coverage(
     )
 
 
+@test_app.command("coverage-threshold")
+def test_coverage_threshold(
+    line_threshold: Annotated[
+        float,
+        typer.Option("--line-threshold", help="Minimum line coverage (0 = config)"),
+    ] = 0.0,
+    branch_threshold: Annotated[
+        float,
+        typer.Option("--branch-threshold", help="Minimum branch coverage (0 = config)"),
+    ] = 0.0,
+    force_regen: Annotated[
+        bool,
+        typer.Option("--force-regen", help="Force regeneration of coverage data"),
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", help="Show verbose threshold output")
+    ] = False,
+    args: Annotated[
+        Optional[List[str]], typer.Argument(help="Additional arguments (ignored)")
+    ] = None,
+) -> None:
+    """Run coverage threshold checks only (no report generation)."""
+    tools = get_testing_tools()
+    run_tool_command(
+        tools.coverage_threshold,
+        args or [],
+        line_threshold=line_threshold or 0.0,
+        branch_threshold=branch_threshold or 0.0,
+        verbose=verbose,
+        learning_mode=state.learning_mode,
+        verbosity_level=state.verbosity,
+        force_regen=force_regen,
+    )
+
+
 @test_app.command("e2e")
 def test_e2e(
     ctx: typer.Context,
