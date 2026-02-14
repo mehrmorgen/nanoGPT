@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from _pytest.mark.structures import MarkDecorator
 import pytest
 
-pytestmark = pytest.mark.e2e
+pytestmark: MarkDecorator = pytest.mark.e2e  # type: ignore[attr-defined]

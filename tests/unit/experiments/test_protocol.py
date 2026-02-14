@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from ml_playground.configuration.models import PreparerConfig
-from ml_playground.experiments import protocol as exp_protocol
+from ml_playground.framework.configuration.models import PreparerConfig
+from ml_playground.framework.experiment_registry import protocol as exp_protocol
 
 
 def test_side_effect_report_summarize_counts() -> None:

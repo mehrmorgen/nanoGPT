@@ -1,2 +1,5 @@
 # Temporary allowlist of test files permitted to contain mocking while migrating to DI-only tests.
 # Keep this file to preserve tooling hooks; leave it empty when no exceptions are required.
+
+# Keep empty to enforce zero mock usage; add entries temporarily only with explicit approval.
+
