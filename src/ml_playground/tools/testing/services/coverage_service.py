@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Mapping, cast, Union, Optional, Literal
+
+from ml_playground.framework.core.di_implementations import DefaultJsonParser
+from ml_playground.tools.core.errors import ToolExecutionError
+
+
+class CoverageService:
+    """Service for handling coverage data collection and reporting."""
+
+    def __init__(self, root_path: Path) -> None:
+        self.root_path = root_path
+        self.json_parser = DefaultJsonParser()
+
+    def collect_metrics(
+        self,
+        json_path: Path,
+    ) -> list[str]:
+        """Parse coverage JSON and return formatted metric lines."""
+        if not json_path.exists():
+            raise ToolExecutionError(
+                "Coverage JSON data not found",
+                reason=f"Coverage JSON file missing: {json_path}",
+                rationale="Coverage metrics require JSON report generation",
+            )
+
+        try:
+            content = json_path.read_text(encoding="utf-8")
+            raw_json_data = self.json_parser.parse_json(content)
+            coverage_data: Mapping[str, object] = raw_json_data
+            totals = cast(Mapping[str, object], coverage_data["totals"])
+        except (json.JSONDecodeError, KeyError) as exc:
+            raise ToolExecutionError(
+                "Failed to parse coverage JSON for summary",
+                reason=str(exc),
+                rationale="Coverage JSON must contain totals for reporting metrics",
+            ) from exc
+
+        statements = cast(int, totals.get("num_statements", 0))
+        covered_lines = cast(int, totals.get("covered_lines", 0))
+        num_branches = cast(int, totals.get("num_branches", 0))
+        covered_branches = cast(int, totals.get("covered_branches", 0))
+
+        line_pct = (covered_lines / statements * 100) if statements else 0.0
+        branch_pct = (covered_branches / num_branches * 100) if num_branches else 0.0
+
+        metrics_lines = [
+            f"Coverage totals: lines={line_pct:.2f}% ({covered_lines}/{statements})",
+        ]
+        if num_branches:
+            metrics_lines.append(
+                f"Branch totals: branches={branch_pct:.2f}% ({covered_branches}/{num_branches})"
+            )
+        else:
+            metrics_lines.append(
+                "Branch totals: not available (no branch data collected)"
+            )
+
+        return metrics_lines
+
+    def get_undercovered_files(
+        self, coverage_data: Mapping[str, object]
+    ) -> list[tuple[str, float, float | None]]:
+        """Identify files with less than 100% coverage."""
+        files = cast(Mapping[str, Mapping[str, object]], coverage_data.get("files", {}))
+        undercovered: list[tuple[str, float, float | None]] = []
+        for path, info in files.items():
+            summary = cast(Mapping[str, object], info.get("summary", {}))
+            percent = cast(Optional[float], summary.get("percent_covered"))
+            if percent is None:
+                display = summary.get("percent_covered_display")
+                if isinstance(display, str):
+                    try:
+                        percent = float(display.rstrip("%"))
+                    except ValueError:
+                        percent = 0.0
+                else:
+                    percent = 0.0
+            percent_float = float(percent)
+            branch_percent: float | None = None
+            num_branches = summary.get("num_branches")
+            covered_branches = summary.get("covered_branches")
+            if isinstance(num_branches, (int, float)) and num_branches:
+                try:
+                    covered_branches_float = float(
+                        cast(Union[str, float, int], covered_branches)
+                    )
+                    branch_percent = covered_branches_float / float(num_branches) * 100
+                except (TypeError, ValueError, ZeroDivisionError):
+                    branch_percent = None
+            if percent_float < 100.0:
+                undercovered.append((path, percent_float, branch_percent))
+        undercovered.sort(key=lambda item: (item[1], item[0]))
+        return undercovered
+
+    def render_undercovered_tree(
+        self, entries: list[tuple[str, float, float | None]]
+    ) -> list[str]:
+        """Render a tree view of files with coverage gaps."""
+        root: dict[str, object] = {}
+
+        for path, line_pct, branch_pct in entries:
+            parts = Path(path).parts
+            node = root
+            for part in parts[:-1]:
+                if part not in node:
+                    node[part] = {}
+                node = cast(dict[str, object], node[part])
+
+            if "__files__" not in node:
+                node["__files__"] = []
+            files_list = cast(list[tuple[str, float, float | None]], node["__files__"])
+            files_list.append((parts[-1], line_pct, branch_pct))
+
+        def _render_node(node: Mapping[str, object], prefix: str) -> list[str]:
+            lines: list[str] = []
+            dir_names = sorted(name for name in node.keys() if name != "__files__")
+
+            raw_files = node.get("__files__", [])
+            files = sorted(
+                cast(list[tuple[str, float, float | None]], raw_files),
+                key=lambda item: item[0],
+            )
+
+            combined: list[tuple[str, Literal["dir", "file"], object]] = [
+                (name, "dir", node[name]) for name in dir_names
+            ]
+            combined.extend(
+                (file_info[0], "file", cast(object, file_info)) for file_info in files
+            )
+
+            for idx, (name, kind, payload) in enumerate(combined):
+                is_last = idx == len(combined) - 1
+                connector = "└── " if is_last else "├── "
+                if kind == "dir":
+                    lines.append(f"{prefix}{connector}{name}/")
+                    child_prefix = prefix + ("    " if is_last else "│   ")
+                    lines.extend(
+                        _render_node(cast(Mapping[str, object], payload), child_prefix)
+                    )
+                else:
+                    file_payload = cast(tuple[str, float, float | None], payload)
+                    _, line_pct, branch_pct = file_payload
+                    branch_text = (
+                        f" branch = {branch_pct:.2f}%" if branch_pct is not None else ""
+                    )
+                    lines.append(
+                        f"{prefix}{connector}{name}: line = {line_pct:.2f}%{branch_text}"
+                    )
+
+            return lines
+
+        return _render_node(root, "")
