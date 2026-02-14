@@ -8,10 +8,10 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, NoReturn, Literal
+from typing import Any, Optional, NoReturn, Literal, cast
 
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.configuration.models import READ_POLICY_BEST
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.configuration.models import READ_POLICY_BEST
 
 
 @dataclass(frozen=True)
@@ -67,14 +67,14 @@ def _inputs_stamp(cfg: OllamaExportConfig, ckpt: Path) -> dict[str, Any]:
     return stamp
 
 
-def _load_stamp(path: Path) -> Optional[dict[str, Any]]:
+def _load_stamp(path: Path) -> Optional[dict[str, object]]:
     if not path.exists():
         return None
     # Strict: invalid stamp is an error
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(dict[str, object], json.loads(path.read_text(encoding="utf-8")))
 
 
-def _same_stamp(a: dict[str, Any], b: dict[str, Any]) -> bool:
+def _same_stamp(a: dict[str, object], b: dict[str, object]) -> bool:
     return a == b
 
 
@@ -85,6 +85,7 @@ def _fail(msg: str, code: int = 2, logger: LoggerLike | None = None) -> NoReturn
     raise SystemExit(code)
 
 
+# TODO: This is a public API used by external tooling.
 def convert(
     export_cfg: OllamaExportConfig,
     out_dir: Path,

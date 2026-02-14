@@ -10,8 +10,8 @@
 #   ckpt_top_k=0, early_stop_patience=0). They exist for completeness but do nothing until set.
 # - Effective batch per optimizer update is batch_size * grad_accum_steps * block_size tokens.
 # - Memory scales roughly with n_layer and block_size^2 per layer; choose conservatively on CPU.
-# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
-# - Key constraint: [train.data].block_size must be <= [train.model].block_size.
+# - If [training.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - Key constraint: [training.data].block_size must be <= [training.model].block_size.
 #
 # Experiments can override any subset of keys in their config TOML; at startup the
 # loader logs where each effective value came from (default vs experiment override vs env override).
@@ -27,9 +27,9 @@ doc_separator = "\n\n"
 [prepare.extras]
 # Reserved for experiment-specific extra settings; empty by default.
 
-[train.model]
+[training.model]
 # Small GPT-like model suitable for CPU experiments (reduce memory/compute).
-# Memory scales with block_size^2 per layer. Ensure [train.data].block_size <= [train.model].block_size.
+# Memory scales with block_size^2 per layer. Ensure [training.data].block_size <= [training.model].block_size.
 n_layer = 6
 n_head = 6
 n_embd = 384
@@ -37,20 +37,23 @@ block_size = 256
 # Dropout is disabled for determinism and simplicity on CPU.
 dropout = 0.0
 bias = false
+# Weight initialization parameters
+init_std = 0.02
+init_std_c_proj_scale = 2.0
 
-[train.data]
-# Filenames configurable; dataset_dir lives in [shared]
+[training.data]
+# Filenames configurable; dataset_dir lives in [metadata]
 train_bin = "train.bin"
 val_bin = "val.bin"
 meta_pkl = "meta.pkl"
-# Character-level n-gram size for datasets that use char/ngram tokenization (1 keeps legacy behavior)
+# Character-level n-gram size for datasets that use char/ngram tokenization (1 keeps current behavior)
 ngram_size = 1
 # Effective batch tokens per optimizer step: batch_size * grad_accum_steps * block_size
 batch_size = 8
 block_size = 256
 grad_accum_steps = 1
 
-[train.optim]
+[training.optim]
 # Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
 learning_rate = 0.001
 # L2-style weight decay for regularization; often excluded for LayerNorm/bias in AdamW.
@@ -62,18 +65,18 @@ beta2 = 0.95
 # Global gradient norm clipping threshold to prevent exploding gradients (0 disables if supported).
 grad_clip = 1.0
 
-[train.schedule]
+[training.schedule]
 # Enable learning-rate schedule (warmup + decay). If false, other fields are ignored.
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate.
 warmup_iters = 200
 # Iterations over which LR decays from learning_rate down toward min_lr.
-# Consider interplay with [train.runtime].max_iters; if much smaller, LR stays at min for long.
+# Consider interplay with [training.runtime].max_iters; if much smaller, LR stays at min for long.
 lr_decay_iters = 20000
 # Lower bound (floor) for the learning rate during decay.
 min_lr = 0.0001
 
-[train.runtime]
+[training.runtime]
 # Relative paths are resolved against the experiment config directory.
 out_dir = "./out"
 mlflow_enabled = true
@@ -107,8 +110,10 @@ ckpt_time_interval_minutes = 0
 best_smoothing_alpha = 0.0
 early_stop_patience = 0
 ema_decay = 0.0
+# Initial best validation loss for checkpoint tracking
+initial_best_val_loss = 1e9
 
-[sample.runtime]
+[sampling.runtime]
 # Use the same default out_dir to find checkpoints by default (fully overridable).
 out_dir = "./out"
 # CPU-first sampling defaults
@@ -117,7 +122,7 @@ dtype = "float32"
 compile = false
 seed = 1337
 
-[sample.sample]
+[sampling.sample]
 # Minimal, conservative sampling defaults. Either omit top_k or set a neutral default.
 start = ""
 num_samples = 1
@@ -127,7 +132,7 @@ temperature = 0.9
 top_k = 0
 
 # Shared experiment context (defaults; experiments may override)
-[shared]
+[metadata]
 experiment = ""
 config_path = "config.toml"
 project_home = "."

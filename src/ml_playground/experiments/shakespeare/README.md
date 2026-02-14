@@ -1,5 +1,13 @@
 # Tiny Shakespeare (GPT-2 BPE)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Required sections, abstraction levels, and folder tree standards for experiment docs.
+- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, training, and sampling flows.
+
+</details>
+
 Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus using GPT-2 BPE tokenization.
 
 ## Overview
@@ -12,14 +20,14 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 ## Data
 
 - Preparer auto-downloads `input.txt` if missing.
-- Prepared artifacts under `[train.data].dataset_dir` (default: `src/ml_playground/experiments/shakespeare/datasets/`).
+- Prepared artifacts under `[training.data].dataset_dir` (default: `src/ml_playground/experiments/shakespeare/datasets/`).
 - Universal meta: the preparer writes `meta.pkl` alongside `train.bin` and `val.bin`.
 
 ## Method/Model
 
-- GPT-2 BPE via tiktoken; small GPT configured via TOML (see `[train.*]`).
-- Rotated checkpoints and TensorBoard logs under `[train.runtime].out_dir`.
-  For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+- GPT-2 BPE via tiktoken; small GPT configured via TOML (see `[training.*]`).
+- Rotated checkpoints and TensorBoard logs under `[training.runtime].out_dir`.
+  For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
 ## How to Run
 
@@ -45,33 +53,26 @@ uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sa
 
 ## Configuration Highlights
 
-- `[train.data].dataset_dir` default: `src/ml_playground/experiments/shakespeare/datasets`
-- `[train.runtime].out_dir` default: `src/ml_playground/experiments/shakespeare/out/shakespeare_next`
-- `[train.runtime].device`: `cpu` or `mps` (or `cuda` if available)
+- `[training.data].dataset_dir` default: `src/ml_playground/experiments/shakespeare/datasets`
+- `[training.runtime].out_dir` default: `src/ml_playground/experiments/shakespeare/out/shakespeare_next`
+- `[training.runtime].device`: `cpu` or `mps` (or `cuda` if available)
 
 ## Outputs
 
-- Training artifacts under `[train.runtime].out_dir` (rotated checkpoints, `logs/tb`).
-- Prepared data under `[train.data].dataset_dir` (`train.bin`, `val.bin`, `meta.pkl`).
+- Training artifacts under `[training.runtime].out_dir` (rotated checkpoints, `logs/tb`).
+- Prepared data under `[training.data].dataset_dir` (`train.bin`, `val.bin`, `meta.pkl`).
 
 ## Folder structure
 
 ```bash
-# experiment documentation (this file)
 src/ml_playground/experiments/shakespeare/
-├── README.md        
-# sample/preset config for real runs
-├── config.toml      
-# tiny defaults for tests
-├── test_config.toml 
-# dataset preparation (download/tokenize, write bins/meta)
-├── preparer.py      
-# NanoGPT-style training orchestration
-├── trainer.py       
-# generation/sampling entrypoints
-├── sampler.py       
-# prepared dataset artifacts written here
-└── datasets/        
+├── README.md        # experiment documentation (this file)
+├── config.toml      # sample/preset config for real runs
+├── test_config.toml # tiny defaults for tests
+├── preparer.py      # dataset preparation (download/tokenize, write bins/meta)
+├── trainer.py       # NanoGPT-style training orchestration
+├── sampler.py       # generation/sampling entrypoints
+└── datasets/        # prepared dataset artifacts written here
 ```
 
 ## Troubleshooting
@@ -84,9 +85,9 @@ src/ml_playground/experiments/shakespeare/
 
 ## Checklist
 
-- Adheres to [.dev-guidelines/README.md](../../.dev-guidelines/README.md) (abstraction, required sections).
+- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
+- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

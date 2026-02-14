@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration.models import PreparerConfig
-from ml_playground.experiments.protocol import (
+from typing import Mapping, cast
+
+from ml_playground.framework.configuration.models import PreparerConfig
+from ml_playground.framework.experiment_registry.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
@@ -22,13 +24,12 @@ class SpeakGerPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
         # Minimal preparer: this experiment expects pre-tokenized data or external pipeline.
         # We simply ensure the dataset directory exists and report no-op if present.
-        extras = getattr(cfg, "extras", {}) or {}
+        extras = cast(Mapping[str, object], getattr(cfg, "extras", {}) or {})
         base_dir_override = extras.get("dataset_dir_override")
-        exp_dir = (
-            Path(base_dir_override)
-            if base_dir_override is not None
-            else Path(__file__).resolve().parent
-        )
+        if isinstance(base_dir_override, (str, Path)):
+            exp_dir = Path(base_dir_override)
+        else:
+            exp_dir = Path(__file__).resolve().parent
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         msgs = (

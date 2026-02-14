@@ -5,7 +5,9 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict
 
-from ml_playground.experiments.extras_registry import register_extras_model
+from ml_playground.framework.experiment_registry.extras_registry import (
+    register_extras_model,
+)
 
 
 class ShakespearePrepareExtras(BaseModel):
@@ -37,5 +39,5 @@ class ShakespeareSampleExtras(BaseModel):
 
 
 register_extras_model("shakespeare", "prepare", ShakespearePrepareExtras)
-register_extras_model("shakespeare", "train", ShakespeareTrainExtras)
-register_extras_model("shakespeare", "sample", ShakespeareSampleExtras)
+register_extras_model("shakespeare", "training", ShakespeareTrainExtras)
+register_extras_model("shakespeare", "sampling", ShakespeareSampleExtras)

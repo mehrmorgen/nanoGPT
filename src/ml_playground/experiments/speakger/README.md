@@ -24,12 +24,13 @@ Minimal I/O with strict config injection (see `[prepare]` in TOML):
 - LoRA (PEFT) adapters for efficient finetuning
 - Optional structure tokens for metadata preservation
 
-For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+For framework utilities, see [../../../../docs/framework_utilities.md](../../../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+uv run tools env setup
+uv run tools env verify
 # Install PEFT/Transformers if not already present in your env
 uv add peft transformers torch tensorboard
 ```
@@ -71,35 +72,35 @@ Memory-friendly defaults for 32GB Apple Silicon are recommended.
   - `add_structure_tokens`: wrap content with speaker/party/year tokens
   - `doc_separator`: separator token between documents
 
-- `[train.hf_model]`
+- `[training.hf_model]`
 
   - `model_name`: e.g., `google/gemma-2-2b` or `google/gemma-2-9b-it`
   - `gradient_checkpointing = true`
   - `block_size`: 256–512 typical on MPS
 
-- `[train.peft]`
+- `[training.peft]`
 
   - `enabled = true`, `r = 8..16`, `lora_alpha = 16`
   - `target_modules = ["q_proj","k_proj","v_proj","o_proj"]`
   - `extend_mlp_targets = false` (set true to include MLP projections)
 
-- `[train.data]`
+- `[training.data]`
 
   - `dataset_dir`: same as in `[prepare]`
   - `batch_size`, `grad_accum_steps` control effective batch size
   - `block_size`: token sequence length per batch element
 
-- `[train.runtime]`
+- `[training.runtime]`
 
   - `out_dir`: where adapters/checkpoints/logs go
   - `device`: `mps` (Apple), `cuda` (NVIDIA), or `cpu`
   - `dtype`: `float16` suggested on mps/cuda, `float32` for stability
 
-- `[sample.runtime]`
+- `[sampling.runtime]`
 
   - `out_dir`, `device`, `dtype`
 
-- `[sample.sample]`
+- `[sampling.sample]`
 
   - `start`: prompt string or `FILE:path/to/prompt.txt`
   - `num_samples`, `max_new_tokens`, `temperature`, `top_k`, `top_p`
@@ -146,9 +147,9 @@ src/ml_playground/experiments/speakger/
 
 ## Checklist
 
-- Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
+- Adheres to `.dev-guidelines/project-specific/DOCUMENTATION.md` (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
+- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

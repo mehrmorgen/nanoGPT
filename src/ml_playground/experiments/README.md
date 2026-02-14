@@ -1,5 +1,13 @@
 # Experiments (Mid‑Level Overview)
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Required sections, abstraction levels, and folder tree standards for experiment docs.
+- [Framework Utilities](../../../docs/framework_utilities.md) – Shared helpers for preparation, training, and sampling referenced by experiments.
+
+</details>
+
 This directory hosts self‑contained experiments. Each experiment bundles:
 
 - its data preparation logic (`preparer.py`),
@@ -13,7 +21,7 @@ Why self‑contained?
 - Portability: copy a single folder to reuse an experiment.
 - Reproducibility: config, code, and sample data paths live together.
 - Discoverability: each experiment explains itself in its own README.
-- Decoupling: no dependency on any legacy `ml_playground/datasets` package (the CLI uses the experiment registry only).
+- Decoupling: no dependency on the old `ml_playground/datasets` package (the CLI uses the experiment registry only).
 
 Conventions
 
@@ -22,16 +30,16 @@ Conventions
 - Config location: TOML lives at the experiment root (no configs/ subfolder).
 - Data location: experiment‑local prepared data lives under `<experiment>/datasets/`.
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
-- MLflow defaults: enabled for training runs; tracking URI resolves relative to the experiment config (`sqlite:///../out/mlflow.db`) with artifacts under `experiments/out/mlruns`. Disable via `[train.runtime].mlflow_enabled = false`.
+- MLflow defaults: enabled for training runs; tracking URI resolves relative to the experiment config (`sqlite:///../out/mlflow.db`) with artifacts under `experiments/out/mlruns`. Disable via `[training.runtime].mlflow_enabled = false`.
 - Typing/UV: everything follows the project’s strict typing and UV‑only workflow (see repo README for commands).
 
 Universal meta policy
 
 - Preparers must write a standardized `meta.pkl` next to `train.bin` and `val.bin` in the dataset directory.
-- Use `ml_playground.data_pipeline.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
+- Use `ml_playground.framework.data_pipeline.transforms.io.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
 - The CLI will fail fast at train/sample time if `meta.pkl` is missing.
 
-All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
+All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../docs/framework_utilities.md).
 
 ## Folder structure (this directory)
 
@@ -51,7 +59,7 @@ src/ml_playground/experiments/
 Important: Strict configuration injection
 
 - Experiments must not read TOML directly. The CLI reads TOML and injects fully validated config objects into experiment code.
-- Any legacy helpers like `prepare_from_toml`, `train_from_toml`, `sample_from_toml`, or `convert_from_toml` have been removed or fail fast.
+- Helpers like `prepare_from_toml`, `train_from_toml`, `sample_from_toml`, or `convert_from_toml` have been removed or fail fast.
 
 Common CLI patterns
 
@@ -143,8 +151,8 @@ Paste the following into `src/ml_playground/experiments/<name>/README.md` and re
 ## Environment Setup (preferred)
 
 ```bash
-uv run env-tasks setup
-uv run env-tasks verify
+uv run tools env setup
+uv run tools env verify
 ````
 
 ## How to Run
@@ -194,9 +202,12 @@ uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml sample 
 ```python
 from __future__ import annotations
 from pathlib import Path
-from ml_playground.configuration import PreparerConfig
-from ml_playground.data_pipeline import write_bin_and_meta
-from ml_playground.experiments.protocol import Preparer as _PreparerProto, PrepareReport
+from ml_playground.framework.configuration import PreparerConfig
+from ml_playground.framework.data_pipeline.transforms.io import write_bin_and_meta
+from ml_playground.framework.experiment_registry.protocol import (
+    Preparer as _PreparerProto,
+    PrepareReport,
+)
 
 class MyPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
