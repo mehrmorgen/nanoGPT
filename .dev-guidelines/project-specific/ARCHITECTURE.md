@@ -8,7 +8,7 @@ description: System architecture overview covering configuration, datasets, runt
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for principles, quick-start commands, and cross-links to each guideline.
+- [Developer Guidelines Index](./README.md) – Entry point for principles, quick-start commands, and cross-links to each guideline.
 - [Development Practices](./DEVELOPMENT.md) – Commit standards, tooling policies, and high-level architecture notes.
 - [Testing Standards](./TESTING.md) – Enforcement of TDD, coverage, and deterministic test suites.
 - [Framework Utilities](../docs/framework_utilities.md) – Shared infrastructure for configuration, datasets, and runtime helpers.
@@ -18,6 +18,7 @@ description: System architecture overview covering configuration, datasets, runt
 ## Table of Contents
 
 - [Overview](#overview)
+- [Layering and Dependency Rules](#layering-and-dependency-rules)
 - [Configuration System](#configuration-system)
 - [Dataset Lifecycle](#dataset-lifecycle)
 - [Runtime Entry Points](#runtime-entry-points)
@@ -33,9 +34,30 @@ description: System architecture overview covering configuration, datasets, runt
 
 The `ml_playground` stack is organized around a strictly validated configuration pipeline, deterministic dataset preparation, Typer-powered runtime commands, and a checkpointing service that enforces explicit retention policies. This document assembles the architectural context that was previously scattered across multiple guideline files.
 
+## Layering and Dependency Rules
+
+The codebase is organized around three explicit roots: framework, tools, experiments.
+
+Target layout (current):
+
+```bash
+src/ml_playground/
+  framework/
+  tools/
+  experiments/
+```
+
+Dependency rules (enforced by tests):
+
+- framework may not import tools or experiments.
+- tools may import framework, but never experiments.
+- experiments may import framework, but never tools or framework CLI entrypoints.
+
+Protocols should be defined in the consumer layer by default (tools or experiments) so the framework does not depend on consumers. If multiple consumers share a protocol, define it in a minimal framework contract module.
+
 ## Configuration System
 
-- Configuration is sourced from TOML files and loaded through `ml_playground.configuration.loading`.
+- Configuration is sourced from TOML files and loaded through `ml_playground.framework.configuration.loading`.
 - Defaults live in `src/ml_playground/experiments/default_config.toml`; experiment overrides (for example `src/ml_playground/experiments/shakespeare/config.toml`) are merged on top.
 - The loader:
   - Parses TOML using strict UTF-8 encoding.
@@ -43,28 +65,40 @@ The `ml_playground` stack is organized around a strictly validated configuration
   - Coerces strings to `pathlib.Path` before validation.
   - Injects required runtime context (logger, device metadata) prior to Pydantic validation.
 - Environment overrides (`ML_PLAYGROUND_TRAIN_OVERRIDES`, `ML_PLAYGROUND_SAMPLE_OVERRIDES`) are deep-merged, validated, and rejected if invalid.
-- Use `configuration.loading.load_experiment_toml()` or `load_full_experiment_config()`; do not reimplement merge logic elsewhere.
+- Use `framework.configuration.loading.load_experiment_toml()` or `load_full_experiment_config()`; do not reimplement merge logic elsewhere.
 
 ## Dataset Lifecycle
 
-- Datasets are generated via `uv run python -m ml_playground.cli prepare <experiment> --config <path>`.
+- Datasets are generated via `uv run python -m ml_playground.runtime_cli prepare <experiment> --config <path>`.
 - Preparers must write `train.bin`, `val.bin`, and `meta.pkl` into the dataset directory.
-- `meta.pkl` creation is mandatory and standardized through helpers such as `ml_playground.prepare.write_bin_and_meta()`.
+- `meta.pkl` creation is mandatory and standardized through helpers such as `ml_playground.framework.data_pipeline.transforms.io.write_bin_and_meta()`.
 - Runtime commands fail fast when required artifacts are missing:
   - `prepare`: validates configuration and writes dataset artifacts.
-  - `train`: requires `train.data.meta_path`.
-  - `sample`: accepts either `train.data.meta_path` or `<sample.runtime.out_dir>/<experiment>/meta.pkl`.
+  - `train`: requires `training.data.meta_path`.
+  - `sample`: accepts either `training.data.meta_path` or `<sampling.runtime.out_dir>/<experiment>/meta.pkl`.
 
 ## Runtime Entry Points
 
-- Typer CLI module `src/ml_playground/cli.py` exposes `prepare`, `train`, and `sample` commands.
+- Typer CLI package `src/ml_playground/framework/cli/` exposes `prepare`, `train`, and `sample` commands.
+
 - Invoke runtimes directly:
+
   ```bash
-  uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
+  uv run python -m ml_playground.runtime_cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
   ```
+
 - CLI commands remain thin coordinators that pass validated configuration into the training pipeline. Avoid wrapping them with additional `/tools` shims.
 
+- Public API surfaces:
+
+  - `ml_playground.framework.training.api.run_training(TrainingPlan)` is the canonical training entry point for consumers.
+  - `ml_playground.framework.sampling.api.run_sampling(SamplingPlan)` is the canonical sampling entry point for consumers.
+
 ## Checkpointing System
+
+### Legacy requirements pointer
+
+The retired `REQUIREMENTS.md` file formerly redirected checkpointing expectations here. Treat this section as the single source of truth for checkpoint retention, naming, and rotation requirements.
 
 ### Policies
 

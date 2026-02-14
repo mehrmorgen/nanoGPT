@@ -14,7 +14,7 @@ description: Author responsibilities and workflows for code review submissions
 
 ## Before You Open a Pull Request
 
-- Run local automation using `uv run ci-tasks quality` and any focused commands (`uv run test-tasks unit`, `uv run lint-tasks ruff`) required for confidence.
+- Run local automation using `uv run tools ci quality-gate` and any focused commands (`uv run tools test unit`, `uv run tools quality lint`) required for confidence.
 - Self-review every diff via your editor or `git diff --staged` to catch TODOs, debug prints, or flaky changes.
 - Confirm scope is limited to one logical change (see `DEVELOPMENT.md#granular-commits-policy`) and that each functional change ships with tests.
 - Update documentation, configs, and telemetry together when behavior changes; link the authoritative file per `DOCUMENTATION.md`.
@@ -37,7 +37,7 @@ description: Author responsibilities and workflows for code review submissions
 
 - Respond promptly: aim to reply or push updates within one business day to keep context warm.
 - Prefer discussion over debate: summarize what you heard and propose next steps when disagreements arise.
-- Use project tooling: run `uv run python tools/review.py list --pr <number> --unreplied --unresolved` daily until the review closes.
+- Use project tooling: run `uv run tools dev review-list <pr_number> --unreplied --unresolved` daily until the review closes.
 - Document decisions: capture significant design outcomes directly in the PR conversation for future discoverability.
 
 ## After Approval

@@ -37,8 +37,8 @@ Call out files or commits that deserve extra attention. Reference experiment con
 
 ## Checklist
 
-- [ ] I followed [`AUTHOR_GUIDELINES.md`](../.dev-guidelines/AUTHOR_GUIDELINES.md) including a self-review of the diff.
+- [ ] I followed [`AUTHOR_GUIDELINES.md`](../.dev-guidelines/project-specific/AUTHOR_GUIDELINES.md) including a self-review of the diff.
 - [ ] All automation listed in **Testing & Validation** is linked or pasted, and failures (if any) are explained.
-- [ ] Scope is a single logical change with paired tests and docs per [`DEVELOPMENT.md`](../.dev-guidelines/DEVELOPMENT.md).
+- [ ] Scope is a single logical change with paired tests and docs per [`DEVELOPMENT.md`](../.dev-guidelines/project-specific/DEVELOPMENT.md).
 - [ ] I updated configs/docs/telemetry where behavior changed and linked canonical sources (`DOCUMENTATION.md`).
-- [ ] Reviewers can verify using [`CODE_REVIEW_CHECKLIST.md`](../.dev-guidelines/CODE_REVIEW_CHECKLIST.md).
+- [ ] Reviewers can verify using [`CODE_REVIEW_CHECKLIST.md`](../.dev-guidelines/project-specific/CODE_REVIEW_CHECKLIST.md).

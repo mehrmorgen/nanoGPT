@@ -1,48 +1,54 @@
 # Test Suites
 
+<details>
+<summary>Related documentation</summary>
+
+- [.dev-guidelines/project-specific/TESTING.md](../.dev-guidelines/project-specific/TESTING.md) – Authoritative testing policies, suite scopes, and gating rules.
+- [.dev-guidelines/project-specific/DOCUMENTATION.md](../.dev-guidelines/project-specific/DOCUMENTATION.md) – Documentation standards applied to test READMEs.
+
+</details>
+
 The `tests/` directory hosts all automated checks. Each subfolder documents its own
 scope; this top-level README provides the high-level testing policy and entry points.
 
 ## Structure
 
-```text
+```bash
 tests/
-├── README.md            - this file
-├── acceptance/          - policy and workflow enforcement via CLI
-├── conftest.py          - shared fixtures limited to stable, deterministic helpers
-├── e2e/                 - end-to-end CLI smoke tests
-├── integration/         - multi-module behaviors using public APIs
-├── property/            - Hypothesis properties scoped as part of coverage gates
-├── support/             - shared data/assets for tests (read-only)
-└── unit/                - example-driven unit tests (use when properties are insufficient)
-    └── <package>/       - mirrors `src/ml_playground/<package>/` for unit tests
+├── README.md            # this file
+├── acceptance/          # policy and workflow enforcement via CLI
+├── conftest.py          # shared fixtures limited to stable, deterministic helpers
+├── e2e/                 # end-to-end CLI smoke tests
+├── integration/         # multi-module behaviors using public APIs
+├── property/            # Hypothesis properties scoped as part of coverage gates
+├── support/             # shared data/assets for tests (read-only)
+└── unit/                # exemplar-driven unit tests (fast, deterministic)
+    └── <package>/       # mirrors framework/tools/experiments subpackages under `src/ml_playground/`
 ```
-
-Property-based tests are the default starting point. Unit tests exist for
-named scenarios that are hard to express as properties.
 
 Unit tests always live under `tests/unit/<package>/...`, mirroring the namespace
 in `src/ml_playground/`. Do not create alternative layouts such as
 `tests/ml_playground/unit`; keep the suite hierarchy stable so imports, tooling,
 and documentation remain aligned with the developer guidelines
-(`.dev-guidelines/TESTING.md`).
+(`.dev-guidelines/project-specific/TESTING.md`).
 
 ## Coverage Policy
 
-- `uv run ci-tasks coverage-report` runs `pytest tests/unit tests/property` under coverage.
+- `uv run tools test coverage` runs `pytest tests/unit tests/property` under coverage.
 - Integration, E2E, and acceptance suites do not contribute to coverage gates, but they
   still run in CI.
-- See `.dev-guidelines/TESTING.md` for thresholds and gating rules.
+- See `.dev-guidelines/project-specific/TESTING.md` for thresholds and gating rules.
 
 ## Running Tests
 
-- **Fast feedback (unit + property)**: `uv run ci-tasks coverage-report`
+- **Fast feedback (unit + property)**: `uv run tools test coverage`
 - **Specific suite**: `uv run pytest tests/<suite>/`
 - **Single file**: `uv run pytest tests/<suite>/path/to/test_file.py`
-- **Acceptance workflows**: `uv run test-tasks acceptance`
+- **Acceptance workflows**: `uv run tools test acceptance`
+- **Runtime entrypoints**: prefer `run_training`/`run_sampling` with plan objects in test helpers.
 
 ## Additional References
 
-- `.dev-guidelines/TESTING.md` – authoritative testing policies.
+- `.dev-guidelines/project-specific/TESTING.md` – authoritative testing policies.
 - `tests/unit/README.md` – detailed unit-test conventions.
 - `tests/property/README.md` – Hypothesis guidance and folder layout.

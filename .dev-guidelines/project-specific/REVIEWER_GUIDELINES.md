@@ -23,12 +23,12 @@ description: Reviewer responsibilities and behaviors for empathetic, high-signal
 
 - Prioritize correctness, security, performance, and maintainability.
 - Mark blocking feedback with **`[blocking]`** so authors can sequence fixes; leave non-blocking notes as suggestions.
-- Avoid nitpicks. If automation can catch it, ensure it’s in `uv run ci-tasks quality` or `ruff` instead.
+- Avoid nitpicks. If automation can catch it, ensure it’s in `uv run tools ci quality-gate` or `ruff` instead.
 - Offer alternatives when pointing out problems; pair with code snippets or configuration examples where possible.
 
 ## Collaborate with Automation
 
-- Trust CI results but verify discrepancies. Re-run targeted commands locally (`uv run test-tasks unit`, `uv run ci-tasks quality`) when failures look environmental.
+- Trust CI results but verify discrepancies. Re-run targeted commands locally (`uv run tools test unit`, `uv run tools ci quality-gate`) when failures look environmental.
 - Use `uv run python tools/review.py list --pr <number> --unreplied --unresolved` to stay on top of open threads.
 - Encourage authors to add guardrails (tests, monitoring) when risky behavior is introduced.
 

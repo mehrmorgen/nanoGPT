@@ -7,7 +7,7 @@ description: Shared code review checklist for authors and reviewers
 
 ## For Authors
 
-- [ ] `uv run ci-tasks quality` passes and relevant focused suites (e.g., `uv run test-tasks unit`) are green.
+- [ ] `uv run tools ci quality-gate` passes and relevant focused suites (e.g., `uv run tools test unit`) are green.
 - [ ] PR title states the single change being shipped; summary covers the why, user impact, and validation commands (copy/paste outputs when useful).
 - [ ] Scope is one logical change; commits follow Conventional Commit style and pair code with tests.
 - [ ] Documentation/config updates accompany behavior changes; links point to canonical sources.

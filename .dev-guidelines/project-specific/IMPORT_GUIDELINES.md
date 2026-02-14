@@ -8,7 +8,7 @@ description: Import standards enforcing PEP 420 namespaces and strict module bou
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for core policies and quick-start commands.
+- [Developer Guidelines Index](./README.md) – Entry point for core policies and quick-start commands.
 - [Development Practices](./DEVELOPMENT.md) – Commit standards, tooling policies, and architecture notes.
 
 </details>
@@ -40,7 +40,7 @@ description: Import standards enforcing PEP 420 namespaces and strict module bou
 
 1. **Absolute, module-level imports only**
 
-   - Use absolute paths rooted at the repository package (e.g., `from ml_playground.core.foo import Bar`).
+   - Use absolute paths rooted at the repository package (e.g., `from ml_playground.framework.core.foo import Bar`).
    - Prohibited: relative imports, umbrella modules, or implicit re-exports.
 
 1. **No star imports**
@@ -114,13 +114,13 @@ description: Import standards enforcing PEP 420 namespaces and strict module bou
 ### Import specific names from a concrete module
 
 ```python
-from ml_playground.core.optimizer import Optimizer
+from ml_playground.framework.core.error_handling import DataError
 ```
 
 ### Import a module wholesale
 
 ```python
-import ml_playground.data_pipeline.sources.text as text_sources
+import ml_playground.framework.data_pipeline.sources.memmap as memmap_sources
 ```
 
 ### Optional dependency (function scoped)
@@ -140,7 +140,7 @@ def export_to_parquet(df, path):
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ml_playground.models.core.model import GPT
+    from ml_playground.framework.models.core.model import GPT
 ```
 
 ### Documented temporary cycle break
@@ -148,9 +148,9 @@ if TYPE_CHECKING:
 ```python
 def compute_metrics():
     # Cycle break: trainer.metrics imports compute_metrics during warm start
-    from ml_playground.training.metrics import aggregate
+    from ml_playground.framework.training.loop.runner import Trainer
 
-    return aggregate()
+    return Trainer
 ```
 
 ## Exception Handling Checklist
@@ -161,7 +161,7 @@ def compute_metrics():
 
 ## Tooling Enforcement
 
-- Run `uv run ci-tasks quality` (ruff + formatter) before every commit to enforce import style automatically.
+- Run `uv run tools ci quality-gate` (ruff + formatter) before every commit to enforce import style automatically.
 - Keep type checkers (`pyright`, `mypy`) green; use `TYPE_CHECKING` guards to avoid runtime imports.
 - Pair import-structure changes with relevant tests/documentation updates.
 

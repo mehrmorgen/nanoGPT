@@ -11,7 +11,7 @@ maintain velocity and reliability.
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for ml_playground principles and quick-start commands.
+- [Developer Guidelines Index](./README.md) – Entry point for ml_playground principles and quick-start commands.
 - [Development Practices](./DEVELOPMENT.md) – Quality gates, commit standards, and runnable-state expectations.
 
 </details>
@@ -57,7 +57,7 @@ Examples:
 Good examples:
 
 - `test(cli): add cuda device seeding property`
-- `docs(workflow): clarify optional ci-tasks quality usage`
+- `docs(workflow): clarify optional tools ci quality-gate usage`
 - `fix(loader): guard against missing override file`
 
 Poor examples (do not use):
@@ -75,9 +75,9 @@ Poor examples (do not use):
 ## Verification Gates & Runnable Commits
 
 - Every commit must be runnable when checked out.
-- Gates to pass locally (same as pre-commit/CI): `uv run ci-tasks quality`.
+- Gates to pass locally (same as pre-commit/CI): `uv run tools ci quality-gate`.
 - Do not bypass verification (avoid `--no-verify`).
-- See `.dev-guidelines/DEVELOPMENT.md` → “Runnable State Requirement (MANDATORY)” for details.
+- See `DEVELOPMENT.md` → “Runnable State Requirement (MANDATORY)” for details.
 
 ## Commit Granularity (Reference)
 

@@ -11,7 +11,7 @@ READMEs, tests READMEs, and tools.
 <details>
 <summary>Related documentation</summary>
 
-- [Developer Guidelines Index](./Readme.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
+- [Developer Guidelines Index](./README.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
 - [Development Practices](./DEVELOPMENT.md) – Core development practices, quality standards, and workflow for ml_playground contributors.
 
 </details>
@@ -22,6 +22,8 @@ READMEs, tests READMEs, and tools.
 - [Required Sections per Experiment Readme](#required-sections-per-experiment-readme)
 - [Folder Tree Standard](#folder-tree-standard)
 - [Linking to Framework Docs](#linking-to-framework-docs)
+- [Environment Commands](#environment-commands)
+- [Link Hygiene](#link-hygiene)
 - [Markdown Style (mdformat)](#markdown-style-mdformat)
 - [Guideline Divergence Documentation](#guideline-divergence-documentation)
 - [Cross-Referencing](#cross-referencing)
@@ -35,15 +37,15 @@ READMEs, tests READMEs, and tools.
 ## Abstraction Policy
 
 - Top level (repo `README.md`): high-level orientation and entrypoints only.
-- Mid level (e.g., `ml_playground/experiments/Readme.md`): overview of experiments and shared conventions. Avoid per-file
+- Mid level (e.g., `ml_playground/experiments/README.md`): overview of experiments and shared conventions. Avoid per-file
   details.
-- Low level (e.g., `ml_playground/experiments/<name>/Readme.md`): operational detail to run the experiment, but remain
+- Low level (e.g., `ml_playground/experiments/<name>/README.md`): operational detail to run the experiment, but remain
   concise. Defer general concepts to shared docs.
 - The deeper you go in the tree, the more concrete the instructions — but keep them brief and avoid duplication.
 
 ## Required Sections per Experiment Readme
 
-- Follow the canonical blueprint documented in `ml_playground/experiments/Readme.md`.
+- Follow the canonical blueprint documented in `ml_playground/experiments/README.md`.
 - Keep content focused on experiment-specific context; link back to shared docs for
   general workflows, commands, or policies.
 - Include only the sections that add new information beyond the shared overview, trimming
@@ -59,7 +61,7 @@ Example:
 
 ```bash
 ml_playground/experiments/shakespeare/
-├── Readme.md        # experiment documentation (this file)
+├── README.md        # experiment documentation (this file)
 ├── config.toml      # sample/preset config for real runs overwriting ml_playground/experiments/default_config.toml
 ├── preparer.py      # dataset preparation
 ├── trainer.py       # training orchestration
@@ -72,10 +74,40 @@ ml_playground/experiments/shakespeare/
 - When referring to shared helpers or patterns, link to `docs/framework_utilities.md` rather than duplicating
   explanations.
 - Example line: “For framework utilities, see `docs/framework_utilities.md`.”
+- Align experiment/package README links with actual directory depth. For example, from `src/ml_playground/experiments/<name>/` use `../../../../docs/framework_utilities.md`.
+
+## Environment Commands
+
+- Standardize environment setup snippets to:
+
+  ```bash
+  uv run tools env setup
+  uv run tools env verify
+  ```
+
+- If additional packages are required (e.g., PEFT extras) list them explicitly after the verify command.
+
+- Documentation must mirror the commands present in the current codebase. Avoid referencing deprecated shorthands like `uv run setup` or old aliases.
+
+- Historical documents (e.g., change logs, architectural retrospectives, roadmaps) may mention past commands, but annotate them as historical context to prevent confusion.
+
+## Link Hygiene
+
+- Use relative links exclusively for in-repo references. Verify the path from the README’s location before committing.
+- When linking to `.dev-guidelines/*`, start from the current directory depth (e.g., `../../../.dev-guidelines/DEVELOPMENT.md`).
+- Include framework/utilities links only when the referenced section adds context beyond what the current README covers.
+- Run `uv run tools ci quality-gate` (delegates to pre-commit) to catch broken links and ensure mdformat coverage across `docs/`, `src/ml_playground/`, `tests/`, `scripts/`, and `.dev-guidelines/`.
+- Avoid absolute links to repository files; they break when branches diverge or when the repository is accessed offline. Absolute URLs are only appropriate for external resources.
+
+## Related documentation section (collapsible)
+
+- We intentionally keep a short “Related documentation” section at the top of long READMEs. Use a collapsible `<details><summary>Related documentation</summary>...</details>` block to keep context discoverable without overwhelming the header.
+- This HTML usage would normally trip MD033 (no-inline-html); our linters rely on `mdformat` (no MD033 rule), so the block is accepted. If a markdownlint run is introduced, it must explicitly allow the `<details>/<summary>` pattern (MD033) to avoid false positives.
+- Keep entries concise (1–5 bullets) and use relative paths aligned to the current file’s depth.
 
 ## Markdown Style (mdformat)
 
-- Run `uv run mdformat <file.md>` (or rely on `uv run ci-tasks quality`) to format Markdown consistently.
+- Run `uv run mdformat <file.md>` (or rely on `uv run tools ci quality-gate`) to format Markdown consistently. The pre-commit hook enforces mdformat across repository Markdown including `scripts/**/*.md`.
 - Maintain one blank line above and below headings.
 - Ensure a blank line before and after lists; mdformat enforces indentation automatically.
 - Add a blank line before and after fenced code blocks and specify a language when possible.
@@ -93,8 +125,8 @@ ml_playground/experiments/shakespeare/
 
 - Use relative links within the repository: `../../docs/framework_utilities.md` from experiment folders.
 - Prefer short, stable link text.
-- When linking to another folder, link to that folder's `Readme.md` (single entry point) instead of deep files. Deep
-  documents should be discovered from that folder's `Readme.md`.
+- When linking to another folder, link to that folder's `README.md` (single entry point) instead of deep files. Deep
+  documents should be discovered from that folder's `README.md`.
 
 ## Cross-Document Details Blocks
 
@@ -129,7 +161,7 @@ ml_playground/experiments/shakespeare/
 
 ## Commit and Review Expectations
 
-- Docs must pass the markdownlint portion of our quality gates. The pre-commit hook runs `uv run ci-tasks quality`,
+- Docs must pass the markdownlint portion of our quality gates. The pre-commit hook runs `uv run tools ci quality-gate`,
   so avoid bypassing it.
 - Prefer granular commits with clear `docs(<area>): <subject>` messages.
 - When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same
@@ -140,7 +172,7 @@ ml_playground/experiments/shakespeare/
 ## Tests and Tools READMEs
 
 - Tests (`tests/*/README.md`): keep to purpose, how to run, principles, folder structure. No deep internal details.
-- Tools (e.g., `tools/llama_cpp/README.md`): short purpose, exact usage, and a small annotated tree.
+- Scripts (e.g., `scripts/llama_cpp/README.md`): short purpose, exact usage, and a small annotated tree.
 
 ## Maintenance
 
