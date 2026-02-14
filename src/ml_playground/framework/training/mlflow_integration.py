@@ -2,29 +2,33 @@
 
 from __future__ import annotations
 
-import os
-import platform
-import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Dict, Optional, cast
 
-try:
-    import mlflow  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency handling
-    mlflow = cast(Any, None)
-from ml_playground.configuration.models import (
-    RuntimeConfig,
-    SharedConfig,
-    TrainerConfig,
-)
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.core.protocols import (
+from ml_playground.framework.core.protocols import (
     MLflowClient,
     MLflowRun,
     OSModule,
     PlatformModule,
     SysModule,
 )
+
+try:
+    import mlflow  # type: ignore[import-not-found]
+except (ImportError, Exception):
+    mlflow = None
+
+from ml_playground.framework.configuration.models import (
+    RuntimeConfig,
+    MetadataConfig,
+    TrainerConfig,
+)
+from ml_playground.framework.core.di_implementations import (
+    StdOSModule,
+    StdPlatformModule,
+    StdSysModule,
+)
+from ml_playground.framework.core.logging_protocol import LoggerLike
 
 
 class MLflowManager:
@@ -33,7 +37,7 @@ class MLflowManager:
     def __init__(
         self,
         cfg: RuntimeConfig,
-        shared: SharedConfig,
+        metadata: MetadataConfig,
         logger: LoggerLike,
         mlflow_client: Optional[MLflowClient] = None,
         os_module: Optional[OSModule] = None,
@@ -41,18 +45,16 @@ class MLflowManager:
         sys_module: Optional[SysModule] = None,
     ):
         self.cfg = cfg
-        self.shared = shared
+        self.metadata = metadata
         self.logger = logger
         self._mlflow = (
             mlflow_client if mlflow_client is not None else cast(MLflowClient, mlflow)
         )
-        self._os = os_module if os_module is not None else cast(OSModule, os)
+        self._os = os_module if os_module is not None else StdOSModule()
         self._platform = (
-            platform_module
-            if platform_module is not None
-            else cast(PlatformModule, platform)
+            platform_module if platform_module is not None else StdPlatformModule()
         )
-        self._sys = sys_module if sys_module is not None else cast(SysModule, sys)
+        self._sys = sys_module if sys_module is not None else StdSysModule()
         self._active_run: Optional[MLflowRun] = None
 
     def setup(self) -> None:
@@ -64,15 +66,16 @@ class MLflowManager:
             if self.cfg.mlflow_tracking_uri is not None:
                 self._mlflow.set_tracking_uri(str(self.cfg.mlflow_tracking_uri))
 
-            exp_name = self.cfg.mlflow_experiment_name or self.shared.experiment
+            exp_name = self.cfg.mlflow_experiment_name or self.metadata.experiment
 
-            artifact_root = self.shared.config_path.parent / ".." / "out" / "mlruns"
+            artifact_root = self.metadata.config_path.parent / ".." / "out" / "mlruns"
             try:
                 artifact_root.mkdir(parents=True, exist_ok=True)
             except Exception:
                 pass
 
             try:
+                # Use a typed variable for the result to satisfy strict mode.
                 existing = self._mlflow.get_experiment_by_name(exp_name)
             except Exception:
                 existing = None
@@ -90,7 +93,7 @@ class MLflowManager:
 
             self._active_run = self._mlflow.start_run(
                 run_name=self.cfg.mlflow_run_name,
-                description=f"Training run for {self.shared.experiment}",
+                description=f"Training run for {self.metadata.experiment}",
             )
 
             # Log system info for reproducibility
@@ -145,9 +148,9 @@ class MLflowManager:
             self._mlflow.log_params(params)
 
             # Log raw config file as artifact for full versioning
-            if self.shared.config_path.exists():
+            if self.metadata.config_path.exists():
                 self._mlflow.log_artifact(
-                    str(self.shared.config_path), artifact_path="config"
+                    str(self.metadata.config_path), artifact_path="config"
                 )
         except Exception as exc:
             self.logger.warning(f"MLflow config logging failed: {exc}")

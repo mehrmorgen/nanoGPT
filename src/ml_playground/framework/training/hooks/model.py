@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import torch
 
-from ml_playground.configuration.models import TrainerConfig
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.models.core.model import GPT
+from ml_playground.framework.configuration.models import TrainerConfig
+from ml_playground.framework.models.core.model import GPT
+from ml_playground.framework.core.logging_protocol import LoggerLike
 
 
 __all__ = ["initialize_model"]
@@ -16,7 +14,7 @@ __all__ = ["initialize_model"]
 
 def initialize_model(
     cfg: TrainerConfig, logger: LoggerLike
-) -> Tuple[GPT, torch.optim.Optimizer]:
+) -> tuple[GPT, torch.optim.Optimizer]:
     """Materialize the GPT model and optimizer with configured hyperparameters."""
     logger.info("Initializing model and optimizer")
     model = GPT(cfg.model, logger=logger)

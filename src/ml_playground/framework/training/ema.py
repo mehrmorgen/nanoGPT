@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 
-from ml_playground.configuration.models import DeviceKind
-from ml_playground.models.core.model import GPT
+import torch
+from typing import Mapping, cast
+from ml_playground.framework.configuration.models import DeviceKind
+from ml_playground.framework.models.core.model import GPT
 
 
 __all__ = ["EMA"]
@@ -20,11 +22,13 @@ class EMA:
             device: Target device identifier onto which the shadow weights are moved.
         """
         self.decay = decay
-        self.shadow = {
-            k: v.detach().clone().to(device)
-            for k, v in model.state_dict().items()
-            if v.dtype.is_floating_point
-        }
+        # Use explicit typing and casting to satisfy strict basedpyright.
+        self.shadow: dict[str, torch.Tensor] = {}
+        # Cast the state_dict to a more specific type to satisfy basedpyright
+        state_dict = cast(Mapping[str, torch.Tensor], model.state_dict())
+        for k, v in state_dict.items():
+            if v.dtype.is_floating_point:
+                self.shadow[k] = v.detach().clone().to(device)
 
     def update(self, model: GPT) -> None:
         """Update stored shadow weights with the latest model parameters."""
@@ -32,8 +36,9 @@ class EMA:
             if param.requires_grad and param.dtype.is_floating_point:
                 assert name in self.shadow
                 # Standard EMA: new = decay * old + (1 - decay) * current
+                current_val = param.data
                 new_average = (
-                    self.decay * self.shadow[name] + (1.0 - self.decay) * param.data
+                    self.decay * self.shadow[name] + (1.0 - self.decay) * current_val
                 )
                 self.shadow[name] = new_average.detach()
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ml_playground.training.optim.lr_scheduler import get_lr as _core_get_lr
-from ml_playground.configuration.models import LRSchedule, OptimConfig
+from ml_playground.framework.training.optim.lr_scheduler import get_lr as _core_get_lr
+from ml_playground.framework.configuration.models import LRSchedule, OptimConfig
 
 
 __all__ = ["get_lr"]

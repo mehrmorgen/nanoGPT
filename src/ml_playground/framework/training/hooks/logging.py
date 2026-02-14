@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.models.core.model import GPT
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.models.core.model import GPT
 
 
 __all__ = ["log_training_step"]
