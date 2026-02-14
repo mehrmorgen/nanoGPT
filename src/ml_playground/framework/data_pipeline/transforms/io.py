@@ -3,55 +3,44 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Callable, Mapping, cast
 import pickle
 
 import numpy as np
 
-from ml_playground.core.file_state import diff_file_states, snapshot_file_states
-from ml_playground.configuration.models import DataConfig
-from ml_playground.core.error_handling import DataError
-from ml_playground.core.logging_protocol import LoggerLike
-from ml_playground.data_pipeline.transforms.tokenization import coerce_tokenizer_type
-from ml_playground.data_pipeline.transforms.metadata import validate_metadata_contract
-from ml_playground.core.tokenizer import create_tokenizer
-from ml_playground.core.tokenizer_protocol import Tokenizer
+from ml_playground.framework.core.file_state import (
+    diff_file_states,
+    snapshot_file_states,
+)
+from ml_playground.framework.configuration.models import DataConfig
+from ml_playground.framework.core.error_handling import DataError
+from ml_playground.framework.core.logging_protocol import LoggerLike
+from ml_playground.framework.core.tokenizer import create_tokenizer
+from ml_playground.framework.core.tokenizer_protocol import Tokenizer
+from ml_playground.framework.data_pipeline.transforms.tokenization import (
+    coerce_tokenizer_type,
+)
 
 __all__ = [
     "write_bin_and_meta",
     "seed_text_file",
-    "coerce_seed_policy",
     "seed_text_file_with_policy",
+    "coerce_seed_policy",
     "setup_tokenizer",
     "snapshot_file_states",
     "diff_file_states",
 ]
-
-SeedPolicy = Literal["auto", "fail_fast"]
-
-
-def coerce_seed_policy(value: Any | None) -> SeedPolicy:
-    if value is None:
-        return "auto"
-    if value in ("auto", "fail_fast"):
-        return value
-    raise DataError(
-        f"Unknown seed policy: {value}",
-        reason="Unsupported seed_text_file policy",
-        rationale="Seed policy must be 'auto' or 'fail_fast'",
-    )
 
 
 def write_bin_and_meta(
     ds_dir: Path,
     train: np.ndarray,
     val: np.ndarray,
-    meta: dict,
+    meta: Mapping[str, object],
     logger: LoggerLike,
     data_cfg: DataConfig | None = None,
 ) -> None:
     ds_dir.mkdir(parents=True, exist_ok=True)
-    validated_meta = validate_metadata_contract(meta)
 
     if data_cfg is not None:
         train_path = data_cfg.train_path(ds_dir)
@@ -67,7 +56,7 @@ def write_bin_and_meta(
     if train_path.exists() and val_path.exists() and meta_path.exists():
         try:
             with meta_path.open("rb") as f:
-                existing_meta = pickle.load(f)
+                existing_meta = cast(Mapping[str, object], pickle.load(f))
         except (OSError, pickle.UnpicklingError, EOFError) as e:
             raise DataError(
                 f"Failed to read existing meta.pkl at {meta_path}: {e}",
@@ -75,7 +64,6 @@ def write_bin_and_meta(
                 rationale="Preparation requires re-using valid metadata to guarantee deterministic outputs",
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-            validate_metadata_contract(existing_meta)
             created, _, skipped = diff_file_states(
                 [train_path, val_path, meta_path], before
             )
@@ -99,7 +87,7 @@ def write_bin_and_meta(
         tmp_train.write_bytes(train.tobytes())
         tmp_val.write_bytes(val.tobytes())
         with tmp_meta.open("wb") as f:
-            pickle.dump(validated_meta, f)
+            pickle.dump(dict(meta), f)
 
         tmp_train.replace(train_path)
         tmp_val.replace(val_path)
@@ -131,57 +119,74 @@ def seed_text_file(dst: Path, candidates: list[Path]) -> None:
     )
 
 
-def seed_text_file_with_policy(
-    dst: Path,
-    candidates: list[Path],
-    *,
-    policy: SeedPolicy,
-) -> None:
-    if policy not in ("auto", "fail_fast"):
-        raise DataError(
-            f"Unknown seed policy: {policy}",
-            reason="Unsupported seed_text_file policy",
-            rationale="Seed policy must be 'auto' or 'fail_fast'",
-        )
-    if dst.exists():
-        return
-    if policy == "auto":
-        seed_text_file(dst, candidates)
-        return
-    raise FileNotFoundError(
-        f"seed_text_file: required file missing at {dst} (policy={policy})"
+def coerce_seed_policy(policy: object | None) -> str:
+    if policy is None:
+        return "auto"
+    if isinstance(policy, str):
+        if policy in {"auto", "fail_fast"}:
+            return policy
+    raise DataError(
+        f"Unsupported seed policy: {policy!r}",
+        reason="Only 'auto' and 'fail_fast' are supported assumptions here",
+        rationale="Seed helpers require deterministic policy choices",
     )
+
+
+def seed_text_file_with_policy(
+    dst: Path, candidates: list[Path], *, policy: object | None
+) -> None:
+    chosen_policy = coerce_seed_policy(policy)
+    if chosen_policy == "auto":
+        seed_text_file(dst, candidates)
+    elif chosen_policy == "fail_fast":
+        for cand in candidates:
+            if cand.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(cand.read_bytes())
+                return
+        raise FileNotFoundError(
+            f"seed_text_file_with_policy(fail_fast): none of the candidate paths exist: {candidates}"
+        )
+    else:
+        raise DataError(
+            f"Unsupported seed policy: {chosen_policy}",
+            reason="Only 'auto' and 'fail_fast' are supported",
+            rationale="Dataset seeding needs deterministic behavior",
+        )
 
 
 def setup_tokenizer(
     out_dir: Path,
     data_cfg: DataConfig | None = None,
     *,
-    tiktoken_loader: Callable[[], Any] | None = None,
+    token_factory: Callable[..., Tokenizer] = create_tokenizer,
 ) -> Tokenizer | None:
     meta_path = out_dir / "meta.pkl"
     if not meta_path.exists():
         return None
     with meta_path.open("rb") as f:
-        meta = pickle.load(f)
-    meta = validate_metadata_contract(meta)
-    tokenizer_type = meta.get("tokenizer_type")
-    if tokenizer_type is None:
+        meta = cast(Mapping[str, object], pickle.load(f))
+    tokenizer_type_obj = meta.get("tokenizer_type")
+    if not isinstance(tokenizer_type_obj, str):
         raise DataError(
             f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'",
             reason="Metadata lacks tokenizer_type entry",
             rationale="Downstream steps need explicit tokenizer kind to construct compatible tokenizers",
         )
+    tokenizer_type = tokenizer_type_obj
     if tokenizer_type in ("char", "word"):
-        vocab = meta.get("stoi") or meta.get("vocab")
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
+        vocab = cast(Mapping[str, object] | None, meta.get("stoi") or meta.get("vocab"))
+        tokenizer = token_factory(coerce_tokenizer_type(tokenizer_type), vocab=vocab)
     elif tokenizer_type == "tiktoken":
-        encoding_name = meta.get("encoding_name", "cl100k_base")
-        tokenizer = create_tokenizer(
-            tokenizer_type,
-            encoding_name=encoding_name,
-            loader=tiktoken_loader,
+        encoding_name_obj = meta.get("encoding_name")
+        encoding_name = (
+            encoding_name_obj if isinstance(encoding_name_obj, str) else "cl100k_base"
         )
+        loader = meta.get("tokenizer_loader")
+        kwargs: dict[str, object] = {"encoding_name": encoding_name}
+        if loader is not None:
+            kwargs["loader"] = loader
+        tokenizer = token_factory(tokenizer_type, **kwargs)
     else:
-        tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type))
+        tokenizer = token_factory(coerce_tokenizer_type(tokenizer_type))
     return tokenizer

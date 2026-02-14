@@ -23,4 +23,5 @@ class MemmapReader:
     @classmethod
     def open(cls, path: Path, *, dtype: np.dtype[Any]) -> "MemmapReader":
         arr: npt.NDArray[Any] = np.memmap(path, dtype=dtype, mode="r")
-        return cls(arr=arr, length=int(arr.shape[0]))
+        length = len(arr)
+        return cls(arr=arr, length=length)

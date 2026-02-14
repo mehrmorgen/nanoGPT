@@ -13,8 +13,8 @@ import torch
 from torch import Tensor
 from numpy.lib.stride_tricks import sliding_window_view
 
-from ml_playground.configuration.models import DataConfig, DeviceKind
-from ml_playground.data_pipeline.sources.memmap import MemmapReader
+from ml_playground.framework.configuration.models import DataConfig, DeviceKind
+from ml_playground.framework.data_pipeline.sources.memmap import MemmapReader
 
 __all__ = ["sample_batch", "SimpleBatches"]
 
@@ -81,19 +81,21 @@ class SimpleBatches:
 
         dtype: np.dtype[Any] = np.dtype(np.uint16)
         meta_path = data.meta_path(dataset_dir)
+        meta_obj: object | None = None
         if meta_path.exists():
             try:
                 with meta_path.open("rb") as f:
-                    meta: dict[str, object] | None = pickle.load(f)
+                    meta_obj = cast(object, pickle.load(f))
             except (OSError, pickle.UnpicklingError, EOFError):
-                meta = None
-            if isinstance(meta, dict):
-                dts_obj = meta.get("dtype")
-                dts = dts_obj if isinstance(dts_obj, str) else None
-                if dts == "uint32":
-                    dtype = np.dtype(np.uint32)
-                elif dts == "uint16":
-                    dtype = np.dtype(np.uint16)
+                meta_obj = None
+            if isinstance(meta_obj, dict):
+                dtype_meta = cast(dict[str, object], meta_obj)
+                dts_obj = dtype_meta.get("dtype")
+                if isinstance(dts_obj, str):
+                    if dts_obj == "uint32":
+                        dtype = np.dtype(np.uint32)
+                    elif dts_obj == "uint16":
+                        dtype = np.dtype(np.uint16)
         self.train = MemmapReader.open(train_path, dtype=dtype)
         self.val = MemmapReader.open(val_path, dtype=dtype)
         self._cursor: dict[Literal["train", "val"], int] = {"train": 0, "val": 0}

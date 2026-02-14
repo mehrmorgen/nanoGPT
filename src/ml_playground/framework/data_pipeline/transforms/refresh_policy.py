@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ml_playground.configuration.models import BinRefreshPolicy
+from ml_playground.framework.configuration.models import BinRefreshPolicy
 
 
 def should_refresh_bins(
