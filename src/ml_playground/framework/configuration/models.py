@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+import tomllib
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +28,29 @@ if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
     pass
 READ_POLICY_LATEST: Literal["latest"] = "latest"
 READ_POLICY_BEST: Literal["best"] = "best"
-DEFAULT_READ_POLICY: Literal["best"] = READ_POLICY_BEST
+
+
+def _load_default_read_policy_from_toml() -> Literal["latest", "best"]:
+    config_path = (
+        Path(__file__).resolve().parents[2] / "experiments" / "default_config.toml"
+    )
+    data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        read_policy = data["training"]["runtime"]["checkpointing"]["read_policy"]
+    except KeyError as e:
+        raise ValueError(
+            f"Could not find default read_policy in {config_path}. Missing key: {e}"
+        ) from e
+    if read_policy == READ_POLICY_LATEST:
+        return READ_POLICY_LATEST
+    if read_policy == READ_POLICY_BEST:
+        return READ_POLICY_BEST
+    raise ValueError(
+        f"Unsupported default read_policy in {config_path}: {read_policy!r}"
+    )
+
+
+DEFAULT_READ_POLICY: Literal["latest", "best"] = _load_default_read_policy_from_toml()
 
 # ----- DI type aliases (kept generic to avoid import cycles) -----
 # Read raw text from a filesystem path
