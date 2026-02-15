@@ -239,27 +239,15 @@ class Trainer:
                     if losses["val"] < self.best_val_loss:
                         self.best_val_loss = losses["val"]
                         if self.iter_num > 0:
-                            self.deps.save_checkpoint(
-                                self.ckpt_mgr,
-                                self.cfg,
-                                model=raw_model,
-                                optimizer=self.optimizer,
-                                ema=self.ema,
+                            self._save_checkpoint(
+                                raw_model=raw_model,
                                 iter_num=self.iter_num,
-                                best_val_loss=self.best_val_loss,
-                                logger=self.logger,
                                 is_best=True,
                             )
                     try:
-                        self.deps.save_checkpoint(
-                            self.ckpt_mgr,
-                            self.cfg,
-                            model=raw_model,
-                            optimizer=self.optimizer,
-                            ema=self.ema,
+                        self._save_checkpoint(
+                            raw_model=raw_model,
                             iter_num=self.iter_num,
-                            best_val_loss=self.best_val_loss,
-                            logger=self.logger,
                             is_best=False,
                         )
                     except (CheckpointError, RuntimeError, OSError) as exc:
@@ -349,6 +337,25 @@ class Trainer:
                 self.writer.close()
 
         return self.iter_num, self.best_val_loss
+
+    def _save_checkpoint(
+        self,
+        *,
+        raw_model: GPT,
+        iter_num: int,
+        is_best: bool,
+    ) -> None:
+        self.deps.save_checkpoint(
+            self.ckpt_mgr,
+            self.cfg,
+            model=raw_model,
+            optimizer=self.optimizer,
+            ema=self.ema,
+            iter_num=iter_num,
+            best_val_loss=self.best_val_loss,
+            logger=self.logger,
+            is_best=is_best,
+        )
 
     def _train_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Perform a gradient accumulation step and update EMA if configured."""
