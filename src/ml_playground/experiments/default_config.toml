@@ -113,6 +113,10 @@ ema_decay = 0.0
 # Initial best validation loss for checkpoint tracking
 initial_best_val_loss = 1e9
 
+[training.runtime.checkpointing]
+# Which checkpoint family training should resume from when requested.
+read_policy = "best"
+
 [sampling.runtime]
 # Use the same default out_dir to find checkpoints by default (fully overridable).
 out_dir = "./out"
@@ -121,6 +125,10 @@ device = "cpu"
 dtype = "float32"
 compile = false
 seed = 1337
+
+[sampling.runtime.checkpointing]
+# Which checkpoint family sampling should load by default.
+read_policy = "best"
 
 [sampling.sample]
 # Minimal, conservative sampling defaults. Either omit top_k or set a neutral default.
