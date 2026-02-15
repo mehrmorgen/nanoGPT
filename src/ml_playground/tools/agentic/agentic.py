@@ -123,6 +123,19 @@ class AgenticTools:
         """Tool category identifier."""
         return "agentic"
 
+    def _create_error_result(
+        self, operation_id: OperationId, message: str
+    ) -> ToolResult:
+        """Create a standardized error ToolResult for this operation."""
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stderr=message,
+        )
+
     def guidelines_setup(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
@@ -1100,13 +1113,9 @@ This is a machine learning playground project with the following key components:
 
         parsed_url = urlparse(url)
         if parsed_url.scheme not in {"http", "https"}:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     f"Invalid URL scheme '{parsed_url.scheme}'. "
                     "Only http and https URLs are supported."
                 ),
@@ -1118,34 +1127,20 @@ This is a machine learning playground project with the following key components:
         try:
             html_content = fetch_html(url, timeout)
         except requests.exceptions.RequestException as exc:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=f"Failed to fetch conversation: {exc}",
+            return self._create_error_result(
+                operation_id, f"Failed to fetch conversation: {exc}"
             )
         except Exception as exc:  # pragma: no cover - defensive guard
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=f"Unexpected error fetching conversation: {exc}",
+            return self._create_error_result(
+                operation_id, f"Unexpected error fetching conversation: {exc}"
             )
 
         try:
             title, markdown_content = parse_html(html_content, url)
         except ImportError:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     "html2text is required for Markdown conversion. "
                     "Install project dependencies with `uv sync`."
                 ),
@@ -1160,35 +1155,21 @@ This is a machine learning playground project with the following key components:
                 )
                 title, markdown_content = parse_html(rendered_html, url)
             except ImportError:
-                return ToolResult.create(
-                    success=False,
-                    exit_code=1,
-                    namespace=operation_id.namespace,
-                    category=operation_id.category,
-                    command=operation_id.command,
-                    stderr=(
+                return self._create_error_result(
+                    operation_id,
+                    (
                         f"{exc} Playwright fallback is unavailable. "
                         "Install dependencies with `uv sync` and run "
                         "`uv run playwright install`."
                     ),
                 )
             except Exception as fallback_exc:
-                return ToolResult.create(
-                    success=False,
-                    exit_code=1,
-                    namespace=operation_id.namespace,
-                    category=operation_id.category,
-                    command=operation_id.command,
-                    stderr=f"Playwright fallback failed: {fallback_exc}",
+                return self._create_error_result(
+                    operation_id, f"Playwright fallback failed: {fallback_exc}"
                 )
         except Exception as exc:  # pragma: no cover - defensive guard
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=f"Failed to parse conversation content: {exc}",
+            return self._create_error_result(
+                operation_id, f"Failed to parse conversation content: {exc}"
             )
 
         stdout = markdown_content
@@ -1198,13 +1179,8 @@ This is a machine learning playground project with the following key components:
                 output_path.write_text(markdown_content, encoding="utf-8")
                 stdout = f"Conversation '{title}' saved to {output_path}"
             except OSError as exc:
-                return ToolResult.create(
-                    success=False,
-                    exit_code=1,
-                    namespace=operation_id.namespace,
-                    category=operation_id.category,
-                    command=operation_id.command,
-                    stderr=f"Failed to write Markdown output: {exc}",
+                return self._create_error_result(
+                    operation_id, f"Failed to write Markdown output: {exc}"
                 )
 
         result = ToolResult.create(
@@ -1253,13 +1229,9 @@ This is a machine learning playground project with the following key components:
 
         parsed_url = urlparse(url)
         if parsed_url.scheme not in {"http", "https"}:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     f"Invalid URL scheme '{parsed_url.scheme}'. "
                     "Only http and https URLs are supported."
                 ),
@@ -1269,13 +1241,9 @@ This is a machine learning playground project with the following key components:
         allowed_waits = {"load", "domcontentloaded", "networkidle", "commit"}
         if wait_condition not in allowed_waits:
             allowed_display = ", ".join(sorted(allowed_waits))
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     f"Invalid wait condition '{wait_until}'. "
                     f"Choose one of: {allowed_display}"
                 ),
@@ -1286,35 +1254,19 @@ This is a machine learning playground project with the following key components:
         try:
             html_content = render_page(url, wait_condition, timeout_ms, selector)
         except ImportError:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     "Playwright is required for dynamic page rendering. "
                     "Install dependencies with `uv sync` and run "
                     "`uv run playwright install` to fetch browser binaries."
                 ),
             )
         except RuntimeError as exc:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=str(exc),
-            )
+            return self._create_error_result(operation_id, str(exc))
         except Exception as exc:  # pragma: no cover - defensive guard
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=f"Failed to render web page: {exc}",
+            return self._create_error_result(
+                operation_id, f"Failed to render web page: {exc}"
             )
 
         convert_html = converter or self._html_to_markdown
@@ -1322,25 +1274,16 @@ This is a machine learning playground project with the following key components:
         try:
             markdown_content = convert_html(html_content)
         except ImportError:
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=(
+            return self._create_error_result(
+                operation_id,
+                (
                     "html2text is required for Markdown conversion. "
                     "Install project dependencies with `uv sync`."
                 ),
             )
         except Exception as exc:  # pragma: no cover - defensive guard
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace=operation_id.namespace,
-                category=operation_id.category,
-                command=operation_id.command,
-                stderr=f"Failed to convert HTML to Markdown: {exc}",
+            return self._create_error_result(
+                operation_id, f"Failed to convert HTML to Markdown: {exc}"
             )
 
         stdout = markdown_content
@@ -1350,13 +1293,8 @@ This is a machine learning playground project with the following key components:
                 output_path.write_text(markdown_content, encoding="utf-8")
                 stdout = f"Rendered content saved to {output_path}"
             except OSError as exc:
-                return ToolResult.create(
-                    success=False,
-                    exit_code=1,
-                    namespace=operation_id.namespace,
-                    category=operation_id.category,
-                    command=operation_id.command,
-                    stderr=f"Failed to write Markdown output: {exc}",
+                return self._create_error_result(
+                    operation_id, f"Failed to write Markdown output: {exc}"
                 )
 
         result = ToolResult.create(
