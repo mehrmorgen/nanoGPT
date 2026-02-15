@@ -244,6 +244,16 @@ class Trainer:
                                 iter_num=self.iter_num,
                                 is_best=True,
                             )
+                    try:
+                        self._save_checkpoint(
+                            raw_model=raw_model,
+                            iter_num=self.iter_num,
+                            is_best=False,
+                        )
+                    except (CheckpointError, RuntimeError, OSError) as exc:
+                        self.logger.warning(
+                            f"Failed to save evaluation checkpoint: {exc}"
+                        )
 
                     if self.iter_num == 0 and self.cfg.runtime.eval_only:
                         break
@@ -292,9 +302,8 @@ class Trainer:
                     break
 
         except KeyboardInterrupt:
-            should_save_checkpoint = False
             self.logger.info(
-                "Training loop interrupted; skipping final checkpoint save"
+                "Training loop interrupted; attempting final checkpoint save"
             )
             raise
         except BaseException:
