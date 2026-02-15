@@ -35,10 +35,12 @@ def _load_default_read_policy_from_toml() -> Literal["latest", "best"]:
         Path(__file__).resolve().parents[2] / "experiments" / "default_config.toml"
     )
     data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    training = cast(Mapping[str, object], data["training"])
-    runtime = cast(Mapping[str, object], training["runtime"])
-    checkpointing = cast(Mapping[str, object], runtime["checkpointing"])
-    read_policy = checkpointing["read_policy"]
+    try:
+        read_policy = data["training"]["runtime"]["checkpointing"]["read_policy"]
+    except KeyError as e:
+        raise ValueError(
+            f"Could not find default read_policy in {config_path}. Missing key: {e}"
+        ) from e
     if read_policy == READ_POLICY_LATEST:
         return READ_POLICY_LATEST
     if read_policy == READ_POLICY_BEST:
