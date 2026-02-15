@@ -33,7 +33,11 @@ def log_training_step(
 ) -> tuple[float, float | None]:
     """Log training progress and compute updated model FLOPS utilization."""
     scaled_loss = loss_value * grad_accum_steps
-    updated_dt_ema = dt if running_dt_ema is None else (1.0 - dt_ema_alpha) * running_dt_ema + dt_ema_alpha * dt
+    updated_dt_ema = (
+        dt
+        if running_dt_ema is None
+        else (1.0 - dt_ema_alpha) * running_dt_ema + dt_ema_alpha * dt
+    )
     remaining_iters = max(0, max_iters - iter_num)
     eta = _format_eta_seconds(updated_dt_ema * remaining_iters)
     elapsed = _format_eta_seconds(elapsed_seconds)
