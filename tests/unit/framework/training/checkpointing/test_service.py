@@ -174,6 +174,51 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
     assert isclose(payload["metric"], 0.123, rel_tol=1e-9)
     assert payload["iter_num"] == 1
     assert payload["is_best"] is True
+    assert payload["counter_value"] is None
+
+
+def test_save_checkpoint_forwards_counter_value(tmp_path: Path) -> None:
+    """save_checkpoint forwards explicit naming counter overrides to manager."""
+    cfg = _make_cfg(tmp_path)
+    calls: list[int | None] = []
+
+    class _SpyManager(CheckpointManager):
+        def __init__(self) -> None:
+            super().__init__(
+                out_dir=cfg.runtime.out_dir,
+                atomic=cfg.runtime.ckpt_atomic,
+                keep_last=cfg.runtime.checkpointing.keep.last,
+                keep_best=cfg.runtime.checkpointing.keep.best,
+            )
+
+        def save_checkpoint(
+            self,
+            checkpoint: Checkpoint,
+            metric: float,
+            iter_num: int,
+            logger: LoggerLike,
+            is_best: bool = False,
+            counter_value: int | None = None,
+        ) -> Path:
+            del checkpoint, metric, iter_num, logger, is_best
+            calls.append(counter_value)
+            return self.out_dir / "ckpt.pt"
+
+    spy = _SpyManager()
+    service.save_checkpoint(
+        spy,
+        cfg,
+        model=make_minimal_gpt(),
+        optimizer=make_optimizer(),
+        ema=None,
+        iter_num=2,
+        best_val_loss=0.3,
+        logger=LoggerStub(),
+        is_best=False,
+        counter_value=1,
+    )
+
+    assert calls == [1]
 
 
 def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:

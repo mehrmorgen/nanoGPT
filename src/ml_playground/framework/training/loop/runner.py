@@ -239,15 +239,9 @@ class Trainer:
                     if losses["val"] < self.best_val_loss:
                         self.best_val_loss = losses["val"]
                         if self.iter_num > 0:
-                            self.deps.save_checkpoint(
-                                self.ckpt_mgr,
-                                self.cfg,
-                                model=raw_model,
-                                optimizer=self.optimizer,
-                                ema=self.ema,
+                            self._save_checkpoint(
+                                raw_model=raw_model,
                                 iter_num=self.iter_num,
-                                best_val_loss=self.best_val_loss,
-                                logger=self.logger,
                                 is_best=True,
                             )
 
@@ -309,16 +303,15 @@ class Trainer:
         finally:
             try:
                 if should_save_checkpoint:
-                    self.deps.save_checkpoint(
-                        self.ckpt_mgr,
-                        self.cfg,
-                        model=raw_model,
-                        optimizer=self.optimizer,
-                        ema=self.ema,
+                    # iter_num tracks the next loop position after a completed step.
+                    # Use a counter one behind for final last-checkpoint naming so
+                    # ckpt_last_* reflects the most recently completed iteration.
+                    final_counter = max(self.iter_num - 1, 0)
+                    self._save_checkpoint(
+                        raw_model=raw_model,
                         iter_num=self.iter_num,
-                        best_val_loss=self.best_val_loss,
-                        logger=self.logger,
                         is_best=False,
+                        counter_value=final_counter,
                     )
             except (CheckpointError, RuntimeError, OSError) as exc:
                 self.logger.warning(f"Failed to save final checkpoint: {exc}")
@@ -334,6 +327,27 @@ class Trainer:
                 self.writer.close()
 
         return self.iter_num, self.best_val_loss
+
+    def _save_checkpoint(
+        self,
+        *,
+        raw_model: GPT,
+        iter_num: int,
+        is_best: bool,
+        counter_value: int | None = None,
+    ) -> None:
+        save_kwargs: dict[str, object] = {
+            "model": raw_model,
+            "optimizer": self.optimizer,
+            "ema": self.ema,
+            "iter_num": iter_num,
+            "best_val_loss": self.best_val_loss,
+            "logger": self.logger,
+            "is_best": is_best,
+        }
+        if counter_value is not None:
+            save_kwargs["counter_value"] = counter_value
+        self.deps.save_checkpoint(self.ckpt_mgr, self.cfg, **save_kwargs)
 
     def _train_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Perform a gradient accumulation step and update EMA if configured."""

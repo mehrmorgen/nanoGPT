@@ -389,6 +389,44 @@ def test_save_checkpoint_domain_naming_last(tmp_path: Path) -> None:
     assert path.exists()
 
 
+def test_save_checkpoint_standard_naming_uses_counter_override_for_last(
+    tmp_path: Path,
+) -> None:
+    """Standard naming should respect counter_value for last-checkpoint filename."""
+    manager = _make_manager_with_deps(tmp_path, naming_policy="standard")
+    logger = FakeLogger()
+    checkpoint = _make_checkpoint()
+    path = manager.save_checkpoint(
+        checkpoint,
+        metric=0.5,
+        iter_num=5,
+        logger=logger,
+        is_best=False,
+        counter_value=3,
+    )
+    assert path.name.startswith("ckpt_last_00000003")
+    assert path.exists()
+
+
+def test_save_checkpoint_standard_naming_uses_counter_override_for_best(
+    tmp_path: Path,
+) -> None:
+    """Standard naming should respect counter_value for best-checkpoint filename."""
+    manager = _make_manager_with_deps(tmp_path, naming_policy="standard")
+    logger = FakeLogger()
+    checkpoint = _make_checkpoint()
+    path = manager.save_checkpoint(
+        checkpoint,
+        metric=0.5,
+        iter_num=5,
+        logger=logger,
+        is_best=True,
+        counter_value=3,
+    )
+    assert path.name.startswith("ckpt_best_00000003_")
+    assert path.exists()
+
+
 # ---------------------------------------------------------------------------
 # save_checkpoint: sidecar unlink via path_unlink (line 429)
 # ---------------------------------------------------------------------------
