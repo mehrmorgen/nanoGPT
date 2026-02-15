@@ -1092,38 +1092,7 @@ class TestScrapeAndMarkdown:
         assert result.success is False
         assert "Failed to fetch conversation" in result.stderr
 
-    def test_scrape_chat_share_uses_playwright_fallback_on_parse_error(
-        self, agentic_tools: agentic_module.AgenticTools
-    ) -> None:
-        calls = {"count": 0}
-
-        def fake_fetcher(_: str, __: float) -> str:
-            return "<html>initial</html>"
-
-        def fake_parser(html: str, _: str) -> tuple[str, str]:
-            calls["count"] += 1
-            if "initial" in html:
-                raise ValueError(
-                    "Could not locate conversation messages in shared page structure."
-                )
-            return "Recovered", "# Recovered"
-
-        with swap_attr(
-            agentic_tools,
-            "_render_dynamic_page",
-            lambda **_: "<html>rendered</html>",
-        ):
-            result = agentic_tools.scrape_chat_share(
-                "https://chatgpt.com/share/test",
-                fetcher=fake_fetcher,
-                parser=fake_parser,
-            )
-
-        assert result.success is True
-        assert result.stdout == "# Recovered"
-        assert calls["count"] == 2
-
-    def test_scrape_chat_share_playwright_importerror_message_is_clear(
+    def test_scrape_chat_share_parse_error_returns_failure(
         self, agentic_tools: agentic_module.AgenticTools
     ) -> None:
         def fake_fetcher(_: str, __: float) -> str:
@@ -1132,19 +1101,17 @@ class TestScrapeAndMarkdown:
         def fake_parser(_: str, __: str) -> tuple[str, str]:
             raise ValueError("Could not parse transcript")
 
-        def failing_render(**_: object) -> str:
-            raise ImportError("playwright missing")
-
-        with swap_attr(agentic_tools, "_render_dynamic_page", failing_render):
-            result = agentic_tools.scrape_chat_share(
-                "https://chatgpt.com/share/test",
-                fetcher=fake_fetcher,
-                parser=fake_parser,
-            )
+        result = agentic_tools.scrape_chat_share(
+            "https://chatgpt.com/share/test",
+            fetcher=fake_fetcher,
+            parser=fake_parser,
+        )
 
         assert result.success is False
-        assert "Initial parsing failed: Could not parse transcript." in result.stderr
-        assert "Attempted Playwright fallback, but it is unavailable." in result.stderr
+        assert (
+            "Failed to parse conversation content: Could not parse transcript"
+            in result.stderr
+        )
 
     def test_parse_chat_share_html_supports_stream_payload_structure(
         self, agentic_tools: agentic_module.AgenticTools

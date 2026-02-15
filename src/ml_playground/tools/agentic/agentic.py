@@ -22,7 +22,6 @@ from urllib.parse import urlparse
 import requests
 import yaml
 from bs4 import BeautifulSoup
-from bs4.element import Tag
 import html2text
 from playwright.sync_api import (
     Error as PlaywrightError,
@@ -1150,28 +1149,9 @@ This is a machine learning playground project with the following key components:
                 ),
             )
         except ValueError as exc:
-            try:
-                rendered_html = self._render_dynamic_page(
-                    url=url,
-                    wait_until="domcontentloaded",
-                    timeout_ms=30_000,
-                    selector="main",
-                )
-                title, markdown_content = parse_html(rendered_html, url)
-            except ImportError:
-                return self._create_error_result(
-                    operation_id,
-                    (
-                        f"Initial parsing failed: {exc}. "
-                        "Attempted Playwright fallback, but it is unavailable. "
-                        "Install dependencies with `uv sync` and run "
-                        "`uv run playwright install`."
-                    ),
-                )
-            except Exception as fallback_exc:
-                return self._create_error_result(
-                    operation_id, f"Playwright fallback failed: {fallback_exc}"
-                )
+            return self._create_error_result(
+                operation_id, f"Failed to parse conversation content: {exc}"
+            )
         except Exception as exc:  # pragma: no cover - defensive guard
             return self._create_error_result(
                 operation_id, f"Failed to parse conversation content: {exc}"
@@ -1869,7 +1849,11 @@ This is a machine learning playground project with the following key components:
         return response.text
 
     def _parse_chat_share_html(self, html: str, url: str) -> tuple[str, str]:
-        """Convert shared ChatGPT page HTML to markdown transcript."""
+        """Convert shared ChatGPT page HTML to markdown transcript.
+
+        This parser intentionally relies on the shared-page stream payload as the
+        single extraction mechanism for ChatGPT transcripts.
+        """
         soup = BeautifulSoup(html, "html.parser")
 
         title_tag = soup.find("title")
@@ -1878,35 +1862,7 @@ This is a machine learning playground project with the following key components:
         )
         title = raw_title.replace(" | ChatGPT", "").strip() or "ChatGPT Conversation"
 
-        conversation_container = soup.find("body")
-        if conversation_container is None:
-            raise ValueError("Could not locate conversation body in shared page.")
-        if not isinstance(conversation_container, Tag):
-            raise ValueError("Could not parse conversation body as HTML element.")
-
-        message_blocks = conversation_container.find_all(
-            "div", class_=re.compile(r"text-base")
-        )
-        conversation_sections: list[tuple[str, str]] = []
-        for block in message_blocks:
-            if not isinstance(block, Tag):
-                continue
-            content_element = block.find(
-                "div", class_=re.compile(r"(markdown|prose|rich-text)")
-            )
-            if content_element is None or not isinstance(content_element, Tag):
-                continue
-
-            inner_html = content_element.decode_contents()
-            markdown = self._html_to_markdown(inner_html).strip()
-            if not markdown:
-                continue
-
-            role = self._extract_share_role(block)
-            conversation_sections.append((role, markdown))
-
-        if not conversation_sections:
-            conversation_sections = self._parse_chat_share_stream_payload(html)
+        conversation_sections = self._parse_chat_share_stream_payload(html)
         if not conversation_sections:
             raise ValueError("Conversation content is empty after parsing the page.")
 
@@ -2076,35 +2032,6 @@ This is a machine learning playground project with the following key components:
             return text_value.strip()
 
         return ""
-
-    def _extract_share_role(self, block: Any) -> str:
-        """Infer conversation role for a shared-chat message block."""
-        data_role = block.get("data-role")
-        if isinstance(data_role, str):
-            normalized = data_role.strip().lower()
-            if normalized == "user":
-                return "User"
-            if normalized == "assistant":
-                return "Assistant"
-
-        data_testid = block.get("data-testid")
-        if isinstance(data_testid, str):
-            lowered = data_testid.lower()
-            if "user" in lowered:
-                return "User"
-            if "assistant" in lowered:
-                return "Assistant"
-
-        classes = block.get("class", [])
-        for class_name in classes:
-            if isinstance(class_name, str):
-                lowered = class_name.lower()
-                if "user" in lowered:
-                    return "User"
-                if "assistant" in lowered:
-                    return "Assistant"
-
-        return "Assistant"
 
     def _html_to_markdown(self, html: str) -> str:
         """Convert HTML to markdown content."""
