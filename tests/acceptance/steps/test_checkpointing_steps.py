@@ -209,4 +209,3 @@ def assert_both_checkpoints_exist_for_iteration(
     assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
     assert _checkpoint_exists(manager, "ckpt_best", iter_num)
     assert _checkpoint_exists(manager, "ckpt_last", iter_num)
-
