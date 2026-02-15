@@ -90,9 +90,8 @@ def _artifacts_look_valid(
     outputs: Iterable[Path], *, symbol: str, total_symbols: int
 ) -> bool:
     output_list = list(outputs)
-    for path in output_list:
-        if not path.exists() or path.stat().st_size == 0:
-            return False
+    if not all(path.exists() and path.stat().st_size > 0 for path in output_list):
+        return False
 
     train_path, val_path, meta_path = output_list
     try:
@@ -132,10 +131,6 @@ def _artifacts_look_valid(
     if val_path.stat().st_size != expected_val * 2:
         return False
     return True
-
-
-def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
-    return _artifacts_look_valid(outputs, symbol="A", total_symbols=640)
 
 
 def _resolve_symbol(cfg: PreparerConfig, extras: Mapping[str, object]) -> str:

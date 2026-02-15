@@ -1,96 +1,69 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 from ml_playground.runtime_cli.main import main
 
 
 def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
-    dataset_dir_str = str(dataset_dir).replace("\\", "\\\\")
-    out_dir_str = str(out_dir).replace("\\", "\\\\")
+    import tomli_w
 
-    content = f'''
-[prepare]
-dataset_dir = "{dataset_dir_str}"
-raw_dir = "{dataset_dir_str}"
-raw_text_path = "{dataset_dir_str}/input.txt"
-tokenizer_type = "char"
-doc_separator = "\\n"
+    base_config_path = (
+        Path(__file__).resolve().parents[4]
+        / "src"
+        / "ml_playground"
+        / "experiments"
+        / "copy_stage0"
+        / "test_config.toml"
+    )
+    with base_config_path.open("rb") as file:
+        config = tomllib.load(file)
 
-[training.model]
-n_layer = 1
-n_head = 1
-n_embd = 32
-block_size = 32
-dropout = 0.0
-bias = false
-vocab_size = 1
+    dataset_dir_str = str(dataset_dir)
+    out_dir_str = str(out_dir)
 
-[training.data]
-batch_size = 2
-block_size = 16
-grad_accum_steps = 1
-sampler = "random"
+    prepare = config.setdefault("prepare", {})
+    training = config.setdefault("training", {})
+    sampling = config.setdefault("sampling", {})
+    metadata = config.setdefault("metadata", {})
 
-[training.optim]
-learning_rate = 0.0005
-weight_decay = 0.0
-beta1 = 0.9
-beta2 = 0.95
-grad_clip = 0.0
+    if not isinstance(prepare, dict):
+        prepare = {}
+        config["prepare"] = prepare
+    if not isinstance(training, dict):
+        training = {}
+        config["training"] = training
+    if not isinstance(sampling, dict):
+        sampling = {}
+        config["sampling"] = sampling
+    if not isinstance(metadata, dict):
+        metadata = {}
+        config["metadata"] = metadata
 
-[training.schedule]
-decay_lr = false
-warmup_iters = 0
-lr_decay_iters = 1
-min_lr = 0.00001
+    prepare["dataset_dir"] = dataset_dir_str
+    prepare["raw_dir"] = dataset_dir_str
+    prepare["raw_text_path"] = str(dataset_dir / "input.txt")
 
-[training.runtime]
-out_dir = "{out_dir_str}"
-max_iters = 4
-eval_interval = 1
-eval_iters = 1
-log_interval = 1
-eval_only = false
-always_save_checkpoint = true
-seed = 1
-device = "cpu"
-dtype = "float32"
-compile = false
-ckpt_write_metadata = false
-ckpt_time_interval_minutes = 0
-ckpt_atomic = false
-best_smoothing_alpha = 0.0
-early_stop_patience = 0
-ema_decay = 0.0
+    training_runtime = training.setdefault("runtime", {})
+    if not isinstance(training_runtime, dict):
+        training_runtime = {}
+        training["runtime"] = training_runtime
+    training_runtime["out_dir"] = out_dir_str
 
-[training.runtime.checkpointing.keep]
-last = 1
-best = 1
+    sampling_runtime = sampling.setdefault("runtime", {})
+    if not isinstance(sampling_runtime, dict):
+        sampling_runtime = {}
+        sampling["runtime"] = sampling_runtime
+    sampling_runtime["out_dir"] = out_dir_str
 
-[sampling.runtime]
-out_dir = "{out_dir_str}"
-device = "cpu"
-dtype = "float32"
-compile = false
-eval_only = false
-always_save_checkpoint = false
-seed = 1
-max_iters = 0
-eval_interval = 1
-eval_iters = 1
-log_interval = 1
-
-[sampling.sample]
-start = "A"
-num_samples = 1
-max_new_tokens = 8
-temperature = 0.1
-top_k = 1
-'''
+    metadata["dataset_dir"] = dataset_dir_str
+    metadata["train_out_dir"] = out_dir_str
+    metadata["sample_out_dir"] = out_dir_str
 
     path = tmp_dir / "copy_stage0_test_config.toml"
-    path.write_text(content, encoding="utf-8")
+    with path.open("wb") as file:
+        tomli_w.dump(config, file)
     return path
 
 
