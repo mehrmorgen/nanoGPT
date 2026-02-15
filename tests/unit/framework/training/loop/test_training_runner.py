@@ -49,7 +49,7 @@ from tests.unit.framework.training._helpers import (
 )
 
 
-SavePayload = dict[str, float | int | bool]
+SavePayload = dict[str, float | int | bool | None]
 EvaluationMap = dict[int, dict[str, float]]
 
 
@@ -247,6 +247,7 @@ def _build_deps(
         best_val_loss: float,
         logger: LoggerLike,
         is_best: bool,
+        counter_value: int | None = None,
     ) -> None:
         del cfg, model, optimizer, ema, logger
         fake_mgr = cast(_FakeCkptMgr, manager_param)
@@ -259,6 +260,7 @@ def _build_deps(
                     "iter_num": iter_num,
                     "best": is_best,
                     "best_val_loss": best_val_loss,
+                    "counter_value": counter_value,
                 }
             )
 
@@ -422,7 +424,9 @@ def test_train_eval_only_breaks_early_and_returns(
 
     assert it == 0
     _assert_close(best, 0.4)
-    assert any(not call["best"] for call in saved_calls)
+    final_saves = [call for call in saved_calls if not call["best"]]
+    assert final_saves
+    assert final_saves[-1]["counter_value"] == 0
 
 
 def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
@@ -444,7 +448,9 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
 
     assert it >= 1
     assert any(call["best"] and call["iter_num"] == 1 for call in saved_calls)
-    assert any(not call["best"] for call in saved_calls)
+    final_saves = [call for call in saved_calls if not call["best"]]
+    assert final_saves
+    assert final_saves[-1]["counter_value"] == max(it - 1, 0)
     _assert_close(best, 0.2)
     assert fixture.manager.saved, "checkpoints should be recorded"
 

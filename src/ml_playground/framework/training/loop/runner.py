@@ -309,6 +309,10 @@ class Trainer:
         finally:
             try:
                 if should_save_checkpoint:
+                    # iter_num tracks the next loop position after a completed step.
+                    # Use a counter one behind for final last-checkpoint naming so
+                    # ckpt_last_* reflects the most recently completed iteration.
+                    final_counter = max(self.iter_num - 1, 0)
                     self.deps.save_checkpoint(
                         self.ckpt_mgr,
                         self.cfg,
@@ -319,6 +323,7 @@ class Trainer:
                         best_val_loss=self.best_val_loss,
                         logger=self.logger,
                         is_best=False,
+                        counter_value=final_counter,
                     )
             except (CheckpointError, RuntimeError, OSError) as exc:
                 self.logger.warning(f"Failed to save final checkpoint: {exc}")

@@ -113,6 +113,7 @@ def save_checkpoint(
     best_val_loss: float,
     logger: LoggerLike,
     is_best: bool,
+    counter_value: int | None = None,
 ) -> None:
     """Persist the current training state via the checkpoint manager."""
     checkpoint = Checkpoint(
@@ -149,6 +150,7 @@ def save_checkpoint(
         iter_num=iter_num,
         logger=logger,
         is_best=is_best,
+        counter_value=counter_value,
     )
 
 
