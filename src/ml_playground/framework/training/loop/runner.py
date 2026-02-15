@@ -245,15 +245,9 @@ class Trainer:
                                 is_best=True,
                             )
                     try:
-                        self.deps.save_checkpoint(
-                            self.ckpt_mgr,
-                            self.cfg,
-                            model=raw_model,
-                            optimizer=self.optimizer,
-                            ema=self.ema,
+                        self._save_checkpoint(
+                            raw_model=raw_model,
                             iter_num=self.iter_num,
-                            best_val_loss=self.best_val_loss,
-                            logger=self.logger,
                             is_best=False,
                         )
                     except (CheckpointError, RuntimeError, OSError) as exc:
