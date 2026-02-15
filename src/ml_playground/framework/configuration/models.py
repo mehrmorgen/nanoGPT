@@ -393,6 +393,7 @@ class RuntimeConfig(_FrozenStrictModel):
     best_smoothing_alpha: UnitIntervalStrictFloat = 1.0
     early_stop_patience: NonNegativeStrictInt = 0
     ema_decay: UnitIntervalStrictFloat = 0.0
+    dt_ema_alpha: UnitIntervalStrictFloat = 0.1
 
     @field_validator("out_dir", mode="after")
     @classmethod

@@ -28,8 +28,8 @@ def log_training_step(
     grad_accum_steps: int,
     max_iters: int,
     running_dt_ema: float | None,
+    dt_ema_alpha: float,
     elapsed_seconds: float = 0.0,
-    dt_ema_alpha: float = 0.1,
 ) -> tuple[float, float | None]:
     """Log training progress and compute updated model FLOPS utilization."""
     scaled_loss = loss_value * grad_accum_steps

@@ -270,6 +270,7 @@ class Trainer:
                         max_iters=self.cfg.runtime.max_iters,
                         running_dt_ema=running_dt_ema,
                         elapsed_seconds=t1 - loop_start_time,
+                        dt_ema_alpha=self.cfg.runtime.dt_ema_alpha,
                     )
                     # TensorBoard logging if update mode is 'log'
                     try:

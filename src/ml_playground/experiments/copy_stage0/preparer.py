@@ -22,7 +22,7 @@ from ml_playground.framework.experiment_registry.protocol import (
 class CopyStage0Preparer(_PreparerProto):
     """Prepare deterministic Stage 0 data for one-symbol learned copying."""
 
-    def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
+    def prepare(self, cfg: PreparerConfig) -> PrepareReport:
         extras = cast(Mapping[str, object], getattr(cfg, "extras", {}) or {})
 
         dataset_dir_override = extras.get("dataset_dir_override")
@@ -89,7 +89,3 @@ def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
         if not path.exists() or path.stat().st_size == 0:
             return False
     return True
-
-
-def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
-    return _artifacts_look_valid(outputs)
