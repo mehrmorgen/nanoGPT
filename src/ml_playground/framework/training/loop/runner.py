@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -67,17 +66,6 @@ class InitializeComponentsFn(Protocol):
         *,
         log_dir: str,
     ) -> tuple[GPT, GradScaler, EMA | None, TensorboardWriter | None]: ...
-
-
-def _accepts_keyword_argument(func: Callable[..., object], keyword: str) -> bool:
-    try:
-        signature = inspect.signature(func)
-    except (TypeError, ValueError):
-        return False
-    for param in signature.parameters.values():
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
-            return True
-    return keyword in signature.parameters
 
 
 @dataclass(frozen=True)
@@ -177,9 +165,6 @@ class Trainer:
         self.best_val_loss: float = getattr(cfg.runtime, "initial_best_val_loss", 1e9)
         self._train_step_override: TTrainStep | None = None
         self._vectorize_impl: VectorizeFn | None = self.deps.vectorize()
-        self._save_checkpoint_accepts_counter_value = _accepts_keyword_argument(
-            self.deps.save_checkpoint, "counter_value"
-        )
 
         checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
@@ -360,7 +345,7 @@ class Trainer:
             "logger": self.logger,
             "is_best": is_best,
         }
-        if counter_value is not None and self._save_checkpoint_accepts_counter_value:
+        if counter_value is not None:
             save_kwargs["counter_value"] = counter_value
         self.deps.save_checkpoint(self.ckpt_mgr, self.cfg, **save_kwargs)
 
