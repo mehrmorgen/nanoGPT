@@ -28,9 +28,9 @@ Feature: Checkpoint retention policy enforcement
     And the checkpoint manager is reinitialized
     Then existing checkpoints should be discovered
 
-  Scenario: Skip last when best improves in same iteration
+  Scenario: Persist both last and best when best improves in same iteration
     Given checkpoint retention policy of 2 last, 2 best
     When an evaluation step produces improvement at iteration 0
     Then both best and last checkpoints should exist for iteration 0
     When an evaluation step produces improvement at iteration 10
-    Then only best checkpoint should exist for iteration 10
+    Then both best and last checkpoints should exist for iteration 10
