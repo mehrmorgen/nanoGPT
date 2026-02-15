@@ -1122,6 +1122,49 @@ class TestScrapeAndMarkdown:
         assert result.stdout == "# Recovered"
         assert calls["count"] == 2
 
+    def test_parse_chat_share_html_supports_stream_payload_structure(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        payload = [
+            "id",
+            "message",
+            "author",
+            "role",
+            "content",
+            "parts",
+            "children",
+            "user",
+            "assistant",
+            "hello from user",
+            "hello from assistant",
+            {"_3": 7},
+            {"_5": [9]},
+            {"_2": 11, "_4": 12},
+            {"_0": "m1", "_1": 13, "_6": []},
+            {"_3": 8},
+            {"_5": [10]},
+            {"_2": 15, "_4": 16},
+            {"_0": "m2", "_1": 17, "_6": []},
+            "linear_conversation",
+            [14, 18],
+        ]
+        encoded_payload = json.dumps(json.dumps(payload))
+        html = (
+            "<html><head><title>ChatGPT - Stream Test</title></head><body>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({encoded_payload});</script>"
+            "</body></html>"
+        )
+
+        title, markdown = agentic_tools._parse_chat_share_html(
+            html, "https://chatgpt.com/share/test"
+        )
+
+        assert title == "ChatGPT - Stream Test"
+        assert "## User" in markdown
+        assert "hello from user" in markdown
+        assert "## Assistant" in markdown
+        assert "hello from assistant" in markdown
+
     def test_website_to_markdown_success(
         self, agentic_tools: agentic_module.AgenticTools
     ) -> None:

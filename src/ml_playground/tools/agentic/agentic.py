@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 from pathlib import Path
 from typing import (
     Any,
@@ -1865,8 +1866,6 @@ This is a machine learning playground project with the following key components:
 
     def _parse_chat_share_html(self, html: str, url: str) -> tuple[str, str]:
         """Convert shared ChatGPT page HTML to markdown transcript."""
-        import re
-
         soup = BeautifulSoup(html, "html.parser")
 
         title_tag = soup.find("title")
@@ -1884,11 +1883,6 @@ This is a machine learning playground project with the following key components:
         message_blocks = conversation_container.find_all(
             "div", class_=re.compile(r"text-base")
         )
-        if not message_blocks:
-            raise ValueError(
-                "Could not locate conversation messages in shared page structure."
-            )
-
         conversation_sections: list[tuple[str, str]] = []
         for block in message_blocks:
             if not isinstance(block, Tag):
@@ -1907,6 +1901,8 @@ This is a machine learning playground project with the following key components:
             role = self._extract_share_role(block)
             conversation_sections.append((role, markdown))
 
+        if not conversation_sections:
+            conversation_sections = self._parse_chat_share_stream_payload(html)
         if not conversation_sections:
             raise ValueError("Conversation content is empty after parsing the page.")
 
@@ -1927,6 +1923,148 @@ This is a machine learning playground project with the following key components:
                 markdown_lines.append("")
 
         return title, "\n".join(markdown_lines).strip()
+
+    def _parse_chat_share_stream_payload(self, html: str) -> list[tuple[str, str]]:
+        """Parse shared chat turns from React Router stream payload scripts."""
+        enqueue_pattern = re.compile(
+            r'streamController\.enqueue\("((?:\\.|[^"\\])*)"\);'
+        )
+        encoded_chunks = enqueue_pattern.findall(html)
+        if not encoded_chunks:
+            return []
+
+        for encoded_chunk in encoded_chunks:
+            try:
+                chunk = json.loads(f'"{encoded_chunk}"')
+            except json.JSONDecodeError:
+                continue
+
+            if not chunk.lstrip().startswith("["):
+                continue
+
+            try:
+                payload_raw = json.loads(chunk)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload_raw, list):
+                continue
+
+            payload = cast(list[Any], payload_raw)
+            sections = self._extract_stream_conversation_sections(payload)
+            if sections:
+                return sections
+
+        return []
+
+    def _extract_stream_conversation_sections(
+        self, payload: list[Any]
+    ) -> list[tuple[str, str]]:
+        """Extract (role, text) sections from flattened React payload."""
+        linear_conversation: list[Any] | None = None
+        for index, item in enumerate(payload[:-1]):
+            if item == "linear_conversation":
+                candidate = payload[index + 1]
+                if isinstance(candidate, list):
+                    linear_conversation = cast(list[Any], candidate)
+                    break
+        if linear_conversation is None:
+            return []
+
+        sections: list[tuple[str, str]] = []
+        for node_ref in linear_conversation:
+            node = self._resolve_stream_payload_ref(payload, node_ref, set())
+            if not isinstance(node, dict):
+                continue
+
+            message = node.get("message")
+            if not isinstance(message, dict):
+                continue
+
+            role = self._extract_stream_role(message)
+            if role is None:
+                continue
+
+            content_text = self._extract_stream_content_text(message.get("content"))
+            if not content_text:
+                continue
+
+            sections.append((role, content_text))
+
+        return sections
+
+    def _resolve_stream_payload_ref(
+        self, payload: list[Any], value: Any, seen: set[int]
+    ) -> Any:
+        """Resolve lightweight index references used by stream payload objects."""
+        if isinstance(value, bool) or value is None:
+            return value
+        if isinstance(value, int):
+            if value < 0 or value >= len(payload) or value in seen:
+                return value
+            next_seen = set(seen)
+            next_seen.add(value)
+            return self._resolve_stream_payload_ref(payload, payload[value], next_seen)
+        if isinstance(value, list):
+            return [
+                self._resolve_stream_payload_ref(payload, item, seen) for item in value
+            ]
+        if isinstance(value, dict):
+            resolved: dict[str, Any] = {}
+            for raw_key, raw_value in value.items():
+                key: Any = raw_key
+                if (
+                    isinstance(raw_key, str)
+                    and raw_key.startswith("_")
+                    and raw_key[1:].isdigit()
+                ):
+                    key_ref = int(raw_key[1:])
+                    key = self._resolve_stream_payload_ref(payload, key_ref, seen)
+                if not isinstance(key, str):
+                    key = str(raw_key)
+                resolved[key] = self._resolve_stream_payload_ref(
+                    payload, raw_value, seen
+                )
+            return resolved
+        return value
+
+    def _extract_stream_role(self, message: Mapping[str, Any]) -> str | None:
+        """Extract user/assistant role from a stream message object."""
+        author = message.get("author")
+        role_value: Any = None
+        if isinstance(author, Mapping):
+            role_value = author.get("role")
+        elif isinstance(author, str):
+            role_value = author
+        if not isinstance(role_value, str):
+            return None
+
+        normalized = role_value.strip().lower()
+        if normalized == "user":
+            return "User"
+        if normalized == "assistant":
+            return "Assistant"
+        return None
+
+    def _extract_stream_content_text(self, content: Any) -> str:
+        """Extract markdown-friendly message text from stream content objects."""
+        if isinstance(content, str):
+            return content.strip()
+        if not isinstance(content, Mapping):
+            return ""
+
+        parts = content.get("parts")
+        if isinstance(parts, list):
+            texts = [
+                part.strip() for part in parts if isinstance(part, str) and part.strip()
+            ]
+            if texts:
+                return "\n\n".join(texts)
+
+        text_value = content.get("text")
+        if isinstance(text_value, str):
+            return text_value.strip()
+
+        return ""
 
     def _extract_share_role(self, block: Any) -> str:
         """Infer conversation role for a shared-chat message block."""
