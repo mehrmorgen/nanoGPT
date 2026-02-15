@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 from typing import cast
 
@@ -18,16 +19,6 @@ from ml_playground.framework.runtime.core.bootstrap import (
 )
 from ml_playground.framework.runtime.core.results import LearningModeEngine, ToolResult
 from ml_playground.framework.runtime.helpers import handle_tool_result
-from ml_playground.framework.sampling.api import (
-    SamplerFactory,
-    SamplingPlan,
-    run_sampling,
-)
-from ml_playground.framework.training.api import (
-    TrainerFactory,
-    TrainingPlan,
-    run_training,
-)
 
 __all__ = [
     "handle_tool_result",
@@ -116,15 +107,22 @@ def run_prepare_impl(
         if deps is None:
             deps = get_cli_dependencies()
 
-        pipeline = deps.create_pipeline(prepare_cfg, metadata)  # type: ignore[reportAny]
-
-        run_fn = getattr(pipeline, "run", None)
-        if callable(run_fn):
-            run_fn()
-        else:
-            raise RuntimeError(
-                f"Pipeline produced by factory does not have a run() method: {type(pipeline)}"
+        if experiment == "copy_stage0" and _run_copy_stage0_preparer(
+            prepare_cfg, metadata
+        ):
+            prepare_cfg.logger.info(
+                f"Experiment preparer for {experiment} finished."
             )
+        else:
+            pipeline = deps.create_pipeline(prepare_cfg, metadata)  # type: ignore[reportAny]
+
+            run_fn = getattr(pipeline, "run", None)
+            if callable(run_fn):
+                run_fn()
+            else:
+                raise RuntimeError(
+                    f"Pipeline produced by factory does not have a run() method: {type(pipeline)}"
+                )
 
         prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
 
@@ -169,6 +167,32 @@ def run_prepare_impl(
         )
 
 
+def _run_copy_stage0_preparer(prepare_cfg: PreparerConfig, metadata: object) -> bool:
+    metadata_cfg = _coerce_metadata_config(metadata)
+    if metadata_cfg is None:
+        return False
+
+    try:
+        mod = import_module("ml_playground.experiments.copy_stage0.preparer")
+    except Exception:
+        return False
+
+    preparer_cls_obj: object = getattr(mod, "CopyStage0Preparer", None)
+    if not isinstance(preparer_cls_obj, type):
+        return False
+
+    extras = dict(prepare_cfg.extras)
+    extras["dataset_dir_override"] = str(metadata_cfg.dataset_dir)
+    prepare_cfg = prepare_cfg.model_copy(update={"extras": extras})
+
+    preparer_obj: object = preparer_cls_obj()
+    prepare_fn: object = getattr(preparer_obj, "prepare", None)
+    if not callable(prepare_fn):
+        return False
+    prepare_fn(prepare_cfg)
+    return True
+
+
 def _missing_runtime_message(category: str) -> str:
     if category == "train":
         return "Runtime configuration is missing for training."
@@ -186,6 +210,11 @@ def run_train_impl(
     learning_mode_engine: LearningModeEngine | None = None,
 ) -> ToolResult:
     """Run the full training flow for an experiment."""
+    from ml_playground.framework.training.api import (
+        TrainerFactory,
+        TrainingPlan,
+        run_training,
+    )
 
     try:
         runtime = train_cfg.runtime
@@ -298,6 +327,11 @@ def run_sample_impl(
     learning_mode_engine: LearningModeEngine | None = None,
 ) -> ToolResult:
     """Run the full sampling flow for an experiment."""
+    from ml_playground.framework.sampling.api import (
+        SamplerFactory,
+        SamplingPlan,
+        run_sampling,
+    )
 
     try:
         runtime = sample_cfg.runtime

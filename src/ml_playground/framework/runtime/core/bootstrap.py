@@ -60,16 +60,22 @@ def create_default_cli_dependencies() -> CLIDependencies:
 
     from ml_playground.framework.configuration import cli as config_cli
     from ml_playground.framework.data_pipeline.preparer import create_pipeline
-    from ml_playground.framework.training.loop.runner import Trainer
-    from ml_playground.framework.sampling.runner import Sampler
     from ml_playground.runtime_cli import commands as cli_commands
-    from ml_playground.runtime_cli import device as cli_device
 
     def _create_trainer(cfg: Any, metadata: Any, deps: Any | None = None) -> Any:  # type: ignore[reportAny]
+        from ml_playground.framework.training.loop.runner import Trainer
+
         return Trainer(cfg, metadata, deps)
 
     def _create_sampler(cfg: Any, metadata: Any, deps: Any | None = None) -> Any:  # type: ignore[reportAny]
+        from ml_playground.framework.sampling.runner import Sampler
+
         return Sampler(cfg, metadata, deps=deps)
+
+    def _global_device_setup(*args: Any, **kwargs: Any) -> None:
+        from ml_playground.runtime_cli import device as cli_device
+
+        cli_device.global_device_setup(*args, **kwargs)
 
     return CLIDependencies(
         load_experiment=config_cli.load_experiment,
@@ -79,7 +85,7 @@ def create_default_cli_dependencies() -> CLIDependencies:
         run_train=cli_commands.run_train_impl,
         run_sample=cli_commands.run_sample_impl,
         run_analyze=cli_commands.run_analyze,
-        global_device_setup=cli_device.global_device_setup,
+        global_device_setup=_global_device_setup,
         log_command_status=cli_commands.log_command_status,
         handle_tool_result=cli_commands.handle_tool_result,
         create_pipeline=create_pipeline,
