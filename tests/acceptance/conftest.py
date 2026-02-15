@@ -27,17 +27,18 @@ _install_package_called = False
 
 @pytest.fixture
 def install_package() -> None:
-    """Install the package in editable mode for CLI tests.
+    """Provision project environment for CLI tests using uv sync.
 
-    This simulates the user installation process and ensures CLI entry points
-    are available. Using session scope means we only install once per test session.
+    This ensures CLI entry points are available in a project-local environment
+    and remains compatible with externally-managed interpreters (e.g. Nix).
+    Using session scope means we only perform sync once per test session.
     """
     global _install_package_called
     if _install_package_called:
         return
     project_root = Path(__file__).resolve().parents[2]
     subprocess.run(
-        ["uv", "pip", "install", "-e", "."],
+        ["uv", "sync", "--group", "all"],
         cwd=project_root,
         capture_output=True,
         check=True,

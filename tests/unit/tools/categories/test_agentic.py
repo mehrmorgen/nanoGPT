@@ -1050,3 +1050,173 @@ class TestErrorHandling:
         # Should complete even if some status checks fail
         assert result.success is True
         assert isinstance(result.stdout, str)
+
+
+class TestScrapeAndMarkdown:
+    """Test scraping and website-to-markdown helpers."""
+
+    def test_scrape_chat_share_success(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        url = "https://chatgpt.com/share/test"
+
+        def fake_fetcher(_: str, __: float) -> str:
+            return "<html></html>"
+
+        def fake_parser(_: str, source: str) -> tuple[str, str]:
+            return "Test Title", f"# Test Title\n\nSource: {source}"
+
+        result = agentic_tools.scrape_chat_share(
+            url, fetcher=fake_fetcher, parser=fake_parser
+        )
+
+        assert result.success is True
+        assert result.exit_code == 0
+        assert str(result.operation_id) == "tools.agentic.scrape-chat-share"
+        assert "Test Title" in result.stdout
+        assert "Source:" in result.stdout
+
+    def test_scrape_chat_share_fetch_error(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        import requests
+
+        def failing_fetcher(_: str, __: float) -> str:
+            raise requests.exceptions.RequestException("network down")
+
+        result = agentic_tools.scrape_chat_share(
+            "https://chatgpt.com/share/test",
+            fetcher=failing_fetcher,
+        )
+
+        assert result.success is False
+        assert "Failed to fetch conversation" in result.stderr
+
+    def test_scrape_chat_share_parse_error_returns_failure(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def fake_fetcher(_: str, __: float) -> str:
+            return "<html>initial</html>"
+
+        def fake_parser(_: str, __: str) -> tuple[str, str]:
+            raise ValueError("Could not parse transcript")
+
+        result = agentic_tools.scrape_chat_share(
+            "https://chatgpt.com/share/test",
+            fetcher=fake_fetcher,
+            parser=fake_parser,
+        )
+
+        assert result.success is False
+        assert (
+            "Failed to parse conversation content: Could not parse transcript"
+            in result.stderr
+        )
+
+    def test_parse_chat_share_html_supports_stream_payload_structure(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        payload = [
+            "id",
+            "message",
+            "author",
+            "role",
+            "content",
+            "parts",
+            "children",
+            "user",
+            "assistant",
+            "hello from user",
+            "hello from assistant",
+            {"_3": 7},
+            {"_5": [9]},
+            {"_2": 11, "_4": 12},
+            {"_0": "m1", "_1": 13, "_6": []},
+            {"_3": 8},
+            {"_5": [10]},
+            {"_2": 15, "_4": 16},
+            {"_0": "m2", "_1": 17, "_6": []},
+            "linear_conversation",
+            [14, 18],
+        ]
+        encoded_payload = json.dumps(json.dumps(payload))
+        html = (
+            "<html><head><title>ChatGPT - Stream Test</title></head><body>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({encoded_payload});</script>"
+            "</body></html>"
+        )
+
+        title, markdown = agentic_tools._parse_chat_share_html(
+            html, "https://chatgpt.com/share/test"
+        )
+
+        assert title == "ChatGPT - Stream Test"
+        assert "## User" in markdown
+        assert "hello from user" in markdown
+        assert "## Assistant" in markdown
+        assert "hello from assistant" in markdown
+
+    def test_parse_chat_share_stream_payload_aggregates_multiple_chunks(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def _chunk_for(role: str, text: str) -> str:
+            payload = [
+                "id",
+                "message",
+                "author",
+                "role",
+                "content",
+                "parts",
+                "children",
+                role,
+                text,
+                {"_3": 7},
+                {"_5": [8]},
+                {"_2": 9, "_4": 10},
+                {"_0": "m1", "_1": 11, "_6": []},
+                "linear_conversation",
+                [12],
+            ]
+            return json.dumps(json.dumps(payload))
+
+        html = (
+            "<html><body>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({_chunk_for('user', 'hello from user')});</script>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({_chunk_for('assistant', 'hello from assistant')});</script>"
+            "</body></html>"
+        )
+
+        sections = agentic_tools._parse_chat_share_stream_payload(html)
+
+        assert sections == [
+            ("User", "hello from user"),
+            ("Assistant", "hello from assistant"),
+        ]
+
+    def test_website_to_markdown_success(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def fake_fetcher(_: str, __: str, ___: int, ____: str | None = None) -> str:
+            return "<html><body><h1>Hello</h1></body></html>"
+
+        def fake_converter(_: str) -> str:
+            return "# Hello"
+
+        result = agentic_tools.website_to_markdown(
+            "https://example.com",
+            fetcher=fake_fetcher,
+            converter=fake_converter,
+        )
+
+        assert result.success is True
+        assert result.stdout == "# Hello"
+
+    def test_website_to_markdown_rejects_invalid_wait(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        result = agentic_tools.website_to_markdown(
+            "https://example.com", wait_until="invalid"
+        )
+
+        assert result.success is False
+        assert "Invalid wait condition" in result.stderr
