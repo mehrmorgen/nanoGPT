@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -66,6 +67,17 @@ class InitializeComponentsFn(Protocol):
         *,
         log_dir: str,
     ) -> tuple[GPT, GradScaler, EMA | None, TensorboardWriter | None]: ...
+
+
+def _accepts_keyword_argument(func: Callable[..., object], keyword: str) -> bool:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+    for param in signature.parameters.values():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+    return keyword in signature.parameters
 
 
 @dataclass(frozen=True)
@@ -165,6 +177,9 @@ class Trainer:
         self.best_val_loss: float = getattr(cfg.runtime, "initial_best_val_loss", 1e9)
         self._train_step_override: TTrainStep | None = None
         self._vectorize_impl: VectorizeFn | None = self.deps.vectorize()
+        self._save_checkpoint_accepts_counter_value = _accepts_keyword_argument(
+            self.deps.save_checkpoint, "counter_value"
+        )
 
         checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
@@ -239,15 +254,9 @@ class Trainer:
                     if losses["val"] < self.best_val_loss:
                         self.best_val_loss = losses["val"]
                         if self.iter_num > 0:
-                            self.deps.save_checkpoint(
-                                self.ckpt_mgr,
-                                self.cfg,
-                                model=raw_model,
-                                optimizer=self.optimizer,
-                                ema=self.ema,
+                            self._save_checkpoint(
+                                raw_model=raw_model,
                                 iter_num=self.iter_num,
-                                best_val_loss=self.best_val_loss,
-                                logger=self.logger,
                                 is_best=True,
                             )
 
@@ -313,15 +322,9 @@ class Trainer:
                     # Use a counter one behind for final last-checkpoint naming so
                     # ckpt_last_* reflects the most recently completed iteration.
                     final_counter = max(self.iter_num - 1, 0)
-                    self.deps.save_checkpoint(
-                        self.ckpt_mgr,
-                        self.cfg,
-                        model=raw_model,
-                        optimizer=self.optimizer,
-                        ema=self.ema,
+                    self._save_checkpoint(
+                        raw_model=raw_model,
                         iter_num=self.iter_num,
-                        best_val_loss=self.best_val_loss,
-                        logger=self.logger,
                         is_best=False,
                         counter_value=final_counter,
                     )
@@ -339,6 +342,27 @@ class Trainer:
                 self.writer.close()
 
         return self.iter_num, self.best_val_loss
+
+    def _save_checkpoint(
+        self,
+        *,
+        raw_model: GPT,
+        iter_num: int,
+        is_best: bool,
+        counter_value: int | None = None,
+    ) -> None:
+        save_kwargs: dict[str, object] = {
+            "model": raw_model,
+            "optimizer": self.optimizer,
+            "ema": self.ema,
+            "iter_num": iter_num,
+            "best_val_loss": self.best_val_loss,
+            "logger": self.logger,
+            "is_best": is_best,
+        }
+        if counter_value is not None and self._save_checkpoint_accepts_counter_value:
+            save_kwargs["counter_value"] = counter_value
+        self.deps.save_checkpoint(self.ckpt_mgr, self.cfg, **save_kwargs)
 
     def _train_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Perform a gradient accumulation step and update EMA if configured."""

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Literal, Optional, Tuple, cast, no_type_check
 import math
@@ -453,6 +453,56 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
     assert final_saves[-1]["counter_value"] == max(it - 1, 0)
     _assert_close(best, 0.2)
     assert fixture.manager.saved, "checkpoints should be recorded"
+
+
+def test_trainer_final_save_supports_legacy_dependency_signature(
+    trainer_harness: TrainerHarness,
+) -> None:
+    """Final save should work when dependency save_checkpoint has no counter_value kwarg."""
+    saved_calls: list[SavePayload] = []
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
+        saved_hook=saved_calls.append,
+        max_iters=0,
+    )
+
+    def legacy_save_checkpoint(
+        manager_param: CheckpointManager,
+        cfg: TrainerConfig,
+        *,
+        model: torch.nn.Module,
+        optimizer: Optimizer,
+        ema: Optional[EMA],
+        iter_num: int,
+        best_val_loss: float,
+        logger: LoggerLike,
+        is_best: bool,
+    ) -> None:
+        del cfg, model, optimizer, ema, logger
+        fake_mgr = cast(_FakeCkptMgr, manager_param)
+        fake_mgr.saved.append(_Saved(is_best=is_best, iter_num=iter_num))
+        saved_calls.append(
+            {
+                "iter_num": iter_num,
+                "best": is_best,
+                "best_val_loss": best_val_loss,
+                "counter_value": None,
+            }
+        )
+
+    fixture.trainer.deps = replace(  # pyright: ignore[reportAttributeAccessIssue]
+        fixture.trainer.deps,
+        save_checkpoint=cast(Callable[..., None], legacy_save_checkpoint),
+    )
+    fixture.trainer._save_checkpoint_accepts_counter_value = False  # type: ignore[reportPrivateUsage]
+
+    it, best = fixture.run()
+
+    assert it == 1
+    _assert_close(best, 0.4)
+    final_saves = [call for call in saved_calls if not call["best"]]
+    assert final_saves
+    assert final_saves[-1]["counter_value"] is None
 
 
 def test_trainer_updates_optimizer_lr_via_get_lr(
