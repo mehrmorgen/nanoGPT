@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
 from typing import Iterable, Mapping, cast
 
@@ -31,10 +32,18 @@ class CopyStage0Preparer(_PreparerProto):
         else:
             ds_dir = Path(__file__).resolve().parent / "datasets"
 
+        total_symbols = cast(int, extras.get("total_symbols", 640))
+        if total_symbols <= 0:
+            raise ValueError("total_symbols must be a positive integer")
+
+        symbol = cast(str, extras.get("symbol", "A"))
+        if not isinstance(symbol, str) or len(symbol) != 1:
+            raise ValueError("symbol must be a single character")
+
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 
-        if _artifacts_look_valid(outputs):
+        if _artifacts_look_valid(outputs, symbol=symbol, total_symbols=total_symbols):
             messages = (
                 f"[copy_stage0] dataset already prepared at {ds_dir}; skipping.",
                 "[copy_stage0.outputs.created] []",
@@ -50,18 +59,13 @@ class CopyStage0Preparer(_PreparerProto):
 
         pre = snapshot_file_states(outputs)
 
-        total_symbols = cast(int, extras.get("total_symbols", 640))
-        if total_symbols <= 0:
-            raise ValueError("total_symbols must be a positive integer")
-
-        symbol = cast(str, extras.get("symbol", "A"))
-        if not isinstance(symbol, str) or len(symbol) != 1:
-            raise ValueError("symbol must be a single character")
-
         data = symbol * total_symbols
         tokenizer = CharTokenizer()
         train_arr, val_arr, meta, _ = prepare_with_tokenizer(data, tokenizer)
 
+        # Ensure stale-but-versioned artifacts are replaced with deterministic Stage 0 data.
+        for path in outputs:
+            path.unlink(missing_ok=True)
         write_bin_and_meta(ds_dir, train_arr, val_arr, meta, logger=cfg.logger)
 
         created, updated, skipped = diff_file_states(outputs, pre)
@@ -84,12 +88,60 @@ class CopyStage0Preparer(_PreparerProto):
         )
 
 
-def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
-    for path in outputs:
+def _artifacts_look_valid(
+    outputs: Iterable[Path], *, symbol: str, total_symbols: int
+) -> bool:
+    output_list = list(outputs)
+    for path in output_list:
         if not path.exists() or path.stat().st_size == 0:
             return False
+
+    train_path, val_path, meta_path = output_list
+    try:
+        with meta_path.open("rb") as f:
+            meta_obj = pickle.load(f)
+    except (OSError, pickle.UnpicklingError, EOFError):
+        return False
+    if not isinstance(meta_obj, dict):
+        return False
+
+    meta = cast(dict[str, object], meta_obj)
+    stoi_obj = meta.get("stoi")
+    if not isinstance(stoi_obj, dict):
+        return False
+    stoi = cast(dict[str, object], stoi_obj)
+    if stoi != {symbol: 0}:
+        return False
+
+    if meta.get("tokenizer_type") != "char":
+        return False
+    vocab_size = _coerce_int(meta.get("vocab_size"))
+    if vocab_size != 1:
+        return False
+
+    expected_train = int(total_symbols * 0.9)
+    expected_val = total_symbols - expected_train
+    train_tokens = _coerce_int(meta.get("train_tokens"))
+    if train_tokens != expected_train:
+        return False
+    val_tokens = _coerce_int(meta.get("val_tokens"))
+    if val_tokens != expected_val:
+        return False
+
+    # Artifacts are stored as uint16 arrays.
+    if train_path.stat().st_size != expected_train * 2:
+        return False
+    if val_path.stat().st_size != expected_val * 2:
+        return False
     return True
 
 
 def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
-    return _artifacts_look_valid(outputs)
+    return _artifacts_look_valid(outputs, symbol="A", total_symbols=640)
+
+
+def _coerce_int(value: object) -> int | None:
+    try:
+        return int(cast(int, value))
+    except (TypeError, ValueError):
+        return None
