@@ -619,10 +619,10 @@ def test_trainer_tensorboard_logging_success(
     assert writer.closed is True
 
 
-def test_trainer_keyboard_interrupt_skips_final_save(
+def test_trainer_keyboard_interrupt_attempts_final_save(
     trainer_harness: TrainerHarness,
 ) -> None:
-    """Test trainer keyboard interrupt skips final save."""
+    """Test trainer keyboard interrupt still attempts final save."""
     saved_calls: list[SavePayload] = []
 
     def _interrupt(
@@ -642,7 +642,7 @@ def test_trainer_keyboard_interrupt_skips_final_save(
     with pytest.raises(KeyboardInterrupt):
         fixture.trainer.run()
 
-    assert fixture.manager.saved == []
+    assert fixture.manager.saved
     assert any("Training loop interrupted" in msg for msg in fixture.logger.infos)
 
 
@@ -794,7 +794,7 @@ def test_trainer_propagates_non_keyboard_exception(
     with pytest.raises(RuntimeError):
         fixture.trainer.run()
 
-    assert fixture.manager.saved == []
+    assert any(not saved.is_best for saved in fixture.manager.saved)
 
 
 def test_trainer_train_step_validates_grad_accum(

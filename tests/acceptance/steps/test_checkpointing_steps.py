@@ -137,9 +137,7 @@ def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
     metric = 0.5 if iter_num == 0 else 0.4
     ckpt = _dummy_checkpoint(iter_num, metric)
     _save_checkpoint(manager, ckpt, metric, iter_num, True)
-    # Only save last checkpoint if it's the first improvement
-    if iter_num == 0:
-        _save_checkpoint(manager, ckpt, metric, iter_num, False)
+    _save_checkpoint(manager, ckpt, metric, iter_num, False)
 
 
 def _checkpoint_exists(manager: CheckpointManager, pattern: str, iter_num: int) -> bool:
@@ -212,12 +210,3 @@ def assert_both_checkpoints_exist_for_iteration(
     assert _checkpoint_exists(manager, "ckpt_best", iter_num)
     assert _checkpoint_exists(manager, "ckpt_last", iter_num)
 
-
-@then(parsers.parse("only best checkpoint should exist for iteration {iter_num:d}"))
-def assert_only_best_checkpoint_exists_for_iteration(
-    manager: CheckpointManager, iter_num: int
-):
-    assert manager is not None, "CheckpointManager required"
-    assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
-    assert _checkpoint_exists(manager, "ckpt_best", iter_num)
-    assert not _checkpoint_exists(manager, "ckpt_last", iter_num)
