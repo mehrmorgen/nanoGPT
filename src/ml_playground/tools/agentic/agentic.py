@@ -137,6 +137,19 @@ class AgenticTools:
             stderr=message,
         )
 
+    def _write_to_output_path(
+        self, content: str, output_path: Path, operation_id: OperationId
+    ) -> ToolResult | None:
+        """Write markdown content to disk, returning an error result on failure."""
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(content, encoding="utf-8")
+            return None
+        except OSError as exc:
+            return self._create_error_result(
+                operation_id, f"Failed to write Markdown output: {exc}"
+            )
+
     def guidelines_setup(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
@@ -1159,14 +1172,12 @@ This is a machine learning playground project with the following key components:
 
         stdout = markdown_content
         if output_path is not None:
-            try:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(markdown_content, encoding="utf-8")
-                stdout = f"Conversation '{title}' saved to {output_path}"
-            except OSError as exc:
-                return self._create_error_result(
-                    operation_id, f"Failed to write Markdown output: {exc}"
-                )
+            error_result = self._write_to_output_path(
+                markdown_content, output_path, operation_id
+            )
+            if error_result is not None:
+                return error_result
+            stdout = f"Conversation '{title}' saved to {output_path}"
 
         result = ToolResult.create(
             success=True,
@@ -1273,14 +1284,12 @@ This is a machine learning playground project with the following key components:
 
         stdout = markdown_content
         if output_path is not None:
-            try:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(markdown_content, encoding="utf-8")
-                stdout = f"Rendered content saved to {output_path}"
-            except OSError as exc:
-                return self._create_error_result(
-                    operation_id, f"Failed to write Markdown output: {exc}"
-                )
+            error_result = self._write_to_output_path(
+                markdown_content, output_path, operation_id
+            )
+            if error_result is not None:
+                return error_result
+            stdout = f"Rendered content saved to {output_path}"
 
         result = ToolResult.create(
             success=True,
