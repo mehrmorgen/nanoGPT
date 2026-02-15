@@ -190,7 +190,7 @@ extraPaths = [".", "src", "tests"]
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-qq -W error --strict-markers --strict-config --import-mode=importlib -r fEsxX -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
+addopts = "-qq -W error --strict-markers --strict-config --import-mode=importlib -r fEsxX -m \"not external\" -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
 pythonpath = ["src", "."]
 testpaths = [
     "tests",
@@ -225,6 +225,7 @@ markers = [
     "integration: marks tests as integration tests",
     "acceptance: marks tests as acceptance (deselect with '-m \"not acceptance\"')",
     "e2e: marks tests as end-to-end tests",
+    "external: marks tests that depend on external network/services (deselected by default)",
 ]
 bdd_features_base_dir = "tests/acceptance/features/"
 
