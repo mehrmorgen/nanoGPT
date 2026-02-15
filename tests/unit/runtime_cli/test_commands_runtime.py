@@ -151,6 +151,21 @@ def test_run_prepare_impl_failure(tmp_path: Path) -> None:
     assert "Pipeline preparation failed" in result.stderr
 
 
+def test_run_prepare_impl_failure_when_pipeline_has_no_run(tmp_path: Path) -> None:
+    def create_pipeline(cfg: PreparerConfig, metadata: MetadataConfigLike) -> Any:
+        _ = cfg, metadata
+        return object()
+
+    deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
+    logger = _Logger()
+    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    metadata: MetadataConfigLike = _metadata(tmp_path)
+
+    result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
+    assert result.success is False
+    assert "does not have a run() method" in (result.stderr or "")
+
+
 def test_run_prepare_impl_learning(tmp_path: Path) -> None:
     class DummyEngine(LearningModeEngine):
         def __init__(self) -> None:
@@ -205,6 +220,109 @@ def test_run_prepare_impl_failure_with_learning(tmp_path: Path) -> None:
     assert result.success is False
     assert result.learning_info is not None
     assert result.learning_info.explanations == ["prep-fail"]
+
+
+def test_resolve_experiment_preparer_returns_instance_for_bundestag_char() -> None:
+    preparer = commands._resolve_experiment_preparer("bundestag_char")
+    assert preparer is not None
+    prepare_attr = getattr(preparer, "prepare", None)
+    assert callable(prepare_attr)
+
+
+def test_resolve_experiment_preparer_returns_none_when_import_fails() -> None:
+    def _import_fail(_name: str) -> object:
+        raise ImportError("missing")
+
+    preparer = commands._resolve_experiment_preparer("nope", import_fn=_import_fail)
+    assert preparer is None
+
+
+def test_resolve_experiment_preparer_skips_classes_without_prepare() -> None:
+    class _NoPrepare:
+        pass
+
+    module = SimpleNamespace(NoPrepare=_NoPrepare)
+    preparer = commands._resolve_experiment_preparer(
+        "dummy", import_fn=lambda _name: module
+    )
+    assert preparer is None
+
+
+def test_resolve_experiment_preparer_skips_non_callable_prepare_attr() -> None:
+    class _BadPrepare:
+        prepare = "nope"
+
+    module = SimpleNamespace(BadPrepare=_BadPrepare)
+    preparer = commands._resolve_experiment_preparer(
+        "dummy", import_fn=lambda _name: module
+    )
+    assert preparer is None
+
+
+def test_resolve_experiment_preparer_skips_type_error_ctor() -> None:
+    class _NeedsArg:
+        def __init__(self, _required: object) -> None:
+            self._required = _required
+
+        def prepare(self, cfg: object) -> None:
+            _ = cfg
+
+    module = SimpleNamespace(NeedsArg=_NeedsArg)
+    preparer = commands._resolve_experiment_preparer(
+        "dummy", import_fn=lambda _name: module
+    )
+    assert preparer is None
+
+
+def test_run_prepare_impl_uses_experiment_preparer_before_pipeline(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    (ds_dir / "input.txt").write_text("hello bundestag", encoding="utf-8")
+
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        logger=logging.getLogger("prepare-real-preparer"),
+        extras={"dataset_dir_override": str(exp_dir), "dataset_source": "seed"},
+    )
+
+    called: list[str] = []
+
+    def create_pipeline(_cfg: PreparerConfig, _metadata: MetadataConfigLike) -> Any:
+        called.append("pipeline")
+        return SimpleNamespace(run=lambda: None)
+
+    deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
+    metadata: MetadataConfigLike = _metadata(tmp_path)
+
+    result = commands.run_prepare_impl(
+        "bundestag_char", cfg, Path("config"), metadata, deps
+    )
+
+    assert result.success is True
+    assert called == []
+
+
+def test_run_prepare_impl_fails_when_resolved_preparer_has_no_prepare(
+    tmp_path: Path,
+) -> None:
+    original_resolver = commands._resolve_experiment_preparer
+    commands._resolve_experiment_preparer = lambda _exp: object()
+    try:
+        logger = _Logger()
+        cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+        metadata: MetadataConfigLike = _metadata(tmp_path)
+        deps = bootstrap.CLIDependencies(
+            create_pipeline=lambda _cfg, _metadata: SimpleNamespace(run=lambda: None)
+        )
+        result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
+    finally:
+        commands._resolve_experiment_preparer = original_resolver
+
+    assert result.success is False
+    assert "does not implement prepare()" in (result.stderr or "")
 
 
 def test_run_train_impl_missing_runtime(tmp_path: Path) -> None:

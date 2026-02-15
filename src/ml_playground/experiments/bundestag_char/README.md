@@ -8,19 +8,22 @@
 
 </details>
 
-Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
+Character-level language modeling on Bundestag speeches with a simple vocabulary built from dataset characters.
 
 ## Overview
 
-- Dataset: Custom text (provide input.txt manually)
+- Dataset: GermaParlTEI by default (with local seed fallback in `auto` mode)
 - Encoding: Per-character IDs (uint16)
 - Method: Classic NanoGPT-style training (strict TOML config)
 - Pipeline: prepare → train → sample via ml_playground CLI
 
 ## Data
 
-- Input: src/ml_playground/experiments/bundestag_char/datasets/input.txt
-  - Preparers fail if this file is missing; create it with your own text.
+- Input: `src/ml_playground/experiments/bundestag_char/datasets/input.txt`
+  - `prepare.extras.dataset_source = "germaparl_tei"` downloads and serializes TEI XML into rich tagged lines.
+  - GermaParlTEI XML is streamed directly from the tarball during preparation; extracted XML files are not persisted.
+  - `prepare.extras.dataset_source = "seed"` reads local seed files only.
+  - `prepare.extras.dataset_source = "auto"` prefers local seed and falls back to GermaParlTEI.
 - Outputs (prepared):
   - train.bin, val.bin (uint16 arrays)
   - meta.pkl (vocab metadata with stoi/itos, vocab_size)
@@ -28,7 +31,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 ## Method/Model
 
 - Build vocabulary from unique characters in the corpus
-- Encode train/val splits 90/10 into uint16 arrays
+- Encode train/val splits (default 90/10, override via `prepare.extras.split`) into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
   This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
@@ -52,6 +55,16 @@ Prepare:
 
 ```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml prepare bundestag_char
+```
+
+GermaParlTEI options (under `[prepare.extras]`):
+
+```toml
+dataset_source = "germaparl_tei"
+germaparl_repo = "PolMine/GermaParlTEI"
+germaparl_ref = "main"
+germaparl_include_stage = true
+germaparl_include_speaker_attrs = true
 ```
 
 Train:
@@ -107,6 +120,14 @@ src/ml_playground/experiments/bundestag_char/
 
 - If sampling fails with a missing `meta.pkl`, ensure it exists at `[training.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sampling.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
 - Ensure your input text is UTF-8 encoded.
+- Full GermaParlTEI ingestion is large and can take significant time. The preparer uses a streaming char encoder to avoid loading the full corpus into memory.
+
+## Licensing Note
+
+- GermaParlTEI is distributed under CLARIN PUB+BY+NC+SA. See:
+  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/README.md
+  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/LICENSE.md
+- Do not commit downloaded corpus files or generated dataset artifacts.
 
 ## Word Tokenizer Option
 

@@ -1,130 +1,468 @@
 from __future__ import annotations
 
-import contextlib
+import io
 import logging
-import shutil
 from pathlib import Path
+import pickle
+import tarfile
+from typing import cast
 
+import numpy as np
 import pytest
 
 from ml_playground.framework.configuration.models import PreparerConfig
-import ml_playground.experiments.bundestag_char.preparer as bundestag_char_module
+from ml_playground.framework.core.error_handling import DataError
 from ml_playground.experiments.bundestag_char.preparer import (
     BundestagCharPreparer,
     artifacts_look_valid,
 )
 
 
-def test_bundestag_char_preparer_creates_dataset(tmp_path: Path) -> None:
-    """BundestagCharPreparer should create train/val/meta files."""
-    exp_dir = tmp_path / "bundestag_char"
-    exp_dir.mkdir()
-    ds_dir = exp_dir / "datasets"
-    ds_dir.mkdir()
+def _minimal_tei(
+    *, speaker: str = "Alice", paragraph: str = "Hallo", stage: str = "(Beifall)"
+) -> str:
+    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<TEI>
+  <text>
+    <body>
+      <div type=\"agenda_item\" n=\"U1\">
+        <sp who=\"Alice\" party=\"SPD\" role=\"mp\">
+          <speaker>{speaker}</speaker>
+          <p>{paragraph}</p>
+          <stage type=\"interjection\">{stage}</stage>
+        </sp>
+      </div>
+    </body>
+  </text>
+</TEI>
+"""
 
-    # Create input file
-    input_file = ds_dir / "input.txt"
-    input_file.write_text("Hello world. This is test data.", encoding="utf-8")
 
-    preparer = BundestagCharPreparer()
+def _tarball_with_xml_files(files: dict[str, str]) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as archive:
+        for rel_path, content in files.items():
+            full_path = f"GermaParlTEI-main/{rel_path}"
+            data = content.encode("utf-8")
+            info = tarfile.TarInfo(name=full_path)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
 
-    cfg = PreparerConfig(
-        tokenizer_type="char",
+
+def _cfg(
+    exp_dir: Path,
+    *,
+    extras: dict[str, object] | None = None,
+    tokenizer_type: str = "char",
+) -> PreparerConfig:
+    return PreparerConfig(
+        tokenizer_type=tokenizer_type,  # type: ignore[arg-type]
         logger=logging.getLogger(__name__),
-        extras={"dataset_dir_override": str(exp_dir)},
+        extras={"dataset_dir_override": str(exp_dir), **(extras or {})},
     )
 
-    report = preparer.prepare(cfg)
 
-    # Check that files were created
+def _load_meta(path: Path) -> dict[str, object]:
+    with path.open("rb") as handle:
+        return pickle.load(handle)
+
+
+def test_bundestag_char_preparer_auto_prefers_local_seed(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    local_text = "LOCAL TEXT"
+    (ds_dir / "input.txt").write_text(local_text, encoding="utf-8")
+
+    # Invalid tarball should never be read because local seed is present.
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "auto",
+            "germaparl_tarball_bytes": b"not a tarball",
+        },
+    )
+
+    report = BundestagCharPreparer().prepare(cfg)
+
     assert (ds_dir / "train.bin").exists()
     assert (ds_dir / "val.bin").exists()
     assert (ds_dir / "meta.pkl").exists()
-
-    # Check report
-    assert len(report.messages) > 0
-    assert any("bundestag_char" in msg for msg in report.messages)
+    assert (ds_dir / "input.txt").read_text(encoding="utf-8") == local_text
+    assert any("prepared dataset" in msg for msg in report.messages)
 
 
-def test_bundestag_char_preparer_skips_if_valid(tmp_path: Path) -> None:
-    """BundestagCharPreparer should skip if valid artifacts exist."""
+def test_bundestag_char_preparer_auto_falls_back_to_germaparl(tmp_path: Path) -> None:
     exp_dir = tmp_path / "bundestag_char"
-    exp_dir.mkdir()
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files(
+        {"01/BT_01_001.xml": _minimal_tei(paragraph="REMOTE")}
+    )
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "auto",
+            "germaparl_tarball_bytes": tarball,
+        },
+    )
+
+    BundestagCharPreparer().prepare(cfg)
+
+    text = (exp_dir / "datasets" / "input.txt").read_text(encoding="utf-8")
+    assert '<DOC id="BT_01_001">' in text
+    assert "<P>REMOTE</P>" in text
+
+
+def test_bundestag_char_preparer_seed_mode_fails_without_local_input(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+
+    cfg = _cfg(exp_dir, extras={"dataset_source": "seed", "seed_policy": "fail_fast"})
+
+    with pytest.raises(FileNotFoundError):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_rejects_invalid_dataset_source(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+
+    cfg = _cfg(exp_dir, extras={"dataset_source": "invalid"})
+
+    with pytest.raises(DataError, match="Unsupported dataset_source"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_rejects_invalid_split_ratio(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files({"01/BT_01_001.xml": _minimal_tei(paragraph="A")})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": 1.2,
+        },
+    )
+
+    with pytest.raises(DataError, match="split ratio must be within"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_rejects_non_numeric_split(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files({"01/BT_01_001.xml": _minimal_tei(paragraph="A")})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": {"bad": "value"},
+        },
+    )
+
+    with pytest.raises(DataError, match="Invalid split ratio"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_rejects_unparseable_string_split(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files({"01/BT_01_001.xml": _minimal_tei(paragraph="A")})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": "not-a-float",
+        },
+    )
+
+    with pytest.raises(DataError, match="Unable to coerce provided split to float"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_rejects_non_positive_germaparl_max_files(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files({"01/BT_01_001.xml": _minimal_tei(paragraph="A")})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "germaparl_max_files": 0,
+        },
+    )
+
+    with pytest.raises(DataError, match="Invalid germaparl_max_files"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_germaparl_mode_bypasses_local_input(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
     ds_dir = exp_dir / "datasets"
-    ds_dir.mkdir()
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "input.txt").write_text("LOCAL", encoding="utf-8")
 
-    # Create valid artifacts
-    (ds_dir / "train.bin").write_bytes(b"train data")
-    (ds_dir / "val.bin").write_bytes(b"val data")
-    (ds_dir / "meta.pkl").write_bytes(b"meta data")
+    tarball = _tarball_with_xml_files(
+        {"01/BT_01_001.xml": _minimal_tei(paragraph="REMOTE")}
+    )
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+        },
+    )
 
-    preparer = BundestagCharPreparer()
+    BundestagCharPreparer().prepare(cfg)
+
+    text = (ds_dir / "input.txt").read_text(encoding="utf-8")
+    assert "REMOTE" in text
+    assert "LOCAL" not in text
+
+
+def test_bundestag_char_preparer_stage_toggle(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files(
+        {"01/BT_01_001.xml": _minimal_tei(stage="(Zwischenruf)")}
+    )
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "germaparl_include_stage": False,
+        },
+    )
+
+    BundestagCharPreparer().prepare(cfg)
+
+    text = (exp_dir / "datasets" / "input.txt").read_text(encoding="utf-8")
+    assert "<STAGE" not in text
+
+
+def test_bundestag_char_preparer_speaker_attrs_toggle(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    tarball = _tarball_with_xml_files({"01/BT_01_001.xml": _minimal_tei()})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "germaparl_include_speaker_attrs": False,
+        },
+    )
+
+    BundestagCharPreparer().prepare(cfg)
+
+    text = (exp_dir / "datasets" / "input.txt").read_text(encoding="utf-8")
+    assert "<SP>" in text
+    assert "who=" not in text
+
+
+def test_bundestag_char_preparer_malformed_xml_fails_fast(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+    bad_tarball = _tarball_with_xml_files({"01/BT_01_001.xml": "<TEI><broken></TEI>"})
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": bad_tarball,
+        },
+    )
+
+    with pytest.raises(DataError, match="Malformed TEI XML"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_streaming_metadata_and_split(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    exp_dir.mkdir(parents=True)
+
+    xml_files = {
+        "01/BT_01_001.xml": _minimal_tei(speaker="Alice", paragraph="abcde", stage="x"),
+        "01/BT_01_002.xml": _minimal_tei(speaker="Bob", paragraph="vwxyz", stage="y"),
+    }
+    tarball = _tarball_with_xml_files(xml_files)
+
+    cfg = _cfg(
+        exp_dir,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": 0.8,
+        },
+    )
+
+    BundestagCharPreparer().prepare(cfg)
+
+    ds_dir = exp_dir / "datasets"
+    input_text = (ds_dir / "input.txt").read_text(encoding="utf-8")
+    meta = _load_meta(ds_dir / "meta.pkl")
+
+    train_tokens_obj = meta["train_tokens"]
+    val_tokens_obj = meta["val_tokens"]
+    stoi_obj = meta["stoi"]
+    source_files_processed_obj = meta["source_files_processed"]
+
+    assert isinstance(train_tokens_obj, int)
+    assert isinstance(val_tokens_obj, int)
+    assert isinstance(stoi_obj, dict)
+    assert isinstance(source_files_processed_obj, int)
+
+    train_tokens = train_tokens_obj
+    val_tokens = val_tokens_obj
+    stoi = cast(dict[str, int], stoi_obj)
+
+    assert train_tokens + val_tokens == len(input_text)
+    assert list(stoi.keys()) == sorted(stoi.keys())
+    assert source_files_processed_obj == 2
+    assert (ds_dir / "train.bin").stat().st_size > 0
+    assert (ds_dir / "val.bin").stat().st_size > 0
+
+    train_arr = np.fromfile(ds_dir / "train.bin", dtype=np.uint16)
+    val_arr = np.fromfile(ds_dir / "val.bin", dtype=np.uint16)
+    assert len(train_arr) == train_tokens
+    assert len(val_arr) == val_tokens
+
+
+def test_bundestag_char_preparer_uses_existing_raw_text_path_when_present(
+    tmp_path: Path,
+) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "input.txt").write_text("seed", encoding="utf-8")
+
+    raw_path = tmp_path / "raw_override.txt"
+    raw_path.write_text("RAW-OVERRIDE", encoding="utf-8")
+
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        raw_text_path=raw_path,
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir), "dataset_source": "seed"},
+    )
+    BundestagCharPreparer().prepare(cfg)
+
+    meta = _load_meta(ds_dir / "meta.pkl")
+    train_tokens_obj = meta["train_tokens"]
+    val_tokens_obj = meta["val_tokens"]
+    assert isinstance(train_tokens_obj, int)
+    assert isinstance(val_tokens_obj, int)
+    assert train_tokens_obj + val_tokens_obj == len("RAW-OVERRIDE")
+
+
+def test_bundestag_char_preparer_raises_on_wrong_tokenizer(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "input.txt").write_text("Test data.", encoding="utf-8")
+
+    cfg = _cfg(exp_dir, tokenizer_type="tiktoken")
+
+    with pytest.raises(ValueError, match="only supports char tokenizer"):
+        BundestagCharPreparer().prepare(cfg)
+
+
+def test_bundestag_char_preparer_uses_base_dir_when_no_override(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "input.txt").write_text("BASE-DIR-SEED", encoding="utf-8")
 
     cfg = PreparerConfig(
         tokenizer_type="char",
         logger=logging.getLogger(__name__),
-        extras={"dataset_dir_override": str(exp_dir)},
+        extras={"dataset_source": "seed"},
     )
+    report = BundestagCharPreparer(base_dir=exp_dir).prepare(cfg)
 
-    report = preparer.prepare(cfg)
+    assert (ds_dir / "meta.pkl").exists()
+    assert any("prepared dataset" in msg for msg in report.messages)
 
-    # Should skip
-    assert len(report.skipped_files) > 0
+
+def test_bundestag_char_preparer_skips_if_valid(tmp_path: Path) -> None:
+    exp_dir = tmp_path / "bundestag_char"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "train.bin").write_bytes(b"train")
+    (ds_dir / "val.bin").write_bytes(b"val")
+    (ds_dir / "meta.pkl").write_bytes(b"meta")
+
+    report = BundestagCharPreparer().prepare(_cfg(exp_dir))
+
+    assert len(report.skipped_files) == 3
     assert len(report.created_files) == 0
     assert any("skipping" in msg for msg in report.messages)
 
 
-def test_bundestag_char_preparer_with_dataset_dir_override(tmp_path: Path) -> None:
-    """BundestagCharPreparer should respect dataset_dir_override."""
-    override_dir = tmp_path / "override"
-    override_dir.mkdir()
-    ds_dir = override_dir / "datasets"
-    ds_dir.mkdir()
-
-    input_file = ds_dir / "input.txt"
-    input_file.write_text("Test data for override.", encoding="utf-8")
-
-    preparer = BundestagCharPreparer()
-
-    # Create config with extras using model_copy
-    cfg = PreparerConfig(
-        tokenizer_type="char",
-        logger=logging.getLogger(__name__),
-        extras={"dataset_dir_override": str(override_dir)},
+def test_bundestag_char_preparer_split_extremes_route_all_tokens(
+    tmp_path: Path,
+) -> None:
+    exp_dir_all_train = tmp_path / "bundestag_char_all_train"
+    exp_dir_all_train.mkdir(parents=True)
+    tarball = _tarball_with_xml_files(
+        {"01/BT_01_001.xml": _minimal_tei(paragraph="abcdef")}
     )
-
-    preparer.prepare(cfg)
-
-    # Should create files in override directory
-    assert (ds_dir / "train.bin").exists()
-    assert (ds_dir / "val.bin").exists()
-    assert (ds_dir / "meta.pkl").exists()
-
-
-def test_bundestag_char_preparer_raises_on_wrong_tokenizer(tmp_path: Path) -> None:
-    """BundestagCharPreparer should raise ValueError for non-char tokenizer."""
-    exp_dir = tmp_path / "bundestag_char"
-    exp_dir.mkdir()
-    ds_dir = exp_dir / "datasets"
-    ds_dir.mkdir()
-
-    input_file = ds_dir / "input.txt"
-    input_file.write_text("Test data.", encoding="utf-8")
-
-    preparer = BundestagCharPreparer()
-
-    cfg = PreparerConfig(
-        tokenizer_type="tiktoken",  # Wrong tokenizer
-        logger=logging.getLogger(__name__),
-        extras={"dataset_dir_override": str(exp_dir)},
+    cfg_all_train = _cfg(
+        exp_dir_all_train,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": 1.0,
+        },
     )
+    BundestagCharPreparer().prepare(cfg_all_train)
+    meta_all_train = _load_meta(exp_dir_all_train / "datasets" / "meta.pkl")
+    train_tokens_all = cast(int, meta_all_train["train_tokens"])
+    val_tokens_all = cast(int, meta_all_train["val_tokens"])
+    assert train_tokens_all > 0
+    assert val_tokens_all == 0
 
-    with pytest.raises(ValueError, match="only supports char tokenizer"):
-        preparer.prepare(cfg)
+    exp_dir_all_val = tmp_path / "bundestag_char_all_val"
+    exp_dir_all_val.mkdir(parents=True)
+    cfg_all_val = _cfg(
+        exp_dir_all_val,
+        extras={
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+            "split": 0.0,
+        },
+    )
+    BundestagCharPreparer().prepare(cfg_all_val)
+    meta_all_val = _load_meta(exp_dir_all_val / "datasets" / "meta.pkl")
+    train_tokens_none = cast(int, meta_all_val["train_tokens"])
+    val_tokens_all2 = cast(int, meta_all_val["val_tokens"])
+    assert train_tokens_none == 0
+    assert val_tokens_all2 > 0
 
 
 def test_artifacts_look_valid_returns_true_for_valid_files(tmp_path: Path) -> None:
-    """_artifacts_look_valid should return True for valid files."""
     file1 = tmp_path / "file1.bin"
     file2 = tmp_path / "file2.bin"
     file1.write_bytes(b"data")
@@ -133,68 +471,14 @@ def test_artifacts_look_valid_returns_true_for_valid_files(tmp_path: Path) -> No
     assert artifacts_look_valid([file1, file2]) is True
 
 
-def test_artifacts_look_valid_returns_false_for_missing_file(tmp_path: Path) -> None:
-    """_artifacts_look_valid should return False if any file is missing."""
+def test_artifacts_look_valid_returns_false_for_missing_or_empty(
+    tmp_path: Path,
+) -> None:
     file1 = tmp_path / "file1.bin"
-    file2 = tmp_path / "missing.bin"
+    file2 = tmp_path / "file2.bin"
     file1.write_bytes(b"data")
 
     assert artifacts_look_valid([file1, file2]) is False
 
-
-def test_artifacts_look_valid_returns_false_for_empty_file(tmp_path: Path) -> None:
-    """_artifacts_look_valid should return False if any file is empty."""
-    file1 = tmp_path / "file1.bin"
-    file2 = tmp_path / "empty.bin"
-    file1.write_bytes(b"data")
-    file2.write_bytes(b"")  # Empty file
-
+    file2.write_bytes(b"")
     assert artifacts_look_valid([file1, file2]) is False
-
-
-def test_bundestag_char_preparer_uses_module_directory(tmp_path: Path) -> None:
-    """prepare should fall back to the package directory when no override is provided."""
-    exp_dir = Path(bundestag_char_module.__file__).resolve().parent
-    ds_dir = exp_dir / "datasets"
-    if ds_dir.exists() and any(ds_dir.iterdir()):
-        pytest.skip("bundle datasets already exist; skipping destructive test")
-
-    page_file = exp_dir / "page1.txt"
-    created_page = False
-    if not page_file.exists():
-        page_file.write_text("Bundestag fallback input", encoding="utf-8")
-        created_page = True
-
-    created_dir = False
-    if not ds_dir.exists():
-        ds_dir.mkdir(parents=True)
-        created_dir = True
-
-    raw_input = tmp_path / "raw.txt"
-    raw_input.write_text("Bundestag overrides", encoding="utf-8")
-
-    cfg = PreparerConfig(
-        tokenizer_type="char",
-        logger=logging.getLogger(__name__),
-        raw_text_path=raw_input,
-    )
-    preparer = BundestagCharPreparer()
-
-    try:
-        report = preparer.prepare(cfg)
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-        assert any("prepared dataset" in msg for msg in report.messages)
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            for item in ds_dir.glob("*"):
-                if item.is_file() or item.is_symlink():
-                    item.unlink()
-                elif item.is_dir():
-                    shutil.rmtree(item)
-            if created_dir:
-                ds_dir.rmdir()
-        if created_page:
-            with contextlib.suppress(FileNotFoundError):
-                page_file.unlink()
