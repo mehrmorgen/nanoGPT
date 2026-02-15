@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
-from typing import cast
+from typing import cast, Any
 
 import typer
 
@@ -116,15 +117,24 @@ def run_prepare_impl(
         if deps is None:
             deps = get_cli_dependencies()
 
-        pipeline = deps.create_pipeline(prepare_cfg, metadata)  # type: ignore[reportAny]
-
-        run_fn = getattr(pipeline, "run", None)
-        if callable(run_fn):
-            run_fn()
+        preparer = _resolve_experiment_preparer(experiment)
+        if preparer is not None:
+            prepare_fn = getattr(preparer, "prepare", None)
+            if callable(prepare_fn):
+                prepare_fn(prepare_cfg)
+            else:
+                raise RuntimeError(
+                    f"Resolved preparer for {experiment} does not implement prepare(): {type(preparer)}"
+                )
         else:
-            raise RuntimeError(
-                f"Pipeline produced by factory does not have a run() method: {type(pipeline)}"
-            )
+            pipeline = deps.create_pipeline(prepare_cfg, metadata)  # type: ignore[reportAny]
+            run_fn = getattr(pipeline, "run", None)
+            if callable(run_fn):
+                run_fn()
+            else:
+                raise RuntimeError(
+                    f"Pipeline produced by factory does not have a run() method: {type(pipeline)}"
+                )
 
         prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
 
@@ -167,6 +177,27 @@ def run_prepare_impl(
             stderr=f"Pipeline preparation failed: {e}",
             learning_info=learning_info,
         )
+
+
+def _resolve_experiment_preparer(
+    experiment: str, *, import_fn: Any = import_module
+) -> object | None:
+    mod_name = f"ml_playground.experiments.{experiment}.preparer"
+    try:
+        mod = import_fn(mod_name)
+    except ImportError:
+        return None
+
+    for attr_name in dir(mod):
+        candidate = getattr(mod, attr_name, None)
+        if isinstance(candidate, type):
+            prepare_attr = getattr(candidate, "prepare", None)
+            if callable(prepare_attr):
+                try:
+                    return cast(Any, candidate)()
+                except TypeError:
+                    continue
+    return None
 
 
 def _missing_runtime_message(category: str) -> str:
