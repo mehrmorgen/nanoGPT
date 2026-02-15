@@ -4,13 +4,16 @@ import logging
 import pickle
 from pathlib import Path
 
+import pytest
+
 from ml_playground.experiments.copy_stage0.preparer import CopyStage0Preparer
 from ml_playground.framework.configuration.models import PreparerConfig
 
 
-def _make_cfg(dataset_dir: Path) -> PreparerConfig:
+def _make_cfg(dataset_dir: Path, raw_text_path: Path | None = None) -> PreparerConfig:
     return PreparerConfig(
         logger=logging.getLogger("copy-stage0-test"),
+        raw_text_path=raw_text_path,
         extras={"dataset_dir_override": str(dataset_dir)},
     )
 
@@ -62,3 +65,25 @@ def test_copy_stage0_preparer_is_deterministic(tmp_path: Path) -> None:
     assert meta_one["tokenizer_type"] == "char"
     assert meta_one["vocab_size"] == 1
     assert meta_one["stoi"] == {"A": 0}
+
+
+def test_copy_stage0_preparer_uses_raw_text_path_symbol(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "datasets"
+    input_path = tmp_path / "input.txt"
+    input_path.write_text("B\n", encoding="utf-8")
+
+    CopyStage0Preparer().prepare(_make_cfg(dataset_dir, raw_text_path=input_path))
+
+    with (dataset_dir / "meta.pkl").open("rb") as file:
+        meta = pickle.load(file)
+    assert meta["stoi"] == {"B": 0}
+    assert meta["vocab_size"] == 1
+
+
+def test_copy_stage0_preparer_rejects_multi_symbol_raw_text(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "datasets"
+    input_path = tmp_path / "input.txt"
+    input_path.write_text("AB", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="exactly one unique symbol"):
+        CopyStage0Preparer().prepare(_make_cfg(dataset_dir, raw_text_path=input_path))

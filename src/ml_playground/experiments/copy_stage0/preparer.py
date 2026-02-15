@@ -36,9 +36,7 @@ class CopyStage0Preparer(_PreparerProto):
         if total_symbols <= 0:
             raise ValueError("total_symbols must be a positive integer")
 
-        symbol = cast(str, extras.get("symbol", "A"))
-        if not isinstance(symbol, str) or len(symbol) != 1:
-            raise ValueError("symbol must be a single character")
+        symbol = _resolve_symbol(cfg, extras)
 
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
@@ -138,6 +136,39 @@ def _artifacts_look_valid(
 
 def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
     return _artifacts_look_valid(outputs, symbol="A", total_symbols=640)
+
+
+def _resolve_symbol(cfg: PreparerConfig, extras: Mapping[str, object]) -> str:
+    raw_text_path = cfg.raw_text_path
+    if isinstance(raw_text_path, Path):
+        raw_text = _read_raw_text(raw_text_path, cfg)
+        return _extract_single_symbol(raw_text)
+
+    symbol = cast(str, extras.get("symbol", "A"))
+    if not isinstance(symbol, str) or len(symbol) != 1:
+        raise ValueError("symbol must be a single character")
+    return symbol
+
+
+def _read_raw_text(path: Path, cfg: PreparerConfig) -> str:
+    reader = cfg.read_text_fn
+    if reader is not None:
+        return reader(path)
+    return path.read_text(encoding="utf-8")
+
+
+def _extract_single_symbol(raw_text: str) -> str:
+    normalized = raw_text.strip()
+    if not normalized:
+        raise ValueError(
+            "copy_stage0 raw_text_path must contain at least one non-whitespace character"
+        )
+    unique_chars = set(normalized)
+    if len(unique_chars) != 1:
+        raise ValueError(
+            "copy_stage0 raw_text_path must contain exactly one unique symbol"
+        )
+    return normalized[0]
 
 
 def _coerce_int(value: object) -> int | None:
