@@ -1072,6 +1072,7 @@ class TestScrapeAndMarkdown:
 
         assert result.success is True
         assert result.exit_code == 0
+        assert str(result.operation_id) == "tools.agentic.scrape-chat-share"
         assert "Test Title" in result.stdout
         assert "Source:" in result.stdout
 
@@ -1122,6 +1123,29 @@ class TestScrapeAndMarkdown:
         assert result.stdout == "# Recovered"
         assert calls["count"] == 2
 
+    def test_scrape_chat_share_playwright_importerror_message_is_clear(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def fake_fetcher(_: str, __: float) -> str:
+            return "<html>initial</html>"
+
+        def fake_parser(_: str, __: str) -> tuple[str, str]:
+            raise ValueError("Could not parse transcript")
+
+        def failing_render(**_: object) -> str:
+            raise ImportError("playwright missing")
+
+        with swap_attr(agentic_tools, "_render_dynamic_page", failing_render):
+            result = agentic_tools.scrape_chat_share(
+                "https://chatgpt.com/share/test",
+                fetcher=fake_fetcher,
+                parser=fake_parser,
+            )
+
+        assert result.success is False
+        assert "Initial parsing failed: Could not parse transcript." in result.stderr
+        assert "Attempted Playwright fallback, but it is unavailable." in result.stderr
+
     def test_parse_chat_share_html_supports_stream_payload_structure(
         self, agentic_tools: agentic_module.AgenticTools
     ) -> None:
@@ -1164,6 +1188,43 @@ class TestScrapeAndMarkdown:
         assert "hello from user" in markdown
         assert "## Assistant" in markdown
         assert "hello from assistant" in markdown
+
+    def test_parse_chat_share_stream_payload_aggregates_multiple_chunks(
+        self, agentic_tools: agentic_module.AgenticTools
+    ) -> None:
+        def _chunk_for(role: str, text: str) -> str:
+            payload = [
+                "id",
+                "message",
+                "author",
+                "role",
+                "content",
+                "parts",
+                "children",
+                role,
+                text,
+                {"_3": 7},
+                {"_5": [8]},
+                {"_2": 9, "_4": 10},
+                {"_0": "m1", "_1": 11, "_6": []},
+                "linear_conversation",
+                [12],
+            ]
+            return json.dumps(json.dumps(payload))
+
+        html = (
+            "<html><body>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({_chunk_for('user', 'hello from user')});</script>"
+            f"<script>window.__reactRouterContext.streamController.enqueue({_chunk_for('assistant', 'hello from assistant')});</script>"
+            "</body></html>"
+        )
+
+        sections = agentic_tools._parse_chat_share_stream_payload(html)
+
+        assert sections == [
+            ("User", "hello from user"),
+            ("Assistant", "hello from assistant"),
+        ]
 
     def test_website_to_markdown_success(
         self, agentic_tools: agentic_module.AgenticTools

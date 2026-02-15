@@ -10,6 +10,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Literal,
     List,
     Mapping,
     Optional,
@@ -1109,7 +1110,9 @@ This is a machine learning playground project with the following key components:
     ) -> ToolResult:
         """Scrape a shared ChatGPT conversation and convert it to Markdown."""
         operation_id = OperationId(
-            namespace="tools", category=self.category, command="share"
+            namespace="tools",
+            category=self.category,
+            command="scrape-chat-share",
         )
 
         parsed_url = urlparse(url)
@@ -1159,7 +1162,8 @@ This is a machine learning playground project with the following key components:
                 return self._create_error_result(
                     operation_id,
                     (
-                        f"{exc} Playwright fallback is unavailable. "
+                        f"Initial parsing failed: {exc}. "
+                        "Attempted Playwright fallback, but it is unavailable. "
                         "Install dependencies with `uv sync` and run "
                         "`uv run playwright install`."
                     ),
@@ -1196,7 +1200,7 @@ This is a machine learning playground project with the following key components:
         if learning_mode:
             self.learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self.learning_engine.explain_command(
-                command="share",
+                command="scrape-chat-share",
                 context="Transforming a shared ChatGPT conversation into Markdown",
                 category=self.category,
                 executed_commands=[
@@ -1933,6 +1937,8 @@ This is a machine learning playground project with the following key components:
         if not encoded_chunks:
             return []
 
+        aggregated_sections: list[tuple[str, str]] = []
+        seen_sections: set[tuple[str, str]] = set()
         for encoded_chunk in encoded_chunks:
             try:
                 chunk = json.loads(f'"{encoded_chunk}"')
@@ -1951,10 +1957,13 @@ This is a machine learning playground project with the following key components:
 
             payload = cast(list[Any], payload_raw)
             sections = self._extract_stream_conversation_sections(payload)
-            if sections:
-                return sections
+            for section in sections:
+                if section in seen_sections:
+                    continue
+                seen_sections.add(section)
+                aggregated_sections.append(section)
 
-        return []
+        return aggregated_sections
 
     def _extract_stream_conversation_sections(
         self, payload: list[Any]
@@ -2001,9 +2010,11 @@ This is a machine learning playground project with the following key components:
         if isinstance(value, int):
             if value < 0 or value >= len(payload) or value in seen:
                 return value
-            next_seen = set(seen)
-            next_seen.add(value)
-            return self._resolve_stream_payload_ref(payload, payload[value], next_seen)
+            seen.add(value)
+            try:
+                return self._resolve_stream_payload_ref(payload, payload[value], seen)
+            finally:
+                seen.remove(value)
         if isinstance(value, list):
             return [
                 self._resolve_stream_payload_ref(payload, item, seen) for item in value
@@ -2122,7 +2133,11 @@ This is a machine learning playground project with the following key components:
                         page.wait_for_selector(selector, timeout=timeout_ms)
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     if wait_until != "commit":
-                        page.wait_for_load_state(wait_until, timeout=timeout_ms)  # type: ignore[arg-type]
+                        wait_state = cast(
+                            Literal["load", "domcontentloaded", "networkidle"],
+                            wait_until,
+                        )
+                        page.wait_for_load_state(wait_state, timeout=timeout_ms)
                     html_content = page.content()
                 finally:
                     browser.close()
