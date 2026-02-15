@@ -57,6 +57,12 @@ src/ml_playground/experiments/
 ├── default_config.toml          # baseline config used by templates/examples
 ├── protocol.py                  # typed protocol/contracts for preparers
 ├── copy_stage0/                 # Stage 0 one-symbol learned copying experiment
+├── copy_stage1/                 # Stage 1 two-symbol learned copying experiment
+├── copy_stage2/                 # Stage 2 copy with explicit EOS token
+├── copy_stage3/                 # Stage 3 copy with SOS/EOS boundaries
+├── copy_stage4/                 # Stage 4 variable-length copy experiment
+├── copy_stage5/                 # Stage 5 Game-15 transition experiment
+├── copy_stage6/                 # Stage 6 tic-tac-toe transition experiment
 ├── shakespeare/                 # Tiny Shakespeare experiment
 ├── bundestag_char/              # Bundestag character-level experiment
 ├── bundestag_tiktoken/          # Bundestag BPE (tiktoken) experiment
@@ -81,6 +87,30 @@ Implemented experiments (current)
   - README: src/ml_playground/experiments/copy_stage0/README.md
   - Config: src/ml_playground/experiments/copy_stage0/config.toml
   - Prepare name: `copy_stage0`
+- copy_stage1 — Stage 1 two-symbol learned copy (deterministic and balanced)
+  - README: src/ml_playground/experiments/copy_stage1/README.md
+  - Config: src/ml_playground/experiments/copy_stage1/config.toml
+  - Prepare name: `copy_stage1`
+- copy_stage2 — Stage 2 copy with explicit end-of-sequence token
+  - README: src/ml_playground/experiments/copy_stage2/README.md
+  - Config: src/ml_playground/experiments/copy_stage2/config.toml
+  - Prepare name: `copy_stage2`
+- copy_stage3 — Stage 3 copy with start/end boundary tokens
+  - README: src/ml_playground/experiments/copy_stage3/README.md
+  - Config: src/ml_playground/experiments/copy_stage3/config.toml
+  - Prepare name: `copy_stage3`
+- copy_stage4 — Stage 4 variable-length bounded copy
+  - README: src/ml_playground/experiments/copy_stage4/README.md
+  - Config: src/ml_playground/experiments/copy_stage4/config.toml
+  - Prepare name: `copy_stage4`
+- copy_stage5 — Stage 5 deterministic Game-15 transition traces
+  - README: src/ml_playground/experiments/copy_stage5/README.md
+  - Config: src/ml_playground/experiments/copy_stage5/config.toml
+  - Prepare name: `copy_stage5`
+- copy_stage6 — Stage 6 deterministic tic-tac-toe transition traces
+  - README: src/ml_playground/experiments/copy_stage6/README.md
+  - Config: src/ml_playground/experiments/copy_stage6/config.toml
+  - Prepare name: `copy_stage6`
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
   - README: src/ml_playground/experiments/shakespeare/README.md
   - Config: src/ml_playground/experiments/shakespeare/config.toml

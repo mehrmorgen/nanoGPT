@@ -59,7 +59,7 @@ Status legend:
 - Failure modes: collapse due to invalid metadata, incompatible block size, non-deterministic preprocessing.
 - Next-stage unlock criteria: reproducible prepare/train/sample with stable checkpoints and deterministic outputs.
 
-### Stage 1: Two-Symbol Learned Copy (`planned`)
+### Stage 1: Two-Symbol Learned Copy (`implemented`)
 
 - Learning objective: learn identity mapping over `A/B` without collapsing to a constant output.
 - Minimal dataset/task: balanced sequences over two symbols.
@@ -67,7 +67,7 @@ Status legend:
 - Failure modes: token imbalance, representation collapse, incorrect tokenizer metadata.
 - Next-stage unlock criteria: robust per-symbol accuracy and deterministic reruns.
 
-### Stage 2: Add End-of-Sequence Token (`planned`)
+### Stage 2: Add End-of-Sequence Token (`implemented`)
 
 - Learning objective: introduce explicit output termination behavior.
 - Minimal dataset/task: copy with appended `<EOS>`.
@@ -75,7 +75,7 @@ Status legend:
 - Failure modes: over-generation, premature stop, disallowed special token handling.
 - Next-stage unlock criteria: consistent termination across fixed prompts.
 
-### Stage 3: Add Start-of-Sequence Token (`planned`)
+### Stage 3: Add Start-of-Sequence Token (`implemented`)
 
 - Learning objective: introduce explicit boundary conditioning (`<SOS> ... <EOS>`).
 - Minimal dataset/task: bounded copy samples with both start/end delimiters.
@@ -83,7 +83,7 @@ Status legend:
 - Failure modes: boundary token confusion, shifted labels, prompt alignment bugs.
 - Next-stage unlock criteria: correct boundary-conditioned generation in deterministic tests.
 
-### Stage 4: Variable-Length Copy (`planned`)
+### Stage 4: Variable-Length Copy (`implemented`)
 
 - Learning objective: preserve order and length over variable-length sequences.
 - Minimal dataset/task: mixed-length copy pairs over small symbol alphabet.
@@ -91,7 +91,7 @@ Status legend:
 - Failure modes: position drift, truncation, bag-of-symbol behavior.
 - Next-stage unlock criteria: strong exact-match performance over all configured lengths.
 
-### Stage 5: Game 15 (`planned`)
+### Stage 5: Game 15 (`implemented`)
 
 - Learning objective: transition from sequence copying to adversarial decision making.
 - Minimal dataset/task: legal move generation and win-condition learning for Game 15.
@@ -99,7 +99,7 @@ Status legend:
 - Failure modes: illegal actions, reward leakage, weak state encoding.
 - Next-stage unlock criteria: reliable legal play and baseline-competitive strategy.
 
-### Stage 6: Tic-Tac-Toe (`planned`)
+### Stage 6: Tic-Tac-Toe (`implemented`)
 
 - Learning objective: spatial strategy with solvable optimal-play reference.
 - Minimal dataset/task: board-state policy/value learning with legal move masking.
@@ -126,7 +126,7 @@ For runnable stages, include:
 
 ## POC Status
 
-- Implemented in this PR scope: Stage 0 only.
-- Planned (not implemented in this PR): stages 1 through 6.
+- Implemented in this PR scope: stages 0 through 6.
+- Planned (not implemented in this PR): none.
 
-Future PRs should implement one stage at a time to keep quality gates green and maintain reproducible progress.
+Further curriculum refinements should keep stage-level changes incremental to preserve reproducibility and green quality gates.
