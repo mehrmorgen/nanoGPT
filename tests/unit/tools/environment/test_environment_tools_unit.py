@@ -21,6 +21,9 @@ def test_setup_git_hooks_creates_hook_in_standard_repo(tmp_path: Path) -> None:
     content = hook.read_text(encoding="utf-8")
     assert "pre-commit" in content
     assert "--config .githooks/.pre-commit-config.yaml" in content
+    assert "Starting full quality gate (verbose output enabled)." in content
+    assert 'UV_NO_SYNC="${UV_NO_SYNC:-1}"' in content
+    assert "pre-commit run -v --config .githooks/.pre-commit-config.yaml" in content
 
 
 def test_setup_git_hooks_uses_worktree_gitdir(tmp_path: Path) -> None:
@@ -41,6 +44,8 @@ def test_setup_git_hooks_uses_worktree_gitdir(tmp_path: Path) -> None:
     assert hook.exists()
     content = hook.read_text(encoding="utf-8")
     assert "--config .githooks/.pre-commit-config.yaml" in content
+    assert "Starting full quality gate (verbose output enabled)." in content
+    assert 'UV_NO_SYNC="${UV_NO_SYNC:-1}"' in content
 
 
 def test_setup_git_hooks_handles_io_error(tmp_path: Path) -> None:

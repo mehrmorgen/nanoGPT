@@ -1,0 +1,40 @@
+{
+  "name": "ml-playground",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [
+    8050,
+    5000,
+    6006
+  ],
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-venv,target=${containerWorkspaceFolder}/.venv,type=volume",
+    "source=${localWorkspaceFolderBasename}-cache,target=${containerWorkspaceFolder}/.cache,type=volume"
+  ],
+  "containerEnv": {
+    "PYTHONPATH": "${containerWorkspaceFolder}/src",
+    "UV_CACHE_DIR": "${containerWorkspaceFolder}/.cache/uv",
+    "PRE_COMMIT_HOME": "${containerWorkspaceFolder}/.cache/pre-commit",
+    "RUFF_CACHE_DIR": "${containerWorkspaceFolder}/.cache/ruff",
+    "HYPOTHESIS_DATABASE_DIRECTORY": "${containerWorkspaceFolder}/.cache/hypothesis",
+    "HYPOTHESIS_STORAGE_DIRECTORY": "${containerWorkspaceFolder}/.cache/hypothesis"
+  },
+  "postCreateCommand": "bash -lc 'uv sync --all-groups && uv pip install -e . && uv run tools env setup && uv run tools env verify'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

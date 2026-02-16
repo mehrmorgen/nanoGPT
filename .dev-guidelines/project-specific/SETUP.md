@@ -30,13 +30,34 @@ Quick start guide for setting up the ml_playground development environment.
 
 - Python version: see pyproject.toml (currently ">=3.13")
 - UV package manager installed
+- Docker Desktop (or another OCI runtime) for the Dev Container workflow
+- VS Code with the Dev Containers extension for containerized development
 - Optional but recommended for reproducible CLI environments:
   - Nix (flakes enabled)
   - direnv
 
 ## Environment Setup
 
-### Option A (Recommended): Nix + direnv
+### Option A (Recommended Cross-Platform): Dev Container
+
+1. Open this repository in VS Code.
+2. Run `Dev Containers: Reopen in Container`.
+3. Wait for post-create bootstrap to complete:
+
+```bash
+uv sync --all-groups
+uv pip install -e .
+uv run tools env setup
+uv run tools env verify
+```
+
+Notes:
+
+- The Dev Container lives under `.devcontainer/` and uses a pinned Python 3.13 base image.
+- The container forwards `8050` (analyze), `5000` (MLflow), and `6006` (TensorBoard).
+- `.venv` and `.cache` are persisted as Docker named volumes for faster rebuilds on Windows/macOS.
+
+### Option B (Optional): Nix + direnv
 
 ```bash
 # Enter reproducible shell with pinned tooling (python, uv, gh, act, etc.)
@@ -53,7 +74,7 @@ Notes:
   - `uv pip install -e .`
 - This keeps CLI behavior (`tools`, `ml-playground`, `cli`) deterministic and fail-fast across machines.
 
-### Option B: UV-only bootstrap
+### Option C: UV-only bootstrap
 
 ### 1. Create Virtual Environment
 
@@ -154,5 +175,8 @@ __Tests cannot import `ml_playground`__: You're not in the project venv - run `u
 __Missing pytest__: Run `uv sync --all-groups` to install dev dependencies
 
 __UV hangs during venv creation__: Exit any active virtual environment first, then retry
+
+__Dev Container first-run hooks feel slow__: The first `pre-commit` run may take several minutes while environments
+are initialized. Keep the process running; subsequent runs reuse `.venv` and `.cache` volumes.
 
 For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

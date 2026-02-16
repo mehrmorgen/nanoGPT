@@ -344,6 +344,8 @@ def test_run_setup_worktree_gitdir_configures_hooks(tmp_path: Path) -> None:
     assert (gitdir / "hooks" / "pre-commit").exists() is True
     hook_content = (gitdir / "hooks" / "pre-commit").read_text(encoding="utf-8")
     assert "--config .githooks/.pre-commit-config.yaml" in hook_content
+    assert "Starting full quality gate (verbose output enabled)." in hook_content
+    assert 'UV_NO_SYNC="${UV_NO_SYNC:-1}"' in hook_content
 
 
 def test_run_setup_worktree_read_text_oserror_warns(tmp_path: Path) -> None:

@@ -72,6 +72,17 @@ Setup and Developer Workflow
 - See `.dev-guidelines/README.md` for environment setup, development
   practices, and testing policies (entry point to all developer guidelines).
 
+Dev Container (recommended cross-platform path)
+
+- Install Docker Desktop and the VS Code Dev Containers extension.
+- Reopen this repository in the container using `Dev Containers: Reopen in Container`.
+- Bootstrap runs automatically via `.devcontainer/devcontainer.json`:
+  - `uv sync --all-groups`
+  - `uv pip install -e .`
+  - `uv run tools env setup`
+  - `uv run tools env verify`
+- Forwarded defaults: `8050` (analyze), `5000` (MLflow), `6006` (TensorBoard).
+
 Nix + direnv (optional, recommended for reproducible CLI environments)
 
 - Enter the dev shell with: `nix develop`

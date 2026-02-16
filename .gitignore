@@ -83,3 +83,7 @@ scripts/llama_cpp/llama-quantize
 # Local developer resources (never share)
 .ldres/
 .direnv/
+
+# Dev Container local overrides (tracked config lives in .devcontainer/)
+.devcontainer/.env
+.devcontainer/*.local.json
