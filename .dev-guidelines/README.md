@@ -32,6 +32,13 @@ them exactly.
 Get up and running immediately:
 
 ```bash
+# Optional (recommended on Windows): open in dev container first
+# VS Code command: Dev Containers: Reopen in Container
+```
+
+Then run:
+
+```bash
 uv run tools env setup
 uv run tools env verify
 uv run tools ci quality-gate   # ruff + format + pyright + mypy + pytest

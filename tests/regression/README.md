@@ -42,6 +42,7 @@ tests/regression/
 ├── test_cache_directory_policy.py         # ensures cache dirs follow conventions
 ├── test_cli_exit_code_consistency.py      # guards against raw sys.exit() usage
 ├── test_cli_isolation.py                  # prohibited cross-imports between CLI layers
+├── test_devcontainer_contract.py          # enforces devcontainer bootstrap/port contract
 ├── test_import_boundaries.py              # framework/tools/experiments layering
 ├── test_namespace_compliance.py           # PEP 420 namespace enforcement
 ├── test_no_mocks.py                       # forbids mocking/patching libraries

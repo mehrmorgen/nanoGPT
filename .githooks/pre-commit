@@ -77,8 +77,20 @@ if files=$(find tests -type f -name '*.py' -print 2>/dev/null) && [ -n "$files" 
   fi
 fi
 
-# shellcheck disable=SC2016
-echo '[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)'
-uv run pre-commit run --config .githooks/.pre-commit-config.yaml
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[pre-commit] Error: uv is required but not found on PATH." >&2
+  echo "[pre-commit] Remediation: install uv, then run 'uv run tools env setup --clear'." >&2
+  exit 1
+fi
+
+if [ ! -x ".venv/bin/pre-commit" ]; then
+  echo "[pre-commit] Error: .venv/bin/pre-commit is missing." >&2
+  echo "[pre-commit] Remediation: run 'uv sync --all-groups' then 'uv run tools env setup --clear'." >&2
+  exit 1
+fi
+
+echo '[pre-commit] Starting full quality gate (verbose output enabled).'
+echo '[pre-commit] This can take several minutes on first run.'
+UV_NO_SYNC="${UV_NO_SYNC:-1}" uv run pre-commit run -v --config .githooks/.pre-commit-config.yaml
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.

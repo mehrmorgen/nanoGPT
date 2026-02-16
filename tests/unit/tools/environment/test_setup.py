@@ -335,6 +335,11 @@ def test_run_setup_worktree_gitdir_configures_hooks(tmp_path: Path) -> None:
     gitdir = tmp_path / ".worktree-git"
     gitdir.mkdir()
     (tmp_path / ".git").write_text(f"gitdir: {gitdir}", encoding="utf-8")
+    (tmp_path / ".githooks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".githooks" / "pre-commit").write_text(
+        "#!/usr/bin/env bash\nuv run pre-commit run -v --config .githooks/.pre-commit-config.yaml\n",
+        encoding="utf-8",
+    )
 
     venv_path = tmp_path / ".venv"
     result = run_setup(config, tmp_path, venv_path, "pkg", [], False, runner)

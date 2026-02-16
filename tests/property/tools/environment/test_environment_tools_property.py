@@ -74,7 +74,7 @@ def test_setup_creates_venv_and_syncs(clear: bool, tmp_path: Path) -> None:
     assert len(subprocess_calls) >= 2
     venv_call = subprocess_calls[0]
     sync_call = subprocess_calls[1]
-    expected_venv = ["uv", "venv"] + (["--clear"] if clear else [])
+    expected_venv = ["uv", "venv"] + (["--clear"] if clear else ["--allow-existing"])
     assert venv_call.args == expected_venv
     assert sync_call.args == ["uv", "sync", "--group", "all"]
 
