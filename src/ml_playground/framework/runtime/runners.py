@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import time
 from typing import Any, Callable, cast, Optional
+import webbrowser
+
+from ml_playground.framework.analysis.lit.integration import run_server_bundestag_char
 
 from ml_playground.framework.core.logging_protocol import LoggerLike
 from ml_playground.framework.core.error_handling import (
@@ -338,30 +342,55 @@ def run_analyze(
     learning_mode_engine: LearningModeEngine | None = None,
     *,
     logger_factory: Callable[[str], Any] | None = None,
+    metadata: object | None = None,
+    exp_config_path: Path | None = None,
+    analyze_runner: Callable[[str | None, int, bool, Any], None] | None = None,
 ) -> ToolResult:
     """Run analysis for an experiment.
 
-    Only 'bundestag_char' is currently supported.
+    Prefers TensorBoard event-data visualization (`out/logs/tb`) when available.
+    Falls back to the LIT demo server for `bundestag_char` if no event files exist.
     """
     from logging import getLogger
 
     try:
-        if experiment != "bundestag_char":
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="ml",
-                category="analyze",
-                command=experiment,
-                stderr=f"analyze currently supports only 'bundestag_char', got: {experiment}",
-            )
-
         logger_name = "ml_playground.runtime_cli"
         logger_getter = logger_factory or getLogger
         logger = logger_getter(logger_name)
-        logger.info(
-            f"Analysis for '{experiment}' not implemented. Host={host}, Port={port}, Open={open_browser}"
-        )
+        if analyze_runner is not None:
+            analyze_runner(host, port, open_browser, logger)
+        else:
+            tb_logdir = _resolve_tensorboard_logdir(
+                experiment, metadata=metadata, exp_config_path=exp_config_path
+            )
+            has_event_files = tb_logdir.exists() and any(
+                tb_logdir.rglob("events.out.tfevents.*")
+            )
+            if has_event_files:
+                logger.info(
+                    "Launching TensorBoard for '%s' from %s on %s:%s (open_browser=%s)",
+                    experiment,
+                    tb_logdir,
+                    host,
+                    port,
+                    open_browser,
+                )
+                _run_tensorboard_server(tb_logdir, host, port, open_browser, logger)
+            elif experiment == "bundestag_char":
+                logger.info(
+                    "No TensorBoard event files found at %s. Falling back to LIT for '%s' on %s:%s (open_browser=%s)",
+                    tb_logdir,
+                    experiment,
+                    host,
+                    port,
+                    open_browser,
+                )
+                run_server_bundestag_char(host, port, open_browser, logger)
+            else:
+                raise RuntimeError(
+                    f"No TensorBoard event files found for '{experiment}' at {tb_logdir}. "
+                    "Run training first or provide event files under out/logs/tb."
+                )
 
         learning_info = None
         if learning_mode_engine:
@@ -378,7 +407,7 @@ def run_analyze(
             namespace="ml",
             category="analyze",
             command=experiment,
-            stdout=f"Analysis placeholder executed for {experiment} (Host={host}, Port={port}, Open={open_browser})",
+            stdout=f"Analysis completed for {experiment}",
             learning_info=learning_info,
         )
     except (ValueError, RuntimeError, AttributeError, TypeError, OSError) as e:
@@ -390,3 +419,43 @@ def run_analyze(
             command=experiment,
             stderr=f"Analysis failed: {e}",
         )
+
+
+def _resolve_tensorboard_logdir(
+    experiment: str,
+    *,
+    metadata: object | None,
+    exp_config_path: Path | None,
+) -> Path:
+    train_out_dir = getattr(metadata, "train_out_dir", None)
+    if isinstance(train_out_dir, Path):
+        return train_out_dir / "logs" / "tb"
+    if exp_config_path is not None:
+        return exp_config_path.parent / "out" / "logs" / "tb"
+    exp_base = Path(__file__).resolve().parents[2] / "experiments" / experiment
+    return exp_base / "out" / "logs" / "tb"
+
+
+def _run_tensorboard_server(
+    logdir: Path, host: str, port: int, open_browser: bool, logger: LoggerLike
+) -> None:
+    from tensorboard import program as tb_program
+
+    tb = tb_program.TensorBoard()
+    tb.configure(
+        argv=[
+            None,
+            "--logdir",
+            str(logdir),
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+    )
+    url = tb.launch()
+    logger.info("TensorBoard running at %s", url)
+    if open_browser:
+        webbrowser.open(url)
+    while True:
+        time.sleep(1)

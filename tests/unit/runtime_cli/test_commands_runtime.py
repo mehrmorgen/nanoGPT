@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import logging
 from pathlib import Path
+import tarfile
 from types import SimpleNamespace, TracebackType
 from typing import Any, Mapping, cast
 
@@ -280,12 +282,26 @@ def test_run_prepare_impl_uses_experiment_preparer_before_pipeline(
     exp_dir = tmp_path / "bundestag_char"
     ds_dir = exp_dir / "datasets"
     ds_dir.mkdir(parents=True, exist_ok=True)
-    (ds_dir / "input.txt").write_text("hello bundestag", encoding="utf-8")
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as archive:
+        xml = (
+            "<?xml version='1.0' encoding='UTF-8'?><TEI><text><body><div>"
+            "<sp><speaker>A</speaker><p>B</p></sp></div></body></text></TEI>"
+        ).encode("utf-8")
+        info = tarfile.TarInfo(name="GermaParlTEI-main/01/BT_01_001.xml")
+        info.size = len(xml)
+        archive.addfile(info, io.BytesIO(xml))
+    tarball = buf.getvalue()
 
     cfg = PreparerConfig(
         tokenizer_type="char",
         logger=logging.getLogger("prepare-real-preparer"),
-        extras={"dataset_dir_override": str(exp_dir), "dataset_source": "seed"},
+        extras={
+            "dataset_dir_override": str(exp_dir),
+            "dataset_source": "germaparl_tei",
+            "germaparl_tarball_bytes": tarball,
+        },
     )
 
     called: list[str] = []
@@ -546,13 +562,20 @@ def test_helpers_run_or_exit_runtime_error() -> None:
 
 
 def test_commands_run_analyze_exception() -> None:
-    # Use a mock logger that raises an exception to verify error handling in run_analyze
-    # (Analysis currently supported only for bundestag_char)
-    result = commands.run_analyze("bundestag_char", "127.0.0.1", 8050, True)
-    # The current placeholder implementation doesn't easily trigger an exception
-    # without deeper mocking of logging, but we verify it works.
-    assert result.success is True
-    assert "Analysis placeholder executed" in result.stdout
+    def _raising_runner(
+        _host: str | None, _port: int, _open_browser: bool, _logger: Any
+    ) -> None:
+        raise RuntimeError("boom")
+
+    result = commands.run_analyze(
+        "bundestag_char",
+        "127.0.0.1",
+        8050,
+        True,
+        analyze_runner=_raising_runner,
+    )
+    assert result.success is False
+    assert "Analysis failed: boom" in (result.stderr or "")
 
 
 def test_extract_exp_config_handles_context(tmp_path: Path) -> None:

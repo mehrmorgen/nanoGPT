@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -202,19 +203,30 @@ def test_run_server_bundestag_char_uses_input_file_lines(
             return True
         return Path.exists(self)
 
-    def fake_read_text(
+    original_open = Path.open
+
+    def fake_open(
         self: Path,
-        *,
+        mode: str = "r",
+        buffering: int = -1,
         encoding: str | None = None,
         errors: str | None = None,
-    ) -> str:
+        newline: str | None = None,
+    ) -> io.StringIO | object:
         if str(self).endswith("experiments/bundestag_char/datasets/input.txt"):
-            return "first\n\nsecond\n"
-        return Path.read_text(self, encoding=encoding, errors=errors)
+            return io.StringIO("first\n\nsecond\n")
+        return original_open(
+            self,
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
 
     with _install_modules(modules):
         with override_attr(lit_integration.Path, "exists", fake_exists):
-            with override_attr(lit_integration.Path, "read_text", fake_read_text):
+            with override_attr(lit_integration.Path, "open", fake_open):
                 lit_integration.run_server_bundestag_char(
                     host="127.0.0.1",
                     port=0,
@@ -256,19 +268,30 @@ def test_run_server_bundestag_char_ignores_empty_input_file(
             return True
         return Path.exists(self)
 
-    def fake_read_text(
+    original_open = Path.open
+
+    def fake_open(
         self: Path,
-        *,
+        mode: str = "r",
+        buffering: int = -1,
         encoding: str | None = None,
         errors: str | None = None,
-    ) -> str:
+        newline: str | None = None,
+    ) -> io.StringIO | object:
         if str(self).endswith("experiments/bundestag_char/datasets/input.txt"):
-            return "\n\n"
-        return Path.read_text(self, encoding=encoding, errors=errors)
+            return io.StringIO("\n\n")
+        return original_open(
+            self,
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
 
     with _install_modules(modules):
         with override_attr(lit_integration.Path, "exists", fake_exists):
-            with override_attr(lit_integration.Path, "read_text", fake_read_text):
+            with override_attr(lit_integration.Path, "open", fake_open):
                 lit_integration.run_server_bundestag_char(
                     host="127.0.0.1",
                     port=0,
@@ -310,6 +333,28 @@ def test_run_server_bundestag_char_ignores_input_file_unicode_error(
             return True
         return Path.exists(self)
 
+    original_open = Path.open
+    original_read_text = Path.read_text
+
+    def fake_open(
+        self: Path,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> io.StringIO | object:
+        if str(self).endswith("experiments/bundestag_char/datasets/input.txt"):
+            raise UnicodeError("boom")
+        return original_open(
+            self,
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+
     def fake_read_text(
         self: Path,
         *,
@@ -318,17 +363,18 @@ def test_run_server_bundestag_char_ignores_input_file_unicode_error(
     ) -> str:
         if str(self).endswith("experiments/bundestag_char/datasets/input.txt"):
             raise UnicodeError("boom")
-        return Path.read_text(self, encoding=encoding, errors=errors)
+        return original_read_text(self, encoding=encoding, errors=errors)
 
     with _install_modules(modules):
         with override_attr(lit_integration.Path, "exists", fake_exists):
-            with override_attr(lit_integration.Path, "read_text", fake_read_text):
-                lit_integration.run_server_bundestag_char(
-                    host="127.0.0.1",
-                    port=0,
-                    open_browser=False,
-                    logger=_CapturingLogger(),
-                )
+            with override_attr(lit_integration.Path, "open", fake_open):
+                with override_attr(lit_integration.Path, "read_text", fake_read_text):
+                    lit_integration.run_server_bundestag_char(
+                        host="127.0.0.1",
+                        port=0,
+                        open_browser=False,
+                        logger=_CapturingLogger(),
+                    )
 
     datasets = cast(Mapping[str, object], state["datasets"])
     dataset = datasets["bundestag_char_sample"]

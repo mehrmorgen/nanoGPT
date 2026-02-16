@@ -21,6 +21,7 @@ from .typer_helpers import extract_exp_config
 from .runners import (
     create_default_cli_dependencies,
     get_cli_dependencies,
+    run_analyze_cmd,
     run_prepare_cmd,
     run_sample_cmd,
     run_train_cmd,
@@ -219,24 +220,26 @@ def analyze(
     experiment: ExperimentArg,
     host: str = typer.Option(
         default_factory=_get_default_host,
-        help="Host for the analysis server (not implemented)",
+        help="Host for the analysis server",
     ),
-    port: int = typer.Option(
-        8050, help="Port for the analysis server (not implemented)"
-    ),
+    port: int = typer.Option(8050, help="Port for the analysis server"),
     open_browser: bool = typer.Option(
-        True, help="Whether to open the browser automatically (not implemented)"
+        True, help="Whether to open the browser automatically"
     ),
 ) -> None:
-    # TODO Remove placeholder: implement analysis server (e.g., Dash/Plotly) that visualizes
-    # training and sampling artifacts; should stream from experiment outputs and optionally
-    # auto-open a browser when ready.
     learning_mode, learning_engine = _learning_from_ctx(ctx)
     deps = _deps_from_ctx(ctx)
+    exp_config_path = extract_exp_config(ctx)
 
     run_or_exit(
-        lambda: deps.handle_tool_result(
-            deps.run_analyze(experiment, host, port, open_browser, learning_engine),
+        lambda: run_analyze_cmd(
+            experiment,
+            exp_config_path,
+            deps,
+            host,
+            port,
+            open_browser,
+            learning_engine,
             learning_mode,
         ),
         keyboard_interrupt_msg=f"Analysis for {experiment} cancelled by user",

@@ -12,7 +12,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 
 ## Overview
 
-- Dataset: GermaParlTEI by default (with local seed fallback in `auto` mode)
+- Dataset: GermaParlTEI only
 - Encoding: Per-character IDs (uint16)
 - Method: Classic NanoGPT-style training (strict TOML config)
 - Pipeline: prepare → train → sample via ml_playground CLI
@@ -20,9 +20,10 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 ## Data
 
 - Input: `src/ml_playground/experiments/bundestag_char/datasets/input.txt`
-  - `prepare.extras.dataset_source = "germaparl_tei"` downloads and serializes TEI XML into rich tagged lines.
-  - `prepare.extras.dataset_source = "seed"` reads local seed files only.
-  - `prepare.extras.dataset_source = "auto"` prefers local seed and falls back to GermaParlTEI.
+  - Preparation always downloads/uses GermaParlTEI and serializes TEI XML into tagged text.
+  - TEI XML files are streamed directly from the tarball; no extracted XML directory is persisted.
+  - Each run resolves the remote GitHub head SHA before skip/rebuild decisions.
+  - If prepared artifacts already exist and overwrite is needed, CLI prompts for explicit confirmation.
 - Outputs (prepared):
   - train.bin, val.bin (uint16 arrays)
   - meta.pkl (vocab metadata with stoi/itos, vocab_size)
@@ -59,7 +60,6 @@ uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 GermaParlTEI options (under `[prepare.extras]`):
 
 ```toml
-dataset_source = "germaparl_tei"
 germaparl_repo = "PolMine/GermaParlTEI"
 germaparl_ref = "main"
 germaparl_include_stage = true
@@ -77,6 +77,17 @@ Sample:
 ```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml sample bundestag_char
 ```
+
+Analyze (event-data Web UI):
+
+```bash
+uv run cli analyze bundestag_char --host 127.0.0.1 --port 8050 --open-browser
+```
+
+Notes:
+- `analyze bundestag_char` launches TensorBoard first when event files exist under `out/logs/tb`.
+- If no event files are found, it falls back to the LIT server integration for `bundestag_char`.
+- If LIT is not installed, install it with `uv sync --extra lit` (or `uv add lit-nlp`).
 
 ## Configuration Highlights
 

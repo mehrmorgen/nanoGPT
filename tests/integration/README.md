@@ -21,7 +21,7 @@ They use real code paths and small in-memory or tiny on-disk data.
 ## Run Locally
 
 - Run all integration tests: `uv run tools test integration`
-- Single file: `uv run pytest tests/integration/test_*.py`
+- Single file: `uv run pytest tests/integration/experiments/test_*.py`
 
 ## Folder structure
 

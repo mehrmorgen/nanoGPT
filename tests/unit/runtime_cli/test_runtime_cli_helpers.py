@@ -103,8 +103,19 @@ def test_main_run_analyze_exception_path(caplog):
     def buggy_analyze(*args, **kwargs):
         raise RuntimeError("forced error")
 
+    metadata = SimpleNamespace(
+        dataset_dir=Path("/tmp/data"),
+        train_out_dir=Path("/tmp/train"),
+        sample_out_dir=Path("/tmp/sample"),
+        config_path=Path("/tmp/config.toml"),
+        experiment="bundestag_char",
+    )
+    exp = SimpleNamespace(prepare=None, training=None, sampling=None, metadata=metadata)
+
     deps = CLIDependencies(
-        run_analyze=buggy_analyze, handle_tool_result=commands.handle_tool_result
+        load_experiment=lambda *_: exp,
+        run_analyze=buggy_analyze,
+        handle_tool_result=commands.handle_tool_result,
     )
     with caplog.at_level(logging.ERROR):
         result = runner.invoke(

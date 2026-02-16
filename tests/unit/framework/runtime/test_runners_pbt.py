@@ -349,33 +349,51 @@ def test_run_sample_with_learning_mode(config: SampleConfigLike) -> None:
 
 @given(experiment=st.text(min_size=1))
 def test_run_analyze_validation(experiment: str) -> None:
+    def _noop_runner(
+        _host: str | None, _port: int, _open_browser: bool, _logger: Any
+    ) -> None:
+        return None
+
     engine: Any = MockLearningEngine()
     result = runners.run_analyze(
-        experiment, "host", 8000, True, learning_mode_engine=engine
+        experiment,
+        "host",
+        8000,
+        True,
+        learning_mode_engine=engine,
+        analyze_runner=_noop_runner,
     )
-    if experiment != "bundestag_char":
-        assert not result.success
-        assert "currently supports only" in (result.stderr or "")
-    else:
-        assert result.success
-        assert result.learning_info == {"explanation": "mock"}
+    assert result.success
+    assert result.learning_info == {"explanation": "mock"}
 
 
 def test_run_analyze_handles_exception() -> None:
-    def _failing_logger_factory(name: str) -> Any:
-        raise RuntimeError("Logger failed")
+    def _failing_runner(
+        _host: str | None, _port: int, _open_browser: bool, _logger: Any
+    ) -> None:
+        raise RuntimeError("analyze failed")
 
     result = runners.run_analyze(
-        "bundestag_char", "host", 8000, True, logger_factory=_failing_logger_factory
+        "bundestag_char", "host", 8000, True, analyze_runner=_failing_runner
     )
     assert not result.success
-    assert "Analysis failed" in (result.stderr or "")
+    assert "Analysis failed: analyze failed" in (result.stderr or "")
 
 
 def test_run_analyze_success_with_learning_mode() -> None:
+    def _noop_runner(
+        _host: str | None, _port: int, _open_browser: bool, _logger: Any
+    ) -> None:
+        return None
+
     engine: Any = MockLearningEngine()
     result = runners.run_analyze(
-        "bundestag_char", "host", 8000, True, learning_mode_engine=engine
+        "bundestag_char",
+        "host",
+        8000,
+        True,
+        learning_mode_engine=engine,
+        analyze_runner=_noop_runner,
     )
     assert result.success
     assert result.learning_info == {"explanation": "mock"}

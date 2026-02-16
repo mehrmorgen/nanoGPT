@@ -329,7 +329,6 @@ def test_no_dynamic_attribute_access() -> None:
         "tests/property/tools/_helpers.py",
         "tests/property/tools/analysis/test_sample_quality_property.py",
         "tests/property/tools/cli/test_tools_cli_property.py",
-        "tests/property/tools/dev/helpers.py",
         "tests/property/tools/dev/test_batch_review_property.py",
         "tests/property/tools/dev/test_dev_tools_property.py",
         "tests/property/tools/test_cli_tools_property.py",

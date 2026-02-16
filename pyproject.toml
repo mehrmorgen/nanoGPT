@@ -177,6 +177,24 @@ pythonVersion = "3.13"
 # Global defaults: standard. Execution environments below set src to strict and keep tests standard.
 typeCheckingMode = "standard"
 stubPath = "typings"
+include = ["src", "tests"]
+exclude = [
+    "**/__pycache__",
+    "**/.cache",
+    "**/.hypothesis",
+    "**/.venv",
+    "**/env",
+    "**/out",
+    "**/data",
+    "**/datasets",
+    "**/checkpoints",
+    "**/runs",
+    "**/wandb",
+    "**/lightning_logs",
+    "**/artifacts",
+    "**/mlruns",
+    "**/htmlcov",
+]
 
 [[tool.basedpyright.executionEnvironments]]
 root = "src"

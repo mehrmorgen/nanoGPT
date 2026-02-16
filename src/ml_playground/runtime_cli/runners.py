@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 import sys
 
 from ml_playground.framework.configuration.models import (
@@ -62,6 +62,7 @@ __all__ = [
     "run_sample",
     "run_train_cmd",
     "run_sample_cmd",
+    "run_analyze_cmd",
     "run_or_exit",
     "extract_exp_config",
 ]
@@ -290,6 +291,46 @@ def run_sample_cmd(
         )
     result = cast(ToolResult, result_raw)
 
+    handler = deps.handle_tool_result
+    if handler is runtime_bootstrap.CLIDependencies.handle_tool_result:
+        handler = handle_tool_result
+    handler(result, learning_mode)
+
+
+def run_analyze_cmd(
+    experiment: str,
+    exp_config_path: Path | None,
+    deps: CLIDependencies,
+    host: str,
+    port: int,
+    open_browser: bool,
+    learning_engine: LearningModeEngine | None = None,
+    learning_mode: bool = False,
+) -> None:
+    """Run analyze command with explicit dependency injection."""
+    exp_obj = deps.load_experiment(experiment, exp_config_path)
+    metadata = getattr(exp_obj, "metadata", None)
+    analyze_fn = deps.run_analyze
+    try:
+        result_raw: object = cast(
+            object,
+            cast(Any, analyze_fn)(
+                experiment,
+                host,
+                port,
+                open_browser,
+                learning_engine,
+                metadata=metadata,
+                exp_config_path=exp_config_path,
+            ),
+        )
+    except TypeError:
+        # Backward compatibility for injected test doubles without new kwargs.
+        result_raw = cast(
+            object,
+            analyze_fn(experiment, host, port, open_browser, learning_engine),
+        )
+    result = cast(ToolResult, result_raw)
     handler = deps.handle_tool_result
     if handler is runtime_bootstrap.CLIDependencies.handle_tool_result:
         handler = handle_tool_result

@@ -1463,7 +1463,7 @@ def test_cleanup_ignored_tracked_failure_public(tmp_path: Path) -> None:
 
 def test_workflow_status_public(tmp_path: Path) -> None:
     """Exercise workflow_status via public API."""
-    tools = DevTools(root_path=tmp_path)
+    tools = DevTools(subprocess_runner=FakeSubprocessRunner(), root_path=tmp_path)
     result = tools.workflow_status()
     assert result.success is True
     assert '"quality_status"' in result.stdout

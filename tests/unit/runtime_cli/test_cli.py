@@ -453,7 +453,7 @@ def test_run_analyze_unsupported() -> None:
     result = cli_commands.run_analyze("not_bundestag", "127.0.0.1", 8050, True)
     assert result.success is False
     assert result.exit_code == 1
-    assert "bundestag_char" in result.stderr
+    assert "No TensorBoard event files found" in (result.stderr or "")
 
 
 def test_run_prepare_internal(tmp_path: Path) -> None:
@@ -637,10 +637,24 @@ def test_cli_sample_cmd_full(tmp_path: Path) -> None:
 
 def test_run_analyze_success() -> None:
     # Test success path for bundestag_char
-    result = cli_commands.run_analyze("bundestag_char", "1.2.3.4", 8888, True)
+    calls: list[tuple[str | None, int, bool]] = []
+
+    def _fake_analyze_runner(
+        host: str | None, port: int, open_browser: bool, _logger: Any
+    ) -> None:
+        calls.append((host, port, open_browser))
+
+    result = cli_commands.run_analyze(
+        "bundestag_char",
+        "1.2.3.4",
+        8888,
+        True,
+        analyze_runner=_fake_analyze_runner,
+    )
     assert result.success is True
     assert result.exit_code == 0
-    assert "Analysis placeholder" in result.stdout
+    assert result.stdout == "Analysis completed for bundestag_char"
+    assert calls == [("1.2.3.4", 8888, True)]
 
 
 def test_cli_analyze_command_success(tmp_path: Path) -> None:
@@ -655,7 +669,17 @@ def test_cli_analyze_command_success(tmp_path: Path) -> None:
     ) -> ToolResult:
         return _ok_result("analyze", experiment)
 
+    metadata = SimpleNamespace(
+        experiment="bundestag_char",
+        dataset_dir=tmp_path / "dataset",
+        config_path=tmp_path / "config.toml",
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+    exp = SimpleNamespace(prepare=None, training=None, sampling=None, metadata=metadata)
+
     deps = CLIDependencies(
+        load_experiment=lambda _name, _path: cast(Any, exp),
         run_analyze=_run_analyze,
         handle_tool_result=cli_commands.handle_tool_result,
     )
@@ -692,7 +716,17 @@ def test_cli_analyze_command_learning_mode(tmp_path: Path) -> None:
             learning_info=info,
         )
 
+    metadata = SimpleNamespace(
+        experiment="bundestag_char",
+        dataset_dir=tmp_path / "dataset",
+        config_path=tmp_path / "config.toml",
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+    exp = SimpleNamespace(prepare=None, training=None, sampling=None, metadata=metadata)
+
     deps = CLIDependencies(
+        load_experiment=lambda _name, _path: cast(Any, exp),
         run_analyze=_run_analyze,
         handle_tool_result=cli_commands.handle_tool_result,
     )
@@ -777,10 +811,10 @@ def test_coerce_metadata_config_invalid() -> None:
 
 
 def test_run_analyze_failure() -> None:
-    # Test unsupported path in run_analyze
+    # Test missing event-data path in run_analyze
     result = cli_commands.run_analyze("invalid", "localhost", 0, False)
     assert result.success is False
-    assert "supports only 'bundestag_char'" in result.stderr
+    assert "No TensorBoard event files found" in (result.stderr or "")
 
 
 def test_log_command_status_failure(caplog: Any) -> None:

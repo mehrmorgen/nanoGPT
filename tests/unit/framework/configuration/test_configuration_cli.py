@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from ml_playground.framework.runtime.core.bootstrap import CLIDependencies
 from ml_playground.runtime_cli.main import app
+from ml_playground.runtime_cli import commands as cli_commands
 from ml_playground.tools.core.interfaces import ToolResult
 from ml_playground.framework.configuration import loading as config_loading
 from ml_playground.framework.configuration.models import (
@@ -88,6 +89,7 @@ def _deps(
     run_train: Callable[[str, TrainerConfig, Path, MetadataConfig], None] | None = None,
     run_sample: Callable[[str, SamplerConfig, Path, MetadataConfig], None]
     | None = None,
+    run_analyze: Callable[[str, str, int, bool], ToolResult] | None = None,
 ) -> CLIDependencies:
     def _ensure_train(exp_cfg: ExperimentConfig) -> object:
         if ensure_train is None:
@@ -153,6 +155,23 @@ def _deps(
             command=experiment,
         )
 
+    def _run_analyze_inner(
+        experiment: str,
+        host: str,
+        port: int,
+        open_browser: bool,
+        _learning_engine: Any = None,
+    ) -> ToolResult:
+        if run_analyze is not None:
+            return run_analyze(experiment, host, port, open_browser)
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=experiment,
+        )
+
     return CLIDependencies(
         load_experiment=load,
         ensure_train_prerequisites=_ensure_train,
@@ -160,6 +179,8 @@ def _deps(
         run_prepare=_run_prepare_inner,
         run_train=_run_train_inner,
         run_sample=_run_sample_inner,
+        run_analyze=_run_analyze_inner,
+        handle_tool_result=cli_commands.handle_tool_result,
     )
 
 
@@ -319,21 +340,60 @@ def test_sample_command_propagates_loader_error(
     )
 
 
-def test_analyze_command_rejects_non_bundestag() -> None:
-    """Test analyze command rejects non bundestag."""
-    result = runner.invoke(app, ["analyze", "other"])
-    assert result.exit_code == 1
+def test_analyze_command_delegates_non_bundestag(tmp_path: Path) -> None:
+    """Test analyze command delegates non-bundestag experiments to injected runner."""
+    shared = _build_shared(tmp_path, "other")
+    experiment_cfg = _build_experiment(shared)
 
+    def load(_name: str, _config: Path | None) -> ExperimentConfig:
+        return experiment_cfg
 
-def test_analyze_command_logs_message(caplog: pytest.LogCaptureFixture) -> None:
-    """Test analyze command logs message."""
-    caplog.set_level(logging.INFO, logger="ml_playground.runtime_cli")
-    result = runner.invoke(app, ["analyze", "bundestag_char"])
+    def run_analyze(
+        experiment: str, host: str, port: int, open_browser: bool
+    ) -> ToolResult:
+        del host, port, open_browser
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=experiment,
+        )
+
+    deps = _deps(load=load, run_analyze=run_analyze)
+    result = runner.invoke(app, ["analyze", "other"], obj={"cli_deps": deps})
     assert result.exit_code == 0
-    assert any(
-        "not implemented" in msg.lower()
-        for msg in cast(list[str], cast(Any, caplog).messages)
-    )
+
+
+def test_analyze_command_logs_message(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test analyze command runs through injected analyzer."""
+    caplog.set_level(logging.INFO, logger="ml_playground.runtime_cli")
+    calls: list[tuple[str, str, int, bool]] = []
+    shared = _build_shared(tmp_path, "bundestag_char")
+    experiment_cfg = _build_experiment(shared)
+
+    def load(_name: str, _config: Path | None) -> ExperimentConfig:
+        return experiment_cfg
+
+    def run_analyze(
+        experiment: str, host: str, port: int, open_browser: bool
+    ) -> ToolResult:
+        calls.append((experiment, host, port, open_browser))
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace="ml",
+            category="analyze",
+            command=experiment,
+            stdout="analyze ok",
+        )
+
+    deps = _deps(load=load, run_analyze=run_analyze)
+    result = runner.invoke(app, ["analyze", "bundestag_char"], obj={"cli_deps": deps})
+    assert result.exit_code == 0
+    assert calls == [("bundestag_char", "127.0.0.1", 8050, True)]
 
 
 def test_global_option_missing_exp_config_exits(
