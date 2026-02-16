@@ -62,8 +62,9 @@ def run_setup(
             ) from exc
 
     # Create virtual environment
+    venv_command = ["uv", "venv"] + (["--clear"] if clear else ["--allow-existing"])
     venv_result = subprocess_runner.run_subprocess(
-        ["uv", "venv"] + (["--clear"] if clear else []),
+        venv_command,
         cwd=root_path,
         timeout=config.environment.timeout,
         operation_id=operation_id,

@@ -23,7 +23,7 @@
     "HYPOTHESIS_DATABASE_DIRECTORY": "${containerWorkspaceFolder}/.cache/hypothesis",
     "HYPOTHESIS_STORAGE_DIRECTORY": "${containerWorkspaceFolder}/.cache/hypothesis"
   },
-  "postCreateCommand": "bash -lc 'uv sync --all-groups && uv pip install -e . && uv run tools env setup && uv run tools env verify'",
+  "postCreateCommand": "bash -lc 'sudo mkdir -p .venv .cache && sudo chown -R vscode:vscode .venv .cache && uv run tools env setup && uv sync --all-groups && uv pip install -e . && uv run tools env verify'",
   "customizations": {
     "vscode": {
       "extensions": [

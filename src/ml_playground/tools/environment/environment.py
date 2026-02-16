@@ -102,7 +102,7 @@ class EnvironmentTools:
                 ) from exc
 
         # Create virtual environment
-        venv_command = ["uv", "venv"] + (["--clear"] if clear else [])
+        venv_command = ["uv", "venv"] + (["--clear"] if clear else ["--allow-existing"])
         venv_result = self._subprocess_runner.run_subprocess(
             venv_command,
             cwd=self._root_path,
