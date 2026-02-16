@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Callable, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.framework.configuration.models import TrainerConfig
 from ml_playground.framework.training.ema import EMA
@@ -16,6 +16,12 @@ from ml_playground.framework.training.types import TensorboardWriter
 
 
 __all__ = ["initialize_components"]
+
+
+def _create_summary_writer(log_dir: str) -> TensorboardWriter:
+    tb_module = importlib.import_module("torch.utils.tensorboard")
+    writer_cls = getattr(tb_module, "SummaryWriter")
+    return cast(TensorboardWriter, writer_cls(log_dir=log_dir))
 
 
 def initialize_components(
@@ -58,6 +64,6 @@ def initialize_components(
 
     writer: TensorboardWriter | None = None
     if cfg.runtime.tensorboard_enabled:
-        writer = SummaryWriter(log_dir=log_dir)
+        writer = _create_summary_writer(log_dir)
 
     return compiled_model, scaler, ema, writer

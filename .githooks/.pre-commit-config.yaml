@@ -7,6 +7,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - tools
           - test
           - regression
@@ -31,6 +32,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - yamlfix
           - ".github"
           - "docs"
@@ -47,6 +49,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - basedpyright
         language: system
         pass_filenames: false
@@ -55,6 +58,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - mypy
         language: system
         pass_filenames: false
@@ -63,6 +67,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - vulture
         language: system
         pass_filenames: false
@@ -73,6 +78,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - tools
           - test
           - coverage-threshold
@@ -84,6 +90,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - tools
           - test
           - integration
@@ -94,6 +101,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - tools
           - test
           - acceptance
@@ -104,6 +112,7 @@ repos:
         entry: uv
         args:
           - run
+          - --no-editable
           - tools
           - test
           - e2e

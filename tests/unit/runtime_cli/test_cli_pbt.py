@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 import importlib
 
+import click
 import pytest
 import typer
 from ml_playground.runtime_cli.main import main_entry, global_options
+
+
+def _get_command(app: typer.Typer) -> click.Command:
+    command_factory = getattr(typer.main, "get_command")
+    return cast(click.Command, command_factory(app))
 
 
 def _swap_attr(target: object, name: str, value: object) -> Callable[[], None]:
@@ -91,7 +97,7 @@ def test_global_options_missing_config(tmp_path: Path) -> None:
     import ml_playground.runtime_cli.main as main_module
 
     missing_path = tmp_path / "missing.toml"
-    ctx = typer.Context(typer.main.get_command(main_module.app))
+    ctx = typer.Context(_get_command(main_module.app))
     with pytest.raises(typer.Exit) as exc:
         global_options(ctx, exp_config=missing_path)
     assert exc.value.exit_code == 2

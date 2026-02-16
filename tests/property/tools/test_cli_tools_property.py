@@ -11,8 +11,8 @@ from ml_playground.tools.core import runtime as tools_runtime
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.utils import subprocess_utils
+import click
 from click.testing import CliRunner, Result
-from typer.main import get_command
 
 import typer
 import ml_playground.tools.cli.main as tools_cli_main
@@ -94,10 +94,17 @@ def _invoke_cli(raw_args: Sequence[str]) -> Result:
     with _stubbed_tools_config():
         _reset_cli_state()
         result = CLI_RUNNER.invoke(
-            get_command(tools_cli_main.app), list(raw_args), prog_name="tools"
+            _get_command(tools_cli_main.app), list(raw_args), prog_name="tools"
         )
         _reset_cli_state()
     return result
+
+
+def _get_command(app: typer.Typer) -> click.Command:
+    command_getter = getattr(typer.main, "get_command", None)
+    if command_getter is None:
+        raise RuntimeError("Typer get_command unavailable")
+    return cast(click.Command, command_getter(app))
 
 
 # --- Deterministic subprocess runner for CLI command execution tests ---

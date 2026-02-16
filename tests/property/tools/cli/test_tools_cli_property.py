@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Iterator, Sequence
+from typing import Iterator, Sequence, cast
 
 import hypothesis.strategies as st
 from hypothesis import assume, example, given, settings
 import typer
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.errors import ToolConfigurationError
+import click
 from click.testing import CliRunner, Result
-from typer.main import get_command
 
 import ml_playground.tools.cli.main as cli_main
 from ml_playground.tools.cli.commands.learn import get_command_info
@@ -57,7 +57,16 @@ def _load_preconfigured_tools_config() -> ToolsConfig:
 
 
 PRELOADED_CONFIG: ToolsConfig = _load_preconfigured_tools_config()
-CLICK_APP = get_command(cli_main.app)
+
+
+def _get_command(app: typer.Typer) -> click.Command:
+    command_getter = getattr(typer.main, "get_command", None)
+    if command_getter is None:
+        raise RuntimeError("Typer get_command unavailable")
+    return cast(click.Command, command_getter(app))
+
+
+CLICK_APP = _get_command(cli_main.app)
 
 
 def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:

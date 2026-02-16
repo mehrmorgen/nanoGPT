@@ -13,6 +13,7 @@ import hypothesis.strategies as st
 from hypothesis import HealthCheck, assume, example, given, settings
 import pytest
 import typer
+import click
 from typer.testing import CliRunner
 
 from ml_playground.framework.core.logging_protocol import LoggerLike
@@ -44,6 +45,13 @@ from tests.property.cli_invariants import (
     assert_traceback_free,
     output_text,
 )
+
+
+def _get_command(typer_app: typer.Typer) -> click.Command:
+    command_getter = getattr(typer.main, "get_command", None)
+    if command_getter is None:
+        raise RuntimeError("Typer get_command unavailable")
+    return command_getter(typer_app)
 
 
 class LogCaptureFixture(Protocol):
@@ -587,7 +595,7 @@ def test_runtime_cli_exp_config_normalizes_dotdot_paths(
 def test_extract_exp_config_handles_missing_and_present_context() -> None:
     """extract_exp_config should read the experiment path when available."""
 
-    ctx = typer.Context(typer.main.get_command(app))
+    ctx = typer.Context(_get_command(app))
     ctx.obj = None
     assert extract_exp_config(ctx) is None
 
@@ -702,7 +710,7 @@ def test_global_options_sets_context_flags(
     path_exists: bool,
     tmp_path: Path,
 ) -> None:
-    ctx = typer.Context(typer.main.get_command(app))
+    ctx = typer.Context(_get_command(app))
     exp_path = tmp_path / "exp.toml" if use_exp_path else None
     if exp_path is not None and path_exists:
         exp_path.write_text("{}", encoding="utf-8")

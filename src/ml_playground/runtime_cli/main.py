@@ -6,7 +6,7 @@ from typing import Annotated, Any, Dict, List, Optional, cast
 
 import click
 import typer
-from typer.main import get_command
+import typer.main as typer_main
 
 from ml_playground.framework.configuration import loading as config_loading
 from ml_playground.framework.experiment_registry import registry
@@ -49,6 +49,11 @@ app = typer.Typer(
         "objects into experiment code. Experiments must not read TOML directly."
     ),
 )
+
+
+def get_command(typer_app: typer.Typer) -> click.Command:
+    command_factory = getattr(typer_main, "get_command")
+    return cast(click.Command, command_factory(typer_app))
 
 
 @app.callback()

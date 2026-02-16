@@ -2,11 +2,17 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+import click
 import pytest
 import typer
 from ml_playground.runtime_cli import commands, main, runners, device
 from ml_playground.framework.runtime.core.results import ToolResult, VerbosityLevel
 from ml_playground.framework.runtime.core.bootstrap import CLIDependencies
+
+
+def _get_command(app: typer.Typer) -> click.Command:
+    command_factory = getattr(typer.main, "get_command")
+    return cast(click.Command, command_factory(app))
 
 
 def test_coerce_metadata_config_various_paths(tmp_path: Path):
@@ -42,7 +48,7 @@ def test_coerce_metadata_config_various_paths(tmp_path: Path):
 
 def test_learning_engine_type_check():
     _learning_from_ctx = getattr(main, "_learning_from_ctx")
-    ctx = typer.Context(typer.main.get_command(main.app))
+    ctx = typer.Context(_get_command(main.app))
 
     class NotAnEngine:
         pass
@@ -53,7 +59,7 @@ def test_learning_engine_type_check():
 
 
 def test_app_global_options_overrides():
-    ctx = typer.Context(typer.main.get_command(main.app))
+    ctx = typer.Context(_get_command(main.app))
     ctx.obj = {}
 
     called = []
@@ -146,7 +152,7 @@ def test_commands_handle_tool_result_learning_info_complete():
 
 def test_main_deps_from_ctx_full():
     _deps_from_ctx = getattr(main, "_deps_from_ctx")
-    ctx = typer.Context(typer.main.get_command(main.app))
+    ctx = typer.Context(_get_command(main.app))
 
     # Line 178: return get_cli_dependencies() when obj is not dict
     ctx.obj = "not-a-dict"
@@ -165,7 +171,7 @@ def test_main_deps_from_ctx_full():
 
 def test_main_learning_from_ctx_object():
     _learning_from_ctx = getattr(main, "_learning_from_ctx")
-    ctx = typer.Context(typer.main.get_command(main.app))
+    ctx = typer.Context(_get_command(main.app))
     ctx.obj = SimpleNamespace(learning_mode=False, verbosity=1, learning_engine=None)
     _learning_from_ctx(ctx)
 
@@ -188,7 +194,7 @@ def test_main_toml_decode_error(tmp_path: Path):
 
     bad_toml = tmp_path / "bad.toml"
     bad_toml.write_text("invalid = {")
-    ctx = typer.Context(typer.main.get_command(main.app))
+    ctx = typer.Context(_get_command(main.app))
     ctx.params = {"exp_config": bad_toml}
     # This should trigger the TomlDecodeError catching block
     # We can test extract_exp_config directly

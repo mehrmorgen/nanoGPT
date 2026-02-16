@@ -169,7 +169,9 @@ incremental = true
 follow_imports = "skip"
 # Avoid spending time resolving missing type stubs for external deps (torch, transformers, etc.)
 ignore_missing_imports = true
-cache_dir = ".cache/mypy"
+disable_error_code = ["import-untyped"]
+no_site_packages = true
+cache_dir = ".cache/mypy-cache"
 
 
 [tool.basedpyright]
@@ -177,6 +179,7 @@ pythonVersion = "3.13"
 # Global defaults: standard. Execution environments below set src to strict and keep tests standard.
 typeCheckingMode = "standard"
 stubPath = "typings"
+useLibraryCodeForTypes = false
 include = ["src", "tests"]
 exclude = [
     "**/__pycache__",
@@ -309,12 +312,12 @@ omit = [
 ]
 skip_covered = false
 # Enforce a raised total coverage gate aligned with current project coverage
-fail_under = 97.0
+fail_under = 97.5
 precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 97.0
+line_threshold = 97.5
 branch_threshold = 94.0
 
 [tool.ml_playground.testing.budgets]

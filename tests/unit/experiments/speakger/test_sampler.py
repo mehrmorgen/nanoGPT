@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from types import ModuleType
+from types import SimpleNamespace
+from typing import Sequence, cast
+
+import pytest
 
 from ml_playground.experiments.speakger import sampler
 
@@ -126,3 +130,201 @@ def test_imports_work_when_available() -> None:
     assert getattr(sampler_module, "AutoTokenizer", None) is not None
     assert getattr(sampler_module, "AutoModelForCausalLM", None) is not None
     assert getattr(sampler_module, "PeftModel", None) is not None
+
+
+def test_auto_tokenizer_import_error_returns_fallback() -> None:
+    def _fail(name: str) -> object:
+        raise ImportError(name)
+
+    original_import = sampler.importlib.import_module
+    try:
+        sampler.importlib.import_module = _fail  # type: ignore[assignment]
+        tok = sampler.AutoTokenizer.from_pretrained("dummy")
+    finally:
+        sampler.importlib.import_module = original_import  # type: ignore[assignment]
+
+    assert isinstance(tok, sampler._FallbackTokenizer)
+    assert (
+        tok.decode(123, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        == "123"
+    )
+
+
+def test_auto_wrappers_delegate_to_imported_modules() -> None:
+    calls: dict[str, object] = {}
+
+    class _Tok:
+        @staticmethod
+        def from_pretrained(*args: object, **kwargs: object) -> object:
+            calls["tok_args"] = args
+            calls["tok_kwargs"] = kwargs
+            return "tok"
+
+    class _Model:
+        @staticmethod
+        def from_pretrained(*args: object, **kwargs: object) -> object:
+            calls["model_args"] = args
+            calls["model_kwargs"] = kwargs
+            return "model"
+
+    class _Peft:
+        @staticmethod
+        def from_pretrained(base_model: object, adapters_path: Path) -> object:
+            calls["peft"] = (base_model, adapters_path)
+            return "peft-model"
+
+    def _import(name: str) -> object:
+        if name == "transformers":
+            return SimpleNamespace(AutoTokenizer=_Tok, AutoModelForCausalLM=_Model)
+        if name == "peft":
+            return SimpleNamespace(PeftModel=_Peft)
+        raise ImportError(name)
+
+    original_import = sampler.importlib.import_module
+    try:
+        sampler.importlib.import_module = _import  # type: ignore[assignment]
+        base_model = cast(sampler._Model, sampler._FallbackModel())
+        assert sampler.AutoTokenizer.from_pretrained("abc", use_fast=True) == "tok"
+        assert sampler.AutoModelForCausalLM.from_pretrained("m") == "model"
+        assert (
+            sampler.PeftModel.from_pretrained(base_model, Path("/tmp/adapters"))
+            == "peft-model"
+        )
+    finally:
+        sampler.importlib.import_module = original_import  # type: ignore[assignment]
+
+    assert calls["tok_args"] == ("abc",)
+    assert calls["tok_kwargs"] == {"use_fast": True}
+    assert calls["model_args"] == ("m",)
+    assert calls["peft"] == (base_model, Path("/tmp/adapters"))
+
+
+def test_default_factories_delegate() -> None:
+    original_tok = sampler.AutoTokenizer.from_pretrained
+    original_model = sampler.AutoModelForCausalLM.from_pretrained
+    original_peft = sampler.PeftModel.from_pretrained
+    sampler.AutoTokenizer.from_pretrained = staticmethod(  # type: ignore[assignment]
+        lambda *args, **kwargs: ("tok", args, kwargs)
+    )
+    sampler.AutoModelForCausalLM.from_pretrained = staticmethod(  # type: ignore[assignment]
+        lambda *args, **kwargs: ("model", args, kwargs)
+    )
+    sampler.PeftModel.from_pretrained = staticmethod(  # type: ignore[assignment]
+        lambda *args, **kwargs: ("peft", args, kwargs)
+    )
+
+    try:
+        tok_factory = sampler._resolve_tokenizer_factory(None)
+        base_factory = sampler._resolve_base_model_factory(None)
+        peft_factory = sampler._resolve_peft_factory(None)
+
+        assert tok_factory(Path("/x"), use_fast=False) == (
+            "tok",
+            ("/x",),
+            {"use_fast": False},
+        )
+        assert base_factory("hf/model") == ("model", ("hf/model",), {})
+        base_model = cast(sampler._Model, sampler._FallbackModel())
+        assert peft_factory(base_model, Path("/adapters")) == (
+            "peft",
+            (base_model, Path("/adapters")),
+            {},
+        )
+    finally:
+        sampler.AutoTokenizer.from_pretrained = original_tok  # type: ignore[assignment]
+        sampler.AutoModelForCausalLM.from_pretrained = original_model  # type: ignore[assignment]
+        sampler.PeftModel.from_pretrained = original_peft  # type: ignore[assignment]
+
+
+def test_load_best_stats_handles_unexpected_payload(tmp_path: Path) -> None:
+    best = tmp_path / "state" / "best.pt"
+    best.parent.mkdir(parents=True)
+    best.write_bytes(b"stub")
+
+    fake_torch = ModuleType("torch")
+    fake_torch.load = lambda *_args, **_kwargs: {  # type: ignore[attr-defined]
+        "best_val_loss": object(),
+        "iter_num": "bad",
+    }
+    import sys
+
+    original_torch = sys.modules.get("torch")
+    try:
+        sys.modules["torch"] = cast(ModuleType, fake_torch)
+        best_val, iter_num = sampler._load_best_stats(tmp_path)
+    finally:
+        if original_torch is None:
+            sys.modules.pop("torch", None)
+        else:
+            sys.modules["torch"] = original_torch
+    assert best_val is None
+    assert iter_num == 0
+
+
+def test_run_sampling_handles_missing_adapters_and_missing_input_ids(
+    tmp_path: Path,
+) -> None:
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+
+    class _Tok:
+        def __call__(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {"attention_mask": [1, 1]}
+
+        def decode(
+            self,
+            token_ids: object,
+            *,
+            skip_special_tokens: bool,
+            clean_up_tokenization_spaces: bool,
+        ) -> str:
+            del token_ids, skip_special_tokens, clean_up_tokenization_spaces
+            return ""
+
+    class _Model:
+        def generate(
+            self,
+            *,
+            input_ids: object,
+            attention_mask: object | None = None,
+        ) -> Sequence[object]:
+            del input_ids, attention_mask
+            return [""]
+
+    class _Logger:
+        def debug(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def info(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def warning(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def error(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+    def _tokenizer_factory(model_path: Path, *, use_fast: bool) -> sampler._Tokenizer:
+        del model_path, use_fast
+        return cast(sampler._Tokenizer, _Tok())
+
+    def _base_model_factory(model_name: str) -> sampler._Model:
+        del model_name
+        return cast(sampler._Model, _Model())
+
+    def _peft_factory(
+        base_model: sampler._Model, adapters_path: Path
+    ) -> sampler._Model:
+        del base_model, adapters_path
+        raise FileNotFoundError("no adapters")
+
+    with pytest.raises(ValueError, match="missing input_ids"):
+        sampler._run_sampling(
+            out_dir,
+            "hf/model",
+            "prompt",
+            cast(sampler.LoggerLike, _Logger()),
+            tokenizer_factory=_tokenizer_factory,
+            base_model_factory=_base_model_factory,
+            peft_model_factory=_peft_factory,
+        )

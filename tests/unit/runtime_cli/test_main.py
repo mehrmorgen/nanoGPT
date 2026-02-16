@@ -18,6 +18,21 @@ def test_main_callable_noargs_raises_help() -> None:
         cli_main.main([])
 
 
+def test_main_returns_none_when_command_main_is_not_callable() -> None:
+    class _Cmd:
+        main = "not-callable"
+
+    original_get_command = cli_main.get_command
+    original_loader = cli_main.registry.load_preparers
+    try:
+        cli_main.get_command = lambda _app: _Cmd()  # type: ignore[assignment]
+        cli_main.registry.load_preparers = lambda: None  # type: ignore[assignment]
+        assert cli_main.main(["prepare", "demo"]) is None
+    finally:
+        cli_main.get_command = original_get_command  # type: ignore[assignment]
+        cli_main.registry.load_preparers = original_loader  # type: ignore[assignment]
+
+
 def test_global_options_help() -> None:
     from typer.testing import CliRunner
 
