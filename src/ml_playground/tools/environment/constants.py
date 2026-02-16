@@ -10,27 +10,9 @@ PRE_COMMIT_TEMPLATE_PATH = Path(".githooks/pre-commit")
 REQUIRED_ENV_TOOLS = ("pre-commit", "yamlfix", "basedpyright", "mypy", "vulture")
 
 FALLBACK_PRE_COMMIT_HOOK_TEMPLATE = """#!/usr/bin/env bash
-# Pre-commit hook using pre-commit framework with uv
-
-set -euo pipefail
-
-if ! command -v uv >/dev/null 2>&1; then
-  echo "[pre-commit] Error: uv is required but not found on PATH." >&2
-  echo "[pre-commit] Remediation: install uv, then run 'uv run tools env setup --clear'." >&2
-  exit 1
-fi
-
-if [ ! -x ".venv/bin/pre-commit" ]; then
-  echo "[pre-commit] Error: .venv/bin/pre-commit is missing." >&2
-  echo "[pre-commit] Remediation: run 'uv sync --all-groups' then 'uv run tools env setup --clear'." >&2
-  exit 1
-fi
-
-echo '[pre-commit] Starting full quality gate (verbose output enabled).'
-echo '[pre-commit] This can take several minutes on first run.'
-UV_NO_SYNC="${UV_NO_SYNC:-1}" uv run pre-commit run -v --config .githooks/.pre-commit-config.yaml
-
-# Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.
+echo 'Error: .githooks/pre-commit is missing or unreadable.' >&2
+echo 'Please restore it from version control and rerun setup.' >&2
+exit 1
 """
 
 

@@ -26,10 +26,7 @@ hooks, and test behavior.
 Executed automatically when the container is created:
 
 ```bash
-uv sync --all-groups
-uv pip install -e .
-uv run tools env setup
-uv run tools env verify
+bash .devcontainer/post-create.sh
 ```
 
 ## Usage

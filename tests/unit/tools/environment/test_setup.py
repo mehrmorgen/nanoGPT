@@ -335,6 +335,11 @@ def test_run_setup_worktree_gitdir_configures_hooks(tmp_path: Path) -> None:
     gitdir = tmp_path / ".worktree-git"
     gitdir.mkdir()
     (tmp_path / ".git").write_text(f"gitdir: {gitdir}", encoding="utf-8")
+    (tmp_path / ".githooks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".githooks" / "pre-commit").write_text(
+        "#!/usr/bin/env bash\nuv run pre-commit run -v --config .githooks/.pre-commit-config.yaml\n",
+        encoding="utf-8",
+    )
 
     venv_path = tmp_path / ".venv"
     result = run_setup(config, tmp_path, venv_path, "pkg", [], False, runner)
@@ -344,8 +349,6 @@ def test_run_setup_worktree_gitdir_configures_hooks(tmp_path: Path) -> None:
     assert (gitdir / "hooks" / "pre-commit").exists() is True
     hook_content = (gitdir / "hooks" / "pre-commit").read_text(encoding="utf-8")
     assert "--config .githooks/.pre-commit-config.yaml" in hook_content
-    assert "Starting full quality gate (verbose output enabled)." in hook_content
-    assert 'UV_NO_SYNC="${UV_NO_SYNC:-1}"' in hook_content
 
 
 def test_run_setup_worktree_read_text_oserror_warns(tmp_path: Path) -> None:

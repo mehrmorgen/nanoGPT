@@ -36,13 +36,19 @@ def test_devcontainer_post_create_bootstrap_contract() -> None:
     config = _load_devcontainer_json()
     command = config.get("postCreateCommand")
     assert isinstance(command, str), "postCreateCommand must be a string"
+    assert command == "bash .devcontainer/post-create.sh", (
+        "postCreateCommand must delegate to the devcontainer bootstrap script"
+    )
+
+    script_path = DEVCONTAINER_DIR / "post-create.sh"
+    assert script_path.exists(), "post-create.sh must exist"
+    script = script_path.read_text(encoding="utf-8")
     for snippet in (
-        "uv sync --all-groups",
-        "uv pip install -e .",
         "uv run tools env setup",
+        "uv pip install -e .",
         "uv run tools env verify",
     ):
-        assert snippet in command, f"postCreateCommand must include `{snippet}`"
+        assert snippet in script, f"post-create.sh must include `{snippet}`"
 
 
 def test_devcontainer_environment_contract() -> None:
