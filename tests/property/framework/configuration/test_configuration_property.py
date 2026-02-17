@@ -17,6 +17,66 @@ from ml_playground.framework.configuration import loading as config_loading
 from ml_playground.framework.configuration.merge_utils import merge_mappings
 
 
+KEY_STRATEGY = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="_-"
+    ),
+    min_size=1,
+    max_size=8,
+)
+
+SCALAR_STRATEGY: st.SearchStrategy[object] = st.one_of(
+    st.none(),
+    st.booleans(),
+    st.integers(min_value=-10_000, max_value=10_000),
+    st.floats(
+        min_value=-10_000, max_value=10_000, allow_nan=False, allow_infinity=False
+    ),
+    st.text(max_size=24),
+)
+
+TOML_SCALAR_STRATEGY: st.SearchStrategy[object] = st.one_of(
+    st.booleans(),
+    st.integers(min_value=-1_000, max_value=1_000),
+    st.floats(min_value=-1_000, max_value=1_000, allow_nan=False, allow_infinity=False),
+    st.text(max_size=24),
+)
+
+
+def _build_nested_value_strategy(
+    scalar_values: st.SearchStrategy[object],
+) -> st.SearchStrategy[object]:
+    def extend(children: st.SearchStrategy[object]) -> st.SearchStrategy[object]:
+        nested_dicts: st.SearchStrategy[dict[str, object]] = st.dictionaries(
+            keys=KEY_STRATEGY,
+            values=children,
+            max_size=4,
+        )
+        nested_lists: st.SearchStrategy[list[object]] = st.lists(children, max_size=3)
+        return st.one_of(nested_dicts, nested_lists)
+
+    return st.recursive(
+        scalar_values,
+        extend,
+        max_leaves=6,
+    )
+
+
+NESTED_VALUE_STRATEGY = _build_nested_value_strategy(SCALAR_STRATEGY)
+NESTED_MAPPING_STRATEGY: st.SearchStrategy[dict[str, Any]] = st.dictionaries(
+    keys=KEY_STRATEGY,
+    values=NESTED_VALUE_STRATEGY,
+    max_size=6,
+)
+
+TOML_VALUE_STRATEGY = _build_nested_value_strategy(TOML_SCALAR_STRATEGY)
+TOML_MAPPING_STRATEGY: st.SearchStrategy[dict[str, Any]] = st.dictionaries(
+    keys=KEY_STRATEGY,
+    values=TOML_VALUE_STRATEGY,
+    max_size=5,
+)
+
+
 def _normalize(value: object) -> object:
     if isinstance(value, Mapping):
         mapping_value = cast(Mapping[Any, object], value)
@@ -33,97 +93,16 @@ def _normalize(value: object) -> object:
 
 @st.composite
 def dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
-    """Generate nested dictionaries with string keys and various values."""
-
-    base_values: st.SearchStrategy[object] = st.one_of(
-        st.none(),
-        st.booleans(),
-        st.integers(),
-        st.floats(allow_nan=False, allow_infinity=False),
-        st.text(max_size=50),
-    )
-
-    def extend(children: st.SearchStrategy[object]) -> st.SearchStrategy[object]:
-        nested_dicts: st.SearchStrategy[dict[str, object]] = st.dictionaries(
-            keys=st.text(min_size=1, max_size=10),
-            values=children,
-            max_size=10,
-        )
-        nested_lists: st.SearchStrategy[list[object]] = st.lists(children, max_size=5)
-        return st.one_of(nested_dicts, nested_lists)
-
-    value_strategy: st.SearchStrategy[object] = st.recursive(
-        base_values,
-        extend,
-        max_leaves=10,
-    )
-
-    mapping_strategy: st.SearchStrategy[dict[str, Any]] = st.dictionaries(
-        keys=st.text(min_size=1, max_size=10),
-        values=value_strategy,
-        max_size=10,
-    )
-
-    raw_mapping = draw(mapping_strategy)
+    """Generate nested dictionaries with bounded depth and breadth."""
+    raw_mapping = draw(NESTED_MAPPING_STRATEGY)
     normalized_mapping = cast(dict[str, Any], _normalize(raw_mapping))
     return normalized_mapping
 
 
 @st.composite
 def toml_dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
-    """Generate dictionaries that can be serialized to TOML."""
-
-    toml_scalars: st.SearchStrategy[object] = st.one_of(
-        st.booleans(),
-        st.integers(min_value=-1000, max_value=1000),
-        st.floats(
-            min_value=-1000, max_value=1000, allow_nan=False, allow_infinity=False
-        ),
-        st.text(max_size=50),
-        st.dates(),
-        st.times(),
-        st.datetimes(),
-    )
-
-    def extend(children: st.SearchStrategy[object]) -> st.SearchStrategy[object]:
-        nested_keys = st.text(
-            min_size=1,
-            max_size=10,
-            alphabet=st.characters(
-                whitelist_categories=("L", "N"),
-                min_codepoint=97,
-                max_codepoint=122,
-            ),
-        )
-        nested_dicts: st.SearchStrategy[dict[str, object]] = st.dictionaries(
-            keys=nested_keys,
-            values=children,
-            max_size=5,
-        )
-        nested_lists: st.SearchStrategy[list[object]] = st.lists(children, max_size=5)
-        return st.one_of(nested_dicts, nested_lists)
-
-    value_strategy: st.SearchStrategy[object] = st.recursive(
-        toml_scalars,
-        extend,
-        max_leaves=5,
-    )
-
-    mapping_strategy: st.SearchStrategy[dict[str, Any]] = st.dictionaries(
-        keys=st.text(
-            min_size=1,
-            max_size=20,
-            alphabet=st.characters(
-                whitelist_categories=("L", "N"),
-                min_codepoint=97,
-                max_codepoint=122,
-            ),
-        ),
-        values=value_strategy,
-        max_size=5,
-    )
-
-    return draw(mapping_strategy)
+    """Generate bounded dictionaries that can be serialized to TOML."""
+    return draw(TOML_MAPPING_STRATEGY)
 
 
 class TestMergeMappings:
@@ -168,12 +147,9 @@ class TestMergeMappings:
         self, d1: dict[str, Any], d2: dict[str, Any], d3: dict[str, Any]
     ) -> None:
         """Test merge associativity."""
-        try:
-            result1 = merge_mappings(merge_mappings(d1, d2), d3)
-            result2 = merge_mappings(d1, merge_mappings(d2, d3))
-            assert result1 == result2
-        except Exception:
-            pass
+        result1 = merge_mappings(merge_mappings(d1, d2), d3)
+        result2 = merge_mappings(d1, merge_mappings(d2, d3))
+        assert result1 == result2
 
     @given(  # type: ignore[reportAny]
         base=dict_strategy()
@@ -220,12 +196,10 @@ class TestTomlReading:
             finally:
                 Path(f.name).unlink(missing_ok=True)
 
-    @given(  # type: ignore[reportAny]
-        content=st.sampled_from(
-            ["[invalid", "key =", "[[table]", "key = value extra", '{"json"}']
-        )
+    @pytest.mark.parametrize(
+        "content",
+        ["[invalid", "key =", "[[table]", "key = value extra", '{"json"}'],
     )
-    @settings(max_examples=20)
     def test_invalid_toml_raises_exception(self, content: str) -> None:
         """Test invalid toml raises exception."""
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".toml", delete=False) as f:

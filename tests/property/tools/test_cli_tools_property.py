@@ -7,6 +7,7 @@ from typing import Iterator, List, Sequence, cast
 
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
+import pytest
 from ml_playground.tools.core import runtime as tools_runtime
 from ml_playground.tools.core.config import ToolsConfig, load_tools_config
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
@@ -32,6 +33,7 @@ TARGET_RUNNER_MODULES = [
 CLI_RUNNER = CliRunner()
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PRELOADED_CONFIG: ToolsConfig = load_tools_config(PROJECT_ROOT)
+CLICK_APP = cast(click.Command, typer.main.get_command(tools_cli_main.app))
 
 
 def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
@@ -90,13 +92,16 @@ def _reset_cli_state() -> None:
     tools_runtime.set_config(PRELOADED_CONFIG, PROJECT_ROOT)
 
 
-def _invoke_cli(raw_args: Sequence[str]) -> Result:
+@pytest.fixture(autouse=True, scope="module")
+def _stub_config_loader_for_module() -> Iterator[None]:
     with _stubbed_tools_config():
-        _reset_cli_state()
-        result = CLI_RUNNER.invoke(
-            _get_command(tools_cli_main.app), list(raw_args), prog_name="tools"
-        )
-        _reset_cli_state()
+        yield
+
+
+def _invoke_cli(raw_args: Sequence[str]) -> Result:
+    _reset_cli_state()
+    result = CLI_RUNNER.invoke(CLICK_APP, list(raw_args), prog_name="tools")
+    _reset_cli_state()
     return result
 
 
