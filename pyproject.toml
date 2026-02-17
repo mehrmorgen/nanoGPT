@@ -101,7 +101,6 @@ all = [
     "pytest>=8.4.2",
     "pytest-xdist>=3.8.0",
     "pytest-bdd>=8.1.0",
-    "pytest-cov>=7.0.0",
     "slipcover>=1.0.17",
     "ruff>=0.14.2",
     "mypy>=1.18.2",
@@ -299,8 +298,8 @@ precision = 2
 
 # Custom coverage thresholds for CI
 [tool.ml_playground.coverage.thresholds]
-line_threshold = 97.5
-branch_threshold = 94.0
+line_threshold = 97.6
+branch_threshold = 95.0
 
 [tool.ml_playground.testing.budgets]
 integration_seconds = 5.0

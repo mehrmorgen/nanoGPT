@@ -156,6 +156,16 @@ def collect_undercovered_files(
         branch_percent: float | None = None
         num_branches_value = summary.get("num_branches")
         covered_branches = summary.get("covered_branches")
+        missing_branches = summary.get("missing_branches")
+        if (
+            (
+                not isinstance(num_branches_value, (int, float))
+                or num_branches_value <= 0
+            )
+            and isinstance(covered_branches, (int, float))
+            and isinstance(missing_branches, (int, float))
+        ):
+            num_branches_value = float(covered_branches) + float(missing_branches)
         if (
             isinstance(num_branches_value, (int, float))
             and num_branches_value

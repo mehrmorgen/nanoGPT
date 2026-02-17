@@ -640,7 +640,7 @@ class TestingTools:
         )
 
         result = self._subprocess_runner.run_pytest_command(
-            ["-m", "integration or True", "--no-cov", "tests/integration", *args],
+            ["-m", "integration or True", "tests/integration", *args],
             cwd=self._root_path,
             timeout=self._config.testing.timeout,
             operation_id=operation_id,
@@ -663,7 +663,7 @@ class TestingTools:
                 context="Running integration tests to verify components work together correctly",
                 category=self.category,
                 executed_commands=[
-                    "pytest -m 'integration or True' --no-cov tests/integration"
+                    "pytest -m 'integration or True' tests/integration"
                     + (f" {' '.join(args)}" if args else "")
                 ],
             )

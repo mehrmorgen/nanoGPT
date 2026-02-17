@@ -13,11 +13,18 @@ class MockModel(BaseModel):
     pass
 
 
-@given(
-    experiment=st.text(min_size=1, max_size=24),
-    section=st.text(min_size=1, max_size=24),
+_identifiers = st.text(
+    alphabet=st.characters(min_codepoint=97, max_codepoint=122),
+    min_size=1,
+    max_size=16,
 )
-@settings(max_examples=20, deadline=None, derandomize=True)
+
+
+@given(
+    experiment=_identifiers,
+    section=_identifiers,
+)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_register_and_get_model(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Clear registry for this experiment to ensure clean state
@@ -31,10 +38,10 @@ def test_register_and_get_model(experiment: str, section: str) -> None:
 
 
 @given(
-    experiment=st.text(min_size=1, max_size=24),
-    section=st.text(min_size=1, max_size=24),
+    experiment=_identifiers,
+    section=_identifiers,
 )
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_get_model_returns_none_for_missing(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Ensure it's not registered

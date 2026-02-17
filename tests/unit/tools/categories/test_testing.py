@@ -146,7 +146,6 @@ class TestIntegrationTests:
         command = subprocess_runner.calls[0]["command"]
         assert "-m" in command
         assert "integration or True" in command
-        assert "--no-cov" in command
         assert "tests/integration" in command
 
 
