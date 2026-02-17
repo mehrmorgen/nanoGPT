@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Iterator, List, Sequence
+from typing import List, Sequence
 
 import hypothesis.strategies as st
 from hypothesis import assume, example, given, settings
@@ -144,13 +143,6 @@ def _build_stub_dependencies(log: DependencyCallLog) -> cli_runners.CLIDependenc
     )
 
 
-@contextmanager
-def _override_dependencies(log: DependencyCallLog) -> Iterator[None]:
-    deps = _build_stub_dependencies(log)
-    with cli_runners.override_cli_dependencies(deps):
-        yield
-
-
 def _build_flags(learning_mode: bool, verbosity: int | None) -> List[str]:
     flags: List[str] = []
     if learning_mode:
@@ -184,8 +176,8 @@ def _invoke_runtime_cli(
 ) -> Result:
     if log is None:
         return CLI_RUNNER.invoke(cli_main.app, list(raw_args))
-    with _override_dependencies(log):
-        return CLI_RUNNER.invoke(cli_main.app, list(raw_args))
+    deps = _build_stub_dependencies(log)
+    return CLI_RUNNER.invoke(cli_main.app, list(raw_args), obj={"cli_deps": deps})
 
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
