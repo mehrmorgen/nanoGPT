@@ -73,19 +73,21 @@ def _load_tools_config_stub(_project_root: Path | None = None) -> ToolsConfig:
     return PRELOADED_CONFIG
 
 
+_BASE_DEPS = default_tools_dependencies()
+_PRECONFIGURED_DEPS = ToolsDependencies(
+    load_config=_load_tools_config_stub,
+    quality_factory=_BASE_DEPS.quality_factory,
+    testing_factory=_BASE_DEPS.testing_factory,
+    environment_factory=_BASE_DEPS.environment_factory,
+    ci_factory=_BASE_DEPS.ci_factory,
+    agentic_factory=_BASE_DEPS.agentic_factory,
+    dev_factory=_BASE_DEPS.dev_factory,
+)
+
+
 @contextmanager
 def _stubbed_tools_dependencies() -> Iterator[None]:
-    base_deps = default_tools_dependencies()
-    overridden = ToolsDependencies(
-        load_config=_load_tools_config_stub,
-        quality_factory=base_deps.quality_factory,
-        testing_factory=base_deps.testing_factory,
-        environment_factory=base_deps.environment_factory,
-        ci_factory=base_deps.ci_factory,
-        agentic_factory=base_deps.agentic_factory,
-        dev_factory=base_deps.dev_factory,
-    )
-    with override_tools_dependencies(overridden):
+    with override_tools_dependencies(_PRECONFIGURED_DEPS):
         yield
 
 
