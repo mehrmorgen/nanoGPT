@@ -200,6 +200,27 @@ def _resolve_experiment_preparer(
     return None
 
 
+def _resolve_experiment_analyzer(
+    experiment: str, *, import_fn: Any = import_module
+) -> object | None:
+    mod_name = f"ml_playground.experiments.{experiment}.analyzer"
+    try:
+        mod = import_fn(mod_name)
+    except ImportError:
+        return None
+
+    for attr_name in dir(mod):
+        candidate = getattr(mod, attr_name, None)
+        if isinstance(candidate, type):
+            analyze_attr = getattr(candidate, "analyze", None)
+            if callable(analyze_attr):
+                try:
+                    return cast(Any, candidate)()
+                except TypeError:
+                    continue
+    return None
+
+
 def _missing_runtime_message(category: str) -> str:
     if category == "train":
         return "Runtime configuration is missing for training."
@@ -471,16 +492,17 @@ def run_analyze(
     open_browser: bool,
     learning_mode_engine: LearningModeEngine | None = None,
 ) -> ToolResult:
-    """Run analysis for an experiment (bundestag_char only)."""
+    """Run analysis for an experiment via experiment-owned analyzer modules."""
     try:
-        if experiment != "bundestag_char":
+        analyzer = _resolve_experiment_analyzer(experiment)
+        if analyzer is None:
             return ToolResult.create(
                 success=False,
                 exit_code=1,
                 namespace="ml",
                 category="analyze",
                 command=experiment,
-                stderr=f"analyze currently supports only 'bundestag_char', got: {experiment}",
+                stderr=f"No analyzer registered for experiment: {experiment}",
             )
 
         import logging as cli_logging
@@ -488,12 +510,21 @@ def run_analyze(
         pkg_name = "ml_playground.runtime_cli"
 
         raw_logger = cli_logging.getLogger(pkg_name)
-        raw_logger.info(
-            "Analysis for '%s' not implemented. Host=%s, Port=%s, Open=%s",
-            experiment,
-            host,
-            port,
-            open_browser,
+        analyze_fn = getattr(analyzer, "analyze", None)
+        if not callable(analyze_fn):
+            raise RuntimeError(
+                f"Resolved analyzer for {experiment} does not implement analyze(): {type(analyzer)}"
+            )
+        analyze_stdout = analyze_fn(
+            host=host,
+            port=port,
+            open_browser=open_browser,
+            logger=raw_logger,
+        )
+        stdout = (
+            analyze_stdout
+            if isinstance(analyze_stdout, str) and analyze_stdout
+            else f"Analysis executed for {experiment} (Host={host}, Port={port}, Open={open_browser})"
         )
 
         learning_info = None
@@ -511,9 +542,7 @@ def run_analyze(
             namespace="ml",
             category="analyze",
             command=experiment,
-            stdout=(
-                f"Analysis placeholder executed for {experiment} (Host={host}, Port={port}, Open={open_browser})"
-            ),
+            stdout=stdout,
             learning_info=learning_info,
         )
     except Exception as e:

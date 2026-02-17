@@ -1583,3 +1583,45 @@ e2e_seconds = 10.0
 
     assert "integration: budget=5.00s, last=4.00s (ok)" in result.stdout
     assert "e2e: budget=10.00s, last=12.00s (over)" in result.stdout
+
+
+def test_budget_report_refresh_parses_durations_table(
+    config: ToolsConfig, root_path: Path, subprocess_runner: FakeSubprocessRunner
+) -> None:
+    testing_tools = testing_module.TestingTools(config, root_path, subprocess_runner)
+    pyproject_path = root_path / "pyproject.toml"
+    pyproject_path.write_text(
+        """
+[tool.ml_playground.testing.budgets]
+integration_seconds = 5.0
+e2e_seconds = 15.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    operation_id = OperationId(namespace="tools", category="test", command="budget")
+    integration_output = (
+        "..... [100%]\n"
+        "============================== slowest durations ===============================\n"
+        "0.40s call tests/integration/a.py::test_a\n"
+        "0.03s setup tests/integration/a.py::test_a\n"
+    )
+    e2e_output = (
+        "..... [100%]\n"
+        "============================== slowest durations ===============================\n"
+        "2.45s call tests/e2e/a.py::test_a\n"
+        "0.12s call tests/e2e/b.py::test_b\n"
+    )
+    subprocess_runner.set_results(
+        [
+            create_success_result(operation_id, stdout=integration_output),
+            create_success_result(operation_id, stdout=e2e_output),
+        ]
+    )
+
+    result = testing_tools.budget_report([], refresh=True)
+
+    assert result.success is True
+    assert "integration: budget=5.00s, last=" in result.stdout
+    assert "e2e: budget=15.00s, last=" in result.stdout
+    assert "last=unknown" not in result.stdout

@@ -770,16 +770,6 @@ def _extract_totals(coverage_data: Mapping[str, object]) -> _CoverageTotals:
             if not isinstance(raw_info, Mapping):
                 continue
             info = cast(Mapping[str, object], raw_info)
-            executed_lines = info.get("executed_lines")
-            executed_branches = info.get("executed_branches")
-            has_execution = (
-                isinstance(executed_lines, list)
-                and len(executed_lines) > 0
-                or isinstance(executed_branches, list)
-                and len(executed_branches) > 0
-            )
-            if not has_execution:
-                continue
             summary = info.get("summary")
             if not isinstance(summary, Mapping):
                 continue

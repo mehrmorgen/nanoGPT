@@ -453,7 +453,7 @@ def test_run_analyze_unsupported() -> None:
     result = cli_commands.run_analyze("not_bundestag", "127.0.0.1", 8050, True)
     assert result.success is False
     assert result.exit_code == 1
-    assert "bundestag_char" in result.stderr
+    assert "No analyzer registered" in result.stderr
 
 
 def test_run_prepare_internal(tmp_path: Path) -> None:
@@ -780,7 +780,7 @@ def test_run_analyze_failure() -> None:
     # Test unsupported path in run_analyze
     result = cli_commands.run_analyze("invalid", "localhost", 0, False)
     assert result.success is False
-    assert "supports only 'bundestag_char'" in result.stderr
+    assert "No analyzer registered" in result.stderr
 
 
 def test_log_command_status_failure(caplog: Any) -> None:

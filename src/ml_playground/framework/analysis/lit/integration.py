@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import importlib
-import logging
-import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 import argparse
 from pathlib import Path
 from types import ModuleType
-from typing import Protocol, cast, override
+from typing import Protocol, cast
 
 from ml_playground.framework.core.di_implementations import DefaultModuleImporter
 from ml_playground.framework.core.logging_protocol import LoggerLike
@@ -101,6 +99,83 @@ def _import_lit_server() -> ModuleType:
     raise RuntimeError(message)
 
 
+def _resolve_experiment_lit_runner(
+    experiment: str, *, import_fn: Callable[[str], object] = importlib.import_module
+) -> Callable[..., None]:
+    module_name = f"ml_playground.experiments.{experiment}.lit_integration"
+    try:
+        module_obj = import_fn(module_name)
+    except ImportError as exc:
+        raise RuntimeError(
+            f"No LIT integration module registered for experiment: {experiment}"
+        ) from exc
+
+    module = cast(ModuleType, module_obj)
+    run_server = getattr(module, "run_server", None)
+    if callable(run_server):
+        return cast(Callable[..., None], run_server)
+
+    legacy_name = f"run_server_{experiment}"
+    legacy_runner = getattr(module, legacy_name, None)
+    if callable(legacy_runner):
+        return cast(Callable[..., None], legacy_runner)
+
+    raise RuntimeError(
+        f"LIT integration module for '{experiment}' does not expose run_server(...)"
+    )
+
+
+def run_server_experiment(
+    experiment: str,
+    host: str | None = None,
+    port: int = 5432,
+    open_browser: bool = False,
+    logger: LoggerLike | None = None,
+    _loader_override: Callable[
+        [], tuple[LitDatasetModule, LitModelModule, LitTypesModule]
+    ]
+    | None = None,
+    _server_importer_override: Callable[[], ModuleType] | None = None,
+    _path_resolver_override: Callable[[Path], Path] | None = None,
+) -> None:
+    """Run experiment-owned LIT wiring for a given experiment."""
+    run_experiment_lit_server = _resolve_experiment_lit_runner(experiment)
+
+    loader = _loader_override or _load_lit_components
+    server_importer = _server_importer_override or _import_lit_server
+
+    def _wrapped_loader() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
+        try:
+            return loader()
+        except RuntimeError as exc:
+            message = (
+                "LIT dependencies not available. Install lit-nlp in an isolated environment "
+                + "or add it as an extra before using this integration. Try `uv sync --extra lit` "
+                + "or `uv add lit-nlp`."
+            )
+            raise RuntimeError(message) from exc
+
+    def _wrapped_server_importer() -> ModuleType:
+        try:
+            return server_importer()
+        except RuntimeError as exc:
+            message = (
+                "LIT server import failed. Ensure a supported lit-nlp version is installed. "
+                + "Try `uv sync --extra lit` or `uv add lit-nlp`."
+            )
+            raise RuntimeError(message) from exc
+
+    run_experiment_lit_server(
+        host=host,
+        port=port,
+        open_browser=open_browser,
+        logger=logger,
+        _loader_override=_wrapped_loader,
+        _server_importer_override=_wrapped_server_importer,
+        _path_resolver_override=_path_resolver_override,
+    )
+
+
 def run_server_bundestag_char(
     host: str | None = None,
     port: int = 5432,
@@ -113,171 +188,17 @@ def run_server_bundestag_char(
     _server_importer_override: Callable[[], ModuleType] | None = None,
     _path_resolver_override: Callable[[Path], Path] | None = None,
 ) -> None:
-    """Launch a minimal LIT server for the bundestag_char PoC.
-
-    This uses a tiny embedded text dataset and a trivial echo model to
-    demonstrate the LIT UI without requiring trained checkpoints.
-    """
-    if host is None:
-        host = get_default_host()
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-
-    try:
-        if _loader_override:
-            dataset_mod, model_mod, types_mod = _loader_override()
-        else:
-            dataset_mod, model_mod, types_mod = _load_lit_components()
-    except RuntimeError as exc:
-        message = (
-            "LIT dependencies not available. Install lit-nlp in an isolated environment "
-            + "or add it as an extra before using this integration. Try `uv sync --extra lit` "
-            + "or `uv add lit-nlp`."
-        )
-        raise RuntimeError(message) from exc
-
-    try:
-        if _server_importer_override:
-            server_module = _server_importer_override()
-        else:
-            server_module = _import_lit_server()
-    except RuntimeError as exc:
-        message = (
-            "LIT server import failed. Ensure a supported lit-nlp version is installed. "
-            + "Try `uv sync --extra lit` or `uv add lit-nlp`."
-        )
-        raise RuntimeError(message) from exc
-
-    dataset_base = dataset_mod.Dataset
-    model_base = model_mod.Model
-    text_segment_factory = types_mod.TextSegment
-
-    # --- Tiny sample dataset ---
-    # Prefer a few lines from the bundestag_char seed if present; otherwise use embedded samples.
-    samples: list[str] = [
-        "Nächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.",
-        "Herr Präsident, liebe Kolleginnen und Kollegen, wir beraten heute wichtige Vorlagen.",
-        "(Beifall bei der SPD)",
-        "Die Bundesregierung handelt entschlossen.",
-        "Applaus bei der CDU/CSU.",
-        "Vielen Dank. — Zur Geschäftsordnung hat der Abgeordnete das Wort.",
-        "Wir müssen die Inflation bekämpfen und Familien entlasten.",
-        "Das Wort hat nun die Bundeskanzlerin.",
-        "Meine Damen und Herren, die Lage ist ernst, aber beherrschbar.",
-        "(Heiterkeit) Der nächste Redner folgt.",
-    ]
-
-    # Try to read input.txt if it exists, but keep it optional and tiny.
-    try:
-        # Resolve to the src/ml_playground/experiments/bundestag_char directory,
-        # tolerating environments (e.g., tests) that stub Path.parents with fewer entries.
-        if _path_resolver_override:
-            resolved = _path_resolver_override(Path(__file__))
-        else:
-            resolved = Path(__file__).resolve()
-        try:
-            base_dir = resolved.parents[3]
-        except Exception:
-            # Fallback for stubs that only provide shallower parents (tests inject parents[2])
-            base_dir = resolved.parents[2]
-        exp_dir = base_dir / "experiments" / "bundestag_char"
-        input = exp_dir / "datasets" / "input.txt"
-        if input.exists():
-            text = input.read_text(encoding="utf-8", errors="ignore")
-            # Take up to 10 reasonably short lines.
-            file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-            if file_lines:
-                samples = file_lines[:10]
-    except (OSError, UnicodeError):
-        # Non-fatal; keep embedded samples
-        pass
-
-    class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
-        def __init__(self, sents: Iterable[str]):
-            self._examples: list[Mapping[str, str]] = [{"text": s} for s in sents]
-
-        @override
-        def spec(self) -> dict[str, object]:
-            return {"text": text_segment_factory()}
-
-        @override
-        def __len__(self) -> int:
-            return len(self._examples)
-
-        @override
-        def __iter__(self):
-            return iter(self._examples)
-
-    class EchoModel(model_base):  # type: ignore[valid-type, misc]
-        """Trivial model that returns the input text as generated output.
-
-        Serves as a PoC to exercise LIT views for text data without trained weights.
-        """
-
-        @override
-        def input_spec(self) -> dict[str, object]:
-            return {"text": text_segment_factory()}
-
-        @override
-        def output_spec(self) -> dict[str, object]:
-            return {"generated": text_segment_factory()}
-
-        @override
-        def predict(
-            self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
-        ) -> list[Mapping[str, object]]:
-            outs: list[Mapping[str, object]] = []
-            for ex in _inputs:
-                s = str(ex.get("text", ""))
-                # Simple deterministic transform to show change
-                gen = s + "\n\n[echo] " + s[::-1]
-                outs.append({"generated": gen})
-            return outs
-
-    datasets: dict[str, LitDataset] = {
-        "bundestag_char_sample": BundestagTextDataset(samples)
-    }
-    models: dict[str, LitModel] = {"echo_model": EchoModel()}
-
-    try:
-        server_factory_obj = getattr(server_module, "Server", None)
-        if not callable(server_factory_obj):
-            raise RuntimeError("LIT server module does not expose a Server factory")
-        server_factory = cast(LitServerFactory, server_factory_obj)
-        app = server_factory(models, datasets)
-    except (
-        TypeError,
-        AttributeError,
-        RuntimeError,
-        ValueError,
-    ) as exc:
-        raise RuntimeError(f"Failed to build LIT app: {exc}") from exc
-
-    url = f"http://{host}:{port if port else '<auto>'}"
-    logger.info(f"Registered models: {', '.join(models.keys())}")
-    logger.info(f"Registered datasets: {', '.join(datasets.keys())}")
-    logger.info(f"Starting server at {url}")
-    _ = sys.stdout.flush()
-
-    serve_method = getattr(app, "serve", None)
-    use_module_serve = False
-    if not callable(serve_method):
-        serve_method = getattr(server_module, "serve", None)
-        use_module_serve = True
-    if not callable(serve_method):
-        raise RuntimeError("LIT server app does not expose a serve(...) method.")
-
-    serve_kwargs = {"port": port, "host": host, "open_browser": open_browser}
-    try:
-        if use_module_serve:
-            _ = serve_method(app, **serve_kwargs)
-        else:
-            _ = serve_method(**serve_kwargs)
-    except TypeError as exc:
-        raise RuntimeError(
-            "LIT server serve() must accept keyword arguments: port, host, open_browser."
-        ) from exc
+    """Backward-compatible alias for the bundestag_char experiment."""
+    run_server_experiment(
+        "bundestag_char",
+        host=host,
+        port=port,
+        open_browser=open_browser,
+        logger=logger,
+        _loader_override=_loader_override,
+        _server_importer_override=_server_importer_override,
+        _path_resolver_override=_path_resolver_override,
+    )
 
 
 def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
@@ -344,6 +265,7 @@ __all__ = [
     "load_lit_components",
     "import_lit_server",
     "parse_cli_args",
+    "run_server_experiment",
     "run_server_bundestag_char",
 ]
 

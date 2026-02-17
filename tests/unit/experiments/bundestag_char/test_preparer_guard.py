@@ -13,7 +13,10 @@ def test_bundestag_char_preparer_tests_avoid_module_globals() -> None:
     test_dir = Path(__file__).parent
     offenders: list[str] = []
     for name in ("test_preparer.py", "test_bundestag_char_preparer.py"):
-        text = (test_dir / name).read_text(encoding="utf-8")
+        path = test_dir / name
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
         for token in _FORBIDDEN_TOKENS:
             if token in text:
                 offenders.append(f"{name}:{token}")

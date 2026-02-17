@@ -379,3 +379,35 @@ branch_threshold = 77.0
     thresholds = coverage_module._read_coverage_thresholds_from_config(tmp_path)
     assert thresholds["line_threshold"] == 88.0
     assert thresholds["branch_threshold"] == 77.0
+
+
+def test_extract_totals_includes_files_without_execution_lists() -> None:
+    payload: dict[str, object] = {
+        "totals": {
+            "covered_lines": 100,
+            "missing_lines": 0,
+            "covered_branches": 10,
+            "missing_branches": 0,
+        },
+        "files": {
+            "src/ml_playground/example.py": {
+                "executed_lines": [],
+                "executed_branches": [],
+                "summary": {
+                    "covered_lines": 0,
+                    "missing_lines": 10,
+                    "covered_branches": 0,
+                    "missing_branches": 2,
+                },
+            }
+        },
+    }
+
+    totals = coverage_module._extract_totals(payload)
+
+    assert totals["covered_lines"] == 0.0
+    assert totals["missing_lines"] == 10.0
+    assert totals["num_statements"] == 10.0
+    assert totals["covered_branches"] == 0.0
+    assert totals["missing_branches"] == 2.0
+    assert totals["num_branches"] == 2.0

@@ -72,6 +72,7 @@ def _write_budget_cache(root_path: Path, payload: Mapping[str, float]) -> None:
 
 
 def _parse_pytest_runtime(output: str) -> float | None:
+    # Preferred form: "X passed in 1.23s"
     for line in reversed(output.splitlines()):
         match = re.search(r" in ([0-9]+\.[0-9]+|[0-9]+)s", line)
         if match:
@@ -79,6 +80,24 @@ def _parse_pytest_runtime(output: str) -> float | None:
                 return float(match.group(1))
             except ValueError:
                 return None
+
+    # Fallback: pytest output can omit final summary and only show "slowest durations".
+    # In that case, estimate total by summing reported call/setup/teardown timings.
+    total = 0.0
+    found_duration_rows = False
+    for line in output.splitlines():
+        row = re.match(
+            r"^\s*([0-9]+(?:\.[0-9]+)?)s\s+(?:call|setup|teardown)\s+",
+            line,
+        )
+        if row:
+            found_duration_rows = True
+            try:
+                total += float(row.group(1))
+            except ValueError:
+                continue
+    if found_duration_rows:
+        return total
     return None
 
 
@@ -102,7 +121,8 @@ def _run_suite(
         timeout=timeout,
         operation_id=operation_id,
     )
-    duration = _parse_pytest_runtime(result.stdout or "")
+    combined_output = "\n".join(part for part in [result.stdout, result.stderr] if part)
+    duration = _parse_pytest_runtime(combined_output)
     return result, duration
 
 

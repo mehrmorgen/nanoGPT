@@ -243,21 +243,15 @@ def _prepare_germaparl_input(
 def _resolve_split_ratio(raw_value: object) -> float:
     if raw_value is None:
         return 0.9
-    if not isinstance(raw_value, (int, float, str)):
-        raise DataError(
-            f"Invalid split ratio in extras: {raw_value!r}",
-            reason="Split ratio must be numeric or string convertible to float",
-            rationale="Training/validation split must be numeric to derive dataset boundaries",
-        )
     try:
-        ratio = float(raw_value)
+        ratio = float(raw_value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
         raise DataError(
             f"Invalid split ratio in extras: {raw_value!r}",
             reason=f"Unable to coerce provided split to float: {exc}",
             rationale="Split ratio must be numeric to determine split boundary",
         ) from exc
-    if ratio < 0.0 or ratio > 1.0:
+    if not 0.0 <= ratio <= 1.0:
         raise DataError(
             f"split ratio must be within [0.0, 1.0]; received {ratio}",
             reason="Split ratio outside inclusive [0.0, 1.0] range",

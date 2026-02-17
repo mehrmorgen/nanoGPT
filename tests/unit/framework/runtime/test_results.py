@@ -92,7 +92,7 @@ def test_learning_mode_engine_comprehensive_extends_templates() -> None:
     assert "Decoding strategies" in info.related_concepts
 
 
-def test_learning_mode_engine_command_override_applies() -> None:
+def test_learning_mode_engine_prepare_category_is_generic() -> None:
     engine = LearningModeEngine(VerbosityLevel.STANDARD)
     info = engine.explain_command(
         command="bundestag_char",
@@ -100,9 +100,8 @@ def test_learning_mode_engine_command_override_applies() -> None:
         category="prepare",
         executed_commands=["prepare bundestag_char"],
     )
-    assert any(
-        "character-level tokens" in explanation for explanation in info.explanations
-    )
+    assert any("curated artifacts" in explanation for explanation in info.explanations)
+    assert "Context: analysis" in info.explanations
 
 
 def test_learning_mode_engine_unknown_category_still_records_context() -> None:

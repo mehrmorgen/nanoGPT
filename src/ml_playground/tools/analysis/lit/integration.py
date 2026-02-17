@@ -20,7 +20,9 @@ load_lit_components = _integration.load_lit_components
 parse_cli_args = _integration.parse_cli_args
 
 
-def run_server_bundestag_char(
+def run_server_experiment(
+    *,
+    experiment: str,
     host: str = "127.0.0.1",
     port: int = 5432,
     open_browser: bool = False,
@@ -32,12 +34,32 @@ def run_server_bundestag_char(
     try:
         _integration._load_lit_components = _load_lit_components
         _integration._import_lit_server = _import_lit_server
-        _integration.run_server_bundestag_char(
-            host=host, port=port, open_browser=open_browser, logger=logger
+        _integration.run_server_experiment(
+            experiment=experiment,
+            host=host,
+            port=port,
+            open_browser=open_browser,
+            logger=logger,
         )
     finally:
         _integration._load_lit_components = original_load
         _integration._import_lit_server = original_import
+
+
+def run_server_bundestag_char(
+    host: str = "127.0.0.1",
+    port: int = 5432,
+    open_browser: bool = False,
+    logger: LoggerLike | None = None,
+) -> None:
+    """Backward-compatible alias around run_server_experiment."""
+    run_server_experiment(
+        experiment="bundestag_char",
+        host=host,
+        port=port,
+        open_browser=open_browser,
+        logger=logger,
+    )
 
 
 __all__ = [
@@ -50,5 +72,6 @@ __all__ = [
     "import_lit_server",
     "load_lit_components",
     "parse_cli_args",
+    "run_server_experiment",
     "run_server_bundestag_char",
 ]

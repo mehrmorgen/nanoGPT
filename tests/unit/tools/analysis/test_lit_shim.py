@@ -79,6 +79,11 @@ def test_main_block() -> None:
     sys.argv = ["prog", "--host", "1.2.3.4", "--port", "8888", "--open-browser"]
     try:
         mod.main(default_host="localhost", _run_server_override=fake_run_server)  # type: ignore
-        assert called_with == {"host": "1.2.3.4", "port": 8888, "open_browser": True}
+        assert called_with == {
+            "experiment": "bundestag_char",
+            "host": "1.2.3.4",
+            "port": 8888,
+            "open_browser": True,
+        }
     finally:
         sys.argv = orig_argv

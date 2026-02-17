@@ -8,7 +8,7 @@ import typer
 from typing_extensions import Annotated
 
 from ml_playground.tools.analysis.lit_integration import (
-    run_server_bundestag_char as run_lit_server,
+    run_server_experiment as run_lit_server,
 )
 from ml_playground.tools.cli.helpers import handle_tool_result
 from ml_playground.framework.analysis.sample_quality_public import (
@@ -82,6 +82,9 @@ def analysis_lit(
     open_browser: Annotated[
         bool, typer.Option("--open-browser", help="Open browser on start")
     ] = False,
+    experiment: Annotated[
+        str, typer.Option(help="Experiment name owning the LIT integration")
+    ] = "bundestag_char",
 ) -> None:
     """Launch a LIT server for interactive dataset/model analysis."""
     try:
@@ -105,14 +108,31 @@ def analysis_lit(
 
         try:
             lit_fn(
+                experiment=experiment,
                 host=host,
                 port=port,
                 open_browser=open_browser,
                 logger=cast(LoggerLike, logger),
             )
         except TypeError:
-            # Some test doubles omit the logger parameter; retry without it.
-            lit_fn(host=host, port=port, open_browser=open_browser)
+            # Keep compatibility with legacy fakes that omit logger and/or experiment.
+            try:
+                lit_fn(
+                    experiment=experiment,
+                    host=host,
+                    port=port,
+                    open_browser=open_browser,
+                )
+            except TypeError:
+                try:
+                    lit_fn(
+                        host=host,
+                        port=port,
+                        open_browser=open_browser,
+                        logger=cast(LoggerLike, logger),
+                    )
+                except TypeError:
+                    lit_fn(host=host, port=port, open_browser=open_browser)
 
         handle_tool_result(
             ToolResult.create(

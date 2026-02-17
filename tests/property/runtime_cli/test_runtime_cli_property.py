@@ -116,7 +116,7 @@ def _build_stub_dependencies(log: DependencyCallLog) -> cli_runners.CLIDependenc
                 namespace="ml",
                 category="analyze",
                 command=experiment,
-                stdout="analyze currently supports only 'bundestag_char'",
+                stdout=f"No analyzer registered for experiment: {experiment}",
             )
         return _success_result("analyze", experiment)
 
@@ -252,4 +252,4 @@ def test_runtime_cli_analyze_unknown_experiment(
     assert result.exit_code == 1
     stream = result.stderr or result.stdout
     if stream:
-        assert "supports only 'bundestag_char'" in stream
+        assert "No analyzer registered" in stream
