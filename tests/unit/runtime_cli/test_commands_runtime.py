@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import logging
 from pathlib import Path
+import tarfile
 from types import SimpleNamespace, TracebackType
 from typing import Any, Mapping, cast
 
@@ -25,7 +27,6 @@ from ml_playground.framework.runtime.core.results import (
     VerbosityLevel,
 )
 from ml_playground.framework.runtime.protocols import MetadataConfigLike
-from ml_playground.framework.training.loop.runner import TrainerDependencies
 
 
 class _Logger:
@@ -117,6 +118,30 @@ def _metadata(tmp_path: Path) -> MetadataConfigLike:
             sample_out_dir=tmp_path / "sample",
         ),
     )
+
+
+def _tarball_with_xml(paragraph: str) -> bytes:
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<TEI>
+  <text><body>
+    <div><sp><speaker>A</speaker><p>{paragraph}</p></sp></div>
+  </body></text>
+</TEI>
+"""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as archive:
+        data = xml.encode("utf-8")
+        info = tarfile.TarInfo(name="GermaParlTEI-main/01/BT_01_001.xml")
+        info.size = len(data)
+        archive.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def _cache_germaparl_tarball(exp_dir: Path, *, head_sha: str, paragraph: str) -> None:
+    cache_dir = exp_dir / "raw" / "germaparl_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / f"PolMine_GermaParlTEI-main-{head_sha}.tar.gz"
+    path.write_bytes(_tarball_with_xml(paragraph))
 
 
 def test_run_prepare_impl_success(tmp_path: Path) -> None:
@@ -278,14 +303,17 @@ def test_run_prepare_impl_uses_experiment_preparer_before_pipeline(
     tmp_path: Path,
 ) -> None:
     exp_dir = tmp_path / "bundestag_char"
-    ds_dir = exp_dir / "datasets"
-    ds_dir.mkdir(parents=True, exist_ok=True)
-    (ds_dir / "input.txt").write_text("hello bundestag", encoding="utf-8")
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    _cache_germaparl_tarball(exp_dir, head_sha="sha1", paragraph="hello bundestag")
 
     cfg = PreparerConfig(
         tokenizer_type="char",
         logger=logging.getLogger("prepare-real-preparer"),
-        extras={"dataset_dir_override": str(exp_dir), "dataset_source": "seed"},
+        extras={
+            "dataset_dir_override": str(exp_dir),
+            "germaparl_cache_dir": str(exp_dir / "raw" / "germaparl_cache"),
+            "__remote_head_resolver": lambda _repo, _ref: "sha1",
+        },
     )
 
     called: list[str] = []
@@ -325,6 +353,27 @@ def test_run_prepare_impl_fails_when_resolved_preparer_has_no_prepare(
     assert "does not implement prepare()" in (result.stderr or "")
 
 
+def test_run_prepare_impl_injects_confirm_callback_into_extras(tmp_path: Path) -> None:
+    captured: list[object] = []
+
+    class _FakePreparer:
+        def prepare(self, cfg: PreparerConfig) -> None:
+            captured.append(cfg.extras.get("overwrite_confirm"))
+
+    original_resolver = commands._resolve_experiment_preparer
+    commands._resolve_experiment_preparer = lambda _exp: _FakePreparer()
+    try:
+        cfg = PreparerConfig(tokenizer_type="char", extras={})
+        metadata: MetadataConfigLike = _metadata(tmp_path)
+        deps = bootstrap.CLIDependencies(confirm_fn=lambda _prompt: True)
+        result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
+    finally:
+        commands._resolve_experiment_preparer = original_resolver
+
+    assert result.success is True
+    assert captured and callable(captured[0])
+
+
 def test_run_train_impl_missing_runtime(tmp_path: Path) -> None:
     logger = _Logger()
     cfg: TrainerConfig = cast(
@@ -349,7 +398,7 @@ def test_run_train_impl_failure_with_learning(tmp_path: Path) -> None:
     def trainer_factory(
         cfg: TrainerConfig,
         metadata: MetadataConfigLike,
-        trainer_deps: TrainerDependencies | None = None,
+        trainer_deps: object | None = None,
     ) -> Any:  # type: ignore[type-arg]
         return SimpleNamespace(run=lambda: (_ for _ in ()).throw(RuntimeError("fail")))
 
@@ -364,9 +413,29 @@ def test_run_train_impl_failure_with_learning(tmp_path: Path) -> None:
     )
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
-    result = commands.run_train_impl(
-        "exp", cfg, Path("config"), metadata, deps, DummyEngine()
-    )
+    original_execute_training = commands._execute_training
+
+    def _fake_execute_training(
+        train_cfg: TrainerConfig,
+        metadata_cfg: MetadataConfig | None,
+        trainer_factory_fn: object | None,
+    ) -> None:
+        _ = train_cfg
+        if metadata_cfg is None or not callable(trainer_factory_fn):
+            raise RuntimeError("invalid training setup")
+        trainer = trainer_factory_fn(cfg, metadata_cfg, None)
+        run_fn = getattr(trainer, "run", None)
+        if not callable(run_fn):
+            raise RuntimeError("trainer missing run()")
+        run_fn()
+
+    commands._execute_training = _fake_execute_training
+    try:
+        result = commands.run_train_impl(
+            "exp", cfg, Path("config"), metadata, deps, DummyEngine()
+        )
+    finally:
+        commands._execute_training = original_execute_training
 
     assert result.success is False
     assert result.learning_info is not None
@@ -386,7 +455,7 @@ def test_run_train_impl_learning(tmp_path: Path) -> None:
     def trainer_factory(
         cfg: TrainerConfig,
         metadata: MetadataConfigLike,
-        trainer_deps: TrainerDependencies | None = None,
+        trainer_deps: object | None = None,
     ) -> Any:  # type: ignore[type-arg]
         return SimpleNamespace(run=lambda: (0, 0.0))
 
@@ -401,11 +470,31 @@ def test_run_train_impl_learning(tmp_path: Path) -> None:
     )
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
-    result = commands.run_train_impl(
-        "exp", cfg, Path("config"), metadata, deps, DummyEngine()
-    )
+    original_execute_training = commands._execute_training
 
-    assert result.success is True
+    def _fake_execute_training(
+        train_cfg: TrainerConfig,
+        metadata_cfg: MetadataConfig | None,
+        trainer_factory_fn: object | None,
+    ) -> None:
+        _ = train_cfg
+        if metadata_cfg is None or not callable(trainer_factory_fn):
+            raise RuntimeError("invalid training setup")
+        trainer = trainer_factory_fn(cfg, metadata_cfg, None)
+        run_fn = getattr(trainer, "run", None)
+        if not callable(run_fn):
+            raise RuntimeError("trainer missing run()")
+        run_fn()
+
+    commands._execute_training = _fake_execute_training
+    try:
+        result = commands.run_train_impl(
+            "exp", cfg, Path("config"), metadata, deps, DummyEngine()
+        )
+    finally:
+        commands._execute_training = original_execute_training
+
+    assert result.success is True, result.stderr
     assert result.learning_info is not None
     assert result.learning_info.explanations == ["train"]
 
@@ -531,12 +620,44 @@ def test_main_global_options_handles_bad_ctx() -> None:
 
 
 def test_main_no_subcommand_shows_help() -> None:
-    runner = CliRunner()
     import ml_playground.runtime_cli.main as cli_mod
+    import click
 
-    result = runner.invoke(cli_mod.app, [])
-    assert result.exit_code == 2
-    assert "Usage:" in result.output
+    ctx = typer.Context(cli_mod.get_command(cli_mod.app))
+    ctx.obj = {}
+
+    class _FakeClickContext:
+        invoked_subcommand: str | None = None
+
+        @staticmethod
+        def get_help() -> str:
+            return "Usage: cli [OPTIONS] COMMAND [ARGS]..."
+
+    echoed: list[str] = []
+    original_get_current_context = click.get_current_context
+    original_echo = typer.echo
+
+    def _fake_get_current_context(*, silent: bool = True) -> _FakeClickContext:
+        _ = silent
+        return _FakeClickContext()
+
+    def _fake_echo(message: object = "", *, err: bool = False) -> None:
+        _ = err
+        echoed.append(str(message))
+
+    click.get_current_context = _fake_get_current_context
+    typer.echo = _fake_echo
+    try:
+        with pytest.raises(typer.Exit) as excinfo:
+            cli_mod._apply_global_options(
+                ctx, exp_config=None, learning_mode=False, verbosity=1
+            )
+    finally:
+        click.get_current_context = original_get_current_context
+        typer.echo = original_echo
+
+    assert excinfo.value.exit_code == 2
+    assert any("Usage:" in message for message in echoed)
 
 
 def test_helpers_run_or_exit_runtime_error() -> None:
@@ -546,13 +667,20 @@ def test_helpers_run_or_exit_runtime_error() -> None:
 
 
 def test_commands_run_analyze_exception() -> None:
-    # Use a mock logger that raises an exception to verify error handling in run_analyze
-    # (Analysis currently supported only for bundestag_char)
-    result = commands.run_analyze("bundestag_char", "127.0.0.1", 8050, True)
-    # The current placeholder implementation doesn't easily trigger an exception
-    # without deeper mocking of logging, but we verify it works.
-    assert result.success is True
-    assert "Analysis placeholder executed" in result.stdout
+    def _raising_runner(
+        _host: str | None, _port: int, _open_browser: bool, _logger: Any
+    ) -> None:
+        raise RuntimeError("boom")
+
+    result = commands.run_analyze(
+        "bundestag_char",
+        "127.0.0.1",
+        8050,
+        True,
+        analyze_runner=_raising_runner,
+    )
+    assert result.success is False
+    assert "Analysis failed: boom" in (result.stderr or "")
 
 
 def test_extract_exp_config_handles_context(tmp_path: Path) -> None:

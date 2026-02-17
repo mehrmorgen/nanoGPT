@@ -11,6 +11,15 @@ from ..core.learning_mode import LearningModeEngine, VerbosityLevel
 from ..utils.subprocess_utils import SubprocessRunner
 
 
+def _regression_env(config: ToolsConfig) -> dict[str, str]:
+    """Return env overrides for stable regression xdist execution."""
+    workers = config.testing.parallel_workers
+    if workers <= 0:
+        # `-n auto` with very high core counts can stall xdist startup on local Macs.
+        workers = 4
+    return {"PYTEST_XDIST_AUTO_NUM_WORKERS": str(workers)}
+
+
 def run_unit(
     config: ToolsConfig,
     root_path: Path,
@@ -82,6 +91,7 @@ def run_regression(
     result = subprocess_runner.run_pytest_command(
         ["tests/regression", *args],
         cwd=root_path,
+        env=_regression_env(config),
         timeout=config.testing.timeout,
         operation_id=operation_id,
     )

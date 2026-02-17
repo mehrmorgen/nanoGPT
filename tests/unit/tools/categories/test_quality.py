@@ -9,6 +9,7 @@ import pytest
 import ml_playground.tools.quality.quality as quality_module
 import ml_playground.tools.core.config as config_module
 from ml_playground.tools.core.config import ToolsConfig
+from ml_playground.tools.core.errors import ToolExecutionError
 from ml_playground.tools.core.interfaces import OperationId
 from tests.unit.tools.fakes import (
     FakeSubprocessRunner,
@@ -318,6 +319,22 @@ class TestBasedPyright:
         assert result.learning_info.commands_executed
 
 
+class TestMypyGuard:
+    def test_fails_fast_on_unreadable_stub_probe(
+        self, quality_tools, subprocess_runner
+    ):
+        probe = (
+            quality_tools._root_path
+            / ".venv/lib/python3.13/site-packages/psutil-stubs/py.typed"
+        )
+        probe.mkdir(parents=True)
+
+        with pytest.raises(ToolExecutionError):
+            quality_tools.mypy([])
+
+        assert subprocess_runner.calls == []
+
+
 class TestMypy:
     def test_success(self, quality_tools, subprocess_runner):
         operation_id = OperationId(
@@ -340,6 +357,20 @@ class TestMypy:
         result = quality_tools.mypy([], learning_mode=True, verbosity_level=1)
 
         assert result.learning_info.commands_executed
+
+    def test_custom_targets_override_default_package(
+        self, quality_tools, subprocess_runner
+    ):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="mypy"
+        )
+        subprocess_runner.set_results([create_success_result(operation_id)])
+
+        quality_tools.mypy(["src/ml_playground/runtime_cli/main.py"])
+
+        command = subprocess_runner.calls[0]["command"]
+        assert "src/ml_playground/runtime_cli/main.py" in command
+        assert str(quality_tools._pkg_path) not in command
 
 
 class TestAllChecks:

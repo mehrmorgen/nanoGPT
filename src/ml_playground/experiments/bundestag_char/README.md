@@ -8,62 +8,68 @@
 
 </details>
 
-Character-level language modeling on Bundestag speeches with a simple vocabulary built from dataset characters.
+Character-level language modeling on Bundestag speeches serialized from GermaParlTEI.
 
 ## Overview
 
-- Dataset: GermaParlTEI by default (with local seed fallback in `auto` mode)
-- Encoding: Per-character IDs (uint16)
-- Method: Classic NanoGPT-style training (strict TOML config)
-- Pipeline: prepare → train → sample via ml_playground CLI
+- Dataset source: GermaParlTEI only (`PolMine/GermaParlTEI`)
+- Encoding: per-character IDs (`uint16`)
+- Pipeline: `prepare -> train -> sample -> analyze`
+- Runtime model/training settings are injected from TOML by the CLI
 
-## Data
+## Data Preparation Contract
 
-- Input: `src/ml_playground/experiments/bundestag_char/datasets/input.txt`
-  - `prepare.extras.dataset_source = "germaparl_tei"` downloads and serializes TEI XML into rich tagged lines.
-  - `prepare.extras.dataset_source = "seed"` reads local seed files only.
-  - `prepare.extras.dataset_source = "auto"` prefers local seed and falls back to GermaParlTEI.
-- Outputs (prepared):
-  - train.bin, val.bin (uint16 arrays)
-  - meta.pkl (vocab metadata with stoi/itos, vocab_size)
+`prepare bundestag_char` always performs a remote-head freshness check before deciding skip vs rebuild.
 
-## Method/Model
+- Remote head SHA is resolved for `germaparl_repo@germaparl_ref`
+- If prepared artifacts are valid and `meta.pkl` stores the same `source_head_sha`, preparation is skipped
+- If the source head changed (or artifacts are stale), overwrite confirmation is required
+- If confirmation is declined, preparation aborts without mutating existing artifacts
 
-- Build vocabulary from unique characters in the corpus
-- Encode train/val splits (default 90/10, override via `prepare.extras.split`) into uint16 arrays
-- Model architecture and training hyperparameters are specified in TOML
-- TensorBoard logging at out_dir/logs/tb
-  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
+### Stored raw artifacts
 
-## Environment Setup (UV-only)
+- Cached source archive: `src/ml_playground/experiments/bundestag_char/raw/germaparl_cache/*.tar.gz`
+- No persistent extracted XML tree is kept
+- Canonical prepared text: `src/ml_playground/experiments/bundestag_char/datasets/input.txt`
+
+## Prepared Outputs
+
+- `input.txt` (serialized corpus text)
+- `train.bin`, `val.bin` (`uint16` token IDs)
+- `meta.pkl` with minimal contract:
+  - `meta_version`
+  - `tokenizer_type`, `tokenizer`
+  - `vocab_size`, `stoi`, `itos`
+  - `train_tokens`, `val_tokens`
+  - `source_head_sha`, `source_repo`, `source_ref`
+
+## Configuration Highlights
+
+Example config: `src/ml_playground/experiments/bundestag_char/config.toml`
+
+`[prepare.extras]` supports only:
+
+- `dataset_dir_override`
+- `germaparl_repo`
+- `germaparl_ref`
+- `germaparl_cache_dir`
+- `germaparl_include_stage`
+- `germaparl_include_speaker_attrs`
+- `split`
+
+## How to Run
+
+Environment setup:
 
 ```bash
 uv run tools env setup
 uv run tools env verify
 ```
 
-## Strict configuration injection
-
-- This experiment does not read TOML directly. The CLI loads and validates the TOML and injects config objects into the experiment code.
-
-## How to Run
-
-- Config example: src/ml_playground/experiments/bundestag_char/config.toml
-
 Prepare:
 
 ```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml prepare bundestag_char
-```
-
-GermaParlTEI options (under `[prepare.extras]`):
-
-```toml
-dataset_source = "germaparl_tei"
-germaparl_repo = "PolMine/GermaParlTEI"
-germaparl_ref = "main"
-germaparl_include_stage = true
-germaparl_include_speaker_attrs = true
 ```
 
 Train:
@@ -78,74 +84,49 @@ Sample:
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml sample bundestag_char
 ```
 
-## Configuration Highlights
+Analyze:
 
-- `[training.data]`
-  - `dataset_dir` = "src/ml_playground/experiments/bundestag_char/datasets"
-  - `train_bin` = "train.bin", `val_bin` = "val.bin", `meta_pkl` = "meta.pkl"
-  - `batch_size`, `block_size`, `grad_accum_steps`
-- `[training.runtime]`
-  - `out_dir` = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
-  - `device` = "cpu" (or "mps"/"cuda" if available), `dtype` = "float32"
-- `[sampling.runtime]`
-  - `out_dir` should match `[training.runtime].out_dir`
-- `[sampling.sample]`
-  - `start` prompt text, `num_samples`, `max_new_tokens`
+```bash
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml analyze bundestag_char
+```
 
-## Outputs
+Analyze behavior:
 
-- Data artifacts: src/ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
-- Training: out_dir contains rotated checkpoints only, e.g.:
-  - ckpt_last_XXXXXXXX.pt
-  - `ckpt_best_XXXXXXXX_<metric>.pt`
-  - logs/tb
+- Uses TensorBoard UI when event files exist under `out/logs/tb`
+- Falls back to LIT demo UI for `bundestag_char` if no TensorBoard event files are available
 
-## Folder structure
+## Progress Logging
+
+Prepare logs progress for:
+
+- archive download size milestones
+- TEI file serialization progress
+- vocabulary scan and encoding progress
+- final token/accounting summary
+
+## Licensing Note
+
+GermaParlTEI is distributed under CLARIN PUB+BY+NC+SA.
+
+- https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/README.md
+- https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/LICENSE.md
+
+Do not commit downloaded corpus files or generated dataset artifacts.
+
+## Folder Structure
 
 ```bash
 src/ml_playground/experiments/bundestag_char/
 ├── README.md        # experiment documentation (this file)
 ├── config.toml      # sample/preset config for real runs
 ├── test_config.toml # tiny defaults for tests
-├── preparer.py      # dataset preparation (char vocab, encode, write bins/meta)
-├── trainer.py       # NanoGPT-style training orchestration
-├── sampler.py       # generation/sampling entrypoints
-├── ollama_export.py # GGUF/Ollama export helper for this experiment
-├── datasets/        # prepared dataset artifacts written here
-└── export/          # export artifacts directory (e.g., GGUF)
+├── extras.py        # strict extras schemas for prepare/train/sample
+├── germaparl_tei.py # GermaParl remote-head, archive, and TEI serialization helpers
+├── preparer.py      # GermaParl-only preparer with freshness + overwrite guard
+├── trainer.py       # training orchestration
+├── sampler.py       # sampling orchestration
+├── ollama_export.py # GGUF/Ollama export helper
+├── datasets/        # prepared outputs (ignored)
+├── raw/             # cached source archives (ignored)
+└── out/             # runtime outputs (ignored)
 ```
-
-## Troubleshooting
-
-- If sampling fails with a missing `meta.pkl`, ensure it exists at `[training.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sampling.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
-- Ensure your input text is UTF-8 encoded.
-- Full GermaParlTEI ingestion is large and can take significant time. The preparer uses a streaming char encoder to avoid loading the full corpus into memory.
-
-## Licensing Note
-
-- GermaParlTEI is distributed under CLARIN PUB+BY+NC+SA. See:
-  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/README.md
-  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/LICENSE.md
-- Do not commit downloaded corpus files or generated dataset artifacts.
-
-## Word Tokenizer Option
-
-- This experiment now supports a word-level tokenizer in addition to char/n-gram.
-- To enable, set in config under `[training.data]`:
-
-```toml
-# Tokenizer selection: "char" (default) or "word"
-tokenizer = "word"
-# ngram_size is ignored when tokenizer="word"
-```
-
-- Sampling and training automatically use the dataset's meta.pkl; decoding joins tokens with a single space.
-
-## Checklist
-
-- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
-- Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
-- Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

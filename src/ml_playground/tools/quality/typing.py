@@ -9,6 +9,7 @@ from ..core.config import ToolsConfig
 from ..core.interfaces import OperationId, ToolResult
 from ..core.learning_mode import LearningModeEngine, VerbosityLevel
 from ..utils.subprocess_utils import SubprocessRunner
+from .mypy_guard import ensure_mypy_runtime_ready
 
 
 def run_basedpyright(
@@ -94,9 +95,13 @@ def run_mypy(
     """
     operation_id = OperationId(namespace="tools", category="quality", command="mypy")
 
-    mypy_args = ["mypy", "--incremental", str(pkg_path)]
+    ensure_mypy_runtime_ready(root_path)
+
+    mypy_args = ["mypy", "--incremental"]
     if args:
         mypy_args.extend(args)
+    else:
+        mypy_args.append(str(pkg_path))
 
     result = subprocess_runner.run_uv_command(
         mypy_args,

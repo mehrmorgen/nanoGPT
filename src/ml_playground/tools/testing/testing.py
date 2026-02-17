@@ -28,6 +28,15 @@ from .services.mutation_service import (
 )
 
 
+def _regression_env(config: ToolsConfig) -> dict[str, str]:
+    """Return env overrides for stable regression xdist execution."""
+    workers = config.testing.parallel_workers
+    if workers <= 0:
+        # `-n auto` with very high core counts can stall xdist startup on local Macs.
+        workers = 4
+    return {"PYTEST_XDIST_AUTO_NUM_WORKERS": str(workers)}
+
+
 def run_unit(
     *,
     config: ToolsConfig,
@@ -607,6 +616,7 @@ class TestingTools:
         result = self._subprocess_runner.run_pytest_command(
             ["tests/regression", *args],
             cwd=self._root_path,
+            env=_regression_env(self._config),
             timeout=self._config.testing.timeout,
             operation_id=operation_id,
         )
@@ -859,7 +869,6 @@ class TestingTools:
                 "pytest",
                 "-n",
                 "0",  # No parallel execution for coverage
-                "-v",
                 "tests/unit",
                 "tests/property",
             ],

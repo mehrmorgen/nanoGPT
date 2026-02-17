@@ -15,14 +15,11 @@ tokenizer_type = "char"
 doc_separator = "\n\n"
 
 [prepare.extras]
-# Source strategy: "auto" (prefer local seed, fallback to GermaParlTEI),
-# "seed" (local files only), or "germaparl_tei" (force remote corpus ingest).
-dataset_source = "germaparl_tei"
+# GermaParlTEI source (mandatory for this experiment).
 germaparl_repo = "PolMine/GermaParlTEI"
 germaparl_ref = "main"
 germaparl_include_stage = true
 germaparl_include_speaker_attrs = true
-germaparl_force_refresh = false
 
 [training.model]
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS

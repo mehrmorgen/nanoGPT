@@ -160,7 +160,7 @@ files = [
     "src/ml_playground",
 ]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
- exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
+exclude = '(^|.*/)(out/|data/|raw/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
 explicit_package_bases = true
 mypy_path = ["src", "tests"]
@@ -179,6 +179,24 @@ pythonVersion = "3.13"
 # Global defaults: standard. Execution environments below set src to strict and keep tests standard.
 typeCheckingMode = "standard"
 stubPath = "typings"
+include = ["src", "tests"]
+exclude = [
+    "**/__pycache__",
+    ".git",
+    ".venv",
+    ".cache",
+    "out",
+    "data",
+    "raw",
+    "datasets",
+    "checkpoints",
+    "runs",
+    "wandb",
+    "lightning_logs",
+    "artifacts",
+    "mlruns",
+    "htmlcov",
+]
 
 [[tool.basedpyright.executionEnvironments]]
 root = "src"
@@ -204,6 +222,7 @@ norecursedirs = [
     "env",
     "out",
     "data",
+    "raw",
     "datasets",
     "checkpoints",
     "runs",

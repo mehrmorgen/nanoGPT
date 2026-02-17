@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Callable, Optional
 
-import torch
-
 from ml_playground.framework.runtime.device import (
     global_device_setup as _framework_device_setup,
 )
@@ -25,12 +23,18 @@ def global_device_setup(
     Delegates to the runtime.device implementation to keep CLI and runtime aligned.
     """
     try:
+        resolved_torch_module: object
+        if torch_module is None:
+            import torch as resolved_torch_module
+        else:
+            resolved_torch_module = torch_module
+
         _framework_device_setup(
             device,
             dtype,
             seed,
             cuda_is_available=cuda_is_available,
-            torch_module=torch_module if torch_module is not None else torch,
+            torch_module=resolved_torch_module,
         )
     except Exception:
         # Runtime CLI must not crash due to environment- or torch-specific issues.

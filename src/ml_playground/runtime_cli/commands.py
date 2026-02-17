@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
-from typing import cast, Any
+import time
+from typing import TYPE_CHECKING, Any, Callable, cast
+import webbrowser
 
 import typer
 
+from ml_playground.framework.analysis.lit.integration import run_server_bundestag_char
 from ml_playground.framework.configuration.models import (
     MetadataConfig,
     PreparerConfig,
@@ -19,16 +22,12 @@ from ml_playground.framework.runtime.core.bootstrap import (
 )
 from ml_playground.framework.runtime.core.results import LearningModeEngine, ToolResult
 from ml_playground.framework.runtime.helpers import handle_tool_result
-from ml_playground.framework.sampling.api import (
-    SamplerFactory,
-    SamplingPlan,
-    run_sampling,
-)
-from ml_playground.framework.training.api import (
-    TrainerFactory,
-    TrainingPlan,
-    run_training,
-)
+
+if TYPE_CHECKING:
+    from ml_playground.framework.sampling.api import SamplerFactory
+    from ml_playground.framework.training.api import TrainerFactory
+
+_PREPARE_OVERWRITE_CONFIRM_EXTRA = "overwrite_confirm"
 
 __all__ = [
     "handle_tool_result",
@@ -116,6 +115,7 @@ def run_prepare_impl(
 
         if deps is None:
             deps = get_cli_dependencies()
+        _inject_prepare_overwrite_confirm(prepare_cfg, deps)
 
         preparer = _resolve_experiment_preparer(experiment)
         if preparer is not None:
@@ -179,6 +179,21 @@ def run_prepare_impl(
         )
 
 
+def _inject_prepare_overwrite_confirm(
+    prepare_cfg: PreparerConfig,
+    deps: CLIDependencies,
+) -> None:
+    extras_obj = getattr(prepare_cfg, "extras", None)
+    if not isinstance(extras_obj, dict):
+        return
+
+    confirm_fn = getattr(deps, "confirm_fn", None)
+    if callable(confirm_fn):
+        extras_obj[_PREPARE_OVERWRITE_CONFIRM_EXTRA] = confirm_fn
+    else:
+        extras_obj.pop(_PREPARE_OVERWRITE_CONFIRM_EXTRA, None)
+
+
 def _resolve_experiment_preparer(
     experiment: str, *, import_fn: Any = import_module
 ) -> object | None:
@@ -206,6 +221,36 @@ def _missing_runtime_message(category: str) -> str:
     if category == "sample":
         return "Runtime configuration is missing for sampling."
     return "Runtime configuration is missing."
+
+
+def _execute_training(
+    train_cfg: TrainerConfig,
+    metadata_cfg: MetadataConfig | None,
+    trainer_factory: TrainerFactory | None,
+) -> None:
+    from ml_playground.framework.training.api import TrainingPlan, run_training
+
+    plan = TrainingPlan(
+        config=train_cfg,
+        metadata=metadata_cfg,
+        trainer_factory=trainer_factory,
+    )
+    run_training(plan)
+
+
+def _execute_sampling(
+    sample_cfg: SamplerConfig,
+    metadata_cfg: MetadataConfig | None,
+    sampler_factory: SamplerFactory | None,
+) -> None:
+    from ml_playground.framework.sampling.api import SamplingPlan, run_sampling
+
+    plan = SamplingPlan(
+        config=sample_cfg,
+        metadata=metadata_cfg,
+        sampler_factory=sampler_factory,
+    )
+    run_sampling(plan)
 
 
 def run_train_impl(
@@ -263,13 +308,12 @@ def run_train_impl(
         if deps_trainer_factory is not None:
             if not callable(deps_trainer_factory):
                 raise RuntimeError("Trainer factory dependency is not callable")
-            trainer_factory_value = cast(TrainerFactory, deps_trainer_factory)
-        plan = TrainingPlan(
-            config=train_cfg,
-            metadata=_coerce_metadata_config(metadata),
-            trainer_factory=trainer_factory_value,
+            trainer_factory_value = cast(Any, deps_trainer_factory)
+        _execute_training(
+            train_cfg,
+            _coerce_metadata_config(metadata),
+            trainer_factory_value,
         )
-        run_training(plan)
 
         train_cfg.logger.info(f"Trainer for {experiment} finished.")
         deps_log_command_status(
@@ -370,13 +414,12 @@ def run_sample_impl(
             sample_cfg.logger,
         )
 
-        sampler_factory_value = cast(SamplerFactory, deps_sampler_factory)
-        plan = SamplingPlan(
-            config=sample_cfg,
-            metadata=_coerce_metadata_config(metadata),
-            sampler_factory=sampler_factory_value,
+        sampler_factory_value = cast(Any, deps_sampler_factory)
+        _execute_sampling(
+            sample_cfg,
+            _coerce_metadata_config(metadata),
+            sampler_factory_value,
         )
-        run_sampling(plan)
 
         sample_cfg.logger.info(f"Sampler for {experiment} finished.")
         deps_log_command_status(
@@ -470,31 +513,57 @@ def run_analyze(
     port: int,
     open_browser: bool,
     learning_mode_engine: LearningModeEngine | None = None,
+    *,
+    metadata: object | None = None,
+    exp_config_path: Path | None = None,
+    analyze_runner: (
+        Callable[[str | None, int, bool, LoggerLike | None], None] | None
+    ) = None,
 ) -> ToolResult:
-    """Run analysis for an experiment (bundestag_char only)."""
-    try:
-        if experiment != "bundestag_char":
-            return ToolResult.create(
-                success=False,
-                exit_code=1,
-                namespace="ml",
-                category="analyze",
-                command=experiment,
-                stderr=f"analyze currently supports only 'bundestag_char', got: {experiment}",
-            )
+    """Run analysis UI for an experiment.
 
+    Prefers TensorBoard event-data visualization (`out/logs/tb`) when available.
+    Falls back to the LIT demo server for `bundestag_char` if no event files exist.
+    """
+    try:
         import logging as cli_logging
 
         pkg_name = "ml_playground.runtime_cli"
-
-        raw_logger = cli_logging.getLogger(pkg_name)
-        raw_logger.info(
-            "Analysis for '%s' not implemented. Host=%s, Port=%s, Open=%s",
-            experiment,
-            host,
-            port,
-            open_browser,
-        )
+        logger = cli_logging.getLogger(pkg_name)
+        if analyze_runner is not None:
+            analyze_runner(host, port, open_browser, logger)
+        else:
+            tb_logdir = _resolve_tensorboard_logdir(
+                experiment, metadata=metadata, exp_config_path=exp_config_path
+            )
+            has_event_files = tb_logdir.exists() and any(
+                tb_logdir.rglob("events.out.tfevents.*")
+            )
+            if has_event_files:
+                logger.info(
+                    "Launching TensorBoard for '%s' from %s on %s:%s (open_browser=%s)",
+                    experiment,
+                    tb_logdir,
+                    host,
+                    port,
+                    open_browser,
+                )
+                _run_tensorboard_server(tb_logdir, host, port, open_browser, logger)
+            elif experiment == "bundestag_char":
+                logger.info(
+                    "No TensorBoard event files found at %s. Falling back to LIT for '%s' on %s:%s (open_browser=%s)",
+                    tb_logdir,
+                    experiment,
+                    host,
+                    port,
+                    open_browser,
+                )
+                run_server_bundestag_char(host, port, open_browser, logger)
+            else:
+                raise RuntimeError(
+                    f"No TensorBoard event files found for '{experiment}' at {tb_logdir}. "
+                    "Run training first or provide event files under out/logs/tb."
+                )
 
         learning_info = None
         if learning_mode_engine:
@@ -511,9 +580,7 @@ def run_analyze(
             namespace="ml",
             category="analyze",
             command=experiment,
-            stdout=(
-                f"Analysis placeholder executed for {experiment} (Host={host}, Port={port}, Open={open_browser})"
-            ),
+            stdout=f"Analysis completed for {experiment}",
             learning_info=learning_info,
         )
     except Exception as e:
@@ -525,3 +592,43 @@ def run_analyze(
             command=experiment,
             stderr=f"Analysis failed: {e}",
         )
+
+
+def _resolve_tensorboard_logdir(
+    experiment: str,
+    *,
+    metadata: object | None,
+    exp_config_path: Path | None,
+) -> Path:
+    train_out_dir = getattr(metadata, "train_out_dir", None)
+    if isinstance(train_out_dir, Path):
+        return train_out_dir / "logs" / "tb"
+    if exp_config_path is not None:
+        return exp_config_path.parent / "out" / "logs" / "tb"
+    exp_base = Path(__file__).resolve().parents[1] / "experiments" / experiment
+    return exp_base / "out" / "logs" / "tb"
+
+
+def _run_tensorboard_server(
+    logdir: Path, host: str, port: int, open_browser: bool, logger: LoggerLike
+) -> None:
+    from tensorboard import program as tb_program
+
+    tb = tb_program.TensorBoard()
+    tb.configure(
+        argv=[
+            None,
+            "--logdir",
+            str(logdir),
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+    )
+    url = tb.launch()
+    logger.info("TensorBoard running at %s", url)
+    if open_browser:
+        webbrowser.open(url)
+    while True:
+        time.sleep(1)

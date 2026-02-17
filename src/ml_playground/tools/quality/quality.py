@@ -9,6 +9,7 @@ from ml_playground.tools.core.config import ToolsConfig
 from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, DEFAULT_RUNNER
+from ml_playground.tools.quality.mypy_guard import ensure_mypy_runtime_ready
 
 
 class QualityTools:
@@ -257,9 +258,13 @@ class QualityTools:
             namespace="tools", category=self.category, command="mypy"
         )
 
-        mypy_args = ["mypy", "--incremental", str(self._pkg_path)]
+        ensure_mypy_runtime_ready(self._root_path)
+
+        mypy_args = ["mypy", "--incremental"]
         if args:
             mypy_args.extend(args)
+        else:
+            mypy_args.append(str(self._pkg_path))
 
         result = self._subprocess_runner.run_uv_command(
             mypy_args,

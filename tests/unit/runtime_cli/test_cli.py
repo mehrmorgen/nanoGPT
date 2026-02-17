@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast, TYPE_CHECKING, Generator
 
-import torch
 import pytest
 from typer.testing import CliRunner
 
@@ -290,24 +289,31 @@ def test_cli_train_impl_success(tmp_path: Path) -> None:
     runtime = SimpleNamespace(device="cpu", dtype="float32", seed=42)
     train_cfg = SimpleNamespace(runtime=runtime, logger=FakeLogger())
 
-    # We need to mock CoreTrainer to avoid actual training
-
-    class MockTrainer:
-        def __init__(self, cfg: Any, metadata: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            pass
-
     mock_deps = CLIDependencies(
         global_device_setup=lambda *_: None,
         log_command_status=lambda *_: None,
         trainer_factory=lambda *_: None,
     )
-    # run_train_impl calls global_device_setup and log_command_status
-    cli_commands.run_train_impl(
-        "demo", cast(Any, train_cfg), Path("unused"), cast(Any, metadata), mock_deps
-    )
+    original_execute_training = cli_commands._execute_training
+
+    def _fake_execute_training(
+        train_cfg_in: TrainerConfig,
+        metadata_cfg: MetadataConfig | None,
+        trainer_factory: object | None,
+    ) -> None:
+        _ = train_cfg_in, metadata_cfg, trainer_factory
+        return None
+
+    cli_commands._execute_training = _fake_execute_training
+    try:
+        # run_train_impl calls global_device_setup and log_command_status
+        result = cli_commands.run_train_impl(
+            "demo", cast(Any, train_cfg), Path("unused"), cast(Any, metadata), mock_deps
+        )
+    finally:
+        cli_commands._execute_training = original_execute_training
+
+    assert result.success is True
 
 
 def test_cli_sample_impl_success(tmp_path: Path) -> None:
@@ -325,21 +331,34 @@ def test_cli_sample_impl_success(tmp_path: Path) -> None:
         runtime=runtime, logger=FakeLogger(), sample=SimpleNamespace(num_samples=1)
     )
 
-    class MockSampler:
-        def __init__(self, cfg: Any, metadata: Any) -> None:
-            pass
-
-        def run(self) -> None:
-            pass
-
     mock_deps = CLIDependencies(
         global_device_setup=lambda *_: None,
         log_command_status=lambda *_: None,
         sampler_factory=lambda *_: None,
     )
-    cli_commands.run_sample_impl(
-        "demo", cast(Any, sample_cfg), Path("unused"), cast(Any, metadata), mock_deps
-    )
+    original_execute_sampling = cli_commands._execute_sampling
+
+    def _fake_execute_sampling(
+        sample_cfg_in: SamplerConfig,
+        metadata_cfg: MetadataConfig | None,
+        sampler_factory: object | None,
+    ) -> None:
+        _ = sample_cfg_in, metadata_cfg, sampler_factory
+        return None
+
+    cli_commands._execute_sampling = _fake_execute_sampling
+    try:
+        result = cli_commands.run_sample_impl(
+            "demo",
+            cast(Any, sample_cfg),
+            Path("unused"),
+            cast(Any, metadata),
+            mock_deps,
+        )
+    finally:
+        cli_commands._execute_sampling = original_execute_sampling
+
+    assert result.success is True
 
 
 def test_global_options_config_not_found() -> None:
@@ -436,24 +455,29 @@ def test_log_command_status_exception_swallow(caplog: Any) -> None:
 
 def test_global_device_setup_torch_errors() -> None:
     # Test that _global_device_setup swallows torch-related errors
-    orig_manual_seed = torch.manual_seed
-
     def _fail_seed(s: int) -> Any:
+        _ = s
         raise RuntimeError("torch fail")
 
-    try:
-        torch.manual_seed = _fail_seed  # type: ignore
-        cli_device.global_device_setup("cpu", "float32", 42)
-        # Should not raise
-    finally:
-        torch.manual_seed = orig_manual_seed
+    fake_torch = SimpleNamespace(
+        manual_seed=_fail_seed,
+        cuda=SimpleNamespace(
+            manual_seed=lambda _seed: None, is_available=lambda: False
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+            cudnn=SimpleNamespace(allow_tf32=False),
+        ),
+    )
+    cli_device.global_device_setup("cpu", "float32", 42, torch_module=fake_torch)
+    # Should not raise
 
 
 def test_run_analyze_unsupported() -> None:
     result = cli_commands.run_analyze("not_bundestag", "127.0.0.1", 8050, True)
     assert result.success is False
     assert result.exit_code == 1
-    assert "bundestag_char" in result.stderr
+    assert "No TensorBoard event files found" in (result.stderr or "")
 
 
 def test_run_prepare_internal(tmp_path: Path) -> None:
@@ -518,26 +542,35 @@ def test_run_sample_internal_missing_runtime() -> None:
 
 def test_global_device_setup_cuda_path() -> None:
     # Test the branch where _cuda_available is True
-    orig_manual_seed = torch.manual_seed
-    orig_cuda_manual_seed = torch.cuda.manual_seed
-    # We don't mock allow_tf32 directly to avoid deprecation warnings or implementation issues
-    # instead we just mock the seeds which is the primary side effect.
+    seed_calls: list[int] = []
+    cuda_seed_calls: list[int] = []
+    matmul = SimpleNamespace(allow_tf32=False)
+    cudnn = SimpleNamespace(allow_tf32=False)
 
-    try:
-        torch.manual_seed = lambda _: None  # type: ignore
-        torch.cuda.manual_seed = lambda _: None  # type: ignore
+    fake_torch = SimpleNamespace(
+        manual_seed=lambda seed: seed_calls.append(seed),
+        cuda=SimpleNamespace(
+            manual_seed=lambda seed: cuda_seed_calls.append(seed),
+            is_available=lambda: True,
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=matmul),
+            cudnn=cudnn,
+        ),
+    )
 
-        # Filter the deprecation warning from torch regarding TF32
-        import warnings
+    cli_device.global_device_setup(
+        "cuda",
+        "float16",
+        42,
+        cuda_is_available=lambda: True,
+        torch_module=fake_torch,
+    )
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning, message=".*TF32.*")
-            cli_device.global_device_setup(
-                "cuda", "float16", 42, cuda_is_available=lambda: True
-            )
-    finally:
-        torch.manual_seed = orig_manual_seed
-        torch.cuda.manual_seed = orig_cuda_manual_seed
+    assert seed_calls == [42]
+    assert cuda_seed_calls == [42]
+    assert matmul.allow_tf32 is True
+    assert cudnn.allow_tf32 is True
 
 
 def test_main_startup() -> None:
@@ -636,11 +669,24 @@ def test_cli_sample_cmd_full(tmp_path: Path) -> None:
 
 
 def test_run_analyze_success() -> None:
-    # Test success path for bundestag_char
-    result = cli_commands.run_analyze("bundestag_char", "1.2.3.4", 8888, True)
+    calls: list[tuple[str | None, int, bool]] = []
+
+    def _fake_analyze_runner(
+        host: str | None, port: int, open_browser: bool, _logger: Any
+    ) -> None:
+        calls.append((host, port, open_browser))
+
+    result = cli_commands.run_analyze(
+        "bundestag_char",
+        "1.2.3.4",
+        8888,
+        True,
+        analyze_runner=_fake_analyze_runner,
+    )
     assert result.success is True
     assert result.exit_code == 0
-    assert "Analysis placeholder" in result.stdout
+    assert result.stdout == "Analysis completed for bundestag_char"
+    assert calls == [("1.2.3.4", 8888, True)]
 
 
 def test_cli_analyze_command_success(tmp_path: Path) -> None:
@@ -652,10 +698,25 @@ def test_cli_analyze_command_success(tmp_path: Path) -> None:
         port: int,
         open_browser: bool,
         learning_engine: Any = None,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = host, port, open_browser, learning_engine, metadata, exp_config_path
         return _ok_result("analyze", experiment)
 
+    metadata = MetadataConfig(
+        experiment="bundestag_char",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "dataset",
+        config_path=tmp_path / "config.toml",
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+    exp = SimpleNamespace(metadata=metadata)
+
     deps = CLIDependencies(
+        load_experiment=lambda *_: exp,
         run_analyze=_run_analyze,
         handle_tool_result=cli_commands.handle_tool_result,
     )
@@ -679,7 +740,11 @@ def test_cli_analyze_command_learning_mode(tmp_path: Path) -> None:
         port: int,
         open_browser: bool,
         learning_engine: Any = None,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = host, port, open_browser, learning_engine, metadata, exp_config_path
         info = LearningInfo(
             explanations=["expl"], best_practices=[], related_concepts=[]
         )
@@ -692,7 +757,18 @@ def test_cli_analyze_command_learning_mode(tmp_path: Path) -> None:
             learning_info=info,
         )
 
+    metadata = MetadataConfig(
+        experiment="bundestag_char",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "dataset",
+        config_path=tmp_path / "config.toml",
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+    exp = SimpleNamespace(metadata=metadata)
+
     deps = CLIDependencies(
+        load_experiment=lambda *_: exp,
         run_analyze=_run_analyze,
         handle_tool_result=cli_commands.handle_tool_result,
     )
@@ -777,10 +853,10 @@ def test_coerce_metadata_config_invalid() -> None:
 
 
 def test_run_analyze_failure() -> None:
-    # Test unsupported path in run_analyze
+    # Test non-bundestag path without tensorboard data
     result = cli_commands.run_analyze("invalid", "localhost", 0, False)
     assert result.success is False
-    assert "supports only 'bundestag_char'" in result.stderr
+    assert "No TensorBoard event files found" in (result.stderr or "")
 
 
 def test_log_command_status_failure(caplog: Any) -> None:

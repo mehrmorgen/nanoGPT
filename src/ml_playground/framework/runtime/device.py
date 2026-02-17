@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, cast
 
-import torch
-
 
 def global_device_setup(
     device: str,
@@ -17,7 +15,10 @@ def global_device_setup(
 
     Centralizes side-effectful setup so other modules don't repeat it.
     """
-    torch_mod_raw: object = torch_module if torch_module is not None else torch
+    if torch_module is None:
+        import torch as torch_mod_raw
+    else:
+        torch_mod_raw = torch_module
     manual_seed_fn_raw = getattr(torch_mod_raw, "manual_seed", None)
     if callable(manual_seed_fn_raw):
         cast(Callable[[int], object], manual_seed_fn_raw)(seed)

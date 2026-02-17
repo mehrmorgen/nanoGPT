@@ -98,7 +98,6 @@ def run_coverage_test(
             "pytest",
             "-n",
             "0",  # No parallel execution for coverage
-            "-v",
             "tests/unit",
             "tests/property",
         ],

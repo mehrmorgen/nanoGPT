@@ -48,14 +48,7 @@ repos:
         args:
           - run
           - basedpyright
-        language: system
-        pass_filenames: false
-      - id: mypy
-        name: mypy
-        entry: uv
-        args:
-          - run
-          - mypy
+          - src/ml_playground
         language: system
         pass_filenames: false
       - id: vulture
@@ -76,7 +69,6 @@ repos:
           - tools
           - test
           - coverage-threshold
-          - --verbose
         language: system
         pass_filenames: false
       - id: integration-tests
