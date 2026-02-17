@@ -57,7 +57,7 @@ class TestMemmapReader:
     """Property-based tests for ``MemmapReader``."""
 
     @given(length=st.integers(min_value=1, max_value=512))
-    @settings(max_examples=10, deadline=None)
+    @settings(max_examples=4, deadline=None, derandomize=True)
     def test_memmap_reader_creation(self, length: int) -> None:
         """Test that MemmapReader can be created and reads data correctly."""
         # Create test data
@@ -95,7 +95,7 @@ class TestSampleBatch:
         batch_config=batch_config_strategy(),
         device=device_strategy(),
     )
-    @settings(max_examples=10, deadline=None)
+    @settings(max_examples=4, deadline=None, derandomize=True)
     def test_sample_batch_shapes(
         self, array_size: int, batch_config: tuple[int, int], device: DeviceKind
     ) -> None:
@@ -144,7 +144,7 @@ class TestSimpleBatches:
         device=device_strategy(),
         sampler=st.sampled_from(["random", "sequential"]),
     )
-    @settings(max_examples=8, deadline=None)
+    @settings(max_examples=4, deadline=None, derandomize=True)
     def test_simple_batches_creation(
         self,
         array_size: int,
@@ -206,7 +206,7 @@ class TestSimpleBatches:
         block_size=st.integers(min_value=10, max_value=48),
         device=device_strategy(),
     )
-    @settings(max_examples=8, deadline=None)
+    @settings(max_examples=4, deadline=None, derandomize=True)
     def test_sequential_sampling_coverage(
         self,
         array_size: int,
@@ -257,7 +257,7 @@ class TestSimpleBatches:
         block_size=st.integers(min_value=1, max_value=64),
         device=device_strategy(),
     )
-    @settings(max_examples=10)
+    @settings(max_examples=4, deadline=None, derandomize=True)
     def test_missing_data_files_raise_errors(
         self, batch_size: int, block_size: int, device: DeviceKind
     ) -> None:

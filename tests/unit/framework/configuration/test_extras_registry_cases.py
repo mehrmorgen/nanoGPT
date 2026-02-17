@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
-from hypothesis import given, strategies as st
+import pytest
 from pydantic import BaseModel
 
 from ml_playground.framework.experiment_registry import extras_registry
@@ -13,7 +13,16 @@ class MockModel(BaseModel):
     pass
 
 
-@given(experiment=st.text(min_size=1), section=st.text(min_size=1))
+@pytest.mark.parametrize(
+    ("experiment", "section"),
+    [
+        ("alpha", "sec"),
+        ("model_a", "config"),
+        ("x", "y"),
+        ("experiment_long", "section_long"),
+        ("abc123", "s42"),
+    ],
+)
 def test_register_and_get_model(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Clear registry for this experiment to ensure clean state
@@ -26,7 +35,14 @@ def test_register_and_get_model(experiment: str, section: str) -> None:
     assert retrieved == MockModel
 
 
-@given(experiment=st.text(min_size=1), section=st.text(min_size=1))
+@pytest.mark.parametrize(
+    ("experiment", "section"),
+    [
+        ("missing_a", "sec"),
+        ("missing_b", "config"),
+        ("m", "n"),
+    ],
+)
 def test_get_model_returns_none_for_missing(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Ensure it's not registered

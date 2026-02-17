@@ -218,8 +218,10 @@ def _get_coverage_status(
     try:
         testing_tools = TestingTools(config, project_root_path, subprocess_runner)
 
-        coverage_file = project_root_path / ".cache" / "coverage" / "coverage.sqlite"
-        if not coverage_file.exists():
+        coverage_dir = project_root_path / ".cache" / "coverage"
+        coverage_file = coverage_dir / "coverage.json"
+        legacy_coverage_file = coverage_dir / "coverage.sqlite"
+        if not coverage_file.exists() and not legacy_coverage_file.exists():
             return {
                 "status": "not_available",
                 "message": "Run coverage to generate data",

@@ -7,7 +7,7 @@ import pytest
 from ml_playground.framework.configuration.loading import load_full_experiment_config
 from ml_playground.framework.configuration.models import ExperimentConfig
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 EXPERIMENTS_DIR = PROJECT_ROOT / "src" / "ml_playground" / "experiments"
 
 

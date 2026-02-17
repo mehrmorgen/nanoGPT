@@ -39,10 +39,40 @@ class CoverageService:
                 rationale="Coverage JSON must contain totals for reporting metrics",
             ) from exc
 
-        statements = cast(int, totals.get("num_statements", 0))
-        covered_lines = cast(int, totals.get("covered_lines", 0))
-        num_branches = cast(int, totals.get("num_branches", 0))
-        covered_branches = cast(int, totals.get("covered_branches", 0))
+        statements_obj = totals.get("num_statements", 0)
+        covered_lines_obj = totals.get("covered_lines", 0)
+        missing_lines_obj = totals.get("missing_lines", 0)
+        num_branches_obj = totals.get("num_branches", 0)
+        covered_branches_obj = totals.get("covered_branches", 0)
+        missing_branches_obj = totals.get("missing_branches", 0)
+
+        statements = (
+            int(statements_obj) if isinstance(statements_obj, (int, float)) else 0
+        )
+        covered_lines = (
+            int(covered_lines_obj) if isinstance(covered_lines_obj, (int, float)) else 0
+        )
+        missing_lines = (
+            int(missing_lines_obj) if isinstance(missing_lines_obj, (int, float)) else 0
+        )
+        if statements <= 0:
+            statements = covered_lines + missing_lines
+
+        num_branches = (
+            int(num_branches_obj) if isinstance(num_branches_obj, (int, float)) else 0
+        )
+        covered_branches = (
+            int(covered_branches_obj)
+            if isinstance(covered_branches_obj, (int, float))
+            else 0
+        )
+        missing_branches = (
+            int(missing_branches_obj)
+            if isinstance(missing_branches_obj, (int, float))
+            else 0
+        )
+        if num_branches <= 0:
+            num_branches = covered_branches + missing_branches
 
         line_pct = (covered_lines / statements * 100) if statements else 0.0
         branch_pct = (covered_branches / num_branches * 100) if num_branches else 0.0
@@ -83,6 +113,13 @@ class CoverageService:
             branch_percent: float | None = None
             num_branches = summary.get("num_branches")
             covered_branches = summary.get("covered_branches")
+            missing_branches = summary.get("missing_branches")
+            if (
+                (not isinstance(num_branches, (int, float)) or float(num_branches) <= 0)
+                and isinstance(covered_branches, (int, float))
+                and isinstance(missing_branches, (int, float))
+            ):
+                num_branches = float(covered_branches) + float(missing_branches)
             if isinstance(num_branches, (int, float)) and num_branches:
                 try:
                     covered_branches_float = float(
