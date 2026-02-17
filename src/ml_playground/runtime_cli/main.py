@@ -140,9 +140,9 @@ def _apply_global_options(
         ctx_dict["verbosity"] = verbosity_level
 
     try:
-        context = cast(click.Context | None, click.get_current_context(silent=True))
+        context = click.get_current_context(silent=True)
     except (TypeError, RuntimeError):
-        context = cast(click.Context | None, click.get_current_context())
+        context = click.get_current_context()
 
     if context is not None and getattr(context, "invoked_subcommand", None) is None:
         echo("Welcome to ML Playground runtime CLI!", err=True)

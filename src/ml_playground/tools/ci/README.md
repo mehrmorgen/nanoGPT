@@ -28,6 +28,6 @@ uv run tools ci coverage-badge
 ## Invariants
 
 - **Pre-commit Authority**: The `quality-gate` command must match the `pre-commit` configuration in `.githooks/.pre-commit-config.yaml`.
-- **Fail-Fast Verification**: `quality-gate` runs environment verification first, including required quality tools (`pre-commit`, `yamlfix`, `basedpyright`, `mypy`, `vulture`), and fails with remediation guidance when prerequisites are missing.
+- **Fail-Fast Verification**: `quality-gate` runs environment verification first, including required quality tools (`pre-commit`, `yamlfix`, `pyrefly`, `vulture`), and fails with remediation guidance when prerequisites are missing.
 - **Structured Results**: All commands return `ToolResult` for consistent CLI reporting.
 - **Dependency Injection**: Subprocess execution is handled via `SubprocessRunner` to allow testability without side effects.

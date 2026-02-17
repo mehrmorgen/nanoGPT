@@ -16,10 +16,7 @@ COMMAND_CATALOG: Dict[str, dict[str, Any]] = {
             "format": "Auto-fix and format code with Ruff",
             "lint-check": "Run Ruff in check-only mode (alias for lint)",
             "deadcode": "Scan for unused code using vulture",
-            "basedpyright": "Run BasedPyright type checks",
-            "pyright": "Run BasedPyright type checks (Pyright CLI alias)",
-            "mypy": "Run Mypy type checks",
-            "typecheck": "Run both BasedPyright and Mypy type checks",
+            "typecheck": "Run strict static type checks",
             "all": "Run all quality checks (lint, typecheck, deadcode)",
         },
         "examples": [
@@ -475,7 +472,7 @@ def _show_learning_paths(category: str, verbosity_level: VerbosityLevel) -> None
             "intermediate": [
                 "Integrate quality checks into your editor for real-time feedback",
                 "Set up pre-commit hooks to run quality checks automatically",
-                "Understand different type checkers: BasedPyright vs MyPy",
+                "Use strict type diagnostics to keep contracts explicit",
                 "Use dead code detection to maintain clean codebase",
             ],
             "advanced": [

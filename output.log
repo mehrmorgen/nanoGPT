@@ -1,0 +1,1912 @@
+.....................................................................FFF [  2%]
+FFF..................................................................... [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+.............................F.......................................... [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+...............................F........................................ [ 29%]
+............................................................s........... [ 32%]
+........................................................................ [ 34%]
+FFF..................................................................... [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+.....................................................................F.. [ 51%]
+........................................................................ [ 54%]
+..................................................................F.FFF. [ 56%]
+F....F...F.........................................F.................... [ 59%]
+....F..........F........................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+...........................FF.F......................................... [ 81%]
+..............................................................
+=================================== FAILURES ===================================
+_______________ test_bundestag_tiktoken_preparer_creates_dataset _______________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar0')
+
+    def test_bundestag_tiktoken_preparer_creates_dataset(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should create train/val/meta files."""
+        # Create a temporary experiment directory structure
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        # Create input file
+        input_file = ds_dir / "input.txt"
+        input_file.write_text(
+            "Hello world. This is test data for tokenization.", encoding="utf-8"
+        )
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       report = preparer.prepare(cfg)
+                 ^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+___________ test_bundestag_tiktoken_preparer_handles_existing_files ____________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar1')
+
+    def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should handle existing output files."""
+        import pickle
+    
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        input_file = ds_dir / "input.txt"
+        input_file.write_text("Sample text for testing.", encoding="utf-8")
+    
+        # Pre-create output files with valid data
+        (ds_dir / "train.bin").write_bytes(b"old")
+        (ds_dir / "val.bin").write_bytes(b"old")
+        with (ds_dir / "meta.pkl").open("wb") as f:
+            pickle.dump(
+                {
+                    "meta_version": 1,
+                    "tokenizer_type": "tiktoken",
+                    "encoding_name": "cl100k_base",
+                    "train_tokens": 1,
+                    "val_tokens": 1,
+                },
+                f,
+            )
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       report = preparer.prepare(cfg)
+                 ^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+_____________ test_bundestag_tiktoken_preparer_with_bundled_input ______________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar2')
+
+    def test_bundestag_tiktoken_preparer_with_bundled_input(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should use bundled input.txt if available."""
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        # Create bundled input.txt in experiment directory
+        bundled_input = exp_dir / "input.txt"
+        bundled_input.write_text("Bundled input text for testing.", encoding="utf-8")
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       preparer.prepare(cfg)
+
+tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+_______________ test_bundestag_tiktoken_preparer_creates_dataset _______________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar3')
+
+    def test_bundestag_tiktoken_preparer_creates_dataset(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should create train/val/meta files."""
+        # Create a temporary experiment directory structure
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        # Create input file
+        input_file = ds_dir / "input.txt"
+        input_file.write_text(
+            "Hello world. This is test data for tokenization.", encoding="utf-8"
+        )
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       report = preparer.prepare(cfg)
+                 ^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/experiments/bundestag_tiktoken/test_preparer.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+___________ test_bundestag_tiktoken_preparer_handles_existing_files ____________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar4')
+
+    def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should handle existing output files."""
+        import pickle
+    
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        input_file = ds_dir / "input.txt"
+        input_file.write_text("Sample text for testing.", encoding="utf-8")
+    
+        # Pre-create output files with valid data
+        (ds_dir / "train.bin").write_bytes(b"old")
+        (ds_dir / "val.bin").write_bytes(b"old")
+        with (ds_dir / "meta.pkl").open("wb") as f:
+            pickle.dump(
+                {
+                    "meta_version": 1,
+                    "tokenizer_type": "tiktoken",
+                    "encoding_name": "cl100k_base",
+                    "train_tokens": 1,
+                    "val_tokens": 1,
+                },
+                f,
+            )
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       report = preparer.prepare(cfg)
+                 ^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/experiments/bundestag_tiktoken/test_preparer.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+_____________ test_bundestag_tiktoken_preparer_with_bundled_input ______________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_bundestag_tiktoken_prepar5')
+
+    def test_bundestag_tiktoken_preparer_with_bundled_input(tmp_path: Path) -> None:
+        """BundestagTiktokenPreparer should use bundled input.txt if available."""
+        exp_dir = tmp_path / "bundestag_tiktoken"
+        exp_dir.mkdir()
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir()
+    
+        # Create bundled input.txt in experiment directory
+        bundled_input = exp_dir / "input.txt"
+        bundled_input.write_text("Bundled input text for testing.", encoding="utf-8")
+    
+        preparer = BundestagTiktokenPreparer()
+    
+        cfg = PreparerConfig(
+            tokenizer_type="tiktoken",
+            logger=logging.getLogger(__name__),
+            extras={"dataset_dir_override": str(exp_dir)},
+        )
+    
+>       preparer.prepare(cfg)
+
+tests/unit/experiments/bundestag_tiktoken/test_preparer.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/experiments/bundestag_tiktoken/preparer.py:68: in prepare
+    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+___________________ test_create_tokenizer_tiktoken_defaults ____________________
+
+    def test_create_tokenizer_tiktoken_defaults() -> None:
+        # Hit the loader is None branch
+        try:
+>           tokenizer.create_tokenizer("tiktoken")
+
+tests/unit/framework/core/test_core_pbt.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/framework/core/tokenizer.py:277: in create_tokenizer
+    return TiktokenTokenizer(encoding_name=encoding_name_obj, loader=loader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/ml_playground/framework/core/tokenizer.py:186: in __init__
+    self.encoder: _TiktokenEncoding = tiktoken_module.get_encoding(encoding_name)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:75: in get_encoding
+    _find_constructors()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _find_constructors() -> None:
+        global ENCODING_CONSTRUCTORS
+        with _lock:
+            if ENCODING_CONSTRUCTORS is not None:
+                return
+            ENCODING_CONSTRUCTORS = {}
+    
+            try:
+                for mod_name in _available_plugin_modules():
+                    mod = importlib.import_module(mod_name)
+                    try:
+                        constructors = mod.ENCODING_CONSTRUCTORS
+                    except AttributeError as e:
+                        raise ValueError(
+                            f"tiktoken plugin {mod_name} does not define ENCODING_CONSTRUCTORS"
+                        ) from e
+                    for enc_name, constructor in constructors.items():
+                        if enc_name in ENCODING_CONSTRUCTORS:
+>                           raise ValueError(
+                                f"Duplicate encoding name {enc_name} in tiktoken plugin {mod_name}"
+                            )
+E                           ValueError: Duplicate encoding name gpt2 in tiktoken plugin tiktoken_ext.openai_public
+
+.venv/lib/python3.13/site-packages/tiktoken/registry.py:51: ValueError
+_________________________ test_run_analyze_validation __________________________
+
+    @given(experiment=st.text(min_size=1))
+>   def test_run_analyze_validation(experiment: str) -> None:
+                   ^^^
+
+tests/unit/framework/runtime/test_runners_pbt.py:351: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+experiment = '0'
+
+    @given(experiment=st.text(min_size=1))
+    def test_run_analyze_validation(experiment: str) -> None:
+        engine: Any = MockLearningEngine()
+        result = runners.run_analyze(
+            experiment, "host", 8000, True, learning_mode_engine=engine
+        )
+        if experiment != "bundestag_char":
+            assert not result.success
+>           assert "currently supports only" in (result.stderr or "")
+E           AssertionError: assert 'currently supports only' in (('No analyzer registered for experiment: 0'))
+E            +  where 'No analyzer registered for experiment: 0' = ToolResult(success=False, exit_code=1, operation_id=OperationId(namespace='ml', category='analyze', command='0'), stdo...eriment: 0', learning_info=LearningInfo(commands_executed=[], explanations=[], best_practices=[], related_concepts=[])).stderr
+E           Falsifying example: test_run_analyze_validation(
+E               experiment='0',
+E           )
+
+tests/unit/framework/runtime/test_runners_pbt.py:358: AssertionError
+____________________ test_mlflow_manager_log_text_fallback _____________________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_mlflow_manager_log_text_f0')
+
+    def test_mlflow_manager_log_text_fallback(tmp_path: Path) -> None:
+        client = _FakeMLflowClient()
+        mgr = MLflowManager(
+            _runtime(tmp_path, enabled=True),
+            create_metadata_config(tmp_path, experiment="exp", mkdir=False),
+            _NullLogger(),
+            mlflow_client=client,
+        )
+        mgr._active_run = _FakeMLflowRun()  # pyright: ignore[reportPrivateUsage]
+        mgr.log_text("hello", "dir/test.txt")
+    
+>       assert len(client.artifacts) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <tests.unit.framework.training.test_mlflow_integration._FakeMLflowClient object at 0x13e3f0d70>.artifacts
+
+tests/unit/framework/training/test_mlflow_integration.py:435: AssertionError
+__________________ test_mlflow_manager_log_text_root_fallback __________________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_mlflow_manager_log_text_r0')
+
+    def test_mlflow_manager_log_text_root_fallback(tmp_path: Path) -> None:
+        client = _FakeMLflowClient()
+        mgr = MLflowManager(
+            _runtime(tmp_path, enabled=True),
+            create_metadata_config(tmp_path, experiment="exp", mkdir=False),
+            _NullLogger(),
+            mlflow_client=client,
+        )
+        mgr._active_run = _FakeMLflowRun()  # pyright: ignore[reportPrivateUsage]
+        mgr.log_text("hello", "test.txt")
+    
+>       assert len(client.artifacts) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <tests.unit.framework.training.test_mlflow_integration._FakeMLflowClient object at 0x14ab47850>.artifacts
+
+tests/unit/framework/training/test_mlflow_integration.py:452: AssertionError
+_____________________ test_mlflow_manager_log_text_failure _____________________
+
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_mlflow_manager_log_text_f1')
+
+    def test_mlflow_manager_log_text_failure(tmp_path: Path) -> None:
+        class _Client(_FakeMLflowClient):
+            def log_text(self, text: str, artifact_file: str) -> None:
+                raise RuntimeError("fail log text")
+    
+        logger = _NullLogger()
+        mgr = MLflowManager(
+            _runtime(tmp_path, enabled=True),
+            create_metadata_config(tmp_path, experiment="exp", mkdir=False),
+            logger,
+            mlflow_client=_Client(),
+        )
+        mgr._active_run = _FakeMLflowRun()  # pyright: ignore[reportPrivateUsage]
+        mgr.log_text("hello", "test.txt")
+>       assert any(
+            "MLflow text logging failed: fail log text" in msg for msg in logger.warnings
+        )
+E       assert False
+E        +  where False = any(<generator object test_mlflow_manager_log_text_failure.<locals>.<genexpr> at 0x14ac3aa80>)
+
+tests/unit/framework/training/test_mlflow_integration.py:471: AssertionError
+______________ TestCoverageBadge.test_coverage_badge_without_json ______________
+
+self = <tools.categories.test_ci.TestCoverageBadge object at 0x13b07c550>
+ci_tools = <ml_playground.tools.ci.ci.CITools object at 0x13e418750>
+fake_runner = <tests.unit.tools.fakes.FakeSubprocessRunner object at 0x13af698d0>
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_badge_without_js0')
+
+    def test_coverage_badge_without_json(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner, tmp_path: Path
+    ):
+        """Test coverage badge generation without existing coverage JSON."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="coverage-badge"
+        )
+        success_result = create_success_result(operation_id, "Coverage generated")
+        fake_runner.set_results([success_result])  # For coverage generation
+    
+        # Set the cache_dir to use our tmp_path
+        ci_tools.cache_dir = tmp_path / ".cache"
+    
+        # Create the coverage JSON that would be generated by the coverage command
+        coverage_dir = tmp_path / ".cache" / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+    
+        # Mock the coverage generation to create the JSON file
+        def mock_run_uv_command(
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:3] == ["python", "-m", "slipcover"]:
+                json_path.write_text('{"totals": {"percent_covered": 75.0}}')
+            return success_result
+    
+        # Use object.__setattr__ to bypass protocol immutability for mocking
+        object.__setattr__(
+            ci_tools._subprocess_runner, "run_uv_command", mock_run_uv_command
+        )
+    
+>       result = ci_tools.coverage_badge([])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/tools/categories/test_ci.py:365: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ml_playground.tools.ci.ci.CITools object at 0x13e418750>, args = []
+
+    def coverage_badge(self, args: List[str]) -> ToolResult:
+        """Regenerate the SVG coverage badges.
+    
+        Args:
+            args: Additional arguments (ignored)
+    
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="coverage-badge"
+        )
+    
+        # Ensure coverage JSON exists
+        json_path = self.cache_dir / "coverage" / "coverage.json"
+        if not json_path.exists():
+            # Generate coverage JSON directly with coverage.
+            coverage_result = self.subprocess_runner.run_uv_command(
+                [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "run",
+                    "-m",
+                    "pytest",
+                    "-n",
+                    "auto",
+                    "tests/unit",
+                    "tests/property",
+                ],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+    
+            if not coverage_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report generation failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            combine_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "combine"],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not combine_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report merging failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            json_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "json", "-o", str(json_path)],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not json_result.success or not json_path.exists():
+>               raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage JSON file was not created by coverage json",
+                    rationale="Badge generation requires valid coverage data",
+                )
+E               ml_playground.tools.core.errors.ToolExecutionError: Failed to generate coverage JSON for badge creation
+E               Reason: Coverage JSON file was not created by coverage json
+E               Rationale: Badge generation requires valid coverage data
+
+src/ml_playground/tools/ci/ci.py:430: ToolExecutionError
+_________________ TestCoverageTest.test_coverage_test_success __________________
+
+self = <tools.categories.test_testing.TestCoverageTest object at 0x13b228e10>
+testing_tools = <ml_playground.tools.testing.testing.TestingTools object at 0x13af6ca50>
+subprocess_runner = <tests.unit.tools.fakes.FakeSubprocessRunner object at 0x14ac01240>
+
+    def test_coverage_test_success(
+        self,
+        testing_tools: testing_module.TestingTools,
+        subprocess_runner: FakeSubprocessRunner,
+    ) -> None:
+        operation_id = OperationId(
+            namespace="tools", category="test", command="coverage-test"
+        )
+        expected_result = create_success_result(operation_id, "coverage output")
+        subprocess_runner.set_results([expected_result])
+    
+        result = testing_tools.coverage_test([])
+    
+        assert result.success is True
+        command = subprocess_runner.calls[0]["command"]
+>       assert (
+            "slipcover" in command
+            and "tests/unit" in command
+            and "tests/property" in command
+        )
+E       AssertionError: assert ('slipcover' in ['uv', 'run', '--project', '/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_test_success0', 'python', '-m', ...])
+
+tests/unit/tools/categories/test_testing.py:237: AssertionError
+__________ test_coverage_threshold_auto_generates_and_reports_totals ___________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_threshold_auto_g0')
+
+    def test_coverage_threshold_auto_generates_and_reports_totals(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = RecordingRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+        coverage_file = tmp_path / ".cache" / "coverage" / "coverage.json"
+        if coverage_file.exists():
+            coverage_file.unlink()
+    
+>       result = tools.coverage_threshold(
+            [], line_threshold=80.0, branch_threshold=70.0, verbose=False
+        )
+
+tests/unit/tools/categories/test_testing.py:262: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/testing.py:954: in coverage_threshold
+    return self._coverage_threshold(
+src/ml_playground/tools/testing/testing.py:976: in _coverage_threshold
+    return run_coverage_threshold(
+src/ml_playground/tools/testing/testing.py:131: in run_coverage_threshold
+    return coverage_module.run_coverage_threshold(
+src/ml_playground/tools/testing/coverage.py:506: in run_coverage_threshold
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+_____ test_coverage_threshold_reuses_cached_data_when_fingerprint_matches ______
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_threshold_reuses0')
+
+    def test_coverage_threshold_reuses_cached_data_when_fingerprint_matches(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = RecordingRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+        sample_file = _create_sample_source_file(tmp_path)
+        _write_coverage_file(tmp_path)
+        initial_fingerprint = tools._compute_coverage_fingerprint()
+        manifest_path = _write_manifest(tmp_path, initial_fingerprint)
+    
+        sample_file.write_text("value = 1", encoding="utf-8")
+    
+>       result = tools.coverage_threshold([], line_threshold=10.0, branch_threshold=5.0)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/tools/categories/test_testing.py:326: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/testing.py:954: in coverage_threshold
+    return self._coverage_threshold(
+src/ml_playground/tools/testing/testing.py:976: in _coverage_threshold
+    return run_coverage_threshold(
+src/ml_playground/tools/testing/testing.py:131: in run_coverage_threshold
+    return coverage_module.run_coverage_threshold(
+src/ml_playground/tools/testing/coverage.py:506: in run_coverage_threshold
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+__________ test_coverage_threshold_force_regen_overrides_cached_data ___________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_threshold_force_0')
+
+    def test_coverage_threshold_force_regen_overrides_cached_data(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = RecordingRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+        _create_sample_source_file(tmp_path)
+        _write_coverage_file(tmp_path)
+        fingerprint = tools._compute_coverage_fingerprint()
+        manifest_path = _write_manifest(tmp_path, fingerprint)
+    
+>       result = tools.coverage_threshold(
+            [], line_threshold=10.0, branch_threshold=5.0, force_regen=True
+        )
+
+tests/unit/tools/categories/test_testing.py:348: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/testing.py:954: in coverage_threshold
+    return self._coverage_threshold(
+src/ml_playground/tools/testing/testing.py:976: in _coverage_threshold
+    return run_coverage_threshold(
+src/ml_playground/tools/testing/testing.py:131: in run_coverage_threshold
+    return coverage_module.run_coverage_threshold(
+src/ml_playground/tools/testing/coverage.py:506: in run_coverage_threshold
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+_____________ test_coverage_combines_report_and_threshold_success ______________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_combines_report_0')
+
+    def test_coverage_combines_report_and_threshold_success(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = MetricsRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+>       result = tools.coverage(
+            [],
+            line_threshold=50.0,
+            branch_threshold=10.0,
+            verbose=False,
+        )
+
+tests/unit/tools/categories/test_testing.py:396: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/testing.py:1016: in coverage
+    report_result = self._coverage_report(
+src/ml_playground/tools/testing/testing.py:866: in _coverage_report
+    return run_coverage_report(
+src/ml_playground/tools/testing/testing.py:62: in run_coverage_report
+    return coverage_module.run_coverage_report(
+src/ml_playground/tools/testing/coverage.py:187: in run_coverage_report
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+________________ test_coverage_report_handles_missing_json_data ________________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_report_handles_m0')
+
+    def test_coverage_report_handles_missing_json_data(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        """When coverage JSON is missing totals, the command should raise ToolExecutionError."""
+    
+        class MissingTotalsRunner(RecordingRunner):
+            def run_uv_command(  # type: ignore[override]
+                self,
+                args: list[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                python: str | None = None,
+                no_project: bool = False,
+            ) -> ToolResult:
+                result = super().run_uv_command(
+                    args,
+                    cwd=cwd,
+                    env=env,
+                    timeout=timeout,
+                    operation_id=operation_id,
+                    python=python,
+                    no_project=no_project,
+                )
+                if args[:3] == ["python", "-m", "slipcover"]:
+                    out_path = Path(args[args.index("--out") + 1])
+                    out_path.write_text(json.dumps({"files": {}}), encoding="utf-8")
+                return result
+    
+        runner = MissingTotalsRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+        (tmp_path / ".cache" / "coverage").mkdir(parents=True, exist_ok=True)
+    
+        with pytest.raises(ToolExecutionError) as excinfo:
+            tools.coverage_report([])
+    
+>       assert "Failed to parse coverage JSON" in str(excinfo.value)
+E       AssertionError: assert 'Failed to parse coverage JSON' in 'Coverage data generation failed\nReason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.\nRationale: Coverage data must be available for threshold analysis'
+E        +  where 'Coverage data generation failed\nReason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.\nRationale: Coverage data must be available for threshold analysis' = str(ToolExecutionError('Coverage data generation failed'))
+E        +    where ToolExecutionError('Coverage data generation failed') = <ExceptionInfo ToolExecutionError('Coverage data generation failed') tblen=6>.value
+
+tests/unit/tools/categories/test_testing.py:578: AssertionError
+________________ test_coverage_threshold_fails_when_totals_low _________________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_threshold_fails_0')
+
+    def test_coverage_threshold_fails_when_totals_low(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        runner = LowCoverageRunner()
+        tools = testing_module.TestingTools(config, tmp_path, runner)
+    
+        coverage_dir = tmp_path / ".cache" / "coverage"
+        coverage_dir.mkdir(parents=True, exist_ok=True)
+        (coverage_dir / "coverage.json").write_bytes(b"data")
+    
+>       result = tools.coverage_threshold(
+            [],
+            line_threshold=95.0,
+            branch_threshold=90.0,
+            verbose=True,
+        )
+
+tests/unit/tools/categories/test_testing.py:1082: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/testing.py:954: in coverage_threshold
+    return self._coverage_threshold(
+src/ml_playground/tools/testing/testing.py:976: in _coverage_threshold
+    return run_coverage_threshold(
+src/ml_playground/tools/testing/testing.py:131: in run_coverage_threshold
+    return coverage_module.run_coverage_threshold(
+src/ml_playground/tools/testing/coverage.py:506: in run_coverage_threshold
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+______________ TestCoverageBadge.test_coverage_badge_without_json ______________
+
+self = <tests.unit.tools.ci.test_ci.TestCoverageBadge object at 0x13b22a350>
+ci_tools = <ml_playground.tools.ci.ci.CITools object at 0x13db9c250>
+fake_runner = <tests.unit.tools.fakes.FakeSubprocessRunner object at 0x14af63e70>
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_badge_without_js1')
+
+    def test_coverage_badge_without_json(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner, tmp_path: Path
+    ):
+        """Test coverage badge generation without existing coverage JSON."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="coverage-badge"
+        )
+        success_result = create_success_result(operation_id, "Coverage generated")
+        fake_runner.set_results([success_result])  # For coverage generation
+    
+        # Set the cache_dir to use our tmp_path
+        ci_tools.cache_dir = tmp_path / ".cache"
+    
+        # Create the coverage JSON that would be generated by the coverage command
+        coverage_dir = tmp_path / ".cache" / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+    
+        # Mock the coverage generation to create the JSON file
+        def mock_run_uv_command(
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:3] == ["python", "-m", "slipcover"]:
+                json_path.write_text('{"totals": {"percent_covered": 75.0}}')
+            return success_result
+    
+        # Accessing protected member for testing purposes
+        object.__setattr__(
+            ci_tools.subprocess_runner, "run_uv_command", mock_run_uv_command
+        )
+    
+>       result = ci_tools.coverage_badge([])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/tools/ci/test_ci.py:444: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ml_playground.tools.ci.ci.CITools object at 0x13db9c250>, args = []
+
+    def coverage_badge(self, args: List[str]) -> ToolResult:
+        """Regenerate the SVG coverage badges.
+    
+        Args:
+            args: Additional arguments (ignored)
+    
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="coverage-badge"
+        )
+    
+        # Ensure coverage JSON exists
+        json_path = self.cache_dir / "coverage" / "coverage.json"
+        if not json_path.exists():
+            # Generate coverage JSON directly with coverage.
+            coverage_result = self.subprocess_runner.run_uv_command(
+                [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "run",
+                    "-m",
+                    "pytest",
+                    "-n",
+                    "auto",
+                    "tests/unit",
+                    "tests/property",
+                ],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+    
+            if not coverage_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report generation failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            combine_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "combine"],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not combine_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report merging failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            json_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "json", "-o", str(json_path)],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not json_result.success or not json_path.exists():
+>               raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage JSON file was not created by coverage json",
+                    rationale="Badge generation requires valid coverage data",
+                )
+E               ml_playground.tools.core.errors.ToolExecutionError: Failed to generate coverage JSON for badge creation
+E               Reason: Coverage JSON file was not created by coverage json
+E               Rationale: Badge generation requires valid coverage data
+
+src/ml_playground/tools/ci/ci.py:430: ToolExecutionError
+______________ TestCoverageBadge.test_coverage_badge_without_json ______________
+
+self = <tests.unit.tools.ci.test_ci_tool.TestCoverageBadge object at 0x13b22b390>
+ci_tools = <ml_playground.tools.ci.ci.CITools object at 0x3dc5276d0>
+fake_runner = <tests.unit.tools.fakes.FakeSubprocessRunner object at 0x14af62580>
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_coverage_badge_without_js2')
+
+    def test_coverage_badge_without_json(
+        self, ci_tools: CITools, fake_runner: FakeSubprocessRunner, tmp_path: Path
+    ):
+        """Test coverage badge generation without existing coverage JSON."""
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="coverage-badge"
+        )
+        success_result = create_success_result(operation_id, "Coverage generated")
+        fake_runner.set_results([success_result])  # For coverage generation
+    
+        # Set the cache_dir to use our tmp_path
+        ci_tools.cache_dir = tmp_path / ".cache"
+    
+        # Create the coverage JSON that would be generated by the coverage command
+        coverage_dir = tmp_path / ".cache" / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+    
+        # Mock the coverage generation to create the JSON file
+        def mock_run_uv_command(
+            args: List[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            if args[:3] == ["python", "-m", "slipcover"]:
+                json_path.write_text('{"totals": {"percent_covered": 75.0}}')
+            return success_result
+    
+        # Accessing protected member for testing purposes
+        object.__setattr__(
+            ci_tools.subprocess_runner, "run_uv_command", mock_run_uv_command
+        )
+    
+>       result = ci_tools.coverage_badge([])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/tools/ci/test_ci_tool.py:401: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ml_playground.tools.ci.ci.CITools object at 0x3dc5276d0>, args = []
+
+    def coverage_badge(self, args: List[str]) -> ToolResult:
+        """Regenerate the SVG coverage badges.
+    
+        Args:
+            args: Additional arguments (ignored)
+    
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="coverage-badge"
+        )
+    
+        # Ensure coverage JSON exists
+        json_path = self.cache_dir / "coverage" / "coverage.json"
+        if not json_path.exists():
+            # Generate coverage JSON directly with coverage.
+            coverage_result = self.subprocess_runner.run_uv_command(
+                [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "run",
+                    "-m",
+                    "pytest",
+                    "-n",
+                    "auto",
+                    "tests/unit",
+                    "tests/property",
+                ],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+    
+            if not coverage_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report generation failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            combine_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "combine"],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not combine_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report merging failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            json_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "json", "-o", str(json_path)],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not json_result.success or not json_path.exists():
+>               raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage JSON file was not created by coverage json",
+                    rationale="Badge generation requires valid coverage data",
+                )
+E               ml_playground.tools.core.errors.ToolExecutionError: Failed to generate coverage JSON for badge creation
+E               Reason: Coverage JSON file was not created by coverage json
+E               Rationale: Badge generation requires valid coverage data
+
+src/ml_playground/tools/ci/ci.py:430: ToolExecutionError
+_______________ test_coverage_badge_generates_json_when_missing ________________
+
+ci_tools = (<ml_playground.tools.ci.ci.CITools object at 0x3dc526ed0>, <tests.unit.tools.fakes.FakeSubprocessRunner object at 0x14af830e0>)
+
+    def test_coverage_badge_generates_json_when_missing(
+        ci_tools: tuple[CITools, FakeSubprocessRunner],
+    ) -> None:
+        tools, runner = ci_tools
+        operation_id = OperationId(
+            namespace="tools", category="ci", command="coverage-badge"
+        )
+        runner.set_results([create_success_result(operation_id, "Coverage generated")])
+        coverage_dir = tools.cache_dir / "coverage"
+        coverage_dir.mkdir(parents=True)
+        json_path = coverage_dir / "coverage.json"
+    
+        class JsonGeneratingRunner(FakeSubprocessRunner):
+            def __init__(self, json_target: Path) -> None:
+                super().__init__()
+                self._json_target = json_target
+    
+            def run_uv_command(  # type: ignore[override]
+                self,
+                args: List[str],
+                *,
+                cwd: str | Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int | None = None,
+                operation_id: OperationId,
+                python: str | None = None,
+                no_project: bool = False,
+            ) -> ToolResult:
+                if args[:3] == ["python", "-m", "slipcover"]:
+                    self._json_target.write_text(
+                        '{"totals": {"percent_covered": 75.0}}', encoding="utf-8"
+                    )
+                return super().run_uv_command(
+                    args,
+                    cwd=cwd,
+                    env=env,
+                    timeout=timeout,
+                    operation_id=operation_id,
+                    python=python,
+                    no_project=no_project,
+                )
+    
+        json_runner = JsonGeneratingRunner(json_path)
+        json_runner.set_results([create_success_result(operation_id, "Coverage generated")])
+        json_tools = CITools(ToolsConfig(), tools.root_path, subprocess_runner=json_runner)
+        json_tools.cache_dir = tools.cache_dir
+    
+>       result = json_tools.coverage_badge([])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/tools/ci/test_coverage_badge.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ml_playground.tools.ci.ci.CITools object at 0x14af00a50>, args = []
+
+    def coverage_badge(self, args: List[str]) -> ToolResult:
+        """Regenerate the SVG coverage badges.
+    
+        Args:
+            args: Additional arguments (ignored)
+    
+        Returns:
+            ToolResult with execution details
+        """
+        operation_id = OperationId(
+            namespace="tools", category=self.category, command="coverage-badge"
+        )
+    
+        # Ensure coverage JSON exists
+        json_path = self.cache_dir / "coverage" / "coverage.json"
+        if not json_path.exists():
+            # Generate coverage JSON directly with coverage.
+            coverage_result = self.subprocess_runner.run_uv_command(
+                [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "run",
+                    "-m",
+                    "pytest",
+                    "-n",
+                    "auto",
+                    "tests/unit",
+                    "tests/property",
+                ],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+    
+            if not coverage_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report generation failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            combine_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "combine"],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not combine_result.success:
+                raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage report merging failed",
+                    rationale="Badge generation requires valid coverage data",
+                )
+    
+            json_result = self.subprocess_runner.run_uv_command(
+                ["python", "-m", "coverage", "json", "-o", str(json_path)],
+                cwd=self.root_path,
+                timeout=self.config.ci.timeout,
+                operation_id=operation_id,
+            )
+            if not json_result.success or not json_path.exists():
+>               raise ToolExecutionError(
+                    "Failed to generate coverage JSON for badge creation",
+                    reason="Coverage JSON file was not created by coverage json",
+                    rationale="Badge generation requires valid coverage data",
+                )
+E               ml_playground.tools.core.errors.ToolExecutionError: Failed to generate coverage JSON for badge creation
+E               Reason: Coverage JSON file was not created by coverage json
+E               Rationale: Badge generation requires valid coverage data
+
+src/ml_playground/tools/ci/ci.py:430: ToolExecutionError
+____________________ test_run_coverage_test_writes_manifest ____________________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_test_writes_0')
+
+    def test_run_coverage_test_writes_manifest(config: ToolsConfig, tmp_path: Path) -> None:
+        create_sample_source_file(tmp_path)
+        runner = CoverageRunner()
+    
+        result = coverage_module.run_coverage_test(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            subprocess_runner=runner,
+            cache_dir=_cache_dir(tmp_path),
+        )
+    
+        assert result.success is True
+>       assert (_coverage_dir(tmp_path) / "coverage_manifest.json").exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_test_writes_0/.cache/coverage') / 'coverage_manifest.json').exists
+E        +      where PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_test_writes_0/.cache/coverage') = _coverage_dir(PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_test_writes_0'))
+
+tests/unit/tools/testing/test_coverage.py:153: AssertionError
+__________________ test_run_coverage_test_propagates_failures __________________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_test_propaga0')
+
+    def test_run_coverage_test_propagates_failures(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        create_sample_source_file(tmp_path)
+        runner = CoverageRunner()
+        runner.slipcover_should_fail = True
+    
+        result = coverage_module.run_coverage_test(
+            config=config,
+            root_path=tmp_path,
+            args=[],
+            subprocess_runner=runner,
+            cache_dir=_cache_dir(tmp_path),
+        )
+    
+>       assert result.success is False
+E       AssertionError: assert True is False
+E        +  where True = ToolResult(success=True, exit_code=0, stdout='uv', stderr='', learning_info=LearningInfo(commands_executed=[], explana...ctices=[], related_concepts=[]), operation_id=OperationId(namespace='tools', category='test', command='coverage-test')).success
+
+tests/unit/tools/testing/test_coverage.py:172: AssertionError
+_____________ test_run_coverage_report_force_regen_runs_slipcover ______________
+
+config = ToolsConfig(quality=QualityToolsConfig(enabled=True, timeout=120, environment_vars={}, ruff_config_path=None, mypy_con...}, batch_size=10, output_format='json'), learning_mode_default=False, default_verbosity=1, display_command_prefix=None)
+tmp_path = PosixPath('/private/var/folders/kb/5dq09mw120b4zpf0ngmb9zn40000gn/T/pytest-of-tv/pytest-468/test_run_coverage_report_force0')
+
+    def test_run_coverage_report_force_regen_runs_slipcover(
+        config: ToolsConfig, tmp_path: Path
+    ) -> None:
+        create_sample_source_file(tmp_path)
+        runner = CoverageRunner()
+    
+>       result = coverage_module.run_coverage_report(
+            config=config,
+            root_path=tmp_path,
+            args=["-k", "fast"],
+            verbose=True,
+            subprocess_runner=runner,
+            cache_dir=_cache_dir(tmp_path),
+            force_regen=True,
+        )
+
+tests/unit/tools/testing/test_coverage.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/ml_playground/tools/testing/coverage.py:187: in run_coverage_report
+    executed, notes, _ = _ensure_coverage_data(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _ensure_coverage_data(
+        *,
+        config: ToolsConfig,
+        root_path: Path,
+        args: List[str],
+        verbose: bool,
+        subprocess_runner: SubprocessRunner,
+        cache_dir: Path,
+        operation_id: OperationId,
+        learning_mode: bool,
+        verbosity_level: int,
+        force_regen: bool,
+    ) -> tuple[list[str], list[str], dict[str, str]]:
+        """Ensure coverage data is available and up-to-date."""
+        executed: list[str] = []
+        notes: list[str] = []
+        coverage_json = cache_dir / "coverage" / "coverage.json"
+        env: dict[str, str] = _coverage_env(cache_dir)
+    
+        current_fingerprint = _compute_coverage_fingerprint(root_path)
+        manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
+        manifest = _read_coverage_manifest(manifest_path)
+        manifest_fingerprint = manifest.get("fingerprint") if manifest else None
+    
+        if (
+            not force_regen
+            and manifest_fingerprint == current_fingerprint
+            and coverage_json.exists()
+            and coverage_json.stat().st_size > 0
+        ):
+            return executed, notes, env
+    
+        generation_result, generation_notes = _run_coverage_test_for_data(
+            config=config,
+            root_path=root_path,
+            args=args,
+            verbose=verbose,
+            subprocess_runner=subprocess_runner,
+            cache_dir=cache_dir,
+            operation_id=operation_id,
+            executed_commands=executed,
+        )
+        if isinstance(generation_result, ToolResult):
+            from ..core.errors import ToolExecutionError
+    
+            stderr = (generation_result.stderr or "").strip()
+            stdout = (generation_result.stdout or "").strip()
+            raise ToolExecutionError(
+                "Coverage data generation failed",
+                reason=stderr or stdout or "Unknown error during coverage generation",
+                rationale="Coverage data must be generated for threshold analysis",
+            )
+        notes.extend(generation_notes)
+    
+        if coverage_json.exists() and coverage_json.stat().st_size > 0:
+            _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
+            return executed, notes, env
+    
+        failure = ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="",
+            stderr=(
+                "Coverage data not produced automatically. Run `tools test coverage` manually "
+                "and re-run the command."
+            ),
+            operation_id=operation_id,
+        )
+        from ..core.errors import ToolExecutionError
+    
+>       raise ToolExecutionError(
+            "Coverage data generation failed",
+            reason=failure.stderr,
+            rationale="Coverage data must be available for threshold analysis",
+        )
+E       ml_playground.tools.core.errors.ToolExecutionError: Coverage data generation failed
+E       Reason: Coverage data not produced automatically. Run `tools test coverage` manually and re-run the command.
+E       Rationale: Coverage data must be available for threshold analysis
+
+src/ml_playground/tools/testing/coverage.py:849: ToolExecutionError
+=========================== short test summary info ============================
+FAILED tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py::test_bundestag_tiktoken_preparer_creates_dataset
+FAILED tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py::test_bundestag_tiktoken_preparer_handles_existing_files
+FAILED tests/unit/experiments/bundestag_tiktoken/test_bundestag_tiktoken_preparer.py::test_bundestag_tiktoken_preparer_with_bundled_input
+FAILED tests/unit/experiments/bundestag_tiktoken/test_preparer.py::test_bundestag_tiktoken_preparer_creates_dataset
+FAILED tests/unit/experiments/bundestag_tiktoken/test_preparer.py::test_bundestag_tiktoken_preparer_handles_existing_files
+FAILED tests/unit/experiments/bundestag_tiktoken/test_preparer.py::test_bundestag_tiktoken_preparer_with_bundled_input
+FAILED tests/unit/framework/core/test_core_pbt.py::test_create_tokenizer_tiktoken_defaults
+FAILED tests/unit/framework/runtime/test_runners_pbt.py::test_run_analyze_validation
+FAILED tests/unit/framework/training/test_mlflow_integration.py::test_mlflow_manager_log_text_fallback
+FAILED tests/unit/framework/training/test_mlflow_integration.py::test_mlflow_manager_log_text_root_fallback
+FAILED tests/unit/framework/training/test_mlflow_integration.py::test_mlflow_manager_log_text_failure
+FAILED tests/unit/tools/categories/test_ci.py::TestCoverageBadge::test_coverage_badge_without_json
+FAILED tests/unit/tools/categories/test_testing.py::TestCoverageTest::test_coverage_test_success
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_threshold_auto_generates_and_reports_totals
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_threshold_reuses_cached_data_when_fingerprint_matches
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_threshold_force_regen_overrides_cached_data
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_combines_report_and_threshold_success
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_report_handles_missing_json_data
+FAILED tests/unit/tools/categories/test_testing.py::test_coverage_threshold_fails_when_totals_low
+FAILED tests/unit/tools/ci/test_ci.py::TestCoverageBadge::test_coverage_badge_without_json
+FAILED tests/unit/tools/ci/test_ci_tool.py::TestCoverageBadge::test_coverage_badge_without_json
+FAILED tests/unit/tools/ci/test_coverage_badge.py::test_coverage_badge_generates_json_when_missing
+FAILED tests/unit/tools/testing/test_coverage.py::test_run_coverage_test_writes_manifest
+FAILED tests/unit/tools/testing/test_coverage.py::test_run_coverage_test_propagates_failures
+FAILED tests/unit/tools/testing/test_coverage.py::test_run_coverage_report_force_regen_runs_slipcover
+SKIPPED [1] tests/unit/framework/training/hooks/test_components.py:123: CUDA required
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/nix/store/04gr3nf8qc9j14hf5hyhwx0avv5b8yfm-python3-3.13.1/lib/python3.13/ssl.py:1138: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)

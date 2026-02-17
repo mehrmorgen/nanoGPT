@@ -7,7 +7,7 @@ from pathlib import Path
 DEFAULT_SYNC_GROUP = "all"
 PRE_COMMIT_CONFIG_PATH = ".githooks/.pre-commit-config.yaml"
 PRE_COMMIT_TEMPLATE_PATH = Path(".githooks/pre-commit")
-REQUIRED_ENV_TOOLS = ("pre-commit", "yamlfix", "basedpyright", "mypy", "vulture")
+REQUIRED_ENV_TOOLS = ("pre-commit", "yamlfix", "pyrefly", "vulture")
 
 FALLBACK_PRE_COMMIT_HOOK_TEMPLATE = """#!/usr/bin/env bash
 echo 'Error: .githooks/pre-commit is missing or unreadable.' >&2

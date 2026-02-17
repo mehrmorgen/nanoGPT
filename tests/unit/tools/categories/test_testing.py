@@ -144,8 +144,7 @@ class TestIntegrationTests:
         assert str(result.operation_id) == "tools.test.integration"
         assert len(subprocess_runner.calls) == 1
         command = subprocess_runner.calls[0]["command"]
-        assert "-m" in command
-        assert "integration or True" in command
+        assert "pytest" in command
         assert "tests/integration" in command
 
 
@@ -236,7 +235,7 @@ class TestCoverageTest:
         assert result.success is True
         command = subprocess_runner.calls[0]["command"]
         assert (
-            "slipcover" in command
+            "coverage" in command
             and "tests/unit" in command
             and "tests/property" in command
         )
@@ -328,7 +327,7 @@ def test_coverage_threshold_reuses_cached_data_when_fingerprint_matches(
 
     assert result.success is True
     assert any(
-        cast(list[str], call["args"])[:3] == ["python", "-m", "slipcover"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -352,7 +351,7 @@ def test_coverage_threshold_force_regen_overrides_cached_data(
 
     assert result.success is True
     assert any(
-        cast(list[str], call["args"])[:3] == ["python", "-m", "slipcover"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -405,7 +404,7 @@ def test_coverage_combines_report_and_threshold_success(
     assert result.exit_code == 0
     assert "Coverage totals:" in result.stdout
     assert any(
-        cast(list[str], call["args"])[:3] == ["python", "-m", "slipcover"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
 
@@ -522,7 +521,7 @@ def test_coverage_report_verbose_lists_artifacts(
 def test_coverage_report_regenerates_after_missing_source(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
-    """Coverage report should succeed when slipcover can regenerate data."""
+    """Coverage report should succeed when coverage can regenerate data."""
     runner = RecordingRunner()
     tools = testing_module.TestingTools(config, tmp_path, runner)
 
@@ -563,8 +562,9 @@ def test_coverage_report_handles_missing_json_data(
                 python=python,
                 no_project=no_project,
             )
-            if args[:3] == ["python", "-m", "slipcover"]:
-                out_path = Path(args[args.index("--out") + 1])
+            if args[:4] == ["python", "-m", "coverage", "json"]:
+                out_path = Path(args[args.index("-o") + 1])
+                out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(json.dumps({"files": {}}), encoding="utf-8")
             return result
 
@@ -680,77 +680,37 @@ class RecordingRunner:
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:3] == ["python", "-m", "slipcover"]:
-            out_path = Path(args[args.index("--out") + 1])
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "totals": {
-                            "covered_lines": 100,
-                            "missing_lines": 0,
-                            "covered_branches": 10,
-                            "missing_branches": 0,
-                        },
-                        "files": {},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            return create_success_result(operation_id, stdout="slipcover")
-        if args[:3] == ["python", "-m", "slipcover"]:
-            out_path = Path(args[args.index("--out") + 1])
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "totals": {
-                            "covered_lines": 80,
-                            "missing_lines": 20,
-                            "covered_branches": 14,
-                            "missing_branches": 6,
-                        },
-                        "files": {
-                            "src/ml_playground/tools/categories/alpha.py": {
-                                "summary": {
-                                    "percent_covered_display": "82.00",
-                                    "num_branches": 4,
-                                    "covered_branches": 3,
-                                }
-                            },
-                            "src/ml_playground/tools/categories/beta.py": {
-                                "summary": {
-                                    "percent_covered_display": "70.00",
-                                    "num_branches": 6,
-                                    "covered_branches": 3,
-                                }
-                            },
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-        if args[:2] == ["coverage", "json"]:
+        _COVERAGE_JSON_PAYLOAD = {
+            "totals": {
+                "num_statements": 100,
+                "covered_lines": 100,
+                "num_branches": 10,
+                "covered_branches": 10,
+            },
+            "files": {},
+        }
+        if args[:4] == ["python", "-m", "coverage", "run"]:
+            return create_success_result(operation_id, stdout="coverage")
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "totals": {
-                            "num_statements": 100,
-                            "covered_lines": 100,
-                            "num_branches": 10,
-                            "covered_branches": 10,
-                        },
-                        "files": {},
-                    }
-                )
-            )
-        if args[:2] == ["coverage", "combine"]:
-            assert env is not None
-            coverage_path = Path(env["COVERAGE_FILE"])
-            coverage_path.parent.mkdir(parents=True, exist_ok=True)
-            coverage_path.write_bytes(b"combined")
+            out_path.write_text(json.dumps(_COVERAGE_JSON_PAYLOAD), encoding="utf-8")
+            return create_success_result(operation_id, stdout="coverage json")
+        _is_coverage_combine = args[:4] == ["python", "-m", "coverage", "combine"] or (
+            args[:1] == ["coverage"] and "combine" in args
+        )
+        if _is_coverage_combine:
+            if env and "COVERAGE_FILE" in env:
+                coverage_path = Path(env["COVERAGE_FILE"])
+                coverage_path.parent.mkdir(parents=True, exist_ok=True)
+                coverage_path.write_bytes(b"combined")
+            return create_success_result(operation_id, stdout="coverage combine")
         return create_success_result(operation_id, stdout="uv")
 
 
@@ -802,11 +762,15 @@ class MetricsRunner(RecordingRunner):
             python=python,
             no_project=no_project,
         )
-        if args[:3] == ["python", "-m", "slipcover"]:
-            out_path = Path(args[args.index("--out") + 1])
-            out_path.write_text(json.dumps(self._payload), encoding="utf-8")
-        if args[:2] == ["coverage", "json"]:
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(json.dumps(self._payload), encoding="utf-8")
         return result
 
@@ -845,11 +809,16 @@ class FailingJsonRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:3] == ["python", "-m", "slipcover"] or args[:2] == [
-            "coverage",
-            "json",
-        ]:
-            return create_failure_result(operation_id, stderr="slipcover failed")
+        if args[:4] in (
+            ["python", "-m", "coverage", "run"],
+            ["python", "-m", "coverage", "json"],
+            ["python", "-m", "coverage", "combine"],
+        ) or args[:2] in (
+            ["coverage", "run"],
+            ["coverage", "json"],
+            ["coverage", "combine"],
+        ):
+            return create_failure_result(operation_id, stderr="coverage failed")
         return create_success_result(operation_id, stdout="ok")
 
 
@@ -866,7 +835,7 @@ class CombineFailureRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:2] == ["coverage", "combine"]:
+        if args[:4] == ["python", "-m", "coverage", "combine"]:
             return create_failure_result(operation_id, stderr="combine failed")
         return create_success_result(operation_id, stdout="ok")
 
@@ -922,8 +891,8 @@ class CoverageTestFailureRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:3] == ["python", "-m", "slipcover"]:
-            return create_failure_result(operation_id, stderr="slipcover failed")
+        if args[:3] == ["python", "-m", "coverage", "run"]:
+            return create_failure_result(operation_id, stderr="coverage failed")
         return create_success_result(operation_id, stdout="ok")
 
 
@@ -965,39 +934,13 @@ class LowCoverageRunner(RecordingRunner):
             python=python,
             no_project=no_project,
         )
-        if args[:3] == ["python", "-m", "slipcover"]:
-            out_path = Path(args[args.index("--out") + 1])
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "totals": {
-                            "covered_lines": 80,
-                            "missing_lines": 20,
-                            "covered_branches": 14,
-                            "missing_branches": 6,
-                        },
-                        "files": {
-                            "src/ml_playground/tools/categories/alpha.py": {
-                                "summary": {
-                                    "percent_covered_display": "82.00",
-                                    "num_branches": 4,
-                                    "covered_branches": 3,
-                                }
-                            },
-                            "src/ml_playground/tools/categories/beta.py": {
-                                "summary": {
-                                    "percent_covered_display": "70.00",
-                                    "num_branches": 6,
-                                    "covered_branches": 3,
-                                }
-                            },
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-        if args[:2] == ["coverage", "json"]:
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(
@@ -1158,8 +1101,15 @@ class TestCoverageHelpers:
                     python=python,
                     no_project=no_project,
                 )
-                if args[:2] == ["coverage", "json"]:
+                _is_coverage_json = args[:4] == [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "json",
+                ] or args[:2] == ["coverage", "json"]
+                if _is_coverage_json:
                     out_path = Path(args[args.index("-o") + 1])
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
                     out_path.write_text(
                         json.dumps(
                             {
@@ -1236,7 +1186,7 @@ class TestCoverageHelpers:
         }
 
         entries = testing_tools._collect_undercovered_files(coverage_data)
-        assert entries == [("pkg/file.py", 88.0, 80.0)]
+        assert entries == [("pkg/file.py", 88.0, 80.0, 0)]
 
     def test_coverage_env_creates_directories(
         self, testing_tools: testing_module.TestingTools

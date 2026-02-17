@@ -77,7 +77,7 @@ def test_collect_undercovered_files_uses_display_values() -> None:
     }
 
     entries = helpers.collect_undercovered_files(coverage_data)
-    assert entries == [("pkg/module.py", 87.5, 75.0)]
+    assert entries == [("pkg/module.py", 87.5, 75.0, 0)]
 
 
 def test_collect_undercovered_files_skips_invalid_or_missing_percent() -> None:
@@ -118,8 +118,8 @@ def test_collect_undercovered_files_branch_percent_handles_errors() -> None:
 
     entries = helpers.collect_undercovered_files(coverage_data)
     assert entries == [
-        ("pkg/type_error.py", 50.0, None),
-        ("pkg/zero_division.py", 50.0, 0.0),
+        ("pkg/type_error.py", 50.0, None, 0),
+        ("pkg/zero_division.py", 50.0, 0.0, 0),
     ]
 
 
@@ -133,8 +133,8 @@ def test_format_undercovered_tree_outputs_hierarchy() -> None:
     assert tree == [
         "└── pkg/",
         "    ├── sub/",
-        "    │   └── inner.py: line = 50.00%",
-        "    └── module.py: line = 87.50% branch = 75.00%",
+        "    │   └── inner.py: line = 50.00% loc = 0",
+        "    └── module.py: line = 87.50% branch = 75.00% loc = 0",
     ]
 
 

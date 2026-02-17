@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 from pathlib import Path
 from typing import Callable, cast
@@ -132,8 +131,6 @@ def log_command_status(
     logger: LoggerLike,
 ) -> None:
     """Log known file-based artifacts for the given config."""
-    if dataclasses.is_dataclass(metadata):
-        metadata = dataclasses.replace(metadata)
     try:
         dataset_dir = metadata.dataset_dir
     except (OSError, ValueError, TypeError, AttributeError):

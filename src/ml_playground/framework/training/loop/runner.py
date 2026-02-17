@@ -41,6 +41,8 @@ from ml_playground.framework.training.hooks.logging import log_training_step
 from ml_playground.framework.training.hooks.model import initialize_model
 from ml_playground.framework.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.framework.training.loop.scheduler import get_lr
+from ml_playground.framework.training.mlflow_integration import MLflowManager
+from ml_playground.framework.data_pipeline.transforms.io import setup_tokenizer
 from ml_playground.framework.training.types import (
     BatchProvider,
     OptimizerLike,
@@ -161,6 +163,11 @@ class Trainer:
         self._ema: EMA | None = ema
         self._writer: TensorboardWriter | None = writer
 
+        self.mlflow_mgr = MLflowManager(cfg.runtime, metadata, self.logger)
+        self.mlflow_mgr.setup()
+        self.mlflow_mgr.log_config(cfg)
+        self.tokenizer = setup_tokenizer(self.metadata.dataset_dir)
+
         self.iter_num: int = 0
         self.best_val_loss: float = getattr(cfg.runtime, "initial_best_val_loss", 1e9)
         self._train_step_override: TTrainStep | None = None
@@ -214,6 +221,15 @@ class Trainer:
         raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
         running_mfu = -1.0
 
+        # Calculate dataset metadata for progress tracking
+        train_obj = getattr(self.batches, "train", None)
+        train_tokens_total = max(1, int(getattr(train_obj, "length", 1)))
+        tokens_per_iter = (
+            self.cfg.data.batch_size
+            * self.cfg.data.block_size
+            * self.cfg.data.grad_accum_steps
+        )
+
         should_save_checkpoint = True
 
         try:
@@ -236,8 +252,111 @@ class Trainer:
                         ctx=self.ctx,
                         writer=self.writer,
                     )
-                    if losses["val"] < self.best_val_loss:
+                    is_new_best = losses["val"] < self.best_val_loss
+                    if is_new_best:
                         self.best_val_loss = losses["val"]
+
+                    # Calculate dataset progress
+                    tokens_seen = self.iter_num * tokens_per_iter
+                    epoch = tokens_seen / train_tokens_total
+
+                    self.logger.info(
+                        f"step {self.iter_num}: train loss {losses.get('train', 0.0):.4f}, "
+                        f"val loss {losses.get('val', 0.0):.4f}, "
+                        f"epoch {epoch:.2f} ({tokens_seen:,}/{train_tokens_total:,} tokens)"
+                    )
+
+                    self.mlflow_mgr.log_metrics(
+                        {
+                            "val_loss": losses.get("val", 0.0),
+                            "train_loss_eval": losses.get("train", 0.0),
+                            "epoch": epoch,
+                            "tokens_seen": tokens_seen,
+                        },
+                        step=self.iter_num,
+                    )
+
+                    if self.tokenizer is not None:
+                        try:
+                            start_text = "\n"
+                            max_new_tokens = 250
+                            try:
+                                import tomllib
+                                from pathlib import Path
+
+                                cfg_path = getattr(self.metadata, "config_path", None)
+                                if cfg_path:
+                                    p = Path(cfg_path)
+                                    if p.exists():
+                                        with open(p, "rb") as f:
+                                            raw_cfg = tomllib.load(f)
+                                            samp_cfg = raw_cfg.get("sampling", {}).get(
+                                                "sample", {}
+                                            )
+                                            extras_cfg = raw_cfg.get(
+                                                "sampling", {}
+                                            ).get("extras", {})
+                                            start_text = samp_cfg.get("start", "\n")
+                                            max_new_tokens = samp_cfg.get(
+                                                "max_new_tokens", 250
+                                            )
+
+                                            if "speaker" in extras_cfg:
+                                                speaker = extras_cfg["speaker"]
+                                                party = extras_cfg.get(
+                                                    "party", "CDU/CSU"
+                                                )
+                                                topic_hint = extras_cfg.get("topic", "")
+                                                topic_str = (
+                                                    f"{topic_hint} "
+                                                    if topic_hint
+                                                    else ""
+                                                )
+                                                start_text = f'<SP name="{speaker}" party="{party}">\n<SPEAKER>{speaker}:</SPEAKER>\n<P>{topic_str}'
+                                            elif start_text.startswith("FILE:"):
+                                                prompt_path = Path(start_text[5:])
+                                                if prompt_path.exists():
+                                                    start_text = prompt_path.read_text(
+                                                        encoding="utf-8"
+                                                    )
+                                    else:
+                                        pass
+                                else:
+                                    pass
+                            except Exception as e:
+                                self.logger.debug(f"Failed to load sample config: {e}")
+
+                            prompt_ids = self.tokenizer.encode(start_text)
+                            orig_device = next(raw_model.parameters()).device
+                            x_gen = torch.tensor(
+                                [prompt_ids], dtype=torch.long, device=orig_device
+                            )
+                            raw_model.eval()
+
+                            with torch.no_grad():
+                                y_gen = raw_model.generate(
+                                    x_gen,
+                                    max_new_tokens=max_new_tokens,
+                                    temperature=0.8,
+                                )
+
+                            raw_model.train()
+
+                            # y_gen contains both the prompt and the generated tokens.
+                            # We slice off the prompt ids to decode just the newly generated text,
+                            # then prepend the exact original start_text so formatting remains perfect.
+                            new_output_ids = y_gen[0][len(prompt_ids) :].tolist()
+                            output_text = self.tokenizer.decode(new_output_ids)
+                            full_text = start_text + output_text
+                            self.mlflow_mgr.log_text(
+                                full_text, f"samples/step_{self.iter_num}.txt"
+                            )
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Failed to generate and log sample text: {e}"
+                            )
+
+                    if is_new_best:
                         if self.iter_num > 0:
                             self._save_checkpoint(
                                 raw_model=raw_model,
@@ -295,6 +414,22 @@ class Trainer:
                             "TensorBoard logging skipped due to writer error: %s", exc
                         )
 
+                    tokens_seen = self.iter_num * tokens_per_iter
+                    epoch = tokens_seen / train_tokens_total
+
+                    self.mlflow_mgr.log_metrics(
+                        {
+                            "train_loss": loss.item() * self.cfg.data.grad_accum_steps,
+                            "lr": lr,
+                            "mfu": max(0.0, min(float(running_mfu) * 100.0, 100.0))
+                            if running_mfu != -1.0
+                            else -1.0,
+                            "epoch": epoch,
+                            "tokens_seen": tokens_seen,
+                        },
+                        step=self.iter_num,
+                    )
+
                 self.iter_num += 1
                 local_iter_num += 1
 
@@ -334,6 +469,8 @@ class Trainer:
 
             if self.writer:
                 self.writer.close()
+
+            self.mlflow_mgr.finish()
 
         return self.iter_num, self.best_val_loss
 

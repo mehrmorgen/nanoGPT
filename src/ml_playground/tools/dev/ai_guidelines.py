@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Callable, List, Optional, Protocol
+from typing import Any, Callable, List, Optional, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict
 from pathspec import PathSpec
@@ -143,11 +143,13 @@ def gitignore_match(
                 if git_wild_match_pattern_factory:
                     pattern = git_wild_match_pattern_factory(line)
                 else:
-                    pattern = GitIgnoreSpecPattern(line)
+                    pattern = GitIgnoreSpecPattern(cast(Any, line))
             except ValueError:
                 continue
 
-            if any(pattern.match_file(candidate) for candidate in candidates):
+            if any(
+                pattern.match_file(cast(Any, candidate)) for candidate in candidates
+            ):
                 ignored = bool(pattern.include)
                 matched_pattern = line.strip()
 
@@ -170,7 +172,7 @@ def is_listed_in_aiignore(project_dir: Path, tool_dir: Path) -> bool:
     if not patterns:
         return False
 
-    spec = PathSpec.from_lines("gitignore", patterns)
+    spec = PathSpec.from_lines("gitignore", cast(Any, patterns))
     rel_path = relative_tool_path(project_dir, tool_dir).rstrip("/")
     return bool(spec.match_file(rel_path) or spec.match_file(rel_path + "/"))
 

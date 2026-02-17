@@ -45,6 +45,9 @@ class BundestagCharSampleExtras(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     require_adapters: bool | None = None
+    speaker: str | None = None
+    party: str | None = None
+    topic: str | None = None
 
 
 register_extras_model("bundestag_char", "prepare", BundestagCharPrepareExtras)

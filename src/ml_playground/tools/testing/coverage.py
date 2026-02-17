@@ -84,22 +84,17 @@ def run_coverage_test(
     # Set up coverage environment
     env = _coverage_env(cache_dir)
 
-    # Run slipcover with pytest
+    # Run coverage with pytest
     result = subprocess_runner.run_uv_command(
         [
             "python",
             "-m",
-            "slipcover",
-            "--branch",
-            "--json",
-            "--out",
-            str(coverage_json),
-            "--source",
-            "src/ml_playground/framework",
+            "coverage",
+            "run",
             "-m",
             "pytest",
             "-n",
-            "0",  # No parallel execution for coverage
+            "0",  # Single-threaded: avoids xdist subprocess instrumentation
             "-v",
             "tests/unit",
             "tests/property",
@@ -110,6 +105,46 @@ def run_coverage_test(
         operation_id=operation_id,
     )
 
+    if result.success:
+        # Combine parallel/fragment coverage data.
+        # --ignore-errors: test fixtures create then delete temp directories;
+        # paths recorded during the run may no longer exist at combine time.
+        combine_result = subprocess_runner.run_uv_command(
+            ["python", "-m", "coverage", "combine", "--quiet"],
+            cwd=root_path,
+            env=env,
+            timeout=config.testing.timeout,
+            operation_id=operation_id,
+        )
+        if not combine_result.success:
+            return combine_result
+
+        # Generate JSON report.
+        # NOTE: `coverage json` exits with code 2 when total coverage is below
+        # `fail_under` in pyproject.toml even though it successfully writes the
+        # JSON file.  We must not treat that as a fatal error here — the
+        # threshold check is done separately by `coverage-threshold`.  Only
+        # bail out if the JSON file was NOT actually written.
+        json_result = subprocess_runner.run_uv_command(
+            [
+                "python",
+                "-m",
+                "coverage",
+                "json",
+                "-i",  # --ignore-errors: skip missing temp test-fixture source paths
+                "-o",
+                str(coverage_json),
+            ],
+            cwd=root_path,
+            env=env,
+            timeout=config.testing.timeout,
+            operation_id=operation_id,
+        )
+        if not json_result.success and not (
+            coverage_json.exists() and coverage_json.stat().st_size > 0
+        ):
+            return json_result
+
     if learning_mode:
         learning_engine = LearningModeEngine()
         learning_engine.verbosity = VerbosityLevel(verbosity_level)
@@ -118,9 +153,8 @@ def run_coverage_test(
             context="Running tests while measuring code coverage to identify untested code",
             category="test",
             executed_commands=[
-                "python -m slipcover --branch --json "
-                f"--out {coverage_json} --source src/ml_playground/framework "
-                "-m pytest -n 0 tests/unit tests/property"
+                "python -m coverage run -m pytest -n auto -v tests/unit tests/property",
+                f"python -m coverage json -o {coverage_json}",
             ],
         )
 
@@ -589,7 +623,7 @@ def run_coverage_threshold(
     # Totals summary for humans/tests (kept in stdout so it appears in combined coverage output).
     info_lines.append("Coverage totals:")
     info_lines.append(
-        f"  Lines: {int(covered_lines)}/{int(num_statements)} ({line_pct:.2f}%)"
+        f"  Lines: {int(covered_lines)}/{int(num_statements)} ({line_pct:.2f}%), LOC={int(num_statements)}"
         if num_statements
         else "  Lines: <missing>"
     )
@@ -600,7 +634,7 @@ def run_coverage_threshold(
     else:
         info_lines.append("  Branches: <missing>")
 
-    coverage_files: list[tuple[str, float, float | None]] = []
+    coverage_files: list[tuple[str, float, float | None, int]] = []
     if coverage_data:
         coverage_files = collect_undercovered_files(coverage_data)
     # Always report under-covered files if any exist, regardless of threshold pass/fail
@@ -971,89 +1005,11 @@ def _run_coverage_test_for_data(
     notes = [message]
     coverage_json = cache_dir / "coverage" / "coverage.json"
     if not coverage_json.exists() or coverage_json.stat().st_size == 0:
-        fallback_result, fallback_notes = _generate_coverage_via_pytest(
-            config=config,
-            root_path=root_path,
-            args=args,
-            verbose=verbose,
-            subprocess_runner=subprocess_runner,
-            cache_dir=cache_dir,
-            operation_id=operation_id,
-            executed_commands=executed_commands,
+        notes.append(
+            "Coverage pipeline generated no data. Check `tools test coverage` output."
         )
-        notes.extend(fallback_notes)
-        if isinstance(fallback_result, ToolResult):
-            return fallback_result, notes
 
     return None, notes
-
-
-def _generate_coverage_via_pytest(
-    *,
-    config: ToolsConfig,
-    root_path: Path,
-    args: List[str],
-    verbose: bool,
-    subprocess_runner: SubprocessRunner,
-    cache_dir: Path,
-    operation_id: OperationId,
-    executed_commands: list[str] | None = None,
-) -> tuple[ToolResult | None, list[str]]:
-    """Generate coverage data with a direct slipcover invocation."""
-    if executed_commands is None:
-        executed_commands = []
-
-    coverage_json = cache_dir / "coverage" / "coverage.json"
-    env = _coverage_env(cache_dir)
-    slipcover_cmd = [
-        "python",
-        "-m",
-        "slipcover",
-        "--branch",
-        "--json",
-        "--out",
-        str(coverage_json),
-        "--source",
-        "src/ml_playground/framework",
-        "-m",
-        "pytest",
-        "-n",
-        "0",
-        "-v",
-        "tests/unit",
-        "tests/property",
-        *args,
-    ]
-    formatted_slipcover_cmd = _format_command(slipcover_cmd)
-    if formatted_slipcover_cmd not in executed_commands:
-        executed_commands.append(formatted_slipcover_cmd)
-
-    result = subprocess_runner.run_uv_command(
-        slipcover_cmd,
-        cwd=root_path,
-        env=env,
-        timeout=config.testing.timeout,
-        operation_id=operation_id,
-    )
-
-    # Clean pytest output
-    if result.stdout:
-        result.stdout = _clean_pytest_output(result.stdout)
-
-    if not result.success:
-        return result, []
-
-    message = "Coverage pipeline generated no data; reran slipcover to create coverage artifacts."
-    if verbose:
-        extra_lines: list[str] = []
-        if result.stdout:
-            extra_lines.append(result.stdout.strip())
-        if result.stderr:
-            extra_lines.append(result.stderr.strip())
-        if extra_lines:
-            message += "\n" + "\n".join(extra_lines)
-
-    return None, [message]
 
 
 def _read_coverage_thresholds_from_config(root_path: Path) -> dict[str, float]:

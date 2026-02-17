@@ -202,9 +202,7 @@ def run_server_bundestag_char(
 
 
 def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
-    parser = argparse.ArgumentParser(
-        description="Run LIT server for bundestag_char PoC"
-    )
+    parser = argparse.ArgumentParser(description="Run experiment LIT server")
     try:
         default_host = get_default_host()
     except (ValueError, TypeError):

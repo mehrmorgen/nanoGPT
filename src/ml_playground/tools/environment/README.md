@@ -39,5 +39,5 @@ src/ml_playground/tools/environment/
 ## Verification Policy
 
 - `env verify` is strict and fail-fast: it validates package import and required quality tooling in one check.
-- Required tools are `pre-commit`, `yamlfix`, `basedpyright`, `mypy`, and `vulture`.
+- Required tools are `pre-commit`, `yamlfix`, `pyrefly`, and `vulture`.
 - If prerequisites are missing, remediation is explicit: run `uv sync --group all` or `uv run tools env setup --clear`.

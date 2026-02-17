@@ -235,32 +235,12 @@ class TestQualityLintCheckAndDeadcode:
 
 
 class TestQualityTypecheckers:
-    @pytest.mark.parametrize(
-        ("command", "method"),
-        [
-            (quality_commands.quality_basedpyright, "basedpyright"),
-            (quality_commands.quality_mypy, "mypy"),
-        ],
-    )
-    def test_typecheck_commands_handle_errors(
-        self, command: Callable[[List[str] | None], None], method: str
-    ) -> None:
+    def test_typecheck_command_handles_errors(self) -> None:
         captured: list[ToolResult] = []
 
         class FailingTools:
-            def __init__(self) -> None:
-                self.method = method
-
-            def __getattr__(self, name: str) -> Any:
-                if name == self.method:
-
-                    def _fail(*_: object, **__: object) -> ToolResult:  # noqa: ANN401
-                        raise ToolExecutionError(
-                            f"{name} failed", reason="a", rationale="b"
-                        )
-
-                    return _fail
-                raise AttributeError(name)
+            def typecheck(self, *args: object, **kwargs: object) -> ToolResult:  # noqa: ANN401
+                raise ToolExecutionError("typecheck failed", reason="a", rationale="b")
 
         def _capture_run_tool_command(
             command_func: Callable[..., ToolResult], *args: Any, **kwargs: Any
@@ -286,9 +266,9 @@ class TestQualityTypecheckers:
                 "run_tool_command",
                 _capture_run_tool_command,
             ):
-                command(None)
+                quality_commands.quality_typecheck(None)
 
         assert captured and captured[0].success is False
         assert captured[0].operation_id.category == "quality"
         assert captured[0].operation_id.command == "generic-error"
-        assert f"{method} failed" in (captured[0].stderr or "")
+        assert "typecheck failed" in (captured[0].stderr or "")

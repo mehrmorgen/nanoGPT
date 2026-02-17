@@ -12,6 +12,8 @@ ROGUE_CONFIG_PATTERNS = [
     "mypy.ini",
     ".pyrightconfig.json",
     "pyrightconfig.json",
+    ".pyrefly.toml",
+    "pyrefly.toml",
     "pytest.ini",
     "setup.cfg",
     ".flake8",

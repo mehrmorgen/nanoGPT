@@ -322,11 +322,14 @@ class TestingTools:
 
     def _collect_undercovered_files(
         self, coverage_data: Mapping[str, object]
-    ) -> list[tuple[str, float, float | None]]:
+    ) -> list[tuple[str, float, float | None, int]]:
         return self._coverage_service.get_undercovered_files(coverage_data)
 
     def _format_undercovered_tree(
-        self, entries: list[tuple[str, float, float | None]]
+        self,
+        entries: list[
+            tuple[str, float, float | None] | tuple[str, float, float | None, int]
+        ],
     ) -> list[str]:
         return self._coverage_service.render_undercovered_tree(entries)
 
@@ -640,20 +643,11 @@ class TestingTools:
         )
 
         result = self._subprocess_runner.run_pytest_command(
-            ["-m", "integration or True", "tests/integration", *args],
+            ["tests/integration", *args],
             cwd=self._root_path,
             timeout=self._config.testing.timeout,
             operation_id=operation_id,
         )
-        # Treat "no tests collected" (pytest exit code 5) as a clean pass for optional suites.
-        if result.exit_code == 5 and not result.success:
-            result.success = True
-            result.exit_code = 0
-            note = (
-                "No integration tests were collected; treating as success "
-                "because the suite is optional in this context."
-            )
-            result.stdout = f"{(result.stdout or '').strip()}\n{note}".strip()
         result = self._clean_pytest_result(result)
 
         if learning_mode:
@@ -663,8 +657,7 @@ class TestingTools:
                 context="Running integration tests to verify components work together correctly",
                 category=self.category,
                 executed_commands=[
-                    "pytest -m 'integration or True' tests/integration"
-                    + (f" {' '.join(args)}" if args else "")
+                    "pytest tests/integration" + (f" {' '.join(args)}" if args else "")
                 ],
             )
 

@@ -41,14 +41,12 @@ from ml_playground.tools.utils.subprocess_utils import (
 
 from ml_playground.framework.core.di_implementations import DefaultJsonParser
 
-# Expose batch_review module for tests/overrides expecting run_batch_review attribute.
 batch_review = batch_review_module
 
 __all__ = [
     "DevTools",
     "batch_review",
     "psutil",
-    # Public testing-friendly aliases for previously private helpers
     "Comment",
     "Thread",
     "FetchResult",
@@ -142,7 +140,6 @@ class _FetchResult(BaseModel):
     pull_request_id: str | None = None
 
 
-# Public aliases for tests and policy compliance
 Comment = _Comment
 Thread = _Thread
 FetchResult = _FetchResult

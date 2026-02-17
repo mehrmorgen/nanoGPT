@@ -523,7 +523,7 @@ This is a machine learning playground project with the following key components:
 ## Key Principles
 
 1. **No Mocking Policy**: Use dependency injection and lightweight fakes exclusively
-2. **Strict Typing**: All code must pass BasedPyright strict mode
+2. **Strict Typing**: All code must pass strict static type checking
 3. **100% Coverage**: Maintain complete test coverage for all code
 4. **TDD Approach**: Write tests first, implement, then refactor
 
@@ -544,7 +544,7 @@ This is a machine learning playground project with the following key components:
 ## Quality Standards
 
 - Ruff for linting and formatting
-- BasedPyright and MyPy for type checking
+- Pyrefly for strict static type checking
 - Vulture for dead code detection
 - Coverage thresholds enforced in CI
 

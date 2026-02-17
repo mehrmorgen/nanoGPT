@@ -80,7 +80,12 @@ def test_coverage_badge_generates_json_when_missing(
             python: str | None = None,
             no_project: bool = False,
         ) -> ToolResult:
-            if args[:2] == ["coverage", "json"]:
+            _is_json = args[:4] == ["python", "-m", "coverage", "json"] or args[:2] == [
+                "coverage",
+                "json",
+            ]
+            if _is_json:
+                self._json_target.parent.mkdir(parents=True, exist_ok=True)
                 self._json_target.write_text(
                     '{"totals": {"percent_covered": 75.0}}', encoding="utf-8"
                 )
@@ -95,7 +100,14 @@ def test_coverage_badge_generates_json_when_missing(
             )
 
     json_runner = JsonGeneratingRunner(json_path)
-    json_runner.set_results([create_success_result(operation_id, "Coverage generated")])
+    # ci.py badge flow: coverage run → coverage combine → coverage json
+    json_runner.set_results(
+        [
+            create_success_result(operation_id, "run ok"),
+            create_success_result(operation_id, "combine ok"),
+            create_success_result(operation_id, "json ok"),
+        ]
+    )
     json_tools = CITools(ToolsConfig(), tools.root_path, subprocess_runner=json_runner)
     json_tools.cache_dir = tools.cache_dir
 

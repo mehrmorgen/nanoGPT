@@ -120,19 +120,19 @@ class CoverageRunner(SubprocessRunner):
     ) -> ToolResult:
         self.uv_calls.append(args)
 
-        if args[:3] == ["python", "-m", "slipcover"]:
+        if args[:3] == ["python", "-m", "coverage"] and "json" in args:
             if self.slipcover_should_fail:
                 return ToolResult(
                     success=False,
                     exit_code=1,
                     stdout="",
-                    stderr="slipcover failed",
+                    stderr="coverage failed",
                     operation_id=operation_id,
                 )
-            out_path = Path(args[args.index("--out") + 1])
+            out_path = Path(args[args.index("-o") + 1])
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(json.dumps(self.json_payload), encoding="utf-8")
-            return self._success(operation_id, stdout="slipcover")
+            return self._success(operation_id, stdout="coverage")
 
         return self._success(operation_id)
 
@@ -151,7 +151,9 @@ def test_run_coverage_test_writes_manifest(config: ToolsConfig, tmp_path: Path) 
 
     assert result.success is True
     assert (_coverage_dir(tmp_path) / "coverage_manifest.json").exists()
-    assert any(cmd[:3] == ["python", "-m", "slipcover"] for cmd in runner.uv_calls)
+    assert any(
+        cmd[:4] == ["python", "-m", "coverage", "run"] for cmd in runner.uv_calls
+    )
 
 
 def test_run_coverage_test_propagates_failures(
@@ -170,7 +172,7 @@ def test_run_coverage_test_propagates_failures(
     )
 
     assert result.success is False
-    assert result.stderr == "slipcover failed"
+    assert result.stderr == "coverage failed"
 
 
 def test_run_coverage_report_uses_cached_manifest(
@@ -195,7 +197,7 @@ def test_run_coverage_report_uses_cached_manifest(
     assert not runner.uv_calls
 
 
-def test_run_coverage_report_force_regen_runs_slipcover(
+def test_run_coverage_report_force_regen_runs_coverage(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
     create_sample_source_file(tmp_path)
@@ -213,7 +215,9 @@ def test_run_coverage_report_force_regen_runs_slipcover(
 
     assert result.success is True
     assert "Automatically ran coverage to generate coverage data." in result.stdout
-    assert any(cmd[:3] == ["python", "-m", "slipcover"] for cmd in runner.uv_calls)
+    assert any(
+        cmd[:4] == ["python", "-m", "coverage", "run"] for cmd in runner.uv_calls
+    )
 
 
 def test_run_coverage_report_raises_on_invalid_json(

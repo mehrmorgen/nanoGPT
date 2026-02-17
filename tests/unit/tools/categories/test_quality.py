@@ -201,71 +201,55 @@ class TestFormat:
 
 class TestTypecheck:
     def test_success(self, quality_tools, subprocess_runner):
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         subprocess_runner.set_results(
-            [
-                create_success_result(bp_id, "bp ok"),
-                create_success_result(mypy_id, "mypy ok"),
-            ]
+            [create_success_result(operation_id, "pyrefly ok")]
         )
 
         result = quality_tools.typecheck([])
 
         assert result.success is True
-        assert "BasedPyright:" in result.stdout
-        assert "Mypy:" in result.stdout
+        assert "pyrefly ok" in result.stdout
 
-    def test_basedpyright_failure(self, quality_tools, subprocess_runner):
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+    def test_failure(self, quality_tools, subprocess_runner):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         subprocess_runner.set_results(
-            [
-                create_failure_result(bp_id, 1, stderr="bp err"),
-                create_success_result(mypy_id),
-            ]
+            [create_failure_result(operation_id, 1, stderr="pyrefly err")]
         )
 
         result = quality_tools.typecheck([])
 
         assert result.success is False
-        assert "bp err" in result.stderr
+        assert "pyrefly err" in result.stderr
 
-    def test_mypy_failure(self, quality_tools, subprocess_runner):
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+    def test_failure_exit_code(self, quality_tools, subprocess_runner):
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         subprocess_runner.set_results(
-            [
-                create_success_result(bp_id),
-                create_failure_result(mypy_id, 2, stderr="mypy err"),
-            ]
+            [create_failure_result(operation_id, 2, stderr="pyrefly err")]
         )
 
         result = quality_tools.typecheck([])
 
         assert result.success is False
         assert result.exit_code == 2
-        assert "mypy err" in result.stderr
+        assert "pyrefly err" in result.stderr
 
     def test_learning_mode(self, quality_tools, subprocess_runner):
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+        operation_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
-        subprocess_runner.set_results(
-            [create_success_result(bp_id), create_success_result(mypy_id)]
-        )
+        subprocess_runner.set_results([create_success_result(operation_id)])
 
         result = quality_tools.typecheck([], learning_mode=True, verbosity_level=2)
 
         assert result.learning_info.commands_executed
-        assert "basedpyright" in result.learning_info.commands_executed[0]
+        assert "pyrefly" in result.learning_info.commands_executed[0]
 
 
 class TestDeadcode:
@@ -294,69 +278,19 @@ class TestDeadcode:
         assert result.learning_info.commands_executed
 
 
-class TestBasedPyright:
-    def test_success(self, quality_tools, subprocess_runner):
-        operation_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id)])
-
-        result = quality_tools.basedpyright([])
-
-        assert result.success is True
-        command = subprocess_runner.calls[0]["command"]
-        assert "basedpyright" in command
-
-    def test_learning_mode(self, quality_tools, subprocess_runner):
-        operation_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id)])
-
-        result = quality_tools.basedpyright([], learning_mode=True, verbosity_level=1)
-
-        assert result.learning_info.commands_executed
-
-
-class TestMypy:
-    def test_success(self, quality_tools, subprocess_runner):
-        operation_id = OperationId(
-            namespace="tools", category="quality", command="mypy"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id, "mypy ok")])
-
-        result = quality_tools.mypy([])
-
-        assert result.success is True
-        command = subprocess_runner.calls[0]["command"]
-        assert "mypy" in command
-
-    def test_learning_mode(self, quality_tools, subprocess_runner):
-        operation_id = OperationId(
-            namespace="tools", category="quality", command="mypy"
-        )
-        subprocess_runner.set_results([create_success_result(operation_id)])
-
-        result = quality_tools.mypy([], learning_mode=True, verbosity_level=1)
-
-        assert result.learning_info.commands_executed
-
-
 class TestAllChecks:
     def test_success(self, quality_tools, subprocess_runner):
         lint_id = OperationId(namespace="tools", category="quality", command="lint")
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+        typecheck_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         deadcode_id = OperationId(
             namespace="tools", category="quality", command="deadcode"
         )
         subprocess_runner.set_results(
             [
                 create_success_result(lint_id, "lint ok"),
-                create_success_result(bp_id, "bp ok"),
-                create_success_result(mypy_id, "mypy ok"),
+                create_success_result(typecheck_id, "typecheck ok"),
                 create_success_result(deadcode_id, "deadcode ok"),
             ]
         )
@@ -369,18 +303,16 @@ class TestAllChecks:
 
     def test_collects_errors(self, quality_tools, subprocess_runner):
         lint_id = OperationId(namespace="tools", category="quality", command="lint")
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+        typecheck_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         deadcode_id = OperationId(
             namespace="tools", category="quality", command="deadcode"
         )
         subprocess_runner.set_results(
             [
                 create_failure_result(lint_id, 1, stderr="lint fail"),
-                create_success_result(bp_id, "bp ok"),
-                create_failure_result(mypy_id, 2, stderr="mypy fail"),
+                create_failure_result(typecheck_id, 2, stderr="typecheck fail"),
                 create_success_result(deadcode_id, "deadcode ok"),
             ]
         )
@@ -389,22 +321,20 @@ class TestAllChecks:
 
         assert result.success is False
         assert "lint fail" in result.stderr
-        assert "mypy fail" in result.stderr
+        assert "typecheck fail" in result.stderr
 
     def test_learning_mode(self, quality_tools, subprocess_runner):
         lint_id = OperationId(namespace="tools", category="quality", command="lint")
-        bp_id = OperationId(
-            namespace="tools", category="quality", command="basedpyright"
+        typecheck_id = OperationId(
+            namespace="tools", category="quality", command="typecheck"
         )
-        mypy_id = OperationId(namespace="tools", category="quality", command="mypy")
         deadcode_id = OperationId(
             namespace="tools", category="quality", command="deadcode"
         )
         subprocess_runner.set_results(
             [
                 create_success_result(lint_id),
-                create_success_result(bp_id),
-                create_success_result(mypy_id),
+                create_success_result(typecheck_id),
                 create_success_result(deadcode_id),
             ]
         )
@@ -412,4 +342,4 @@ class TestAllChecks:
         result = quality_tools.all_checks([], learning_mode=True, verbosity_level=2)
 
         assert result.learning_info.commands_executed
-        assert len(result.learning_info.commands_executed) == 4
+        assert len(result.learning_info.commands_executed) == 3

@@ -92,8 +92,5 @@ def test_verify_uses_python_import_command(tmp_path: Path) -> None:
     assert call.args[0:2] == ["python", "-c"]
     script = call.args[2]
     assert "import ml_playground" in script
-    assert (
-        "required = ['pre-commit', 'yamlfix', 'basedpyright', 'mypy', 'vulture']"
-        in script
-    )
+    assert "required = ['pre-commit', 'yamlfix', 'pyrefly', 'vulture']" in script
     assert "raise SystemExit(0 if not missing else 1)" in script

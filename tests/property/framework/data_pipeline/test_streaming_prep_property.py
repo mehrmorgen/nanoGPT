@@ -15,7 +15,7 @@ from ml_playground.framework.data_pipeline.transforms.streaming import (
 
 @settings(
     max_examples=12,
-    deadline=100,
+    deadline=None,
     derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )

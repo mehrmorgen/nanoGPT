@@ -73,7 +73,7 @@ def ensure_germaparl_tarball(
         with tmp_path.open("wb") as handle:
             chunks = getattr(response, "iter_content", None)
             if callable(chunks):
-                chunk_iter = cast(object, chunks(chunk_size=CHUNK_SIZE))
+                chunk_iter = chunks(chunk_size=CHUNK_SIZE)
                 if not isinstance(chunk_iter, Iterable):
                     raise DataError(
                         "HTTP response iter_content did not return an iterable",

@@ -205,6 +205,8 @@ class MLflowClient(Protocol):
 
     def set_tag(self, _key: str, _value: object, /) -> None: ...
 
+    def log_text(self, _text: str, _artifact_file: str, /) -> None: ...
+
 
 @runtime_checkable
 class OSModule(Protocol):

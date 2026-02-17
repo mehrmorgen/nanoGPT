@@ -45,7 +45,7 @@ def run_clean(
         cache_dir / "pre-commit",
         cache_dir / "ruff",
         cache_dir / "uv",
-        cache_dir / "mypy",
+        cache_dir / "pyrefly",
     ]
 
     build_targets = [

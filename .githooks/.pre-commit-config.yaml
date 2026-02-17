@@ -7,7 +7,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - tools
           - test
           - regression
@@ -32,7 +32,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - yamlfix
           - ".github"
           - "docs"
@@ -44,22 +44,27 @@ repos:
         pass_filenames: false
   - repo: local
     hooks:
-      - id: basedpyright
-        name: basedpyright (strict)
+      - id: typecheck
+        name: typecheck (strict)
         entry: uv
         args:
           - run
-          - --no-editable
-          - basedpyright
-        language: system
-        pass_filenames: false
-      - id: mypy
-        name: mypy
-        entry: uv
-        args:
-          - run
-          - --no-editable
-          - mypy
+          - --no-sync
+          - pyrefly
+          - check
+          - --error
+          - redundant-cast
+          - --error
+          - redundant-condition
+          - --error
+          - unnecessary-comparison
+          - --error
+          - unreachable
+          - --error
+          - unused-ignore
+          - --error
+          - deprecated
+          - src/ml_playground
         language: system
         pass_filenames: false
       - id: vulture
@@ -67,7 +72,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - vulture
         language: system
         pass_filenames: false
@@ -78,7 +83,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - tools
           - test
           - coverage-threshold
@@ -90,7 +95,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - tools
           - test
           - integration
@@ -101,7 +106,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - tools
           - test
           - acceptance
@@ -112,7 +117,7 @@ repos:
         entry: uv
         args:
           - run
-          - --no-editable
+          - --no-sync
           - tools
           - test
           - e2e

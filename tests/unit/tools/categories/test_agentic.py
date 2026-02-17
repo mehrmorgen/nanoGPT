@@ -786,13 +786,15 @@ class TestWorkflowStatus:
                     OperationId(
                         namespace="tools",
                         category="quality",
-                        command="basedpyright",
+                        command="typecheck",
                     ),
                     exit_code=3,
                     stderr="Type errors found",
                 ),
                 create_success_result(
-                    OperationId(namespace="tools", category="quality", command="mypy"),
+                    OperationId(
+                        namespace="tools", category="quality", command="deadcode"
+                    ),
                     stdout="Success: no issues found",
                 ),
             ]

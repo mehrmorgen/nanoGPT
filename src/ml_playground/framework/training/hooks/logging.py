@@ -28,7 +28,12 @@ def log_training_step(
             mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * float(mfu)
         )
 
-    mfu_pct = max(0.0, min(float(running_mfu), 100.0))
+    # running_mfu is a ratio (e.g. 0.003), multiply by 100 to get a percentage
+    mfu_pct = (
+        max(0.0, min(float(running_mfu) * 100.0, 100.0))
+        if running_mfu != -1.0
+        else -1.0
+    )
     logger.info(
         f"iter {iter_num}: loss {scaled_loss:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
     )

@@ -75,9 +75,7 @@ class CharTokenizer:
         arr: npt.NDArray[np.int64] = np.atleast_1d(
             np.asarray(token_ids, dtype=np.int64)
         )
-        mask: npt.NDArray[np.bool_] = cast(
-            npt.NDArray[np.bool_], (arr >= 0) & (arr < lookup.shape[0])
-        )
+        mask: npt.NDArray[np.bool_] = (arr >= 0) & (arr < lookup.shape[0])
         if not np.any(mask):
             return ""
         return "".join(lookup[arr[mask]])
@@ -133,9 +131,7 @@ class WordTokenizer:
         arr: npt.NDArray[np.int64] = np.atleast_1d(
             np.asarray(token_ids, dtype=np.int64)
         )
-        mask: npt.NDArray[np.bool_] = cast(
-            npt.NDArray[np.bool_], (arr >= 0) & (arr < lookup.shape[0])
-        )
+        mask: npt.NDArray[np.bool_] = (arr >= 0) & (arr < lookup.shape[0])
         if not np.any(mask):
             return ""
         tokens: npt.NDArray[np.object_] = lookup[arr[mask]]
