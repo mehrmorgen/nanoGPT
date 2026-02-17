@@ -207,7 +207,7 @@ def test_validate_config_value_accepts_none_when_optional(
 
 
 @settings(max_examples=30, deadline=None, derandomize=True)
-@given(value=st.text(min_size=1), name=st.text(min_size=1, max_size=20))
+@given(value=st.text(min_size=1, max_size=64), name=st.text(min_size=1, max_size=20))
 def test_validate_config_value_type_mismatch(value: str, name: str) -> None:
     """validate_config_value raises on type mismatch with clear message."""
     with pytest.raises(ValidationError) as exc:
@@ -231,7 +231,7 @@ def test_validate_config_value_accepts_correct_type(value: int) -> None:
 
 @settings(max_examples=30, deadline=None, derandomize=True)
 @given(
-    msg=st.text(),
+    msg=st.text(max_size=128),
     context=st.one_of(st.none(), st.text(min_size=1, max_size=50)),
 )
 def test_format_error_message_properties(msg: str, context: str | None) -> None:

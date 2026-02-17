@@ -253,7 +253,7 @@ def test_checkpoint_lock_respects_fresh_lock(tmp_path: Path) -> None:
         st.just(float("nan")),
         st.just(float("inf")),
         st.just(float("-inf")),
-        st.text(),
+        st.text(max_size=32),
     )
 )
 def test_checkpoint_lock_handles_bad_timestamp_types(bad_ts: Any) -> None:

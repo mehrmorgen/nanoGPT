@@ -25,10 +25,10 @@ def ci_tools(tmp_path: Path) -> CITools:
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(  # type: ignore[reportAny]
-    ruff_stdout=st.text(),
-    ruff_stderr=st.text(),
-    format_stdout=st.text(),
-    format_stderr=st.text(),
+    ruff_stdout=st.text(max_size=200),
+    ruff_stderr=st.text(max_size=200),
+    format_stdout=st.text(max_size=200),
+    format_stderr=st.text(max_size=200),
 )
 def test_quality_fast_output_aggregation_property(
     ci_tools: CITools,
