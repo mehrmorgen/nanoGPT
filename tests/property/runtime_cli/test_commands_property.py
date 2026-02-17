@@ -237,7 +237,11 @@ def _make_cli_deps(config_path: Path) -> CLIDependencies:
         _port: int,
         _open_browser: bool,
         _learning_engine: object | None = None,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        del metadata, exp_config_path
         return ToolResult.create(
             success=True,
             exit_code=0,
@@ -450,7 +454,10 @@ def test_analyze_command_uses_overrides(
         _port: int,
         _open_browser: bool,
         _learning_engine: object | None,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = metadata, exp_config_path
         return ToolResult.create(
             success=True,
             exit_code=0,

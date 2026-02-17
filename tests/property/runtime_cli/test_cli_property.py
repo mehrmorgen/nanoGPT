@@ -1154,7 +1154,10 @@ def test_analyze_command_invokes_override(
         analysis_port: int,
         should_open_browser: bool,
         learning_engine: LearningModeEngine | None,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = learning_engine, metadata, exp_config_path
         calls["analyze"].append(
             (name, analysis_host, analysis_port, should_open_browser)
         )

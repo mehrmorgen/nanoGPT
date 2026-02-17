@@ -3,25 +3,46 @@
 from __future__ import annotations
 
 import os
+import pickle
 import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+
 
 def test_e2e_bundestag_char_flow(tmp_path: Path) -> None:
-    """Verify prepare -> train -> sample flow using bundestag_char experiment via CLI."""
-    # Arrange: Create input data and config override
+    """Verify train -> sample flow using pre-prepared bundestag_char artifacts via CLI."""
+    # Arrange: Create minimal prepared dataset artifacts and config override.
     datasets_dir = tmp_path / "datasets"
     datasets_dir.mkdir()
     input_file = datasets_dir / "input.txt"
     input_file.write_text("Hello world " * 1000, encoding="utf-8")
+    train_tokens = np.asarray([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.uint16)
+    val_tokens = np.asarray([1, 2, 3, 4], dtype=np.uint16)
+    train_tokens.tofile(datasets_dir / "train.bin")
+    val_tokens.tofile(datasets_dir / "val.bin")
+    meta_payload = {
+        "meta_version": 1,
+        "tokenizer_type": "char",
+        "tokenizer": "char",
+        "vocab_size": 256,
+        "stoi": {"H": 1, "e": 2, "l": 3, "o": 4, " ": 5, "w": 6, "r": 7, "d": 8},
+        "itos": {1: "H", 2: "e", 3: "l", 4: "o", 5: " ", 6: "w", 7: "r", 8: "d"},
+        "train_tokens": int(train_tokens.size),
+        "val_tokens": int(val_tokens.size),
+        "source_head_sha": "test-sha",
+        "source_repo": "PolMine/GermaParlTEI",
+        "source_ref": "main",
+    }
+    with (datasets_dir / "meta.pkl").open("wb") as handle:
+        pickle.dump(meta_payload, handle)
 
     out_dir = tmp_path / "out"
 
     # Config override: point to tmp_path for data and output, use tiny model
     config_content = f"""
 [prepare]
-raw_text_path = "{str(input_file)}"
 tokenizer_type = "char"
 dataset_dir = "{str(datasets_dir)}"
 
@@ -113,16 +134,11 @@ top_k = 50
                 result.returncode, cmd, output=result.stdout, stderr=result.stderr
             )
 
-    # Act 1: Prepare
-    run_cli_safe("prepare")
-    assert (datasets_dir / "train.bin").exists()
-    assert (datasets_dir / "meta.pkl").exists()
-
-    # Act 2: Train
+    # Act 1: Train
     run_cli_safe("train")
     # Checkpoints might be named differently depending on config (last, best)
     # We expect at least one checkpoint
     assert any(out_dir.glob("*.pt")), f"No checkpoints found in {out_dir}"
 
-    # Act 3: Sample
+    # Act 2: Sample
     run_cli_safe("sample")

@@ -311,25 +311,18 @@ def run_analyze_cmd(
     exp_obj = deps.load_experiment(experiment, exp_config_path)
     metadata = getattr(exp_obj, "metadata", None)
     analyze_fn = deps.run_analyze
-    try:
-        result_raw: object = cast(
-            object,
-            cast(Any, analyze_fn)(
-                experiment,
-                host,
-                port,
-                open_browser,
-                learning_engine,
-                metadata=metadata,
-                exp_config_path=exp_config_path,
-            ),
-        )
-    except TypeError:
-        # Backward compatibility for injected test doubles without new kwargs.
-        result_raw = cast(
-            object,
-            analyze_fn(experiment, host, port, open_browser, learning_engine),
-        )
+    result_raw: object = cast(
+        object,
+        cast(Any, analyze_fn)(
+            experiment,
+            host,
+            port,
+            open_browser,
+            learning_engine,
+            metadata=metadata,
+            exp_config_path=exp_config_path,
+        ),
+    )
     result = cast(ToolResult, result_raw)
     handler = deps.handle_tool_result
     if handler is runtime_bootstrap.CLIDependencies.handle_tool_result:

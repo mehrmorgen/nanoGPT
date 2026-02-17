@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import io
 import logging
 from pathlib import Path
-import tarfile
 from types import SimpleNamespace, TracebackType
-from typing import Any, Mapping, cast
+from typing import Any, Callable, ContextManager, Mapping, cast
 
 import pytest
 import typer
@@ -121,6 +119,10 @@ def _metadata(tmp_path: Path) -> MetadataConfigLike:
     )
 
 
+def _prepare_cfg(logger: _Logger) -> PreparerConfig:
+    return PreparerConfig(tokenizer_type="char", logger=logger, extras={})
+
+
 def test_run_prepare_impl_success(tmp_path: Path) -> None:
     called: list[str] = []
 
@@ -129,7 +131,7 @@ def test_run_prepare_impl_success(tmp_path: Path) -> None:
 
     deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
     logger = _Logger()
-    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    cfg = _prepare_cfg(logger)
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
     result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
@@ -144,7 +146,7 @@ def test_run_prepare_impl_failure(tmp_path: Path) -> None:
 
     deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
     logger = _Logger()
-    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    cfg = _prepare_cfg(logger)
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
     result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
@@ -160,7 +162,7 @@ def test_run_prepare_impl_failure_when_pipeline_has_no_run(tmp_path: Path) -> No
 
     deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
     logger = _Logger()
-    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    cfg = _prepare_cfg(logger)
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
     result = commands.run_prepare_impl("exp", cfg, Path("config"), metadata, deps)
@@ -185,7 +187,7 @@ def test_run_prepare_impl_learning(tmp_path: Path) -> None:
 
     deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
     logger = _Logger()
-    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    cfg = _prepare_cfg(logger)
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
     result = commands.run_prepare_impl(
@@ -212,7 +214,7 @@ def test_run_prepare_impl_failure_with_learning(tmp_path: Path) -> None:
 
     deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
     logger = _Logger()
-    cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+    cfg = _prepare_cfg(logger)
     metadata: MetadataConfigLike = _metadata(tmp_path)
 
     result = commands.run_prepare_impl(
@@ -279,46 +281,42 @@ def test_resolve_experiment_preparer_skips_type_error_ctor() -> None:
 def test_run_prepare_impl_uses_experiment_preparer_before_pipeline(
     tmp_path: Path,
 ) -> None:
-    exp_dir = tmp_path / "bundestag_char"
-    ds_dir = exp_dir / "datasets"
-    ds_dir.mkdir(parents=True, exist_ok=True)
-
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as archive:
-        xml = (
-            "<?xml version='1.0' encoding='UTF-8'?><TEI><text><body><div>"
-            "<sp><speaker>A</speaker><p>B</p></sp></div></body></text></TEI>"
-        ).encode("utf-8")
-        info = tarfile.TarInfo(name="GermaParlTEI-main/01/BT_01_001.xml")
-        info.size = len(xml)
-        archive.addfile(info, io.BytesIO(xml))
-    tarball = buf.getvalue()
-
     cfg = PreparerConfig(
         tokenizer_type="char",
         logger=logging.getLogger("prepare-real-preparer"),
-        extras={
-            "dataset_dir_override": str(exp_dir),
-            "dataset_source": "germaparl_tei",
-            "germaparl_tarball_bytes": tarball,
-        },
+        extras={},
     )
 
     called: list[str] = []
+    prepared: list[str] = []
+
+    class _DummyPreparer:
+        def prepare(self, prepared_cfg: PreparerConfig) -> None:
+            prepared.append("prepare")
+            assert callable(prepared_cfg.extras.get("overwrite_confirm"))
 
     def create_pipeline(_cfg: PreparerConfig, _metadata: MetadataConfigLike) -> Any:
         called.append("pipeline")
         return SimpleNamespace(run=lambda: None)
 
-    deps = bootstrap.CLIDependencies(create_pipeline=create_pipeline)
-    metadata: MetadataConfigLike = _metadata(tmp_path)
-
-    result = commands.run_prepare_impl(
-        "bundestag_char", cfg, Path("config"), metadata, deps
+    deps = bootstrap.CLIDependencies(
+        create_pipeline=create_pipeline,
+        confirm_fn=lambda _msg: True,
     )
+    metadata: MetadataConfigLike = _metadata(tmp_path)
+    original_resolver = commands._resolve_experiment_preparer
+
+    commands._resolve_experiment_preparer = lambda _exp: _DummyPreparer()
+    try:
+        result = commands.run_prepare_impl(
+            "bundestag_char", cfg, Path("config"), metadata, deps
+        )
+    finally:
+        commands._resolve_experiment_preparer = original_resolver
 
     assert result.success is True
     assert called == []
+    assert prepared == ["prepare"]
 
 
 def test_run_prepare_impl_fails_when_resolved_preparer_has_no_prepare(
@@ -328,7 +326,7 @@ def test_run_prepare_impl_fails_when_resolved_preparer_has_no_prepare(
     commands._resolve_experiment_preparer = lambda _exp: object()
     try:
         logger = _Logger()
-        cfg: PreparerConfig = cast(PreparerConfig, SimpleNamespace(logger=logger))
+        cfg = _prepare_cfg(logger)
         metadata: MetadataConfigLike = _metadata(tmp_path)
         deps = bootstrap.CLIDependencies(
             create_pipeline=lambda _cfg, _metadata: SimpleNamespace(run=lambda: None)
@@ -576,6 +574,43 @@ def test_commands_run_analyze_exception() -> None:
     )
     assert result.success is False
     assert "Analysis failed: boom" in (result.stderr or "")
+
+
+def test_commands_run_analyze_uses_tensorboard_when_events_exist(
+    tmp_path: Path,
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    train_out = tmp_path / "train"
+    tb_dir = train_out / "logs" / "tb"
+    tb_dir.mkdir(parents=True, exist_ok=True)
+    (tb_dir / "events.out.tfevents.test").write_text("event", encoding="utf-8")
+    metadata = SimpleNamespace(train_out_dir=train_out)
+    calls: list[tuple[Path, str, int, bool]] = []
+
+    def _fake_tensorboard(
+        logdir: Path, host: str, port: int, open_browser: bool, _logger: Any
+    ) -> None:
+        calls.append((logdir, host, port, open_browser))
+
+    with override_attr(commands, "_run_tensorboard_server", _fake_tensorboard):
+        result = commands.run_analyze(
+            "not_bundestag",
+            "127.0.0.1",
+            8051,
+            False,
+            metadata=metadata,
+        )
+
+    assert result.success is True
+    assert calls == [(tb_dir, "127.0.0.1", 8051, False)]
+
+
+def test_resolve_tensorboard_logdir_fallbacks(tmp_path: Path) -> None:
+    cfg = tmp_path / "exp" / "cfg.toml"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    assert commands._resolve_tensorboard_logdir(
+        "demo", metadata=None, exp_config_path=cfg
+    ) == (cfg.parent / "out" / "logs" / "tb")
 
 
 def test_extract_exp_config_handles_context(tmp_path: Path) -> None:

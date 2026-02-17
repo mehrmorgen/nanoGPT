@@ -19,6 +19,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "datasets>=4.3.0",
     "beautifulsoup4>=4.14.2",
+    "html2text>=2024.2.26",
+    "playwright>=1.49.0",
     "pydantic>=2.12.3",
     "notebook>=7.4.7",
     "typer==0.20.0",
@@ -169,9 +171,7 @@ incremental = true
 follow_imports = "skip"
 # Avoid spending time resolving missing type stubs for external deps (torch, transformers, etc.)
 ignore_missing_imports = true
-disable_error_code = ["import-untyped"]
-no_site_packages = true
-cache_dir = ".cache/mypy-cache"
+cache_dir = ".cache/mypy"
 
 
 [tool.basedpyright]
@@ -179,25 +179,6 @@ pythonVersion = "3.13"
 # Global defaults: standard. Execution environments below set src to strict and keep tests standard.
 typeCheckingMode = "standard"
 stubPath = "typings"
-useLibraryCodeForTypes = false
-include = ["src", "tests"]
-exclude = [
-    "**/__pycache__",
-    "**/.cache",
-    "**/.hypothesis",
-    "**/.venv",
-    "**/env",
-    "**/out",
-    "**/data",
-    "**/datasets",
-    "**/checkpoints",
-    "**/runs",
-    "**/wandb",
-    "**/lightning_logs",
-    "**/artifacts",
-    "**/mlruns",
-    "**/htmlcov",
-]
 
 [[tool.basedpyright.executionEnvironments]]
 root = "src"
@@ -209,7 +190,7 @@ extraPaths = [".", "src", "tests"]
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-qq -W error --strict-markers --strict-config --import-mode=importlib -r fEsxX -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
+addopts = "-qq -W error --strict-markers --strict-config --import-mode=importlib -r fEsxX -m \"not external\" -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
 pythonpath = ["src", "."]
 testpaths = [
     "tests",
@@ -244,6 +225,7 @@ markers = [
     "integration: marks tests as integration tests",
     "acceptance: marks tests as acceptance (deselect with '-m \"not acceptance\"')",
     "e2e: marks tests as end-to-end tests",
+    "external: marks tests that depend on external network/services (deselected by default)",
 ]
 bdd_features_base_dir = "tests/acceptance/features/"
 

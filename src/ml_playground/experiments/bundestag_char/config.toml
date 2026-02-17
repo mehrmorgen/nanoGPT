@@ -14,16 +14,6 @@ raw_text_path = "./raw/input.txt"
 tokenizer_type = "char"
 doc_separator = "\n\n"
 
-[prepare.extras]
-# Source strategy: "auto" (prefer local seed, fallback to GermaParlTEI),
-# "seed" (local files only), or "germaparl_tei" (force remote corpus ingest).
-dataset_source = "germaparl_tei"
-germaparl_repo = "PolMine/GermaParlTEI"
-germaparl_ref = "main"
-germaparl_include_stage = true
-germaparl_include_speaker_attrs = true
-germaparl_force_refresh = false
-
 [training.model]
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
 
@@ -100,10 +90,6 @@ device = "mps"
 dtype = "bfloat16"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
 compile = false
-
-# Prefer reading the best checkpoint during sampling by default
-[sampling.runtime.checkpointing]
-read_policy = "best"
 
 [sampling.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).

@@ -1,162 +1,55 @@
-# Bundestag (Char-Level)
+# Bundestag Char
 
-<details>
-<summary>Related documentation</summary>
+Character-level language model experiment using GermaParlTEI as the only prepare source.
 
-- [.dev-guidelines/project-specific/DOCUMENTATION.md](../../../../.dev-guidelines/project-specific/DOCUMENTATION.md) – Experiment README blueprint, folder tree standards, and abstraction rules.
-- [Framework Utilities](../../../../docs/framework_utilities.md) – Shared helpers for tokenizer preparation, progress reporting, and training.
+## Prepare behavior
 
-</details>
+- `prepare bundestag_char` always resolves GermaParlTEI (`PolMine/GermaParlTEI@main` by default).
+- A remote GitHub head SHA check is mandatory for every run.
+- Skip only happens when all artifacts exist and `meta.pkl` source fields match the remote head.
+- If artifacts exist and freshness changes (or metadata is stale), prepare requires explicit overwrite confirmation.
+- Cached raw artifact: `raw/germaparl_cache/<repo>_<ref>.tar.gz`.
+- No persistent extracted XML tree is written.
 
-Character-level language modeling on Bundestag speeches with a simple vocabulary built from dataset characters.
+Prepared outputs:
 
-## Overview
+- `datasets/input.txt`
+- `datasets/train.bin`
+- `datasets/val.bin`
+- `datasets/meta.pkl`
 
-- Dataset: GermaParlTEI only
-- Encoding: Per-character IDs (uint16)
-- Method: Classic NanoGPT-style training (strict TOML config)
-- Pipeline: prepare → train → sample via ml_playground CLI
+`meta.pkl` contract is minimal:
 
-## Data
+- `meta_version`
+- `tokenizer_type`, `tokenizer`
+- `vocab_size`, `stoi`, `itos`
+- `train_tokens`, `val_tokens`
+- `source_head_sha`, `source_repo`, `source_ref`
 
-- Input: `src/ml_playground/experiments/bundestag_char/datasets/input.txt`
-  - Preparation always downloads/uses GermaParlTEI and serializes TEI XML into tagged text.
-  - TEI XML files are streamed directly from the tarball; no extracted XML directory is persisted.
-  - Each run resolves the remote GitHub head SHA before skip/rebuild decisions.
-  - If prepared artifacts already exist and overwrite is needed, CLI prompts for explicit confirmation.
-- Outputs (prepared):
-  - train.bin, val.bin (uint16 arrays)
-  - meta.pkl (vocab metadata with stoi/itos, vocab_size)
+## Prepare extras
 
-## Method/Model
+Supported prepare extras (`[prepare.extras]`):
 
-- Build vocabulary from unique characters in the corpus
-- Encode train/val splits (default 90/10, override via `prepare.extras.split`) into uint16 arrays
-- Model architecture and training hyperparameters are specified in TOML
-- TensorBoard logging at out_dir/logs/tb
-  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../../../docs/framework_utilities.md).
+- `dataset_dir_override`
+- `germaparl_repo`
+- `germaparl_ref`
+- `germaparl_cache_dir`
+- `germaparl_include_stage`
+- `germaparl_include_speaker_attrs`
+- `split`
 
-## Environment Setup (UV-only)
+No seed/auto/test transport extras are supported.
 
-```bash
-uv run tools env setup
-uv run tools env verify
-```
+## Analyze behavior
 
-## Strict configuration injection
+`analyze bundestag_char` prefers TensorBoard event files under `out/logs/tb`.
+If none are found, it falls back to the LIT integration path.
 
-- This experiment does not read TOML directly. The CLI loads and validates the TOML and injects config objects into the experiment code.
-
-## How to Run
-
-- Config example: src/ml_playground/experiments/bundestag_char/config.toml
-
-Prepare:
+## Commands
 
 ```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml prepare bundestag_char
-```
-
-GermaParlTEI options (under `[prepare.extras]`):
-
-```toml
-germaparl_repo = "PolMine/GermaParlTEI"
-germaparl_ref = "main"
-germaparl_include_stage = true
-germaparl_include_speaker_attrs = true
-```
-
-Train:
-
-```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml train bundestag_char
-```
-
-Sample:
-
-```bash
 uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml sample bundestag_char
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml analyze bundestag_char
 ```
-
-Analyze (event-data Web UI):
-
-```bash
-uv run cli analyze bundestag_char --host 127.0.0.1 --port 8050 --open-browser
-```
-
-Notes:
-- `analyze bundestag_char` launches TensorBoard first when event files exist under `out/logs/tb`.
-- If no event files are found, it falls back to the LIT server integration for `bundestag_char`.
-- If LIT is not installed, install it with `uv sync --extra lit` (or `uv add lit-nlp`).
-
-## Configuration Highlights
-
-- `[training.data]`
-  - `dataset_dir` = "src/ml_playground/experiments/bundestag_char/datasets"
-  - `train_bin` = "train.bin", `val_bin` = "val.bin", `meta_pkl` = "meta.pkl"
-  - `batch_size`, `block_size`, `grad_accum_steps`
-- `[training.runtime]`
-  - `out_dir` = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
-  - `device` = "cpu" (or "mps"/"cuda" if available), `dtype` = "float32"
-- `[sampling.runtime]`
-  - `out_dir` should match `[training.runtime].out_dir`
-- `[sampling.sample]`
-  - `start` prompt text, `num_samples`, `max_new_tokens`
-
-## Outputs
-
-- Data artifacts: src/ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
-- Training: out_dir contains rotated checkpoints only, e.g.:
-  - ckpt_last_XXXXXXXX.pt
-  - `ckpt_best_XXXXXXXX_<metric>.pt`
-  - logs/tb
-
-## Folder structure
-
-```bash
-src/ml_playground/experiments/bundestag_char/
-├── README.md        # experiment documentation (this file)
-├── config.toml      # sample/preset config for real runs
-├── test_config.toml # tiny defaults for tests
-├── preparer.py      # dataset preparation (char vocab, encode, write bins/meta)
-├── trainer.py       # NanoGPT-style training orchestration
-├── sampler.py       # generation/sampling entrypoints
-├── ollama_export.py # GGUF/Ollama export helper for this experiment
-├── datasets/        # prepared dataset artifacts written here
-└── export/          # export artifacts directory (e.g., GGUF)
-```
-
-## Troubleshooting
-
-- If sampling fails with a missing `meta.pkl`, ensure it exists at `[training.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sampling.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
-- Ensure your input text is UTF-8 encoded.
-- Full GermaParlTEI ingestion is large and can take significant time. The preparer uses a streaming char encoder to avoid loading the full corpus into memory.
-
-## Licensing Note
-
-- GermaParlTEI is distributed under CLARIN PUB+BY+NC+SA. See:
-  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/README.md
-  - https://raw.githubusercontent.com/PolMine/GermaParlTEI/main/LICENSE.md
-- Do not commit downloaded corpus files or generated dataset artifacts.
-
-## Word Tokenizer Option
-
-- This experiment now supports a word-level tokenizer in addition to char/n-gram.
-- To enable, set in config under `[training.data]`:
-
-```toml
-# Tokenizer selection: "char" (default) or "word"
-tokenizer = "word"
-# ngram_size is ignored when tokenizer="word"
-```
-
-- Sampling and training automatically use the dataset's meta.pkl; decoding joins tokens with a single space.
-
-## Checklist
-
-- Adheres to [.dev-guidelines/README.md](../../../../.dev-guidelines/README.md) (abstraction, required sections).
-- Folder tree includes inline descriptions for each entry.
-- Links to shared docs where applicable (e.g., `../../../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
-- Configuration Highlights only list essential keys; defaults are not restated.
-- Outputs paths and filenames reflect current behavior (check `[training.runtime].out_dir`).

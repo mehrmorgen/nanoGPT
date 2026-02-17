@@ -107,7 +107,11 @@ def _build_stub_dependencies(log: DependencyCallLog) -> cli_runners.CLIDependenc
         _port: int,
         _open_browser: bool,
         _learning_engine: object | None = None,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        del metadata, exp_config_path
         log.analyze_runs.append(experiment)
         if experiment != "bundestag_char":
             return ToolResult.create(

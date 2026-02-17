@@ -1,31 +1,38 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 import pickle
-from typing import Iterable, Mapping, cast
+import time
+from typing import cast
 
 import numpy as np
 
 from ml_playground.framework.configuration.models import PreparerConfig
+from ml_playground.framework.core.error_handling import DataError
+from ml_playground.framework.core.tokenizer import CharTokenizer
 from ml_playground.framework.data_pipeline.transforms.io import (
-    coerce_seed_policy,
     diff_file_states,
-    seed_text_file_with_policy,
     snapshot_file_states,
 )
-from ml_playground.framework.core.error_handling import DataError
-from ml_playground.framework.experiment_registry.protocol import (
-    Preparer as _PreparerProto,
-    PrepareReport,
+from ml_playground.framework.data_pipeline.transforms.tokenization import (
+    prepare_with_tokenizer,
 )
-from ml_playground.framework.core.error_handling import validate_file_exists
-from ml_playground.experiments.bundestag_char.germaparl_tei import (
+from ml_playground.framework.experiment_registry.protocol import (
+    PrepareReport,
+    Preparer as _PreparerProto,
+)
+
+from .germaparl_tei import (
     ensure_germaparl_tarball,
+    resolve_remote_head_sha,
     serialize_germaparl_tei_to_text,
 )
 
-_CHUNK_CHARS = 1 << 20
+DEFAULT_REPO = "PolMine/GermaParlTEI"
+DEFAULT_REF = "main"
+DEFAULT_SPLIT = 0.9
+OVERWRITE_CONFIRM_KEY = "overwrite_confirm"
 
 
 class BundestagCharPreparer(_PreparerProto):
@@ -33,22 +40,48 @@ class BundestagCharPreparer(_PreparerProto):
         self._base_dir = base_dir
 
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
+        started = time.monotonic()
         extras = cast(Mapping[str, object], getattr(cfg, "extras", {}) or {})
-        base_dir_override = extras.get("dataset_dir_override")
-        if isinstance(base_dir_override, (str, Path)):
-            exp_dir = Path(base_dir_override)
-        elif self._base_dir is not None:
-            exp_dir = self._base_dir
-        else:
-            exp_dir = Path(__file__).resolve().parent
-
+        exp_dir = _resolve_exp_dir(extras, self._base_dir)
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
-        outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 
-        if _artifacts_look_valid(outputs):
-            msgs = (
-                f"[bundestag_char] dataset already prepared at {ds_dir}; skipping.",
+        input_path = ds_dir / "input.txt"
+        train_path = ds_dir / "train.bin"
+        val_path = ds_dir / "val.bin"
+        meta_path = ds_dir / "meta.pkl"
+        outputs = [input_path, train_path, val_path, meta_path]
+        pre = snapshot_file_states(outputs)
+
+        if cfg.tokenizer_type != "char":
+            raise DataError(
+                "BundestagCharPreparer only supports tokenizer_type='char'",
+                reason=f"Received tokenizer_type={cfg.tokenizer_type!r}",
+                rationale="This experiment is intentionally char-only for deterministic behavior",
+            )
+
+        repo = _coerce_str(extras.get("germaparl_repo"), DEFAULT_REPO)
+        ref = _coerce_str(extras.get("germaparl_ref"), DEFAULT_REF)
+        split = _coerce_split(extras.get("split"))
+        include_stage = _coerce_bool(
+            extras.get("germaparl_include_stage"), default=True
+        )
+        include_speaker = _coerce_bool(
+            extras.get("germaparl_include_speaker_attrs"), default=True
+        )
+        cache_dir = _resolve_cache_dir(exp_dir, extras.get("germaparl_cache_dir"))
+        remote_head = resolve_remote_head_sha(repo, ref)
+
+        existing_meta = _load_existing_meta(meta_path)
+        artifacts_valid = _artifacts_look_valid(outputs)
+        if (
+            artifacts_valid
+            and existing_meta.get("source_repo") == repo
+            and existing_meta.get("source_ref") == ref
+            and existing_meta.get("source_head_sha") == remote_head
+        ):
+            skip_messages = (
+                f"[bundestag_char] dataset already prepared at {ds_dir}; remote head unchanged ({remote_head}).",
                 "[bundestag_char.outputs.created] []",
                 "[bundestag_char.outputs.updated] []",
                 f"[bundestag_char.outputs.skipped] {[str(p) for p in outputs]}",
@@ -57,96 +90,234 @@ class BundestagCharPreparer(_PreparerProto):
                 created_files=tuple(),
                 updated_files=tuple(),
                 skipped_files=tuple(outputs),
-                messages=msgs,
+                messages=skip_messages,
             )
 
-        pre = snapshot_file_states(outputs)
-
-        input_file_path = ds_dir / "input.txt"
-        bundled = Path(__file__).parent / "input.txt"
-        candidates = [
-            Path("/datasets/Bundestag.csv"),
-            ds_dir / "input.txt",
-            exp_dir / "input.txt",
-            exp_dir / "page1.txt",
-            bundled,
-        ]
-        dataset_source = _coerce_dataset_source(extras.get("dataset_source"))
-        source_metadata: dict[str, object]
-
-        if dataset_source == "seed":
-            _seed_from_local(input_file_path, candidates, extras)
-            source_metadata = {"source_kind": "seed"}
-        elif dataset_source == "germaparl_tei":
-            processed = _prepare_germaparl_input(input_file_path, exp_dir, extras)
-            source_metadata = {
-                "source_kind": "germaparl_tei",
-                "source_repo": str(
-                    extras.get("germaparl_repo") or "PolMine/GermaParlTEI"
-                ),
-                "source_ref": str(extras.get("germaparl_ref") or "main"),
-                "source_files_processed": processed,
-            }
-        else:
-            if _any_candidates_exist(input_file_path, candidates):
-                _seed_from_local(input_file_path, candidates, extras)
-                source_metadata = {"source_kind": "seed"}
-            else:
-                processed = _prepare_germaparl_input(input_file_path, exp_dir, extras)
-                source_metadata = {
-                    "source_kind": "germaparl_tei",
-                    "source_repo": str(
-                        extras.get("germaparl_repo") or "PolMine/GermaParlTEI"
-                    ),
-                    "source_ref": str(extras.get("germaparl_ref") or "main"),
-                    "source_files_processed": processed,
-                }
-
-        validate_file_exists(input_file_path, "Input text file")
-
-        raw_path = (
-            Path(cfg.raw_text_path)
-            if cfg.raw_text_path is not None and Path(cfg.raw_text_path).exists()
-            else input_file_path
-        )
-
-        tokenizer_type = cfg.tokenizer_type
-        if tokenizer_type != "char":
-            raise ValueError(
-                "BundestagCharPreparer only supports char tokenizer configured via prepare.tokenizer_type"
+        if any(path.exists() for path in outputs):
+            _require_overwrite_confirmation(
+                extras=extras,
+                repo=repo,
+                ref=ref,
+                existing_sha=cast(str | None, existing_meta.get("source_head_sha")),
+                remote_sha=remote_head,
+                outputs=outputs,
             )
-        split_ratio = _resolve_split_ratio(extras.get("split"))
-        train_tokens, val_tokens, vocab = _stream_encode_char_dataset(
-            raw_path=raw_path,
-            train_path=ds_dir / "train.bin",
-            val_path=ds_dir / "val.bin",
-            split_ratio=split_ratio,
+
+        cfg.logger.info(
+            "[bundestag_char] preparing dataset from %s@%s (remote head %s)",
+            repo,
+            ref,
+            remote_head,
         )
-        meta = _build_char_metadata(
-            vocab=vocab,
-            train_tokens=train_tokens,
-            val_tokens=val_tokens,
-            source_metadata=source_metadata,
+        tarball_path = ensure_germaparl_tarball(cache_dir, repo=repo, ref=ref)
+        cfg.logger.info("[bundestag_char] using tarball: %s", tarball_path)
+
+        next_progress = {"at": 100}
+
+        def _progress_cb(count: int, _doc_id: str) -> None:
+            if count >= next_progress["at"]:
+                cfg.logger.info("[bundestag_char] serialized %s TEI documents", count)
+                next_progress["at"] += 100
+
+        source_files = serialize_germaparl_tei_to_text(
+            tarball_path,
+            input_path,
+            include_stage=include_stage,
+            include_speaker_attrs=include_speaker,
+            progress_cb=_progress_cb,
         )
-        _write_meta_atomic(ds_dir / "meta.pkl", meta)
+        input_text = input_path.read_text(encoding="utf-8")
+        if not input_text:
+            raise DataError(
+                "GermaParlTEI serialization produced empty input text",
+                reason="input.txt was created but contained no characters",
+                rationale="Character-level tokenization requires non-empty source text",
+            )
+
+        tokenizer = CharTokenizer()
+        train_arr, val_arr, token_meta, tok = prepare_with_tokenizer(
+            input_text, tokenizer, split=split
+        )
+        if not isinstance(tok, CharTokenizer):
+            raise DataError(
+                "Unexpected tokenizer instance returned by tokenization pipeline",
+                reason=f"Expected CharTokenizer, got {type(tok).__name__}",
+                rationale="This experiment is constrained to char tokenization",
+            )
+
+        stoi = _extract_stoi(token_meta, tok)
+        itos = {index: token for token, index in stoi.items()}
+        minimal_meta: dict[str, object] = {
+            "meta_version": 1,
+            "tokenizer_type": "char",
+            "tokenizer": "char",
+            "vocab_size": len(stoi),
+            "stoi": stoi,
+            "itos": itos,
+            "train_tokens": int(train_arr.size),
+            "val_tokens": int(val_arr.size),
+            "source_head_sha": remote_head,
+            "source_repo": repo,
+            "source_ref": ref,
+        }
+
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        train_arr.astype(np.uint16, copy=False).tofile(train_path)
+        val_arr.astype(np.uint16, copy=False).tofile(val_path)
+        with meta_path.open("wb") as handle:
+            pickle.dump(minimal_meta, handle)
 
         created, updated, skipped = diff_file_states(outputs, pre)
-        created_paths = [Path(path) for path in created]
-        updated_paths = [Path(path) for path in updated]
-        skipped_paths = [Path(path) for path in skipped]
+        created_paths = tuple(Path(path) for path in created)
+        updated_paths = tuple(Path(path) for path in updated)
+        skipped_paths = tuple(Path(path) for path in skipped)
+        elapsed = time.monotonic() - started
 
-        msgs = (
+        build_messages: list[str] = [
             f"[bundestag_char] prepared dataset at {ds_dir}",
+            f"[bundestag_char] source_files_processed={source_files}, input_chars={len(input_text)}, train_tokens={train_arr.size}, val_tokens={val_arr.size}, elapsed_s={elapsed:.2f}",
             f"[bundestag_char.outputs.created] {[str(p) for p in created_paths]}",
             f"[bundestag_char.outputs.updated] {[str(p) for p in updated_paths]}",
             f"[bundestag_char.outputs.skipped] {[str(p) for p in skipped_paths]}",
+        ]
+        return PrepareReport(
+            created_files=created_paths,
+            updated_files=updated_paths,
+            skipped_files=skipped_paths,
+            messages=tuple(build_messages),
         )
 
-        return PrepareReport(
-            created_files=tuple(created_paths),
-            updated_files=tuple(updated_paths),
-            skipped_files=tuple(skipped_paths),
-            messages=msgs,
+
+def _resolve_exp_dir(extras: Mapping[str, object], base_dir: Path | None) -> Path:
+    value = extras.get("dataset_dir_override")
+    if isinstance(value, (str, Path)):
+        return Path(value)
+    if base_dir is not None:
+        return base_dir
+    return Path(__file__).resolve().parent
+
+
+def _resolve_cache_dir(exp_dir: Path, cache_override: object) -> Path:
+    if isinstance(cache_override, (str, Path)):
+        return Path(cache_override)
+    return exp_dir / "raw" / "germaparl_cache"
+
+
+def _coerce_bool(value: object, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise DataError(
+        "Invalid boolean prepare extra",
+        reason=f"Expected bool value but received {type(value).__name__}",
+        rationale="GermaParl toggles require explicit boolean values",
+    )
+
+
+def _coerce_str(value: object, default: str) -> str:
+    if value is None:
+        return default
+    if isinstance(value, str) and value.strip():
+        return value
+    raise DataError(
+        "Invalid string prepare extra",
+        reason=f"Expected non-empty string but received {value!r}",
+        rationale="Source repository and ref must be concrete strings",
+    )
+
+
+def _coerce_split(value: object) -> float:
+    if value is None:
+        return DEFAULT_SPLIT
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        split = float(value)
+    else:
+        raise DataError(
+            "Invalid split ratio",
+            reason=f"Expected numeric split ratio but received {type(value).__name__}",
+            rationale="Train/validation split requires a numeric fraction in (0, 1)",
+        )
+    if split <= 0.0 or split >= 1.0:
+        raise DataError(
+            "Invalid split ratio",
+            reason=f"Split ratio {split} is outside the open interval (0, 1)",
+            rationale="Split must leave at least one token for each dataset partition",
+        )
+    return split
+
+
+def _load_existing_meta(meta_path: Path) -> dict[str, object]:
+    if not meta_path.exists():
+        return {}
+    try:
+        with meta_path.open("rb") as handle:
+            payload = pickle.load(handle)
+    except Exception:
+        return {}
+    if isinstance(payload, dict):
+        return cast(dict[str, object], payload)
+    return {}
+
+
+def _extract_stoi(
+    meta: Mapping[str, object], tokenizer: CharTokenizer
+) -> dict[str, int]:
+    stoi_raw = meta.get("stoi")
+    if isinstance(stoi_raw, Mapping):
+        normalized: dict[str, int] = {}
+        for token, index in stoi_raw.items():
+            if isinstance(index, int) and not isinstance(index, bool):
+                normalized[str(token)] = index
+            else:
+                raise DataError(
+                    "Tokenizer metadata contains invalid stoi mapping",
+                    reason=f"Token index for {token!r} is not an integer",
+                    rationale="Metadata must provide deterministic integer token ids",
+                )
+        return dict(sorted(normalized.items(), key=lambda item: item[0]))
+    return dict(sorted(tokenizer.stoi.items(), key=lambda item: item[0]))
+
+
+def _require_overwrite_confirmation(
+    *,
+    extras: Mapping[str, object],
+    repo: str,
+    ref: str,
+    existing_sha: str | None,
+    remote_sha: str,
+    outputs: Iterable[Path],
+) -> None:
+    confirm_raw = extras.get(OVERWRITE_CONFIRM_KEY)
+    if confirm_raw is None:
+        raise DataError(
+            "bundestag_char prepared artifacts already exist and require overwrite permission",
+            reason="No overwrite confirmation callback was injected",
+            rationale="Non-interactive callers must provide explicit overwrite policy",
+        )
+    if not callable(confirm_raw):
+        raise DataError(
+            "Invalid overwrite confirmation callback",
+            reason=f"Expected callable, got {type(confirm_raw).__name__}",
+            rationale="Overwrite confirmation must be injected as a callable",
+        )
+    existing_display = existing_sha if isinstance(existing_sha, str) else "<missing>"
+    message = "\n".join(
+        (
+            "bundestag_char prepared artifacts already exist and require overwrite.",
+            f"Source repo/ref: {repo}@{ref}",
+            f"Existing source_head_sha: {existing_display}",
+            f"Remote source_head_sha: {remote_sha}",
+            f"Impacted files: {', '.join(str(path) for path in outputs)}",
+            "Overwrite existing prepared artifacts?",
+        )
+    )
+    confirmed = cast(Callable[[str], bool], confirm_raw)(message)
+    if not confirmed:
+        raise DataError(
+            "Overwrite cancelled by user",
+            reason="Confirmation callback returned False",
+            rationale="Existing prepared artifacts must remain unchanged without explicit approval",
         )
 
 
@@ -161,184 +332,3 @@ def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
 
 def artifacts_look_valid(outputs: Iterable[Path]) -> bool:
     return _artifacts_look_valid(outputs)
-
-
-def _coerce_dataset_source(value: object) -> str:
-    if value is None:
-        return "auto"
-    if isinstance(value, str) and value in {"auto", "seed", "germaparl_tei"}:
-        return value
-    raise DataError(
-        f"Unsupported dataset_source: {value!r}",
-        reason="dataset_source must be one of 'auto', 'seed', 'germaparl_tei'",
-        rationale="Bundestag char preparer requires explicit source strategy",
-    )
-
-
-def _seed_from_local(
-    dst: Path, candidates: list[Path], extras: Mapping[str, object]
-) -> None:
-    seed_policy_input: object | None = extras.get("seed_policy")
-    seed_policy = coerce_seed_policy(seed_policy_input)
-    seed_text_file_with_policy(dst, candidates, policy=seed_policy)
-
-
-def _any_candidates_exist(dst: Path, candidates: list[Path]) -> bool:
-    if dst.exists():
-        return True
-    for cand in candidates:
-        if cand.exists():
-            return True
-    return False
-
-
-def _prepare_germaparl_input(
-    dst_input: Path, exp_dir: Path, extras: Mapping[str, object]
-) -> int:
-    repo = str(extras.get("germaparl_repo") or "PolMine/GermaParlTEI")
-    ref = str(extras.get("germaparl_ref") or "main")
-    cache_dir_raw = extras.get("germaparl_cache_dir")
-    cache_dir = (
-        Path(cache_dir_raw)
-        if isinstance(cache_dir_raw, (str, Path))
-        else exp_dir / "raw" / "germaparl_cache"
-    )
-    force_refresh = bool(extras.get("germaparl_force_refresh", False))
-    include_stage = bool(extras.get("germaparl_include_stage", True))
-    include_speaker_attrs = bool(extras.get("germaparl_include_speaker_attrs", True))
-    max_files_raw = extras.get("germaparl_max_files")
-    max_files = int(max_files_raw) if isinstance(max_files_raw, int) else None
-    tarball_obj = extras.get("germaparl_tarball_bytes")
-    tarball_bytes = (
-        bytes(tarball_obj) if isinstance(tarball_obj, (bytes, bytearray)) else None
-    )
-    http_get = extras.get("germaparl_http_get")
-
-    tarball_path = ensure_germaparl_tarball(
-        cache_dir,
-        repo=repo,
-        ref=ref,
-        force_refresh=force_refresh,
-        tarball_bytes=tarball_bytes,
-        http_get=http_get if callable(http_get) else None,
-    )
-    return serialize_germaparl_tei_to_text(
-        tarball_path,
-        dst_input,
-        include_stage=include_stage,
-        include_speaker_attrs=include_speaker_attrs,
-        max_files=max_files,
-    )
-
-
-def _resolve_split_ratio(raw_value: object) -> float:
-    if raw_value is None:
-        return 0.9
-    if not isinstance(raw_value, (int, float, str)):
-        raise DataError(
-            f"Invalid split ratio in extras: {raw_value!r}",
-            reason="Split ratio must be numeric or string convertible to float",
-            rationale="Training/validation split must be numeric to derive dataset boundaries",
-        )
-    try:
-        ratio = float(raw_value)
-    except (TypeError, ValueError) as exc:
-        raise DataError(
-            f"Invalid split ratio in extras: {raw_value!r}",
-            reason=f"Unable to coerce provided split to float: {exc}",
-            rationale="Split ratio must be numeric to determine split boundary",
-        ) from exc
-    if ratio < 0.0 or ratio > 1.0:
-        raise DataError(
-            f"split ratio must be within [0.0, 1.0]; received {ratio}",
-            reason="Split ratio outside inclusive [0.0, 1.0] range",
-            rationale="Dataset preparation assumes ratios describe a valid probability interval",
-        )
-    return ratio
-
-
-def _iter_text_chunks(path: Path, chunk_chars: int = _CHUNK_CHARS) -> Iterator[str]:
-    with path.open("r", encoding="utf-8") as handle:
-        while True:
-            chunk = handle.read(chunk_chars)
-            if not chunk:
-                break
-            yield chunk
-
-
-def _stream_encode_char_dataset(
-    *,
-    raw_path: Path,
-    train_path: Path,
-    val_path: Path,
-    split_ratio: float,
-) -> tuple[int, int, dict[str, int]]:
-    vocab_chars: set[str] = set()
-    total_chars = 0
-    for chunk in _iter_text_chunks(raw_path):
-        total_chars += len(chunk)
-        vocab_chars.update(chunk)
-
-    vocab = {ch: idx for idx, ch in enumerate(sorted(vocab_chars))}
-    split_index = int(total_chars * split_ratio)
-
-    train_path.parent.mkdir(parents=True, exist_ok=True)
-    train_tokens = 0
-    val_tokens = 0
-    seen = 0
-    with train_path.open("wb") as train_out, val_path.open("wb") as val_out:
-        for chunk in _iter_text_chunks(raw_path):
-            encoded = np.fromiter(
-                (vocab[ch] for ch in chunk), dtype=np.uint16, count=len(chunk)
-            )
-            chunk_start = seen
-            chunk_end = seen + len(encoded)
-            if chunk_end <= split_index:
-                train_out.write(encoded.tobytes())
-                train_tokens += len(encoded)
-            elif chunk_start >= split_index:
-                val_out.write(encoded.tobytes())
-                val_tokens += len(encoded)
-            else:
-                train_len = split_index - chunk_start
-                if train_len > 0:
-                    train_out.write(encoded[:train_len].tobytes())
-                    train_tokens += train_len
-                val_part = encoded[train_len:]
-                if len(val_part) > 0:
-                    val_out.write(val_part.tobytes())
-                    val_tokens += len(val_part)
-            seen = chunk_end
-    return train_tokens, val_tokens, vocab
-
-
-def _build_char_metadata(
-    *,
-    vocab: Mapping[str, int],
-    train_tokens: int,
-    val_tokens: int,
-    source_metadata: Mapping[str, object],
-) -> dict[str, object]:
-    itos = {idx: ch for ch, idx in vocab.items()}
-    meta: dict[str, object] = {
-        "meta_version": 1,
-        "tokenizer_type": "char",
-        "tokenizer": "char",
-        "vocab_size": len(vocab),
-        "train_tokens": train_tokens,
-        "val_tokens": val_tokens,
-        "stoi": dict(vocab),
-        "itos": itos,
-    }
-    meta.update(source_metadata)
-    return meta
-
-
-def _write_meta_atomic(path: Path, meta: Mapping[str, object]) -> None:
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    try:
-        with tmp_path.open("wb") as handle:
-            pickle.dump(dict(meta), handle)
-        tmp_path.replace(path)
-    finally:
-        tmp_path.unlink(missing_ok=True)

@@ -101,43 +101,6 @@ def _import_lit_server() -> ModuleType:
     raise RuntimeError(message)
 
 
-def _read_input_samples(input_path: Path, *, limit: int = 10) -> list[str]:
-    """Read up to ``limit`` non-empty lines from input text.
-
-    Prefers streaming to avoid loading very large corpora into memory.
-    Falls back to read_text for test doubles that only override read_text().
-    """
-    samples: list[str] = []
-
-    try:
-        with input_path.open("r", encoding="utf-8", errors="ignore") as handle:
-            for raw_line in handle:
-                line = raw_line.strip()
-                if not line:
-                    continue
-                samples.append(line)
-                if len(samples) >= limit:
-                    return samples
-        return samples
-    except (OSError, UnicodeError):
-        pass
-
-    # Compatibility path for tests that patch Path.read_text without creating files.
-    try:
-        text = input_path.read_text(encoding="utf-8", errors="ignore")
-    except (OSError, UnicodeError):
-        return []
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        samples.append(stripped)
-        if len(samples) >= limit:
-            break
-    return samples
-
-
 def run_server_bundestag_char(
     host: str | None = None,
     port: int = 5432,
@@ -221,9 +184,11 @@ def run_server_bundestag_char(
         exp_dir = base_dir / "experiments" / "bundestag_char"
         input = exp_dir / "datasets" / "input.txt"
         if input.exists():
-            file_lines = _read_input_samples(input, limit=10)
+            text = input.read_text(encoding="utf-8", errors="ignore")
+            # Take up to 10 reasonably short lines.
+            file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
             if file_lines:
-                samples = file_lines
+                samples = file_lines[:10]
     except (OSError, UnicodeError):
         # Non-fatal; keep embedded samples
         pass

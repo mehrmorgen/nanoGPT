@@ -317,12 +317,12 @@ class CheckpointManager:
             if self.naming_policy == "domain":
                 rotated_name = f"ckpt_best_{label}_{counter:08d}_{metric:.6f}.pt"
             else:
-                rotated_name = f"ckpt_best_{iter_num:08d}_{metric:.6f}.pt"
+                rotated_name = f"ckpt_best_{counter:08d}_{metric:.6f}.pt"
         else:
             if self.naming_policy == "domain":
                 rotated_name = f"ckpt_last_{label}_{counter:08d}.pt"
             else:
-                rotated_name = f"ckpt_last_{iter_num:08d}.pt"
+                rotated_name = f"ckpt_last_{counter:08d}.pt"
         path = self.out_dir / rotated_name
 
         # Save the checkpoint

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
-import importlib
-from collections.abc import Mapping, Sequence
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
+from collections.abc import Mapping, Sequence
+import json
 from typing import Any, Protocol, TypedDict, cast
 
 from ml_playground.framework.configuration.models import RuntimeConfig, SamplerConfig
@@ -58,79 +57,69 @@ class _PeftFactory(Protocol):
     def __call__(self, base_model: _Model, adapters_path: Path) -> _Model: ...
 
 
-class _FallbackTokenizer:
-    def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
-        encoded = list(text.encode("utf-8"))
-        return {
-            "input_ids": encoded,
-            "attention_mask": None,
-            "return_tensors": return_tensors,
-        }
+# Optional heavy dependencies with fallbacks for environments without transformers/peft.
+try:
+    from transformers import AutoTokenizer as AutoTokenizer  # type: ignore
+    from transformers import AutoModelForCausalLM as AutoModelForCausalLM  # type: ignore
+except ImportError:
 
-    def decode(
-        self,
-        token_ids: object,
-        *,
-        skip_special_tokens: bool,
-        clean_up_tokenization_spaces: bool,
-    ) -> str:
-        del skip_special_tokens, clean_up_tokenization_spaces
-        if isinstance(token_ids, (bytes, bytearray)):
-            return bytes(token_ids).decode("utf-8", errors="ignore")
-        if isinstance(token_ids, Sequence):
-            ints: list[int] = []
-            for value in cast(Sequence[object], token_ids):
-                if isinstance(value, int):
-                    ints.append(int(value))
-            return bytes(ints).decode("utf-8", errors="ignore")
-        return str(token_ids)
+    class _FallbackTokenizer:
+        def __call__(self, text: str, *, return_tensors: str) -> TokenBatch:
+            encoded = list(text.encode("utf-8"))
+            return {
+                "input_ids": encoded,
+                "attention_mask": None,
+                "return_tensors": return_tensors,
+            }
 
+        def decode(
+            self,
+            token_ids: object,
+            *,
+            skip_special_tokens: bool,
+            clean_up_tokenization_spaces: bool,
+        ) -> str:
+            del skip_special_tokens, clean_up_tokenization_spaces
+            if isinstance(token_ids, (bytes, bytearray)):
+                return bytes(token_ids).decode("utf-8", errors="ignore")
+            if isinstance(token_ids, Sequence):
+                ints: list[int] = []
+                for value in cast(Sequence[object], token_ids):
+                    if isinstance(value, int):
+                        ints.append(int(value))
+                return bytes(ints).decode("utf-8", errors="ignore")
+            return str(token_ids)
 
-class _FallbackModel:
-    def generate(
-        self,
-        *,
-        input_ids: object,
-        attention_mask: object | None = None,
-    ) -> Sequence[object]:
-        del attention_mask
-        return [input_ids]
-
-
-class AutoTokenizer:
-    @staticmethod
-    def from_pretrained(*args: object, **kwargs: object) -> _Tokenizer:
-        try:
-            transformers_mod = importlib.import_module("transformers")
-            tokenizer_cls = getattr(transformers_mod, "AutoTokenizer")
-        except ImportError:
+    class AutoTokenizer:  # type: ignore[no-redef]
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackTokenizer:
             return _FallbackTokenizer()
-        tokenizer = tokenizer_cls.from_pretrained(*args, **kwargs)
-        return cast(_Tokenizer, tokenizer)
 
+    class _FallbackModel:
+        def generate(
+            self,
+            *,
+            input_ids: object,
+            attention_mask: object | None = None,
+        ) -> Sequence[object]:
+            del attention_mask
+            return [input_ids]
 
-class AutoModelForCausalLM:
-    @staticmethod
-    def from_pretrained(*args: object, **kwargs: object) -> _Model:
-        try:
-            transformers_mod = importlib.import_module("transformers")
-            model_cls = getattr(transformers_mod, "AutoModelForCausalLM")
-        except ImportError:
+    class AutoModelForCausalLM:  # type: ignore[no-redef]
+        @staticmethod
+        def from_pretrained(*_: object, **__: object) -> _FallbackModel:
             return _FallbackModel()
-        model = model_cls.from_pretrained(*args, **kwargs)
-        return cast(_Model, model)
 
 
-class PeftModel:
-    @staticmethod
-    def from_pretrained(base_model: _Model, adapters_path: Path) -> _Model:
-        try:
-            peft_mod = importlib.import_module("peft")
-            peft_model_cls = getattr(peft_mod, "PeftModel")
-        except ImportError:
+try:
+    from peft import PeftModel as PeftModel  # type: ignore
+except ImportError:
+
+    class PeftModel:  # type: ignore[no-redef]
+        @staticmethod
+        def from_pretrained(base_model: _Model, adapters_path: Path) -> _Model:
+            del adapters_path
             return base_model
-        model = peft_model_cls.from_pretrained(base_model, adapters_path)
-        return cast(_Model, model)
 
 
 def _resolve_tokenizer_factory(

@@ -161,7 +161,11 @@ def _deps(
         port: int,
         open_browser: bool,
         _learning_engine: Any = None,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        del metadata, exp_config_path
         if run_analyze is not None:
             return run_analyze(experiment, host, port, open_browser)
         return ToolResult.create(
@@ -349,8 +353,15 @@ def test_analyze_command_delegates_non_bundestag(tmp_path: Path) -> None:
         return experiment_cfg
 
     def run_analyze(
-        experiment: str, host: str, port: int, open_browser: bool
+        experiment: str,
+        host: str,
+        port: int,
+        open_browser: bool,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        del metadata, exp_config_path
         del host, port, open_browser
         return ToolResult.create(
             success=True,
@@ -378,8 +389,15 @@ def test_analyze_command_logs_message(
         return experiment_cfg
 
     def run_analyze(
-        experiment: str, host: str, port: int, open_browser: bool
+        experiment: str,
+        host: str,
+        port: int,
+        open_browser: bool,
+        *,
+        metadata: object | None = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        del metadata, exp_config_path
         calls.append((experiment, host, port, open_browser))
         return ToolResult.create(
             success=True,

@@ -119,18 +119,19 @@ def run_prepare_impl(
 
         if deps is None:
             deps = get_cli_dependencies()
+        effective_prepare_cfg = _with_prepare_runtime_extras(prepare_cfg, deps)
 
         preparer = _resolve_experiment_preparer(experiment)
         if preparer is not None:
             prepare_fn = getattr(preparer, "prepare", None)
             if callable(prepare_fn):
-                prepare_fn(prepare_cfg)
+                prepare_fn(effective_prepare_cfg)
             else:
                 raise RuntimeError(
                     f"Resolved preparer for {experiment} does not implement prepare(): {type(preparer)}"
                 )
         else:
-            pipeline = deps.create_pipeline(prepare_cfg, metadata)  # type: ignore[reportAny]
+            pipeline = deps.create_pipeline(effective_prepare_cfg, metadata)  # type: ignore[reportAny]
             run_fn = getattr(pipeline, "run", None)
             if callable(run_fn):
                 run_fn()
@@ -201,6 +202,24 @@ def _resolve_experiment_preparer(
                 except TypeError:
                     continue
     return None
+
+
+def _with_prepare_runtime_extras(
+    prepare_cfg: PreparerConfig, deps: CLIDependencies
+) -> PreparerConfig:
+    base_extras_raw = getattr(prepare_cfg, "extras", {})
+    base_extras = dict(base_extras_raw) if isinstance(base_extras_raw, dict) else {}
+    if deps.confirm_fn is not None:
+        base_extras["overwrite_confirm"] = deps.confirm_fn
+    model_copy = getattr(prepare_cfg, "model_copy", None)
+    if not callable(model_copy):
+        raise RuntimeError(
+            "prepare configuration does not support model_copy(update=...)"
+        )
+    return cast(
+        PreparerConfig,
+        model_copy(update={"extras": base_extras}),
+    )
 
 
 def _missing_runtime_message(category: str) -> str:

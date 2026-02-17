@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import ModuleType
-from types import SimpleNamespace
 from typing import Sequence, cast
 
 import pytest
@@ -132,73 +131,6 @@ def test_imports_work_when_available() -> None:
     assert getattr(sampler_module, "PeftModel", None) is not None
 
 
-def test_auto_tokenizer_import_error_returns_fallback() -> None:
-    def _fail(name: str) -> object:
-        raise ImportError(name)
-
-    original_import = sampler.importlib.import_module
-    try:
-        sampler.importlib.import_module = _fail  # type: ignore[assignment]
-        tok = sampler.AutoTokenizer.from_pretrained("dummy")
-    finally:
-        sampler.importlib.import_module = original_import  # type: ignore[assignment]
-
-    assert isinstance(tok, sampler._FallbackTokenizer)
-    assert (
-        tok.decode(123, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-        == "123"
-    )
-
-
-def test_auto_wrappers_delegate_to_imported_modules() -> None:
-    calls: dict[str, object] = {}
-
-    class _Tok:
-        @staticmethod
-        def from_pretrained(*args: object, **kwargs: object) -> object:
-            calls["tok_args"] = args
-            calls["tok_kwargs"] = kwargs
-            return "tok"
-
-    class _Model:
-        @staticmethod
-        def from_pretrained(*args: object, **kwargs: object) -> object:
-            calls["model_args"] = args
-            calls["model_kwargs"] = kwargs
-            return "model"
-
-    class _Peft:
-        @staticmethod
-        def from_pretrained(base_model: object, adapters_path: Path) -> object:
-            calls["peft"] = (base_model, adapters_path)
-            return "peft-model"
-
-    def _import(name: str) -> object:
-        if name == "transformers":
-            return SimpleNamespace(AutoTokenizer=_Tok, AutoModelForCausalLM=_Model)
-        if name == "peft":
-            return SimpleNamespace(PeftModel=_Peft)
-        raise ImportError(name)
-
-    original_import = sampler.importlib.import_module
-    try:
-        sampler.importlib.import_module = _import  # type: ignore[assignment]
-        base_model = cast(sampler._Model, sampler._FallbackModel())
-        assert sampler.AutoTokenizer.from_pretrained("abc", use_fast=True) == "tok"
-        assert sampler.AutoModelForCausalLM.from_pretrained("m") == "model"
-        assert (
-            sampler.PeftModel.from_pretrained(base_model, Path("/tmp/adapters"))
-            == "peft-model"
-        )
-    finally:
-        sampler.importlib.import_module = original_import  # type: ignore[assignment]
-
-    assert calls["tok_args"] == ("abc",)
-    assert calls["tok_kwargs"] == {"use_fast": True}
-    assert calls["model_args"] == ("m",)
-    assert calls["peft"] == (base_model, Path("/tmp/adapters"))
-
-
 def test_default_factories_delegate() -> None:
     original_tok = sampler.AutoTokenizer.from_pretrained
     original_model = sampler.AutoModelForCausalLM.from_pretrained
@@ -224,7 +156,18 @@ def test_default_factories_delegate() -> None:
             {"use_fast": False},
         )
         assert base_factory("hf/model") == ("model", ("hf/model",), {})
-        base_model = cast(sampler._Model, sampler._FallbackModel())
+
+        class _DummyModel:
+            def generate(
+                self,
+                *,
+                input_ids: object,
+                attention_mask: object | None = None,
+            ) -> Sequence[object]:
+                del attention_mask
+                return [input_ids]
+
+        base_model = cast(sampler._Model, _DummyModel())
         assert peft_factory(base_model, Path("/adapters")) == (
             "peft",
             (base_model, Path("/adapters")),

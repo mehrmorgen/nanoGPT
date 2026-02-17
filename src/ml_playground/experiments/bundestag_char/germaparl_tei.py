@@ -14,10 +14,54 @@ import requests.exceptions
 from ml_playground.framework.core.error_handling import DataError
 
 CHUNK_SIZE = 1 << 20
+GITHUB_API_URL = "https://api.github.com"
 
 
 def build_codeload_url(repo: str, ref: str) -> str:
     return f"https://codeload.github.com/{repo}/tar.gz/refs/heads/{ref}"
+
+
+def resolve_remote_head_sha(
+    repo: str,
+    ref: str,
+    *,
+    http_get: Callable[..., object] | None = None,
+) -> str:
+    get_fn = http_get if callable(http_get) else requests.get
+    url = f"{GITHUB_API_URL}/repos/{repo}/commits/{ref}"
+    try:
+        response = get_fn(url, timeout=30)
+        raise_for_status = getattr(response, "raise_for_status", None)
+        if callable(raise_for_status):
+            raise_for_status()
+        json_fn = getattr(response, "json", None)
+        if not callable(json_fn):
+            raise DataError(
+                "Remote head resolution response has no json() method",
+                reason="HTTP response object did not provide JSON decoding",
+                rationale="GitHub head SHA resolution requires a JSON payload",
+            )
+        payload = json_fn()
+        if not isinstance(payload, dict):
+            raise DataError(
+                "Remote head resolution payload must be a JSON object",
+                reason=f"Received payload type {type(payload).__name__}",
+                rationale="GitHub head SHA resolution expects commit metadata fields",
+            )
+        sha = payload.get("sha")
+        if not isinstance(sha, str) or not sha:
+            raise DataError(
+                "Remote head response did not include a valid commit sha",
+                reason="Missing/invalid 'sha' field in GitHub commit payload",
+                rationale="Freshness checks require a concrete source head SHA",
+            )
+        return sha
+    except requests.exceptions.RequestException as exc:
+        raise DataError(
+            f"Failed to resolve remote head SHA for {repo}@{ref}: {exc}",
+            reason=f"HTTP request raised {exc.__class__.__name__}",
+            rationale="Freshness checks require querying the remote source head",
+        ) from exc
 
 
 def ensure_germaparl_tarball(
@@ -25,19 +69,12 @@ def ensure_germaparl_tarball(
     *,
     repo: str,
     ref: str,
-    force_refresh: bool = False,
-    tarball_bytes: bytes | None = None,
     http_get: Callable[..., object] | None = None,
 ) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     safe_repo = repo.replace("/", "_")
     tarball_path = cache_dir / f"{safe_repo}-{ref}.tar.gz"
-
-    if tarball_bytes is not None:
-        tarball_path.write_bytes(tarball_bytes)
-        return tarball_path
-
-    if tarball_path.exists() and not force_refresh:
+    if tarball_path.exists() and tarball_path.stat().st_size > 0:
         return tarball_path
 
     get_fn = http_get if callable(http_get) else requests.get
@@ -88,7 +125,7 @@ def serialize_germaparl_tei_to_text(
     *,
     include_stage: bool,
     include_speaker_attrs: bool,
-    max_files: int | None = None,
+    progress_cb: Callable[[int, str], None] | None = None,
 ) -> int:
     file_count = 0
     dst_text_path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,8 +141,6 @@ def serialize_germaparl_tei_to_text(
             if member.isfile() and member.name.endswith(".xml")
         ]
         xml_members.sort(key=lambda member: member.name)
-        if max_files is not None:
-            xml_members = xml_members[:max_files]
 
         for member in xml_members:
             extracted = archive.extractfile(member)
@@ -121,6 +156,8 @@ def serialize_germaparl_tei_to_text(
                 include_speaker_attrs=include_speaker_attrs,
             )
             file_count += 1
+            if progress_cb is not None:
+                progress_cb(file_count, doc_id)
 
     tmp_path.replace(dst_text_path)
     return file_count
@@ -182,8 +219,7 @@ def _attrs_to_str(attrs: dict[str, str]) -> str:
         return ""
     parts: list[str] = []
     for key in sorted(attrs):
-        value = attrs[key]
-        parts.append(f' {key}="{escape(value, quote=True)}"')
+        parts.append(f' {key}="{escape(attrs[key], quote=True)}"')
     return "".join(parts)
 
 

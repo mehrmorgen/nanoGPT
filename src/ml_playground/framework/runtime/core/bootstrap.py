@@ -29,7 +29,7 @@ class CLIDependencies:
     run_sample: Callable[[str, Any, Path, Any, "CLIDependencies", Any | None], Any] = (
         _default_noop
     )
-    run_analyze: Callable[[str, str, int, bool, Any | None], Any] = _default_noop
+    run_analyze: Callable[..., Any] = _default_noop
     global_device_setup: Callable[..., None] = _default_noop
     log_command_status: Callable[[str, Any, Path | None, Any], None] = (
         lambda _s, _d, _p, _a: None  # type: ignore[reportAny]
@@ -46,6 +46,7 @@ class CLIDependencies:
     sampler_factory: Callable[..., Any] = (
         lambda *args, **kwargs: None  # type: ignore[reportAny]
     )
+    confirm_fn: Callable[[str], bool] | None = None
     app: Any = None
     echo: Callable[..., None] | None = None
 
@@ -64,6 +65,7 @@ def create_default_cli_dependencies() -> CLIDependencies:
     from ml_playground.framework.sampling.runner import Sampler
     from ml_playground.runtime_cli import commands as cli_commands
     from ml_playground.runtime_cli import device as cli_device
+    import typer
 
     def _create_trainer(cfg: Any, metadata: Any, deps: Any | None = None) -> Any:  # type: ignore[reportAny]
         return Trainer(cfg, metadata, deps)
@@ -85,6 +87,7 @@ def create_default_cli_dependencies() -> CLIDependencies:
         create_pipeline=create_pipeline,
         trainer_factory=_create_trainer,
         sampler_factory=_create_sampler,
+        confirm_fn=typer.confirm,
     )
 
 

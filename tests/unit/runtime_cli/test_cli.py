@@ -462,7 +462,9 @@ def test_run_prepare_internal(tmp_path: Path) -> None:
         dataset_dir=tmp_path / "dataset",
         config_path=tmp_path / "config.toml",
     )
-    prepare_cfg = SimpleNamespace(logger=FakeLogger())
+    prepare_cfg = PreparerConfig(
+        tokenizer_type="char", logger=cast(Any, FakeLogger()), extras={}
+    )
 
     class MockPipeline:
         def __init__(self) -> None:
@@ -666,7 +668,10 @@ def test_cli_analyze_command_success(tmp_path: Path) -> None:
         port: int,
         open_browser: bool,
         learning_engine: Any = None,
+        metadata: Any = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = host, port, open_browser, learning_engine, metadata, exp_config_path
         return _ok_result("analyze", experiment)
 
     metadata = SimpleNamespace(
@@ -703,7 +708,10 @@ def test_cli_analyze_command_learning_mode(tmp_path: Path) -> None:
         port: int,
         open_browser: bool,
         learning_engine: Any = None,
+        metadata: Any = None,
+        exp_config_path: Path | None = None,
     ) -> ToolResult:
+        _ = host, port, open_browser, learning_engine, metadata, exp_config_path
         info = LearningInfo(
             explanations=["expl"], best_practices=[], related_concepts=[]
         )

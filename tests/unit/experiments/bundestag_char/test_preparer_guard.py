@@ -12,12 +12,12 @@ _FORBIDDEN_TOKENS = (
 def test_bundestag_char_preparer_tests_avoid_module_globals() -> None:
     test_dir = Path(__file__).parent
     offenders: list[str] = []
-    for name in ("test_preparer.py",):
+    for name in ("test_preparer.py", "test_germaparl_tei.py"):
         text = (test_dir / name).read_text(encoding="utf-8")
         for token in _FORBIDDEN_TOKENS:
             if token in text:
                 offenders.append(f"{name}:{token}")
     assert not offenders, (
-        "Found module-global reassignment in bundestag_char preparer tests: "
+        "Found module-global reassignment in bundestag_char tests: "
         + ", ".join(offenders)
     )

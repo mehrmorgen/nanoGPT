@@ -180,7 +180,7 @@ uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml sample 
 ## Configuration
 
 - Use the shared defaults in `src/ml_playground/experiments/default_config.toml` and adjust via experiment configs under `src/ml_playground/experiments/<name>/config.toml`.
-- For tiny test defaults, see `tests/e2e/experiments/test_default_config.toml`.
+- For tiny test defaults, see `tests/e2e/ml_playground/experiments/test_default_config.toml`.
 - MLflow defaults: enabled for train/sample runtimes; tracking URI defaults to `sqlite:///../out/mlflow.db` resolved relative to the experiment config; artifacts stored under `experiments/out/mlruns`; disable per experiment via `mlflow_enabled = false`.
 
 ## Outputs

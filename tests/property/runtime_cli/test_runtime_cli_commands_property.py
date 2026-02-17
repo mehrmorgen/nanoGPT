@@ -328,9 +328,10 @@ def test_run_prepare_executes_pipeline(
         def run(self) -> None:
             calls["ran"] = True
 
-    prepare_cfg = cast(
-        PreparerConfig,
-        SimpleNamespace(logger=logging.getLogger("ml_playground.runtime_cli")),
+    prepare_cfg = PreparerConfig(
+        tokenizer_type="char",
+        logger=logging.getLogger("ml_playground.runtime_cli"),
+        extras={},
     )
 
     def _create_pipeline(_: PreparerConfig, __: MetadataConfig) -> FakePipeline:

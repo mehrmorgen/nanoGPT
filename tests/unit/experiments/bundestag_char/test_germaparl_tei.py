@@ -7,12 +7,8 @@ import tarfile
 import pytest
 import requests.exceptions
 
+from ml_playground.experiments.bundestag_char import germaparl_tei
 from ml_playground.framework.core.error_handling import DataError
-from ml_playground.experiments.bundestag_char.germaparl_tei import (
-    build_codeload_url,
-    ensure_germaparl_tarball,
-    serialize_germaparl_tei_to_text,
-)
 
 
 def _tarball_with_xml(files: dict[str, str]) -> bytes:
@@ -27,7 +23,35 @@ def _tarball_with_xml(files: dict[str, str]) -> bytes:
     return buf.getvalue()
 
 
-class _ResponseIter:
+def _tei_xml(text: str) -> str:
+    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<TEI>
+  <text><body>
+    <div type=\"agenda_item\" n=\"U1\">
+      <sp who=\"Alice\" party=\"SPD\"><speaker>Alice</speaker><p>{text}</p></sp>
+    </div>
+  </body></text>
+</TEI>
+"""
+
+
+class _JsonResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class _JsonlessResponse:
+    def raise_for_status(self) -> None:
+        return None
+
+
+class _DownloadResponse:
     def __init__(self, chunks: list[bytes]) -> None:
         self._chunks = chunks
 
@@ -39,222 +63,133 @@ class _ResponseIter:
         return self._chunks
 
 
-class _ResponseContent:
-    def __init__(self, content: bytes) -> None:
+class _ContentResponse:
+    def __init__(self, content: object) -> None:
         self.content = content
 
     def raise_for_status(self) -> None:
         return None
 
 
-class _ResponseContentNoRaise:
-    def __init__(self, content: bytes) -> None:
-        self.content = content
-
-
-class _ResponseBadIter:
-    def raise_for_status(self) -> None:
-        return None
-
-    def iter_content(self, *, chunk_size: int) -> object:
-        _ = chunk_size
-        return 123
-
-
-class _ResponseNoBytes:
-    def raise_for_status(self) -> None:
-        return None
-
-    @property
-    def content(self) -> object:
-        return object()
-
-
-def _tei_xml(text: str) -> str:
-    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<TEI>
-  <text><body>
-    <div type=\"agenda_item\" n=\"U1\">
-      <sp who=\"Alice\" party=\"SPD\">
-        <speaker>Alice</speaker>
-        <p>{text}</p>
-        <stage type=\"interjection\">(Beifall)</stage>
-      </sp>
-    </div>
-  </body></text>
-</TEI>
-"""
-
-
-def test_build_codeload_url() -> None:
-    assert (
-        build_codeload_url("PolMine/GermaParlTEI", "main")
-        == "https://codeload.github.com/PolMine/GermaParlTEI/tar.gz/refs/heads/main"
+def test_resolve_remote_head_sha_success() -> None:
+    sha = germaparl_tei.resolve_remote_head_sha(
+        "PolMine/GermaParlTEI",
+        "main",
+        http_get=lambda *_args, **_kwargs: _JsonResponse({"sha": "abc123"}),
     )
+    assert sha == "abc123"
 
 
-def test_ensure_germaparl_tarball_uses_injected_bytes(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
-    tarball_bytes = _tarball_with_xml({"01/BT_01_001.xml": _tei_xml("A")})
-
-    path = ensure_germaparl_tarball(
-        cache_dir,
-        repo="PolMine/GermaParlTEI",
-        ref="main",
-        tarball_bytes=tarball_bytes,
-    )
-
-    assert path.exists()
-    assert path.read_bytes() == tarball_bytes
-
-
-def test_ensure_germaparl_tarball_uses_existing_cache(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
-    existing = ensure_germaparl_tarball(
-        cache_dir,
-        repo="PolMine/GermaParlTEI",
-        ref="main",
-        tarball_bytes=b"cached",
-    )
-
+def test_resolve_remote_head_sha_wraps_failures() -> None:
     def _boom(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("http_get must not be called when cache exists")
+        raise requests.exceptions.Timeout("timeout")
 
-    path = ensure_germaparl_tarball(
-        cache_dir,
+    with pytest.raises(DataError, match="Failed to resolve remote head SHA"):
+        germaparl_tei.resolve_remote_head_sha(
+            "PolMine/GermaParlTEI", "main", http_get=_boom
+        )
+
+
+def test_resolve_remote_head_sha_rejects_jsonless_response() -> None:
+    with pytest.raises(DataError, match="no json\\(\\) method"):
+        germaparl_tei.resolve_remote_head_sha(
+            "PolMine/GermaParlTEI",
+            "main",
+            http_get=lambda *_args, **_kwargs: _JsonlessResponse(),
+        )
+
+
+def test_resolve_remote_head_sha_rejects_non_mapping_payload() -> None:
+    class _ListPayload(_JsonResponse):
+        def json(self) -> object:  # type: ignore[override]
+            return ["not", "a", "mapping"]
+
+    with pytest.raises(DataError, match="payload must be a JSON object"):
+        germaparl_tei.resolve_remote_head_sha(
+            "PolMine/GermaParlTEI",
+            "main",
+            http_get=lambda *_args, **_kwargs: _ListPayload({}),
+        )
+
+
+def test_resolve_remote_head_sha_rejects_missing_sha() -> None:
+    with pytest.raises(DataError, match="valid commit sha"):
+        germaparl_tei.resolve_remote_head_sha(
+            "PolMine/GermaParlTEI",
+            "main",
+            http_get=lambda *_args, **_kwargs: _JsonResponse({"not_sha": "x"}),
+        )
+
+
+def test_ensure_germaparl_tarball_uses_cache(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    existing = cache / "PolMine_GermaParlTEI-main.tar.gz"
+    existing.write_bytes(b"cached")
+
+    path = germaparl_tei.ensure_germaparl_tarball(
+        cache,
         repo="PolMine/GermaParlTEI",
         ref="main",
-        http_get=_boom,
+        http_get=lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("no call")),
     )
 
     assert path == existing
+    assert path.read_bytes() == b"cached"
 
 
-def test_ensure_germaparl_tarball_downloads_via_iter_content(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseIter:
-        return _ResponseIter([b"abc", b"def"])
-
-    path = ensure_germaparl_tarball(
-        cache_dir,
+def test_ensure_germaparl_tarball_downloads_when_missing(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    path = germaparl_tei.ensure_germaparl_tarball(
+        cache,
         repo="PolMine/GermaParlTEI",
         ref="main",
-        force_refresh=True,
-        http_get=_http_get,
+        http_get=lambda *_a, **_k: _DownloadResponse([b"abc", b"def"]),
     )
-
+    assert path.exists()
     assert path.read_bytes() == b"abcdef"
 
 
-def test_ensure_germaparl_tarball_ignores_empty_chunks(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseIter:
-        return _ResponseIter([b"", b"abc", b""])
-
-    path = ensure_germaparl_tarball(
-        cache_dir,
-        repo="PolMine/GermaParlTEI",
-        ref="main",
-        force_refresh=True,
-        http_get=_http_get,
-    )
-
-    assert path.read_bytes() == b"abc"
-
-
-def test_ensure_germaparl_tarball_downloads_via_content_fallback(
+def test_ensure_germaparl_tarball_uses_content_when_no_iter_content(
     tmp_path: Path,
 ) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseContent:
-        return _ResponseContent(b"xyz")
-
-    path = ensure_germaparl_tarball(
-        cache_dir,
+    cache = tmp_path / "cache"
+    path = germaparl_tei.ensure_germaparl_tarball(
+        cache,
         repo="PolMine/GermaParlTEI",
         ref="main",
-        force_refresh=True,
-        http_get=_http_get,
+        http_get=lambda *_a, **_k: _ContentResponse(b"xyz"),
     )
-
     assert path.read_bytes() == b"xyz"
 
 
-def test_ensure_germaparl_tarball_works_without_raise_for_status(
-    tmp_path: Path,
-) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseContentNoRaise:
-        return _ResponseContentNoRaise(b"ok")
-
-    path = ensure_germaparl_tarball(
-        cache_dir,
-        repo="PolMine/GermaParlTEI",
-        ref="main",
-        force_refresh=True,
-        http_get=_http_get,
-    )
-
-    assert path.read_bytes() == b"ok"
-
-
-def test_ensure_germaparl_tarball_rejects_non_iterable_iter_content(
-    tmp_path: Path,
-) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseBadIter:
-        return _ResponseBadIter()
-
-    with pytest.raises(DataError, match="iter_content"):
-        ensure_germaparl_tarball(
-            cache_dir,
-            repo="PolMine/GermaParlTEI",
-            ref="main",
-            force_refresh=True,
-            http_get=_http_get,
-        )
-
-
 def test_ensure_germaparl_tarball_rejects_non_bytes_content(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
-
-    def _http_get(*_args: object, **_kwargs: object) -> _ResponseNoBytes:
-        return _ResponseNoBytes()
-
-    with pytest.raises(DataError, match="bytes content"):
-        ensure_germaparl_tarball(
-            cache_dir,
+    cache = tmp_path / "cache"
+    with pytest.raises(DataError, match="did not include bytes content"):
+        germaparl_tei.ensure_germaparl_tarball(
+            cache,
             repo="PolMine/GermaParlTEI",
             ref="main",
-            force_refresh=True,
-            http_get=_http_get,
+            http_get=lambda *_a, **_k: _ContentResponse("nope"),
         )
 
 
-def test_ensure_germaparl_tarball_wraps_request_failures(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "cache"
+def test_ensure_germaparl_tarball_wraps_request_errors(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
 
-    def _http_get(*_args: object, **_kwargs: object) -> object:
-        raise requests.exceptions.Timeout("timeout")
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        raise requests.exceptions.ConnectionError("down")
 
     with pytest.raises(DataError, match="Failed to download GermaParlTEI tarball"):
-        ensure_germaparl_tarball(
-            cache_dir,
+        germaparl_tei.ensure_germaparl_tarball(
+            cache,
             repo="PolMine/GermaParlTEI",
             ref="main",
-            force_refresh=True,
-            http_get=_http_get,
+            http_get=_boom,
         )
 
 
-def test_serialize_germaparl_tei_to_text_is_deterministic_and_respects_max_files(
-    tmp_path: Path,
-) -> None:
+def test_serialize_germaparl_tei_to_text_is_deterministic(tmp_path: Path) -> None:
     tarball = _tarball_with_xml(
         {
             "01/BT_01_002.xml": _tei_xml("two"),
@@ -265,41 +200,16 @@ def test_serialize_germaparl_tei_to_text_is_deterministic_and_respects_max_files
     tar_path.write_bytes(tarball)
     out_path = tmp_path / "input.txt"
 
-    processed = serialize_germaparl_tei_to_text(
+    processed = germaparl_tei.serialize_germaparl_tei_to_text(
         tar_path,
         out_path,
         include_stage=True,
         include_speaker_attrs=True,
-        max_files=1,
     )
 
     text = out_path.read_text(encoding="utf-8")
-    assert processed == 1
-    assert '<DOC id="BT_01_001">' in text
-    assert "<P>one</P>" in text
-    assert "<STAGE" in text
-    assert 'who="Alice"' in text
-
-
-def test_serialize_germaparl_tei_to_text_toggles_stage_and_speaker_attrs(
-    tmp_path: Path,
-) -> None:
-    tarball = _tarball_with_xml({"01/BT_01_001.xml": _tei_xml("hello")})
-    tar_path = tmp_path / "germaparl.tar.gz"
-    tar_path.write_bytes(tarball)
-    out_path = tmp_path / "input.txt"
-
-    serialize_germaparl_tei_to_text(
-        tar_path,
-        out_path,
-        include_stage=False,
-        include_speaker_attrs=False,
-    )
-
-    text = out_path.read_text(encoding="utf-8")
-    assert "<STAGE" not in text
-    assert "<SP>" in text
-    assert "who=" not in text
+    assert processed == 2
+    assert text.find('id="BT_01_001"') < text.find('id="BT_01_002"')
 
 
 def test_serialize_germaparl_tei_to_text_fails_on_malformed_xml(tmp_path: Path) -> None:
@@ -308,7 +218,7 @@ def test_serialize_germaparl_tei_to_text_fails_on_malformed_xml(tmp_path: Path) 
     tar_path.write_bytes(tarball)
 
     with pytest.raises(DataError, match="Malformed TEI XML"):
-        serialize_germaparl_tei_to_text(
+        germaparl_tei.serialize_germaparl_tei_to_text(
             tar_path,
             tmp_path / "input.txt",
             include_stage=True,
@@ -316,13 +226,15 @@ def test_serialize_germaparl_tei_to_text_fails_on_malformed_xml(tmp_path: Path) 
         )
 
 
-def test_serialize_germaparl_tei_to_text_supports_namespaced_tags(
+def test_serialize_germaparl_tei_to_text_progress_and_toggle_fields(
     tmp_path: Path,
 ) -> None:
     xml = """<?xml version="1.0" encoding="UTF-8"?>
-<TEI xmlns="http://www.tei-c.org/ns/1.0">
+<TEI xmlns="urn:test">
   <text><body>
-    <div><sp><speaker>A</speaker><p>B</p></sp></div>
+    <div type="agenda_item" n="U1">
+      <sp who="Alice"><speaker>Alice</speaker><p>Hello</p><stage type="noise">[x]</stage></sp>
+    </div>
   </body></text>
 </TEI>
 """
@@ -330,15 +242,27 @@ def test_serialize_germaparl_tei_to_text_supports_namespaced_tags(
     tar_path = tmp_path / "germaparl.tar.gz"
     tar_path.write_bytes(tarball)
     out_path = tmp_path / "input.txt"
+    seen: list[tuple[int, str]] = []
 
-    processed = serialize_germaparl_tei_to_text(
+    processed = germaparl_tei.serialize_germaparl_tei_to_text(
         tar_path,
         out_path,
-        include_stage=True,
-        include_speaker_attrs=True,
+        include_stage=False,
+        include_speaker_attrs=False,
+        progress_cb=lambda count, doc_id: seen.append((count, doc_id)),
     )
 
     text = out_path.read_text(encoding="utf-8")
     assert processed == 1
-    assert "<SPEAKER>A</SPEAKER>" in text
-    assert "<P>B</P>" in text
+    assert seen == [(1, "BT_01_001")]
+    assert "<STAGE" not in text
+    assert "<SP>" in text
+    assert 'who="' not in text
+
+
+def test_helper_formatting_functions() -> None:
+    assert germaparl_tei._local_name("{urn:test}sp") == "sp"
+    assert germaparl_tei._local_name("sp") == "sp"
+    assert germaparl_tei._attrs_to_str({}) == ""
+    rendered = germaparl_tei._attrs_to_str({"b": "2", "a": "1"})
+    assert rendered == ' a="1" b="2"'

@@ -6,6 +6,8 @@ using Hypothesis to discover edge cases in runner execution.
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import click
@@ -159,3 +161,110 @@ def test_run_or_exit_exit_code_matches_result(success: bool) -> None:
         with pytest.raises(click.exceptions.Exit) as exc_info:
             runners.run_or_exit(failure_func)
         assert exc_info.value.exit_code == 1
+
+
+@given(kind=st.sampled_from(["train", "prepare", "sample"]))
+@settings(max_examples=6, deadline=None, derandomize=True)
+def test_command_runners_require_non_none_metadata_config_path(kind: str) -> None:
+    if kind == "train":
+        exp = SimpleNamespace(
+            training=SimpleNamespace(runtime=SimpleNamespace()),
+            metadata=SimpleNamespace(config_path=None, train_out_dir=Path("/tmp")),
+        )
+        deps = runners.CLIDependencies(load_experiment=lambda *_: exp)
+        with pytest.raises(
+            RuntimeError, match="metadata.config_path is required for training"
+        ):
+            runners.run_train_cmd("demo", None, deps)
+        return
+
+    if kind == "prepare":
+        exp = SimpleNamespace(
+            prepare=SimpleNamespace(),
+            metadata=SimpleNamespace(config_path=None),
+        )
+        deps = runners.CLIDependencies(load_experiment=lambda *_: exp)
+        with pytest.raises(
+            RuntimeError, match="metadata.config_path is required for preparation"
+        ):
+            runners.run_prepare_cmd("demo", None, deps)
+        return
+
+    exp = SimpleNamespace(
+        sampling=SimpleNamespace(runtime=SimpleNamespace()),
+        metadata=SimpleNamespace(config_path=None, train_out_dir=Path("/tmp")),
+    )
+    deps = runners.CLIDependencies(load_experiment=lambda *_: exp)
+    with pytest.raises(
+        RuntimeError, match="metadata.config_path is required for sampling"
+    ):
+        runners.run_sample_cmd("demo", None, deps)
+
+
+@given(open_browser=st.booleans())
+@settings(max_examples=8, deadline=None, derandomize=True)
+def test_run_analyze_cmd_uses_module_fallback_handler(open_browser: bool) -> None:
+    exp = SimpleNamespace(metadata=SimpleNamespace())
+    handled: list[tuple[bool, int]] = []
+    original_handler = runners.handle_tool_result
+    try:
+        runners.handle_tool_result = lambda result, learning_mode: handled.append(
+            (result.success, result.exit_code)
+        )
+        deps = runners.CLIDependencies(
+            load_experiment=lambda *_: exp,
+            run_analyze=lambda *_a, **_k: ToolResult.create(
+                success=True,
+                exit_code=0,
+                namespace="ml",
+                category="analyze",
+                command="demo",
+            ),
+            handle_tool_result=runners.runtime_bootstrap.CLIDependencies.handle_tool_result,
+        )
+        runners.run_analyze_cmd("demo", None, deps, "127.0.0.1", 8050, open_browser)
+    finally:
+        runners.handle_tool_result = original_handler
+
+    assert handled == [(True, 0)]
+
+
+@given(_none=st.none())
+@settings(max_examples=1, deadline=None, derandomize=True)
+def test_normalize_cli_path_accepts_none(_none: None) -> None:
+    _ = _none
+    assert runners._normalize_cli_path(None) is None
+
+
+@given(command=st.text(min_size=1, max_size=8, alphabet="abcdefghijklmnopqrstuvwxyz"))
+@settings(max_examples=8, deadline=None, derandomize=True)
+def test_run_prepare_cmd_uses_module_fallback_handler(command: str) -> None:
+    handled: list[bool] = []
+    original_handler = runners.handle_tool_result
+    try:
+        runners.handle_tool_result = lambda result, learning_mode: handled.append(
+            result.success
+        )
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "cfg.toml"
+            cfg_path.write_text("[dummy]\nvalue=1\n", encoding="utf-8")
+            exp = SimpleNamespace(
+                prepare=SimpleNamespace(),
+                metadata=SimpleNamespace(config_path=cfg_path),
+            )
+            deps = runners.CLIDependencies(
+                load_experiment=lambda *_: exp,
+                run_prepare=lambda *_a, **_k: ToolResult.create(
+                    success=True,
+                    exit_code=0,
+                    namespace="ml",
+                    category="prepare",
+                    command=command,
+                ),
+                handle_tool_result=runners.runtime_bootstrap.CLIDependencies.handle_tool_result,
+            )
+            runners.run_prepare_cmd(command, None, deps)
+    finally:
+        runners.handle_tool_result = original_handler
+
+    assert handled == [True]
