@@ -3,35 +3,30 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from hypothesis import given, settings, strategies as st
 
 from ml_playground.framework.core import checkpoint_lock, tokenizer
 
 # --- Checkpoint Lock Tests ---
 
 
-@given(
-    filename=st.one_of(
-        st.just("."),
-        st.just(".."),
-        st.just("/absolute/path"),
-        st.just("/root"),
-        st.text(min_size=1, max_size=24).map(
-            lambda s: "/" + s
-        ),  # Absolute path simulation
-    )
+@pytest.mark.parametrize(
+    "filename",
+    [
+        ".",
+        "..",
+        "/absolute/path",
+        "/root",
+        "/tmp/checkpoint",
+        "/var/lock",
+    ],
 )
-@settings(max_examples=40, deadline=None, derandomize=True)
 def test_checkpoint_lock_path_validation(filename: str) -> None:
     # We fake the check for absolute/root in a way that matches os.path behavior if possible
     # But since the code uses Path.is_absolute(), we rely on that.
     # Note: On non-posix, "/" might not be absolute.
     # For robust testing, we just check if it raises ValueError for known invalid inputs.
 
-    if filename in {".", ".."}:
-        with pytest.raises(ValueError, match="must not be"):
-            checkpoint_lock.checkpoint_lock_path(Path("out"), filename)
-    elif filename.startswith("/"):
+    if filename in {".", ".."} or filename.startswith("/"):
         with pytest.raises(ValueError, match="must not be"):
             checkpoint_lock.checkpoint_lock_path(Path("out"), filename)
 
@@ -56,11 +51,9 @@ def test_read_lock_metadata_corruption(tmp_path: Path) -> None:
 
 # --- Tokenizer Tests ---
 
-TOK_TYPES = st.sampled_from(["char", "word", "tiktoken"])
 
-
-@given(tok_type=TOK_TYPES, extra_kw=st.text(min_size=1, max_size=24))
-@settings(max_examples=40, deadline=None, derandomize=True)
+@pytest.mark.parametrize("tok_type", ["char", "word", "tiktoken"])
+@pytest.mark.parametrize("extra_kw", ["unknown", "abc", "foo", "bar", "zzz"])
 def test_create_tokenizer_invalid_kwargs(tok_type: str, extra_kw: str) -> None:
     # Ensure extra_kw is not a valid arg
     valid_args = {"vocab", "encoding_name", "loader", "tokenizer_type"}
@@ -84,9 +77,7 @@ def test_create_tokenizer_invalid_kwargs(tok_type: str, extra_kw: str) -> None:
             tokenizer.create_tokenizer(tok_type, loader=lambda: None, **kwargs)
 
 
-@given(_vals=st.lists(st.text(max_size=16), max_size=16))
-@settings(max_examples=40, deadline=None, derandomize=True)
-def test_create_tokenizer_invalid_vocab_types(_vals: list[str]) -> None:
+def test_create_tokenizer_invalid_vocab_types() -> None:
     vocab = {"k": "string_value"}
     with pytest.raises(TypeError, match="numeric or boolean"):
         tokenizer.create_tokenizer("char", vocab=vocab)

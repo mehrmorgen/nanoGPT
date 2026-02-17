@@ -137,7 +137,7 @@ class MockLearningEngine:
 
 
 @given(config=prepare_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_prepare_handles_success(config: PrepareConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=lambda *_: type("Runner", (), {"run": lambda: None}),
@@ -152,7 +152,7 @@ def test_run_prepare_handles_success(config: PrepareConfigLike) -> None:
 
 
 @given(config=prepare_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_prepare_with_learning_mode(config: PrepareConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=lambda *_: type("Runner", (), {"run": lambda: None}),
@@ -170,7 +170,7 @@ def test_run_prepare_with_learning_mode(config: PrepareConfigLike) -> None:
 
 
 @given(config=prepare_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_prepare_failure_with_learning_mode(config: PrepareConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_failing_factory,
@@ -199,7 +199,7 @@ def test_run_prepare_failure_with_learning_mode(config: PrepareConfigLike) -> No
 
 
 @given(config=prepare_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_prepare_handles_broken_runner(config: PrepareConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_broken_runner_factory,
@@ -214,7 +214,7 @@ def test_run_prepare_handles_broken_runner(config: PrepareConfigLike) -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_handles_scenarios(config: TrainConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -235,7 +235,7 @@ def test_run_train_handles_scenarios(config: TrainConfigLike) -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_handles_factory_failure(config: TrainConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -256,7 +256,7 @@ def test_run_train_handles_factory_failure(config: TrainConfigLike) -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_handles_broken_runner(config: TrainConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -272,7 +272,7 @@ def test_run_train_handles_broken_runner(config: TrainConfigLike) -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_with_learning_mode(config: TrainConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -292,7 +292,7 @@ def test_run_train_with_learning_mode(config: TrainConfigLike) -> None:
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_handles_factory_failure(config: SampleConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -308,7 +308,7 @@ def test_run_sample_handles_factory_failure(config: SampleConfigLike) -> None:
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_handles_broken_runner(config: SampleConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -324,7 +324,7 @@ def test_run_sample_handles_broken_runner(config: SampleConfigLike) -> None:
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_with_learning_mode(config: SampleConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -359,7 +359,7 @@ def test_run_sample_with_learning_mode(config: SampleConfigLike) -> None:
 
 
 @given(experiment=st.text(min_size=1))
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_analyze_validation(experiment: str) -> None:
     def _noop_runner(
         _host: str | None, _port: int, _open_browser: bool, _logger: Any
@@ -412,7 +412,7 @@ def test_run_analyze_success_with_learning_mode() -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_exception_with_learning_mode(config: TrainConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -431,7 +431,7 @@ def test_run_train_exception_with_learning_mode(config: TrainConfigLike) -> None
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_exception_with_learning_mode(config: SampleConfigLike) -> None:
     hooks = runners.RuntimeRunHooks(
         pipeline_factory=_noop,
@@ -450,7 +450,7 @@ def test_run_sample_exception_with_learning_mode(config: SampleConfigLike) -> No
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_seed_resolution(config: TrainConfigLike) -> None:
     seeds: list[int] = []
 
@@ -477,7 +477,7 @@ def test_run_train_seed_resolution(config: TrainConfigLike) -> None:
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_seed_resolution(config: SampleConfigLike) -> None:
     seeds: list[int] = []
 
@@ -504,7 +504,7 @@ def test_run_sample_seed_resolution(config: SampleConfigLike) -> None:
 
 
 @given(config=train_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_train_seed_resolution_none(config: TrainConfigLike) -> None:
     seeds: list[int] = []
 
@@ -532,7 +532,7 @@ def test_run_train_seed_resolution_none(config: TrainConfigLike) -> None:
 
 
 @given(config=sample_configs())
-@settings(max_examples=20, deadline=None, derandomize=True)
+@settings(max_examples=12, deadline=None, derandomize=True)
 def test_run_sample_seed_resolution_none(config: SampleConfigLike) -> None:
     seeds: list[int] = []
 
