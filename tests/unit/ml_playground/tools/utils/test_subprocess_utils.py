@@ -233,7 +233,7 @@ class TestRealSubprocessRunner:
             runner.run_subprocess(
                 [sys.executable, "-c", "import time; time.sleep(1)"],
                 operation_id=operation_id,
-                timeout=1,
+                timeout=0,
             )
 
     def test_run_subprocess_os_error_raises(self) -> None:

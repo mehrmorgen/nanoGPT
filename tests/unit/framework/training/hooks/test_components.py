@@ -229,17 +229,33 @@ def test_initialize_components_scaler_cpu_branch(tmp_path: Path) -> None:
     assert not scaler.is_enabled()
 
 
-def test_initialize_components_compile_none_fallback_to_torch(tmp_path: Path) -> None:
+def test_initialize_components_compile_none_fallback_to_torch(
+    tmp_path: Path,
+) -> None:
     """compile_fn=None with compile=True falls back to getattr(torch, 'compile')."""
     model = make_minimal_gpt()
     cfg = _make_config(compile=True)
     runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
+    compile_calls: list[GPT] = []
 
-    compiled_model, _scaler, _ema, _writer = initialize_components(
-        model, cfg, runtime, log_dir=str(tmp_path), compile_fn=None
-    )
+    def _fake_compile(module: GPT) -> GPT:
+        compile_calls.append(module)
+        return module
+
+    original_compile = getattr(torch, "compile", None)
+    object.__setattr__(torch, "compile", _fake_compile)
+    try:
+        compiled_model, _scaler, _ema, _writer = initialize_components(
+            model, cfg, runtime, log_dir=str(tmp_path), compile_fn=None
+        )
+    finally:
+        if original_compile is None:
+            delattr(torch, "compile")
+        else:
+            object.__setattr__(torch, "compile", original_compile)
 
     assert compiled_model is not None
+    assert compile_calls == [model]
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")  # type: ignore[reportAny]

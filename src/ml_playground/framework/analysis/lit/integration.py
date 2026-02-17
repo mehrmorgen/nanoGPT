@@ -184,11 +184,19 @@ def run_server_bundestag_char(
         exp_dir = base_dir / "experiments" / "bundestag_char"
         input = exp_dir / "datasets" / "input.txt"
         if input.exists():
-            text = input.read_text(encoding="utf-8", errors="ignore")
-            # Take up to 10 reasonably short lines.
-            file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            # Stream only the first few non-empty lines to avoid loading large
+            # corpora into memory for this tiny demo dataset.
+            file_lines: list[str] = []
+            with input.open("r", encoding="utf-8", errors="ignore") as input_file:
+                for raw_line in input_file:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    file_lines.append(line)
+                    if len(file_lines) >= 10:
+                        break
             if file_lines:
-                samples = file_lines[:10]
+                samples = file_lines
     except (OSError, UnicodeError):
         # Non-fatal; keep embedded samples
         pass
