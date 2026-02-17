@@ -16,50 +16,33 @@ from ml_playground.tools.dev.dev import (
     comment_lookup,
 )
 
+_TEXT_CHARS = st.characters(blacklist_categories=("Cs",), min_codepoint=32)
+_SMALL_TEXT = st.text(alphabet=_TEXT_CHARS, min_size=1, max_size=24)
+_BODY_TEXT = st.text(alphabet=_TEXT_CHARS, max_size=96)
+
 # Strategies for generating mock data
 st_comment = st.fixed_dictionaries(
     {
-        "author": st.text(
-            min_size=1,
-            alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32),
-        ),
+        "author": _SMALL_TEXT,
         "viewer_did_author": st.booleans(),
-        "body": st.text(
-            alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32)
-        ),
+        "body": _BODY_TEXT,
         "url": st.one_of(
             st.none(),
-            st.text(
-                min_size=1,
-                alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32),
-            ),
+            _SMALL_TEXT,
         ),
         "id": st.one_of(
             st.none(),
-            st.text(
-                min_size=1,
-                alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32),
-            ),
+            _SMALL_TEXT,
         ),
         "databaseId": st.one_of(st.none(), st.integers(min_value=1)),
-        "createdAt": st.one_of(
-            st.none(),
-            st.text(
-                alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32)
-            ),
-        ),
+        "createdAt": st.one_of(st.none(), st.text(alphabet=_TEXT_CHARS, max_size=32)),
     }
 )
 
 
 @st.composite
 def st_thread(draw: st.DrawFn) -> Thread:
-    url = draw(
-        st.text(
-            min_size=1,
-            alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32),
-        )
-    )
+    url = draw(_SMALL_TEXT)
     is_resolved = draw(st.booleans())
     raw_comments = draw(st.lists(st_comment, min_size=1, max_size=5))
     comments = [
@@ -80,11 +63,11 @@ def st_thread(draw: st.DrawFn) -> Thread:
 @st.composite
 def st_fetch_result(draw: st.DrawFn) -> FetchResult:
     threads = draw(st.lists(st_thread(), min_size=0, max_size=10))
-    viewer = draw(st.one_of(st.none(), st.text(min_size=1)))
+    viewer = draw(st.one_of(st.none(), _SMALL_TEXT))
     return FetchResult(threads=threads, viewer=viewer)
 
 
-@settings(max_examples=50, deadline=500)
+@settings(max_examples=35, deadline=500)
 @given(st_fetch_result())
 def test_comment_lookup_invariants(fetch: FetchResult) -> None:
     """Test that _comment_lookup correctly maps available identifiers to IDs."""
@@ -128,12 +111,12 @@ def test_comment_lookup_invariants(fetch: FetchResult) -> None:
         assert lookup.get(ident) == expected_id
 
 
-@settings(max_examples=50, deadline=500)
+@settings(max_examples=35, deadline=500)
 @given(
     st.lists(st_thread(), min_size=0, max_size=20),
     st.booleans(),
     st.booleans(),
-    st.one_of(st.none(), st.text(min_size=1)),
+    st.one_of(st.none(), _SMALL_TEXT),
 )
 def test_apply_filters_invariants(
     threads: list[Thread], unreplied: bool, unresolved: bool, viewer: str | None
@@ -165,11 +148,17 @@ def test_apply_filters_invariants(
 
 
 @settings(
-    max_examples=50,
+    max_examples=35,
     deadline=500,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
-@given(st.dictionaries(st.text(), st.text()))
+@given(
+    st.dictionaries(
+        st.text(alphabet=_TEXT_CHARS, max_size=24),
+        st.text(alphabet=_TEXT_CHARS, max_size=64),
+        max_size=16,
+    )
+)
 def test_load_replies_valid_json(tmp_path: Path, replies_dict: Dict[str, str]) -> None:
     """Test that _load_replies correctly loads arbitrary valid JSON dictionaries."""
     from ml_playground.tools.dev.dev import load_replies

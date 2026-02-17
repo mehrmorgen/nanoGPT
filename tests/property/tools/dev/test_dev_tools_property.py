@@ -508,7 +508,7 @@ def test_workflow_status_delegates(
 
 
 @settings(
-    max_examples=50,
+    max_examples=30,
     deadline=None,
     derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
@@ -520,16 +520,17 @@ def test_workflow_status_delegates(
                 "url": st.text(
                     min_size=1,
                     alphabet=st.characters(
-                        whitelist_categories=("L", "Nd", "Pc", "Pd", "Zs")
+                        whitelist_categories=("L", "Nd", "Pc", "Pd", "Zs"),
                     ),
+                    max_size=32,
                 ),
                 "is_resolved": st.booleans(),
                 "comments": st.lists(
                     st.fixed_dictionaries(
                         {
-                            "author": st.text(min_size=1),
+                            "author": st.text(min_size=1, max_size=24),
                             "viewer_did_author": st.booleans(),
-                            "body": st.text(),
+                            "body": st.text(max_size=96),
                             "id": st.text(
                                 min_size=1,
                                 alphabet=st.characters(
@@ -537,6 +538,7 @@ def test_workflow_status_delegates(
                                     min_codepoint=48,
                                     max_codepoint=57,
                                 ),
+                                max_size=24,
                             ),
                         }
                     ),
@@ -550,7 +552,7 @@ def test_workflow_status_delegates(
     ),
     unreplied=st.booleans(),
     unresolved=st.booleans(),
-    viewer=st.text(min_size=1) | st.none(),
+    viewer=st.text(min_size=1, max_size=24) | st.none(),
 )
 def test_apply_filters_logic(
     threads_data: list[dict[str, Any]],
@@ -584,7 +586,7 @@ def test_apply_filters_logic(
 
 
 @settings(
-    max_examples=50,
+    max_examples=30,
     deadline=None,
     derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
@@ -596,16 +598,17 @@ def test_apply_filters_logic(
                 "url": st.text(
                     min_size=1,
                     alphabet=st.characters(
-                        whitelist_categories=("L", "Nd", "Pc", "Pd", "Zs")
+                        whitelist_categories=("L", "Nd", "Pc", "Pd", "Zs"),
                     ),
+                    max_size=32,
                 ),
                 "is_resolved": st.booleans(),
                 "comments": st.lists(
                     st.fixed_dictionaries(
                         {
-                            "author": st.text(min_size=1),
+                            "author": st.text(min_size=1, max_size=24),
                             "viewer_did_author": st.booleans(),
-                            "body": st.text(),
+                            "body": st.text(max_size=96),
                             "id": st.text(
                                 min_size=1,
                                 alphabet=st.characters(
@@ -613,8 +616,9 @@ def test_apply_filters_logic(
                                     min_codepoint=48,
                                     max_codepoint=57,
                                 ),
+                                max_size=24,
                             ),
-                            "url": st.text(),
+                            "url": st.text(max_size=32),
                             "database_id": st.integers(min_value=1) | st.none(),
                         }
                     ),

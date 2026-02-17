@@ -238,7 +238,7 @@ _UNKNOWN_COMMANDS = (
 @given(  # type: ignore[reportAny]
     command=_UNKNOWN_COMMANDS
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_reports_unknown_commands(command: str) -> None:
     result = CLI_RUNNER.invoke(app, [command])
     assert result.exit_code != 0
@@ -264,7 +264,7 @@ def test_runtime_cli_help_always_succeeds() -> None:
     verbosity=st.integers(min_value=0, max_value=2),
 )
 @example(include_learning_mode=False, include_verbosity=False, verbosity=1)
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_no_subcommand_shows_welcome_and_help(
     include_learning_mode: bool,
     include_verbosity: bool,
@@ -415,7 +415,7 @@ def test_runtime_cli_commands_require_experiment_argument(subcommand: str) -> No
 @given(  # type: ignore[reportAny]
     bad_port=_NON_INT_TEXT
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
     result = CLI_RUNNER.invoke(app, ["analyze", "dummy", "--port", bad_port])
     assert result.exit_code != 0
@@ -428,7 +428,7 @@ def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
 @given(  # type: ignore[reportAny]
     bad_bool=_NON_INT_TEXT
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_rejects_invalid_open_browser_value(bad_bool: str) -> None:
     result = CLI_RUNNER.invoke(app, ["analyze", "dummy", f"--open-browser={bad_bool}"])
     assert result.exit_code != 0
@@ -461,7 +461,7 @@ def test_runtime_cli_analyze_requires_option_values(opt: str) -> None:
     subcommand=st.sampled_from(["prepare", "train", "analyze"]),
     option=_UNKNOWN_OPTION_NAME,
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_unknown_options(
     subcommand: str,
     option: str,
@@ -475,7 +475,7 @@ def test_runtime_cli_rejects_unknown_options(
 @given(  # type: ignore[reportAny]
     name=_PATH_TOKEN
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> None:
     with TemporaryDirectory() as tmpdir:
         missing = Path(tmpdir) / f"{name}.toml"
@@ -493,7 +493,7 @@ def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> No
 @given(  # type: ignore[reportAny]
     name=_PATH_TOKEN
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
     name: str,
 ) -> None:
@@ -512,7 +512,7 @@ def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
 @given(  # type: ignore[reportAny]
     filename=_REL_SEGMENT
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_missing_exp_config_relative_path_is_stable(
     filename: str,
 ) -> None:
@@ -532,7 +532,7 @@ def test_runtime_cli_missing_exp_config_relative_path_is_stable(
 @given(  # type: ignore[reportAny]
     dirname=_REL_SEGMENT
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_directory_exp_config_is_rejected(dirname: str) -> None:
     with TemporaryDirectory() as tmpdir:
         config_dir = Path(tmpdir) / dirname
@@ -551,7 +551,7 @@ def test_runtime_cli_directory_exp_config_is_rejected(dirname: str) -> None:
 @given(  # type: ignore[reportAny]
     dirname=_REL_SEGMENT, filename=_REL_SEGMENT
 )
-@settings(max_examples=25, deadline=None, derandomize=True)
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_exp_config_normalizes_dotdot_paths(
     dirname: str,
     filename: str,

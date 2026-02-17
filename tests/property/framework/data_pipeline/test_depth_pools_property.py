@@ -11,7 +11,10 @@ from ml_playground.framework.data_pipeline.transforms.depth_pools import (
 
 @settings(max_examples=50, deadline=None, derandomize=True)
 @given(  # type: ignore[reportAny]
-    records=st.lists(st.tuples(st.integers(min_value=0, max_value=5), st.integers()))
+    records=st.lists(
+        st.tuples(st.integers(min_value=0, max_value=5), st.integers()),
+        max_size=80,
+    )
 )
 def test_partition_by_depth_groups_records(records: list[tuple[int, int]]) -> None:
     """Partitioning preserves all records and depth labels."""

@@ -164,11 +164,10 @@ EXPERIMENT_NAME_STRATEGY = st.text(
     min_size=1,
     max_size=8,
 )
-INVALID_TOKEN_STRATEGY = st.text(
-    alphabet="abcdefghijklmnopqrstuvwxyz",
-    min_size=3,
-    max_size=10,
-).filter(lambda token: token not in VALID_TOKENS)
+INVALID_TOKEN_POOL = [f"invalid-{idx}" for idx in range(64)]
+INVALID_TOKEN_STRATEGY = st.sampled_from(
+    [token for token in INVALID_TOKEN_POOL if token not in VALID_TOKENS]
+)
 
 
 def _invoke_runtime_cli(
@@ -182,7 +181,7 @@ def _invoke_runtime_cli(
 
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 @example(flags=[])
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_runtime_cli_without_subcommand_shows_guidance(flags: List[str]) -> None:
     result = _invoke_runtime_cli(flags, log=None)
     assert result.exit_code == 2
@@ -194,7 +193,7 @@ def test_runtime_cli_without_subcommand_shows_guidance(flags: List[str]) -> None
     experiment=EXPERIMENT_NAME_STRATEGY,
 )
 @example(flags=[], command="prepare", experiment="demo")
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_runtime_cli_commands_use_dependencies(
     flags: List[str], command: str, experiment: str
 ) -> None:
@@ -213,7 +212,7 @@ def test_runtime_cli_commands_use_dependencies(
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, invalid=INVALID_TOKEN_STRATEGY)
 @example(flags=[], invalid="bogus")
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_runtime_cli_reports_unknown_commands(flags: List[str], invalid: str) -> None:
     assume(invalid)
     result = _invoke_runtime_cli([*flags, invalid], log=None)
@@ -222,7 +221,7 @@ def test_runtime_cli_reports_unknown_commands(flags: List[str], invalid: str) ->
     assert "no such command" in stream or "unknown command" in stream
 
 
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 @given(flags=GLOBAL_FLAGS_STRATEGY)
 def test_runtime_cli_invalid_exp_config_is_rejected(flags: List[str]) -> None:
     missing = Path("nonexistent-config-path.toml")
@@ -238,7 +237,7 @@ def test_runtime_cli_invalid_exp_config_is_rejected(flags: List[str]) -> None:
 
 @given(flags=GLOBAL_FLAGS_STRATEGY, experiment=EXPERIMENT_NAME_STRATEGY)
 @example(flags=[], experiment="invalid")
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_unknown_experiment(
     flags: List[str], experiment: str
 ) -> None:

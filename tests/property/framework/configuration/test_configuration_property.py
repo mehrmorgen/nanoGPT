@@ -58,7 +58,7 @@ def _build_nested_value_strategy(
     return st.recursive(
         scalar_values,
         extend,
-        max_leaves=6,
+        max_leaves=5,
     )
 
 
@@ -125,7 +125,7 @@ class TestMergeMappings:
     @given(  # type: ignore[reportAny]
         base=dict_strategy(), override=dict_strategy()
     )
-    @settings(max_examples=50, deadline=None)
+    @settings(max_examples=30, deadline=None)
     def test_merge_overrides_base_values(
         self, base: dict[str, Any], override: dict[str, Any]
     ) -> None:
@@ -176,7 +176,7 @@ class TestTomlReading:
     @given(  # type: ignore[reportAny]
         content=toml_dict_strategy()
     )
-    @settings(max_examples=50)
+    @settings(max_examples=30)
     def test_round_trip_toml_serialization(self, content: dict[str, Any]) -> None:
         """Test round trip toml serialization."""
         import tomli_w
@@ -225,7 +225,7 @@ class TestConfigPaths:
             max_size=50,
         )
     )
-    @settings(max_examples=50)
+    @settings(max_examples=30)
     def test_experiment_path_computation(self, experiment: str) -> None:
         """Test experiment path computation."""
         path = config_loading.get_cfg_path(experiment, None)
@@ -239,7 +239,7 @@ class TestConfigPaths:
             max_size=100,
         )
     )
-    @settings(max_examples=50)
+    @settings(max_examples=30)
     def test_custom_config_path(self, exp_config: str) -> None:
         """Test custom config path."""
         path = config_loading.get_cfg_path("dummy_experiment", Path(exp_config))

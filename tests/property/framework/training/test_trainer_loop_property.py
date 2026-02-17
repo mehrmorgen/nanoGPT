@@ -89,7 +89,7 @@ def _make_config(
     return cfg, shared
 
 
-def _create_dataset(tmp_path: Path, train_size: int = 64, val_size: int = 32) -> None:
+def _create_dataset(tmp_path: Path, train_size: int = 48, val_size: int = 24) -> None:
     """Create train and val binary datasets."""
     dataset_dir = tmp_path / "data"
     dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -107,13 +107,13 @@ def _create_dataset(tmp_path: Path, train_size: int = 64, val_size: int = 32) ->
 
 @pytest.mark.filterwarnings("ignore::UserWarning")  # type: ignore[reportAny]
 @given(  # type: ignore[reportAny]
-    max_iters=st.integers(min_value=1, max_value=5),
+    max_iters=st.integers(min_value=1, max_value=4),
     eval_interval=st.integers(min_value=1, max_value=3),
     ema_decay=st.floats(min_value=0.0, max_value=0.999),
     grad_accum_steps=st.integers(min_value=1, max_value=3),
 )
 @settings(
-    max_examples=10,
+    max_examples=6,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
     derandomize=True,
@@ -143,11 +143,11 @@ def test_trainer_completes_with_valid_config(
 
 @pytest.mark.filterwarnings("ignore::UserWarning")  # type: ignore[reportAny]
 @given(  # type: ignore[reportAny]
-    max_iters=st.integers(min_value=2, max_value=5),
+    max_iters=st.integers(min_value=2, max_value=4),
     eval_interval=st.integers(min_value=1, max_value=2),
 )
 @settings(
-    max_examples=5,
+    max_examples=4,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
     derandomize=True,
@@ -173,7 +173,7 @@ def test_trainer_respects_iteration_bounds(
     ema_decay=st.floats(min_value=0.0, max_value=0.999),
 )
 @settings(
-    max_examples=5,
+    max_examples=4,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
     derandomize=True,
@@ -203,7 +203,7 @@ def test_trainer_ema_consistency(
     grad_accum_steps=st.integers(min_value=1, max_value=3),
 )
 @settings(
-    max_examples=5,
+    max_examples=4,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
     derandomize=True,

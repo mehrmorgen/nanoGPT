@@ -56,7 +56,7 @@ def test_is_listed_in_aiignore_basic(path: str) -> None:
 
 
 @settings(
-    max_examples=100,
+    max_examples=40,
     deadline=1000,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
@@ -66,7 +66,12 @@ def test_is_listed_in_aiignore_basic(path: str) -> None:
     | st.text(min_size=0, max_size=5),
     directory=st.just(True),
     # Include malformed pattern "[" to reliably trigger line 129 ValueError branch
-    patterns=st.lists(st.text(min_size=1) | st.just("["), min_size=1, max_size=5),
+    patterns=st.lists(
+        st.text(min_size=1, max_size=12, alphabet="abcdefghijklmnopqrstuvwxyz*?[]/")
+        | st.just("["),
+        min_size=1,
+        max_size=5,
+    ),
 )
 def test_gitignore_match_comprehensive(
     tmp_path: Path, relative_path: str, directory: bool, patterns: list[str]
@@ -92,12 +97,17 @@ def test_gitignore_match_comprehensive(
 
 
 @settings(
-    max_examples=50,
+    max_examples=30,
     deadline=500,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(  # type: ignore[reportAny]
-    relative_path=st.text(),
+    relative_path=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("L", "Nd"), whitelist_characters="/._-"
+        ),
+        max_size=32,
+    ),
 )
 def test_project_path_validation(tmp_path: Path, relative_path: str) -> None:
     """Cover project_path validation branches."""

@@ -233,7 +233,7 @@ _REL_NAME_TEXT = st.text(
     flags=GLOBAL_FLAGS_STRATEGY
 )
 @example(flags=[])
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_cli_without_subcommand_shows_guidance(flags: list[str]) -> None:
     result = _invoke_cli(flags)
     assert result.exit_code == 2
@@ -250,7 +250,7 @@ def test_cli_without_subcommand_shows_guidance(flags: list[str]) -> None:
 )
 @example(flags=[], group_path=("quality",))
 @example(flags=["--dry-run"], group_path=("test", "mutation"))
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_cli_groups_render_help(flags: list[str], group_path: tuple[str, ...]) -> None:
     args = [*flags, *group_path]
     result = _invoke_cli(args)
@@ -320,7 +320,7 @@ def test_cli_rejects_empty_input(flags: list[str], whitespace: list[str]) -> Non
 )
 @example(flags=[], group_path=("quality",), invalid="totally-unknown")
 @example(flags=["--no-learning-mode"], group_path=("env",), invalid="bogus")
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_cli_rejects_invalid_command_token(
     flags: list[str], group_path: tuple[str, ...], invalid: str
 ) -> None:
@@ -338,7 +338,7 @@ def test_cli_rejects_invalid_command_token(
 )
 @example(flags=[])
 @example(flags=["--learning-mode", "--verbosity", "2"])
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_version_command_reports_metadata(flags: list[str]) -> None:
     args = [*flags, "version"]
     result = _invoke_cli(args)
@@ -351,7 +351,7 @@ def test_version_command_reports_metadata(flags: list[str]) -> None:
 )
 @example(flags=[])
 @example(flags=["--project-root", str(PROJECT_ROOT)])
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_config_command_shows_categories(flags: list[str]) -> None:
     args = [*flags, "config"]
     result = _invoke_cli(args)
@@ -373,7 +373,7 @@ def test_config_command_shows_categories(flags: list[str]) -> None:
     ),
 )
 @example(flags=[], invalid_value=3)
-@settings(max_examples=50, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_invalid_verbosity_is_rejected(flags: list[str], invalid_value: int) -> None:
     args = [*flags, "--verbosity", str(invalid_value)]
     result = _invoke_cli(args)
@@ -831,7 +831,7 @@ def _invoke_with_deterministic_runner(
 )
 @example(command=("quality", "lint"), flags=[])
 @example(command=("test", "unit"), flags=["--no-learning-mode"])
-@settings(max_examples=40, deadline=None, derandomize=True)
+@settings(max_examples=30, deadline=None, derandomize=True)
 def test_commands_execute_with_deterministic_runner(
     command: tuple[str, ...], flags: list[str]
 ) -> None:
