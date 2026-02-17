@@ -7,7 +7,6 @@ from pathlib import Path
 import hypothesis.strategies as st
 import numpy as np
 import pytest
-import torch
 from hypothesis import HealthCheck, given, settings
 
 from ml_playground.framework.configuration.models import (
@@ -90,7 +89,7 @@ def _make_config(
     return cfg, shared
 
 
-def _create_dataset(tmp_path: Path, train_size: int = 256, val_size: int = 128) -> None:
+def _create_dataset(tmp_path: Path, train_size: int = 64, val_size: int = 32) -> None:
     """Create train and val binary datasets."""
     dataset_dir = tmp_path / "data"
     dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -98,12 +97,11 @@ def _create_dataset(tmp_path: Path, train_size: int = 256, val_size: int = 128) 
     train_file = dataset_dir / "train.bin"
     val_file = dataset_dir / "val.bin"
 
-    # Use explicit cast or typed wrapper if needed, but for now ensure we handle the ndarray safely
-    # torch.randint returns Tensor. numpy() returns ndarray.
-    train_data = torch.randint(0, 256, (train_size,), dtype=torch.uint16).numpy()
+    rng = np.random.default_rng(42)
+    train_data = rng.integers(0, 256, size=train_size, dtype=np.uint16)
     train_data.tofile(str(train_file))
 
-    val_data = torch.randint(0, 256, (val_size,), dtype=torch.uint16).numpy()
+    val_data = rng.integers(0, 256, size=val_size, dtype=np.uint16)
     val_data.tofile(str(val_file))
 
 
