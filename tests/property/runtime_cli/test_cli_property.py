@@ -54,6 +54,9 @@ def _get_command(typer_app: typer.Typer) -> click.Command:
     return command_getter(typer_app)
 
 
+CLI_RUNNER = CliRunner()
+
+
 class LogCaptureFixture(Protocol):
     messages: list[str]
 
@@ -237,8 +240,7 @@ _UNKNOWN_COMMANDS = (
 )
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_reports_unknown_commands(command: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, [command])
+    result = CLI_RUNNER.invoke(app, [command])
     assert result.exit_code != 0
     stream = (result.stderr or result.stdout).lower()
     assert (
@@ -248,8 +250,7 @@ def test_runtime_cli_reports_unknown_commands(command: str) -> None:
 
 
 def test_runtime_cli_help_always_succeeds() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--help"])
+    result = CLI_RUNNER.invoke(app, ["--help"])
     assert result.exit_code == 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -269,14 +270,13 @@ def test_runtime_cli_no_subcommand_shows_welcome_and_help(
     include_verbosity: bool,
     verbosity: int,
 ) -> None:
-    runner = CliRunner()
     args: list[str] = []
     if include_learning_mode:
         args.append("--learning-mode")
     if include_verbosity:
         args.extend(["--verbosity", str(verbosity)])
 
-    result = runner.invoke(app, args)
+    result = CLI_RUNNER.invoke(app, args)
     assert result.exit_code == 2
 
     output = output_text(result)
@@ -288,8 +288,7 @@ def test_runtime_cli_no_subcommand_shows_welcome_and_help(
 
 
 def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["-h"])
+    result = CLI_RUNNER.invoke(app, ["-h"])
     output = output_text(result)
     lowered = output.lower()
     assert_traceback_free(output)
@@ -301,15 +300,13 @@ def test_runtime_cli_short_help_flag_never_shows_traceback() -> None:
 )
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_invalid_learning_mode_value(bad_value: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, [f"--learning-mode={bad_value}"])
+    result = CLI_RUNNER.invoke(app, [f"--learning-mode={bad_value}"])
     assert result.exit_code != 0
     assert_cli_error(result, "invalid value", "does not take a value")
 
 
 def test_runtime_cli_rejects_missing_exp_config_value() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--exp-config"])
+    result = CLI_RUNNER.invoke(app, ["--exp-config"])
     assert result.exit_code != 0
     assert_cli_error(result, "requires an argument", "missing")
 
@@ -319,8 +316,7 @@ def test_runtime_cli_rejects_missing_exp_config_value() -> None:
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
 def test_runtime_cli_subcommand_help_always_succeeds(subcommand: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, [subcommand, "--help"])
+    result = CLI_RUNNER.invoke(app, [subcommand, "--help"])
     assert result.exit_code == 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -340,8 +336,7 @@ def test_runtime_cli_subcommand_help_always_succeeds(subcommand: str) -> None:
 def test_runtime_cli_whitespace_args_never_show_traceback(
     whitespace: list[str],
 ) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, whitespace)
+    result = CLI_RUNNER.invoke(app, whitespace)
     if result.exception is not None:
         assert isinstance(result.exception, SystemExit)
     output = (result.stdout or "") + (result.stderr or "")
@@ -355,15 +350,13 @@ def test_runtime_cli_whitespace_args_never_show_traceback(
 )
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_invalid_verbosity_range(bad_value: int) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--verbosity", str(bad_value)])
+    result = CLI_RUNNER.invoke(app, ["--verbosity", str(bad_value)])
     assert result.exit_code != 0
     assert_cli_error(result, "invalid value")
 
 
 def test_runtime_cli_rejects_missing_verbosity_value() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--verbosity"])
+    result = CLI_RUNNER.invoke(app, ["--verbosity"])
     assert result.exit_code != 0
     assert_cli_error(result, "requires an argument", "missing")
 
@@ -373,8 +366,7 @@ def test_runtime_cli_rejects_missing_verbosity_value() -> None:
 )
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_invalid_verbosity_equals_form(bad_value: int) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, [f"--verbosity={bad_value}"])
+    result = CLI_RUNNER.invoke(app, [f"--verbosity={bad_value}"])
     assert result.exit_code != 0
     output = output_text(result)
     lowered = output.lower()
@@ -387,8 +379,7 @@ def test_runtime_cli_rejects_invalid_verbosity_equals_form(bad_value: int) -> No
 )
 @settings(max_examples=20, deadline=None, derandomize=True)
 def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--verbosity", bad_value])
+    result = CLI_RUNNER.invoke(app, ["--verbosity", bad_value])
     assert result.exit_code != 0
     stream = output_text(result).lower()
     assert_traceback_free(stream)
@@ -396,8 +387,7 @@ def test_runtime_cli_rejects_non_int_verbosity(bad_value: str) -> None:
 
 
 def test_runtime_cli_analyze_requires_experiment_argument() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["analyze"])
+    result = CLI_RUNNER.invoke(app, ["analyze"])
     assert result.exit_code != 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -412,8 +402,7 @@ def test_runtime_cli_analyze_requires_experiment_argument() -> None:
 )
 @settings(max_examples=12, deadline=None, derandomize=True)
 def test_runtime_cli_commands_require_experiment_argument(subcommand: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, [subcommand])
+    result = CLI_RUNNER.invoke(app, [subcommand])
     assert result.exit_code == 2
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -428,8 +417,7 @@ def test_runtime_cli_commands_require_experiment_argument(subcommand: str) -> No
 )
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["analyze", "dummy", "--port", bad_port])
+    result = CLI_RUNNER.invoke(app, ["analyze", "dummy", "--port", bad_port])
     assert result.exit_code != 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -442,8 +430,7 @@ def test_runtime_cli_analyze_rejects_non_int_port(bad_port: str) -> None:
 )
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_rejects_invalid_open_browser_value(bad_bool: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["analyze", "dummy", f"--open-browser={bad_bool}"])
+    result = CLI_RUNNER.invoke(app, ["analyze", "dummy", f"--open-browser={bad_bool}"])
     assert result.exit_code != 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -460,8 +447,7 @@ def test_runtime_cli_analyze_rejects_invalid_open_browser_value(bad_bool: str) -
 )
 @settings(max_examples=10, deadline=None, derandomize=True)
 def test_runtime_cli_analyze_requires_option_values(opt: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["analyze", "dummy", opt])
+    result = CLI_RUNNER.invoke(app, ["analyze", "dummy", opt])
     assert result.exit_code != 0
     output = (result.stdout or "") + (result.stderr or "")
     lowered = output.lower()
@@ -480,9 +466,8 @@ def test_runtime_cli_rejects_unknown_options(
     subcommand: str,
     option: str,
 ) -> None:
-    runner = CliRunner()
     args = [subcommand, "dummy", f"--{option}"]
-    result = runner.invoke(app, args)
+    result = CLI_RUNNER.invoke(app, args)
     assert result.exit_code != 0
     assert_cli_error(result, "no such option")
 
@@ -492,10 +477,9 @@ def test_runtime_cli_rejects_unknown_options(
 )
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> None:
-    runner = CliRunner()
     with TemporaryDirectory() as tmpdir:
         missing = Path(tmpdir) / f"{name}.toml"
-        result = runner.invoke(
+        result = CLI_RUNNER.invoke(
             app,
             ["--exp-config", str(missing), "prepare", "nonexistent"],
         )
@@ -513,11 +497,10 @@ def test_runtime_cli_missing_exp_config_exits_with_stable_error(name: str) -> No
 def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
     name: str,
 ) -> None:
-    runner = CliRunner()
     with TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / f"{name}.toml"
         config_path.write_text("\n", encoding="utf-8")
-        result = runner.invoke(
+        result = CLI_RUNNER.invoke(
             app,
             ["--exp-config", str(config_path), "prepare", "nonexistent"],
         )
@@ -533,10 +516,9 @@ def test_runtime_cli_existing_exp_config_does_not_trigger_missing_error(
 def test_runtime_cli_missing_exp_config_relative_path_is_stable(
     filename: str,
 ) -> None:
-    runner = CliRunner()
-    with runner.isolated_filesystem():
+    with CLI_RUNNER.isolated_filesystem():
         rel_path = Path(f"{filename}.toml")
-        result = runner.invoke(
+        result = CLI_RUNNER.invoke(
             app,
             ["--exp-config", str(rel_path), "prepare", "nonexistent"],
         )
@@ -552,11 +534,10 @@ def test_runtime_cli_missing_exp_config_relative_path_is_stable(
 )
 @settings(max_examples=25, deadline=None, derandomize=True)
 def test_runtime_cli_directory_exp_config_is_rejected(dirname: str) -> None:
-    runner = CliRunner()
     with TemporaryDirectory() as tmpdir:
         config_dir = Path(tmpdir) / dirname
         config_dir.mkdir(parents=True)
-        result = runner.invoke(
+        result = CLI_RUNNER.invoke(
             app,
             ["--exp-config", str(config_dir), "prepare", "nonexistent"],
         )
@@ -575,15 +556,14 @@ def test_runtime_cli_exp_config_normalizes_dotdot_paths(
     dirname: str,
     filename: str,
 ) -> None:
-    runner = CliRunner()
-    with runner.isolated_filesystem():
+    with CLI_RUNNER.isolated_filesystem():
         base = Path(dirname)
         base.mkdir(parents=True, exist_ok=True)
         config_path = base / f"{filename}.toml"
         config_path.write_text("\n", encoding="utf-8")
 
         rel_with_dotdot = Path(dirname) / ".." / dirname / f"{filename}.toml"
-        result = runner.invoke(
+        result = CLI_RUNNER.invoke(
             app,
             ["--exp-config", str(rel_with_dotdot), "prepare", "nonexistent"],
         )
@@ -861,8 +841,7 @@ def test_prepare_command_invokes_override(experiment: str) -> None:
             run_sample=_noop_sample,
         )
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["prepare", experiment], obj={"cli_deps": deps})
+        result = CLI_RUNNER.invoke(app, ["prepare", experiment], obj={"cli_deps": deps})
 
         assert result.exit_code == 0
         assert calls["prepare"] == 1
@@ -985,8 +964,7 @@ def test_train_command_invokes_override(experiment: str) -> None:
             run_sample=_noop_sample,
         )
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["train", experiment], obj={"cli_deps": deps})
+        result = CLI_RUNNER.invoke(app, ["train", experiment], obj={"cli_deps": deps})
 
         assert result.exit_code == 0
         assert calls["train"] == 1
@@ -1109,8 +1087,7 @@ def test_sample_command_invokes_override(experiment: str) -> None:
             run_sample=_run_sample,
         )
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["sample", experiment], obj={"cli_deps": deps})
+        result = CLI_RUNNER.invoke(app, ["sample", experiment], obj={"cli_deps": deps})
 
         assert result.exit_code == 0
         assert calls["sample"] == 1
@@ -1177,8 +1154,7 @@ def test_analyze_command_invokes_override(
     # Inject dependency via CLIDependencies
     deps = CLIDependencies(run_analyze=_run_analyze)
 
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CLI_RUNNER.invoke(
         app,
         [
             "analyze",
