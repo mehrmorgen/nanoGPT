@@ -61,7 +61,7 @@ class CITools:
 
     def _coverage_file(self) -> Path:
         """Get the coverage data file path."""
-        return self.cache_dir / "coverage" / "coverage.sqlite"
+        return self.cache_dir / "coverage" / "coverage.json"
 
     def _ensure_cache_dirs(self, *subdirs: str) -> None:
         """Ensure cache directories exist."""
@@ -375,11 +375,26 @@ class CITools:
         # Ensure coverage JSON exists
         json_path = self.cache_dir / "coverage" / "coverage.json"
         if not json_path.exists():
-            # Try to generate coverage report first
+            # Generate coverage JSON directly with slipcover.
             coverage_result = self.subprocess_runner.run_uv_command(
-                ["coverage", "json", "-o", str(json_path)],
+                [
+                    "python",
+                    "-m",
+                    "slipcover",
+                    "--branch",
+                    "--json",
+                    "--out",
+                    str(json_path),
+                    "--source",
+                    "src/ml_playground/framework",
+                    "-m",
+                    "pytest",
+                    "-n",
+                    "0",
+                    "tests/unit",
+                    "tests/property",
+                ],
                 cwd=self.root_path,
-                env={"COVERAGE_FILE": str(self._coverage_file())},
                 timeout=self.config.ci.timeout,
                 operation_id=operation_id,
             )
@@ -390,6 +405,19 @@ class CITools:
                     reason="Coverage report generation failed",
                     rationale="Badge generation requires valid coverage data",
                 )
+            if not json_path.exists():
+                fallback_result = self.subprocess_runner.run_uv_command(
+                    ["coverage", "json", "-o", str(json_path)],
+                    cwd=self.root_path,
+                    timeout=self.config.ci.timeout,
+                    operation_id=operation_id,
+                )
+                if not fallback_result.success or not json_path.exists():
+                    raise ToolExecutionError(
+                        "Failed to generate coverage JSON for badge creation",
+                        reason="Coverage JSON file was not created",
+                        rationale="Badge generation requires valid coverage data",
+                    )
 
         # Generate badges directly
         try:

@@ -177,7 +177,33 @@ class DefaultCoverageDataExtractor(CoverageDataExtractor):
     def extract_totals(self, coverage_data: dict[str, object]) -> dict[str, object]:
         totals = coverage_data.get("totals", {})
         if isinstance(totals, dict):
-            return cast(dict[str, object], totals)
+            normalized = cast(dict[str, object], totals)
+            if "num_statements" not in normalized:
+                covered_lines = normalized.get("covered_lines", 0)
+                missing_lines = normalized.get("missing_lines", 0)
+                if (
+                    ("covered_lines" in normalized or "missing_lines" in normalized)
+                    and isinstance(covered_lines, (int, float))
+                    and isinstance(missing_lines, (int, float))
+                ):
+                    normalized["num_statements"] = float(covered_lines) + float(
+                        missing_lines
+                    )
+            if "num_branches" not in normalized:
+                covered_branches = normalized.get("covered_branches", 0)
+                missing_branches = normalized.get("missing_branches", 0)
+                if (
+                    (
+                        "covered_branches" in normalized
+                        or "missing_branches" in normalized
+                    )
+                    and isinstance(covered_branches, (int, float))
+                    and isinstance(missing_branches, (int, float))
+                ):
+                    normalized["num_branches"] = float(covered_branches) + float(
+                        missing_branches
+                    )
+            return normalized
         return {}
 
     def get_coverage_percent(self, totals: dict[str, object]) -> float:

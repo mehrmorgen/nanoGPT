@@ -183,7 +183,7 @@ class TestingTools:
 
     def _coverage_file(self) -> Path:
         """Get the coverage data file path."""
-        return self._cache_dir / "coverage" / "coverage.sqlite"
+        return self._cache_dir / "coverage" / "coverage.json"
 
     def _coverage_manifest_path(self) -> Path:
         """Get the manifest file path storing coverage fingerprint metadata."""
@@ -832,64 +832,15 @@ class TestingTools:
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
         """Internal coverage test implementation."""
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="coverage-test"
+        return coverage_module.run_coverage_test(
+            config=self._config,
+            root_path=self._root_path,
+            args=args,
+            subprocess_runner=self._subprocess_runner,
+            cache_dir=self._cache_dir,
+            learning_mode=learning_mode,
+            verbosity_level=verbosity_level,
         )
-
-        # Clean up existing coverage data
-        coverage_file = self._coverage_file()
-        if coverage_file.exists():
-            coverage_file.unlink()
-
-        # Remove any coverage fragments
-        for fragment in coverage_file.parent.glob("coverage.sqlite.*"):
-            if fragment.name != coverage_file.name:
-                fragment.unlink()
-
-        # Set up coverage environment
-        env = self._coverage_env(coverage_file)
-
-        # Run coverage with pytest
-        result = self._subprocess_runner.run_uv_command(
-            [
-                "coverage",
-                "run",
-                f"--data-file={coverage_file}",
-                "-m",
-                "pytest",
-                "-n",
-                "0",  # No parallel execution for coverage
-                "-v",
-                "tests/unit",
-                "tests/property",
-            ],
-            cwd=self._root_path,
-            env=env,
-            timeout=self._config.testing.timeout,
-            operation_id=operation_id,
-        )
-        result = self._clean_pytest_result(result)
-
-        if learning_mode:
-            self._learning_engine.verbosity = VerbosityLevel(verbosity_level)
-            result.learning_info = self._learning_engine.explain_command(
-                command="coverage-test",
-                context="Running tests while measuring code coverage to identify untested code",
-                category=self.category,
-                executed_commands=[
-                    f"coverage run --data-file={coverage_file} -m pytest -n 0 tests/unit tests/property"
-                ],
-            )
-
-        if (
-            result.success
-            and coverage_file.exists()
-            and coverage_file.stat().st_size > 0
-        ):
-            fingerprint = self._compute_coverage_fingerprint()
-            self._write_coverage_manifest(fingerprint=fingerprint)
-
-        return result
 
     def coverage_report(
         self,

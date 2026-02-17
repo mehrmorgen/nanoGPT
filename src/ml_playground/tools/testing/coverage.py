@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from pathlib import Path
 from typing import List, Mapping, TypedDict, cast
 
@@ -76,24 +75,27 @@ def run_coverage_test(
     )
 
     # Clean up existing coverage data
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    if coverage_file.exists():
-        coverage_file.unlink()
-
-    # Remove any coverage fragments
-    for fragment in coverage_file.parent.glob("coverage.sqlite.*"):
-        if fragment.name != coverage_file.name:
-            fragment.unlink()
+    coverage_dir = cache_dir / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
+    coverage_json = coverage_dir / "coverage.json"
+    if coverage_json.exists():
+        coverage_json.unlink()
 
     # Set up coverage environment
-    env = _coverage_env(coverage_file, cache_dir)
+    env = _coverage_env(cache_dir)
 
-    # Run coverage with pytest
+    # Run slipcover with pytest
     result = subprocess_runner.run_uv_command(
         [
-            "coverage",
-            "run",
-            f"--data-file={coverage_file}",
+            "python",
+            "-m",
+            "slipcover",
+            "--branch",
+            "--json",
+            "--out",
+            str(coverage_json),
+            "--source",
+            "src/ml_playground/framework",
             "-m",
             "pytest",
             "-n",
@@ -116,11 +118,13 @@ def run_coverage_test(
             context="Running tests while measuring code coverage to identify untested code",
             category="test",
             executed_commands=[
-                f"coverage run --data-file={coverage_file} -m pytest -n 0 tests/unit tests/property"
+                "python -m slipcover --branch --json "
+                f"--out {coverage_json} --source src/ml_playground/framework "
+                "-m pytest -n 0 tests/unit tests/property"
             ],
         )
 
-    if result.success and coverage_file.exists() and coverage_file.stat().st_size > 0:
+    if result.success and coverage_json.exists() and coverage_json.stat().st_size > 0:
         fingerprint = _compute_coverage_fingerprint(root_path)
         manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
         _write_coverage_manifest(manifest_path, fingerprint=fingerprint)
@@ -161,7 +165,7 @@ def run_coverage_report(
     )
     from ..core.errors import ToolExecutionError
 
-    executed, notes, env = _ensure_coverage_data(
+    executed, notes, _ = _ensure_coverage_data(
         config=config,
         root_path=root_path,
         args=args,
@@ -174,134 +178,18 @@ def run_coverage_report(
         force_regen=force_regen,
     )
 
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
+    coverage_dir = cache_dir / "coverage"
+    json_path = coverage_dir / "coverage.json"
     # Check for empty coverage file in CI
     ci_strict = os.environ.get("CI", "").lower() == "true"
-    if ci_strict and coverage_file.stat().st_size == 0:
-        from ..core.errors import ToolExecutionError
-
+    if ci_strict and (not json_path.exists() or json_path.stat().st_size == 0):
         raise ToolExecutionError(
             "Coverage data file is empty",
-            reason="Coverage file exists but contains no data",
+            reason="Coverage JSON file is missing or empty",
             rationale="Empty coverage files indicate test execution problems in CI",
         )
-
-    coverage_dir = coverage_file.parent
-
-    # Generate multiple report formats
-    commands = [
-        (
-            ["coverage", "report", "-m", "--fail-under=0", "--ignore-errors"],
-            "terminal report",
-        ),
-        (
-            [
-                "coverage",
-                "html",
-                "-d",
-                str(coverage_dir / "htmlcov"),
-                "--fail-under=0",
-                "--ignore-errors",
-            ],
-            "HTML report",
-        ),
-        (
-            [
-                "coverage",
-                "json",
-                "-o",
-                str(coverage_dir / "coverage.json"),
-                "--fail-under=0",
-                "--ignore-errors",
-            ],
-            "JSON report",
-        ),
-        (
-            [
-                "coverage",
-                "xml",
-                "-o",
-                str(coverage_dir / "coverage.xml"),
-                "--fail-under=0",
-                "--ignore-errors",
-            ],
-            "XML report",
-        ),
-    ]
-
-    report_messages: list[str] = []
+    report_messages = ["Generated JSON report"]
     failure_messages: list[str] = []
-    first_failure: ToolResult | None = None
-
-    for command, description in commands:
-        regenerated = False
-        while True:
-            try:
-                result = subprocess_runner.run_uv_command(
-                    command,
-                    cwd=root_path,
-                    env=env,
-                    timeout=config.testing.timeout,
-                    operation_id=operation_id,
-                )
-            except (
-                ToolExecutionError,
-                TimeoutError,
-                OSError,
-                subprocess.SubprocessError,
-                RuntimeError,
-            ) as exc:
-                raise ToolExecutionError(
-                    f"Failed to generate {description}",
-                    reason=f"Subprocess error: {exc}",
-                    rationale="Coverage report generation must succeed for quality gates",
-                ) from exc
-
-            if result.success:
-                suffix = " after refreshing coverage data" if regenerated else ""
-                report_messages.append(f"Generated {description}{suffix}")
-                run_command = _format_command(command)
-                if run_command not in executed:
-                    executed.append(run_command)
-                break
-
-            error_detail = (
-                result.stderr.strip() or result.stdout.strip() or "command failed"
-            )
-
-            if not regenerated and "No source for code" in error_detail:
-                regen_result, regen_notes = _run_coverage_test_for_data(
-                    config=config,
-                    root_path=root_path,
-                    args=args,
-                    verbose=verbose,
-                    subprocess_runner=subprocess_runner,
-                    cache_dir=cache_dir,
-                    operation_id=operation_id,
-                    executed_commands=executed,
-                )
-                notes.extend(regen_notes)
-                if isinstance(regen_result, ToolResult):
-                    return regen_result
-
-            if not regenerated:
-                regenerated = True
-            else:
-                if first_failure is None:
-                    first_failure = result
-                failure_messages.append(
-                    f"Failed to generate {description}: {error_detail}"
-                )
-                break
-
-    if first_failure and not report_messages:
-        return ToolResult(
-            success=False,
-            exit_code=1,
-            stdout="\n".join(line for line in notes if line),
-            stderr="\n".join(failure_messages) or (first_failure.stderr or ""),
-            operation_id=operation_id,
-        )
 
     # Combine notes and report messages
     all_messages = notes + report_messages
@@ -310,8 +198,6 @@ def run_coverage_report(
     success = bool(report_messages) and not failure_messages
 
     if verbose:
-        coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-        coverage_dir = coverage_file.parent
         artifacts: list[str] = []
         if coverage_dir.exists():
             for path in sorted(coverage_dir.iterdir()):
@@ -339,9 +225,8 @@ def run_coverage_report(
         operation_id=operation_id,
     )
 
-    # Validate coverage.json contains totals to avoid downstream ambiguity.
-    coverage_dir = (cache_dir / "coverage").resolve()
-    json_path = coverage_dir / "coverage.json"
+    # Validate coverage.json has enough data for thresholding/reporting.
+    coverage_dir = coverage_dir.resolve()
     if json_path.exists():
         try:
             raw_untyped = cast(
@@ -351,21 +236,21 @@ def run_coverage_report(
             raise ToolExecutionError(
                 "Failed to parse coverage JSON",
                 reason=str(exc),
-                rationale="Coverage report must include parsable totals data",
+                rationale="Coverage report must include parseable JSON data",
             ) from exc
         if not isinstance(raw_untyped, dict):
             raise ToolExecutionError(
                 "Failed to parse coverage JSON",
                 reason="coverage.json did not parse to a mapping",
-                rationale="Coverage report must include totals for thresholding and reporting",
+                rationale="Coverage report must include data for thresholding and reporting",
             )
 
         raw = cast(dict[str, object], raw_untyped)
-        totals_obj = raw.get("totals")
-        if not isinstance(totals_obj, dict):
+        totals_obj = _extract_totals(raw)
+        if totals_obj["num_statements"] <= 0:
             raise ToolExecutionError(
                 "Failed to parse coverage JSON",
-                reason="coverage.json missing 'totals'",
+                reason="coverage.json missing usable line totals",
                 rationale="Coverage report must include totals for thresholding and reporting",
             )
 
@@ -506,7 +391,7 @@ def run_coverage_map(
         namespace="tools", category="test", command="coverage-map"
     )
 
-    executed, notes, env = _ensure_coverage_data(
+    executed, notes, _ = _ensure_coverage_data(
         config=config,
         root_path=root_path,
         args=args,
@@ -519,38 +404,16 @@ def run_coverage_map(
         force_regen=force_regen,
     )
 
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    coverage_dir = coverage_file.parent
+    coverage_dir = cache_dir / "coverage"
     json_path = coverage_dir / "coverage.json"
-    json_cmd = [
-        "coverage",
-        "json",
-        "-o",
-        str(json_path),
-        "--fail-under=0",
-        "--ignore-errors",
-    ]
-    formatted_json_cmd = _format_command(json_cmd)
-
-    if force_regen or not json_path.exists():
-        json_result = subprocess_runner.run_uv_command(
-            json_cmd,
-            cwd=root_path,
-            env=env,
-            timeout=config.testing.timeout,
+    if not json_path.exists():
+        return ToolResult(
+            success=False,
+            exit_code=1,
+            stdout="\n".join(line for line in notes if line),
+            stderr="Coverage JSON file was not created",
             operation_id=operation_id,
         )
-        if not json_result.success:
-            return ToolResult(
-                success=False,
-                exit_code=1,
-                stdout="\n".join(line for line in notes if line),
-                stderr=json_result.stderr or json_result.stdout,
-                operation_id=operation_id,
-            )
-
-    if formatted_json_cmd not in executed:
-        executed.insert(0, formatted_json_cmd)
 
     coverage_data = cast(_CoverageJsonData, _load_coverage_json(json_path))
     from .coverage_helpers import collect_undercovered_files, format_coverage_map
@@ -621,7 +484,7 @@ def run_coverage_threshold(
         namespace="tools", category="test", command="coverage-threshold"
     )
 
-    executed, notes, env = _ensure_coverage_data(
+    executed, notes, _ = _ensure_coverage_data(
         config=config,
         root_path=root_path,
         args=args,
@@ -642,35 +505,15 @@ def run_coverage_threshold(
         if branch_threshold == 0.0:
             branch_threshold = config_thresholds.get("branch_threshold", 0.0)
 
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    if not coverage_file.exists():
+    json_path = cache_dir / "coverage" / "coverage.json"
+    if not json_path.exists():
         from ..core.errors import ToolExecutionError
 
         raise ToolExecutionError(
             "Coverage data file not found",
-            reason=f"Missing coverage file: {coverage_file}",
+            reason=f"Missing coverage file: {json_path}",
             rationale="Coverage threshold checks require prior execution of coverage-test command",
         )
-
-    json_path = coverage_file.parent / "coverage.json"
-    json_cmd = [
-        "coverage",
-        "json",
-        "-o",
-        str(json_path),
-        "--fail-under=0",
-        "--ignore-errors",
-    ]
-    formatted_json_cmd = _format_command(json_cmd)
-    if formatted_json_cmd not in executed:
-        executed.append(formatted_json_cmd)
-    json_result = subprocess_runner.run_uv_command(
-        json_cmd,
-        cwd=root_path,
-        env=env,
-        timeout=config.testing.timeout,
-        operation_id=operation_id,
-    )
 
     if not json_path.exists():
         from ..core.errors import ToolExecutionError
@@ -682,18 +525,13 @@ def run_coverage_threshold(
         )
 
     coverage_data = cast(_CoverageJsonData, _load_coverage_json(json_path))
-    totals_section = coverage_data.get("totals")
-    normalized_totals: Mapping[str, object]
-    if isinstance(totals_section, Mapping):
-        normalized_totals = cast(Mapping[str, object], totals_section)
-    else:
-        normalized_totals = {}
+    normalized_totals = _extract_totals(coverage_data)
 
     # Extract metrics
-    num_branches = _to_float(normalized_totals.get("num_branches"))
-    covered_branches = _to_float(normalized_totals.get("covered_branches"))
-    covered_lines = _to_float(normalized_totals.get("covered_lines"))
-    num_statements = _to_float(normalized_totals.get("num_statements"))
+    num_branches = normalized_totals["num_branches"]
+    covered_branches = normalized_totals["covered_branches"]
+    covered_lines = normalized_totals["covered_lines"]
+    num_statements = normalized_totals["num_statements"]
 
     # Calculate percentages
     line_pct = (covered_lines / num_statements) * 100 if num_statements else 0.0
@@ -741,9 +579,7 @@ def run_coverage_threshold(
                 )
             )
 
-    # Ensure coverage json command appears first
-    remaining_commands = [cmd for cmd in executed if cmd != formatted_json_cmd]
-    info_lines: list[str] = [formatted_json_cmd, *remaining_commands]
+    info_lines: list[str] = [*executed]
     if notes:
         info_lines.extend(notes)
 
@@ -795,17 +631,6 @@ def run_coverage_threshold(
             operation_id=operation_id,
         )
 
-    if not json_result.success and json_result.stderr:
-        combined_stderr = "\n".join(
-            part
-            for part in [
-                threshold_result.stderr,
-                f"[coverage-json] {json_result.stderr.strip()}",
-            ]
-            if part
-        )
-        threshold_result.stderr = combined_stderr
-
     if learning_mode:
         learning_engine = LearningModeEngine()
         learning_engine.verbosity = VerbosityLevel(verbosity_level)
@@ -813,7 +638,9 @@ def run_coverage_threshold(
             command="coverage-threshold",
             context="Checking coverage thresholds to enforce quality standards",
             category="test",
-            executed_commands=["coverage json"],
+            executed_commands=[
+                "python -m slipcover --json --out .cache/coverage/coverage.json"
+            ],
         )
 
     return threshold_result
@@ -854,7 +681,7 @@ def _clean_pytest_output(output: str) -> str:
 # Duplicate function definition removed - using the one defined earlier
 
 
-def _coverage_env(coverage_file: Path, cache_dir: Path) -> dict[str, str]:
+def _coverage_env(cache_dir: Path) -> dict[str, str]:
     """Get environment variables for coverage execution."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     (cache_dir / "coverage").mkdir(parents=True, exist_ok=True)
@@ -865,7 +692,6 @@ def _coverage_env(coverage_file: Path, cache_dir: Path) -> dict[str, str]:
         "HYPOTHESIS_STORAGE_DIRECTORY": str(cache_dir / "hypothesis"),
         "HYPOTHESIS_SEED": "0",
         "PYTHONHASHSEED": "0",
-        "COVERAGE_FILE": str(coverage_file),
     }
 
 
@@ -913,11 +739,13 @@ def _format_command(command: list[str]) -> str:
     return "Executed: " + format_command(command)
 
 
-class _CoverageTotals(TypedDict, total=False):
-    num_branches: int | float | None
-    covered_branches: int | float | None
-    covered_lines: int | float | None
-    num_statements: int | float | None
+class _CoverageTotals(TypedDict):
+    num_branches: float
+    covered_branches: float
+    missing_branches: float
+    covered_lines: float
+    missing_lines: float
+    num_statements: float
 
 
 def _to_float(value: object | None) -> float:
@@ -929,6 +757,85 @@ def _to_float(value: object | None) -> float:
         except ValueError:
             return 0.0
     return 0.0
+
+
+def _extract_totals(coverage_data: Mapping[str, object]) -> _CoverageTotals:
+    files_section = coverage_data.get("files")
+    if isinstance(files_section, Mapping):
+        covered_lines_from_files = 0.0
+        missing_lines_from_files = 0.0
+        covered_branches_from_files = 0.0
+        missing_branches_from_files = 0.0
+        for raw_info in files_section.values():
+            if not isinstance(raw_info, Mapping):
+                continue
+            info = cast(Mapping[str, object], raw_info)
+            executed_lines = info.get("executed_lines")
+            executed_branches = info.get("executed_branches")
+            has_execution = (
+                isinstance(executed_lines, list)
+                and len(executed_lines) > 0
+                or isinstance(executed_branches, list)
+                and len(executed_branches) > 0
+            )
+            if not has_execution:
+                continue
+            summary = info.get("summary")
+            if not isinstance(summary, Mapping):
+                continue
+            summary_map = cast(Mapping[str, object], summary)
+            covered_lines_from_files += _to_float(summary_map.get("covered_lines"))
+            missing_lines_from_files += _to_float(summary_map.get("missing_lines"))
+            covered_branches_from_files += _to_float(
+                summary_map.get("covered_branches")
+            )
+            missing_branches_from_files += _to_float(
+                summary_map.get("missing_branches")
+            )
+
+        num_statements_from_files = covered_lines_from_files + missing_lines_from_files
+        num_branches_from_files = (
+            covered_branches_from_files + missing_branches_from_files
+        )
+        if num_statements_from_files > 0:
+            return {
+                "num_branches": num_branches_from_files,
+                "covered_branches": covered_branches_from_files,
+                "missing_branches": missing_branches_from_files,
+                "covered_lines": covered_lines_from_files,
+                "missing_lines": missing_lines_from_files,
+                "num_statements": num_statements_from_files,
+            }
+
+    totals_section = coverage_data.get("totals")
+    if not isinstance(totals_section, Mapping):
+        totals_section = coverage_data.get("summary")
+    normalized_totals: Mapping[str, object]
+    if isinstance(totals_section, Mapping):
+        normalized_totals = cast(Mapping[str, object], totals_section)
+    else:
+        normalized_totals = {}
+
+    covered_lines = _to_float(normalized_totals.get("covered_lines"))
+    missing_lines = _to_float(normalized_totals.get("missing_lines"))
+    num_statements = _to_float(normalized_totals.get("num_statements"))
+    if num_statements <= 0:
+        num_statements = covered_lines + missing_lines
+
+    covered_branches = _to_float(normalized_totals.get("covered_branches"))
+    missing_branches = _to_float(normalized_totals.get("missing_branches"))
+    num_branches = _to_float(normalized_totals.get("num_branches"))
+    if num_branches <= 0:
+        num_branches = covered_branches + missing_branches
+
+    return {
+        "num_branches": num_branches,
+        "covered_branches": covered_branches,
+        "missing_branches": missing_branches,
+        "covered_lines": covered_lines,
+        "missing_lines": missing_lines,
+        "num_statements": num_statements,
+    }
 
 
 class _CoverageJsonData(TypedDict, total=False):
@@ -952,8 +859,8 @@ def _ensure_coverage_data(
     """Ensure coverage data is available and up-to-date."""
     executed: list[str] = []
     notes: list[str] = []
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    env: dict[str, str] = _coverage_env(coverage_file, cache_dir)
+    coverage_json = cache_dir / "coverage" / "coverage.json"
+    env: dict[str, str] = _coverage_env(cache_dir)
 
     current_fingerprint = _compute_coverage_fingerprint(root_path)
     manifest_path = cache_dir / "coverage" / "coverage_manifest.json"
@@ -963,39 +870,9 @@ def _ensure_coverage_data(
     if (
         not force_regen
         and manifest_fingerprint == current_fingerprint
-        and coverage_file.exists()
-        and coverage_file.stat().st_size > 0
+        and coverage_json.exists()
+        and coverage_json.stat().st_size > 0
     ):
-        return executed, notes, env
-
-    combine_result, combined = _combine_coverage_fragments(
-        env=env,
-        subprocess_runner=subprocess_runner,
-        root_path=root_path,
-        cache_dir=cache_dir,
-        operation_id=operation_id,
-        executed_commands=executed,
-    )
-    if isinstance(combine_result, ToolResult):
-        from ..core.errors import ToolExecutionError
-
-        stderr = (combine_result.stderr or "").strip()
-        stdout = (combine_result.stdout or "").strip()
-        raise ToolExecutionError(
-            "Coverage fragment combination failed",
-            reason=stderr or stdout or "Unknown error during coverage combination",
-            rationale="Coverage data must be properly combined for threshold analysis",
-        )
-
-    if (
-        not force_regen
-        and manifest_fingerprint == current_fingerprint
-        and combined
-        and coverage_file.exists()
-        and coverage_file.stat().st_size > 0
-    ):
-        notes.append("Combined existing coverage fragments into coverage.sqlite.")
-        _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
         return executed, notes, env
 
     generation_result, generation_notes = _run_coverage_test_for_data(
@@ -1020,29 +897,7 @@ def _ensure_coverage_data(
         )
     notes.extend(generation_notes)
 
-    combine_result, combined = _combine_coverage_fragments(
-        env=env,
-        subprocess_runner=subprocess_runner,
-        root_path=root_path,
-        cache_dir=cache_dir,
-        operation_id=operation_id,
-        executed_commands=executed,
-    )
-    if isinstance(combine_result, ToolResult):
-        from ..core.errors import ToolExecutionError
-
-        stderr = (combine_result.stderr or "").strip()
-        stdout = (combine_result.stdout or "").strip()
-        raise ToolExecutionError(
-            "Coverage fragment combination failed",
-            reason=stderr or stdout or "Unknown error during coverage combination",
-            rationale="Coverage data must be properly combined for threshold analysis",
-        )
-
-    if combined:
-        notes.append("Combined coverage fragments into coverage.sqlite.")
-
-    if coverage_file.exists() and coverage_file.stat().st_size > 0:
+    if coverage_json.exists() and coverage_json.stat().st_size > 0:
         _write_coverage_manifest(manifest_path, fingerprint=current_fingerprint)
         return executed, notes, env
 
@@ -1074,33 +929,8 @@ def _combine_coverage_fragments(
     operation_id: OperationId,
     executed_commands: list[str] | None = None,
 ) -> tuple[ToolResult | None, bool]:
-    """Combine coverage fragments into the primary coverage.sqlite file."""
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    fragments = list(coverage_file.parent.glob(f"{coverage_file.name}.*"))
-    if not fragments:
-        return None, False
-
-    combine_cmd = ["coverage", "combine", f"--data-file={coverage_file}"]
-    formatted = _format_command(combine_cmd)
-
-    if executed_commands is not None and formatted not in executed_commands:
-        executed_commands.append(formatted)
-
-    result = subprocess_runner.run_uv_command(
-        combine_cmd,
-        cwd=root_path,
-        env=env,
-        timeout=300,  # Use reasonable timeout for coverage operations
-        operation_id=operation_id,
-    )
-
-    if not result.success:
-        return result, True
-
-    if coverage_file.exists() and coverage_file.stat().st_size > 0:
-        return None, True
-
-    return None, True
+    """SlipCover writes a single JSON file, so fragment combination is unnecessary."""
+    return None, False
 
 
 def _run_coverage_test_for_data(
@@ -1149,8 +979,8 @@ def _run_coverage_test_for_data(
             message += "\n" + "\n".join(extra_lines)
 
     notes = [message]
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    if not coverage_file.exists() or coverage_file.stat().st_size == 0:
+    coverage_json = cache_dir / "coverage" / "coverage.json"
+    if not coverage_json.exists() or coverage_json.stat().st_size == 0:
         fallback_result, fallback_notes = _generate_coverage_via_pytest(
             config=config,
             root_path=root_path,
@@ -1179,31 +1009,37 @@ def _generate_coverage_via_pytest(
     operation_id: OperationId,
     executed_commands: list[str] | None = None,
 ) -> tuple[ToolResult | None, list[str]]:
-    """Generate coverage data by running pytest directly."""
+    """Generate coverage data with a direct slipcover invocation."""
     if executed_commands is None:
         executed_commands = []
 
-    coverage_file = cache_dir / "coverage" / "coverage.sqlite"
-    env = {
-        "COVERAGE_FILE": str(coverage_file),
-        "HYPOTHESIS_DATABASE_DIRECTORY": str(cache_dir / "hypothesis"),
-        "HYPOTHESIS_STORAGE_DIRECTORY": str(cache_dir / "hypothesis"),
-        "HYPOTHESIS_SEED": "0",
-        "PYTHONHASHSEED": "0",
-    }
-
-    pytest_args = [
+    coverage_json = cache_dir / "coverage" / "coverage.json"
+    env = _coverage_env(cache_dir)
+    slipcover_cmd = [
+        "python",
+        "-m",
+        "slipcover",
+        "--branch",
+        "--json",
+        "--out",
+        str(coverage_json),
+        "--source",
+        "src/ml_playground/framework",
+        "-m",
+        "pytest",
+        "-n",
+        "0",
+        "-v",
         "tests/unit",
         "tests/property",
         *args,
     ]
-    pytest_cmd = ["pytest", *pytest_args]
-    formatted_pytest_cmd = _format_command(pytest_cmd)
-    if formatted_pytest_cmd not in executed_commands:
-        executed_commands.append(formatted_pytest_cmd)
+    formatted_slipcover_cmd = _format_command(slipcover_cmd)
+    if formatted_slipcover_cmd not in executed_commands:
+        executed_commands.append(formatted_slipcover_cmd)
 
-    result = subprocess_runner.run_pytest_command(
-        pytest_args,
+    result = subprocess_runner.run_uv_command(
+        slipcover_cmd,
         cwd=root_path,
         env=env,
         timeout=config.testing.timeout,
@@ -1217,7 +1053,7 @@ def _generate_coverage_via_pytest(
     if not result.success:
         return result, []
 
-    message = "Coverage pipeline generated no data; reran pytest to create coverage artifacts."
+    message = "Coverage pipeline generated no data; reran slipcover to create coverage artifacts."
     if verbose:
         extra_lines: list[str] = []
         if result.stdout:

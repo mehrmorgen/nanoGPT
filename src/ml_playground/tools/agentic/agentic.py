@@ -1345,10 +1345,11 @@ This is a machine learning playground project with the following key components:
             if callable(coverage_path_fn):
                 coverage_file = cast(Path, coverage_path_fn())
             else:
-                coverage_file = (
-                    self.root_path / ".cache" / "coverage" / "coverage.sqlite"
-                )
-            if not coverage_file.exists():
+                coverage_file = self.root_path / ".cache" / "coverage" / "coverage.json"
+            legacy_coverage_file = (
+                self.root_path / ".cache" / "coverage" / "coverage.sqlite"
+            )
+            if not coverage_file.exists() and not legacy_coverage_file.exists():
                 return {
                     "status": "not_available",
                     "message": "Run coverage-test to generate data",
