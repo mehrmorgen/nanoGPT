@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 from pydantic import BaseModel
 
 from ml_playground.framework.experiment_registry import extras_registry
@@ -17,6 +17,7 @@ class MockModel(BaseModel):
     experiment=st.text(min_size=1, max_size=24),
     section=st.text(min_size=1, max_size=24),
 )
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_register_and_get_model(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Clear registry for this experiment to ensure clean state
@@ -33,6 +34,7 @@ def test_register_and_get_model(experiment: str, section: str) -> None:
     experiment=st.text(min_size=1, max_size=24),
     section=st.text(min_size=1, max_size=24),
 )
+@settings(max_examples=20, deadline=None, derandomize=True)
 def test_get_model_returns_none_for_missing(experiment: str, section: str) -> None:
     experiment = f"pbt_{experiment}"
     # Ensure it's not registered

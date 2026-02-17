@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Protocol, cast, override
 
+from ml_playground.experiments.bundestag_char.lit_samples import load_lit_samples
 from ml_playground.framework.core.di_implementations import DefaultModuleImporter
 from ml_playground.framework.core.logging_protocol import LoggerLike
 from ml_playground.framework.core.project_config import get_default_host
@@ -153,53 +154,8 @@ def run_server_bundestag_char(
     model_base = model_mod.Model
     text_segment_factory = types_mod.TextSegment
 
-    # --- Tiny sample dataset ---
-    # Prefer a few lines from the bundestag_char seed if present; otherwise use embedded samples.
-    samples: list[str] = [
-        "Nächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.",
-        "Herr Präsident, liebe Kolleginnen und Kollegen, wir beraten heute wichtige Vorlagen.",
-        "(Beifall bei der SPD)",
-        "Die Bundesregierung handelt entschlossen.",
-        "Applaus bei der CDU/CSU.",
-        "Vielen Dank. — Zur Geschäftsordnung hat der Abgeordnete das Wort.",
-        "Wir müssen die Inflation bekämpfen und Familien entlasten.",
-        "Das Wort hat nun die Bundeskanzlerin.",
-        "Meine Damen und Herren, die Lage ist ernst, aber beherrschbar.",
-        "(Heiterkeit) Der nächste Redner folgt.",
-    ]
-
-    # Try to read input.txt if it exists, but keep it optional and tiny.
-    try:
-        # Resolve to the src/ml_playground/experiments/bundestag_char directory,
-        # tolerating environments (e.g., tests) that stub Path.parents with fewer entries.
-        if _path_resolver_override:
-            resolved = _path_resolver_override(Path(__file__))
-        else:
-            resolved = Path(__file__).resolve()
-        try:
-            base_dir = resolved.parents[3]
-        except Exception:
-            # Fallback for stubs that only provide shallower parents (tests inject parents[2])
-            base_dir = resolved.parents[2]
-        exp_dir = base_dir / "experiments" / "bundestag_char"
-        input = exp_dir / "datasets" / "input.txt"
-        if input.exists():
-            # Stream only the first few non-empty lines to avoid loading large
-            # corpora into memory for this tiny demo dataset.
-            file_lines: list[str] = []
-            with input.open("r", encoding="utf-8", errors="ignore") as input_file:
-                for raw_line in input_file:
-                    line = raw_line.strip()
-                    if not line:
-                        continue
-                    file_lines.append(line)
-                    if len(file_lines) >= 10:
-                        break
-            if file_lines:
-                samples = file_lines
-    except (OSError, UnicodeError):
-        # Non-fatal; keep embedded samples
-        pass
+    # Keep bundestag-specific sample loading inside experiments package.
+    samples = load_lit_samples(path_resolver=_path_resolver_override, max_lines=10)
 
     class BundestagTextDataset(dataset_base):  # type: ignore[valid-type, misc]
         def __init__(self, sents: Iterable[str]):

@@ -1,12 +1,36 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
+import ml_playground.experiments.bundestag_tiktoken.preparer as preparer_module
 from ml_playground.framework.configuration.models import PreparerConfig
 from ml_playground.experiments.bundestag_tiktoken.preparer import (
     BundestagTiktokenPreparer,
 )
+
+
+@contextmanager
+def _use_fake_tiktoken() -> Iterator[None]:
+    class _FakeTokenizer:
+        def __init__(self, encoding_name: str = "gpt2") -> None:
+            self.name = "tiktoken"
+            self.encoding_name = encoding_name
+            self.vocab = {"a": 0}
+            self.vocab_size = len(self.vocab)
+
+        def encode(self, text: str) -> list[int]:
+            # Deterministic, cheap tokenization for unit tests.
+            return [index % 1024 for index, _ in enumerate(text)]
+
+    original = preparer_module.TiktokenTokenizer
+    object.__setattr__(preparer_module, "TiktokenTokenizer", _FakeTokenizer)
+    try:
+        yield
+    finally:
+        object.__setattr__(preparer_module, "TiktokenTokenizer", original)
 
 
 def test_bundestag_tiktoken_preparer_creates_dataset(tmp_path: Path) -> None:
@@ -31,7 +55,8 @@ def test_bundestag_tiktoken_preparer_creates_dataset(tmp_path: Path) -> None:
         extras={"dataset_dir_override": str(exp_dir)},
     )
 
-    report = preparer.prepare(cfg)
+    with _use_fake_tiktoken():
+        report = preparer.prepare(cfg)
 
     # Check that files were created
     assert (ds_dir / "train.bin").exists()
@@ -78,7 +103,8 @@ def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> N
         extras={"dataset_dir_override": str(exp_dir)},
     )
 
-    report = preparer.prepare(cfg)
+    with _use_fake_tiktoken():
+        report = preparer.prepare(cfg)
 
     # Files should be updated
     assert (ds_dir / "train.bin").exists()
@@ -112,7 +138,8 @@ def test_bundestag_tiktoken_preparer_with_bundled_input(tmp_path: Path) -> None:
         extras={"dataset_dir_override": str(exp_dir)},
     )
 
-    preparer.prepare(cfg)
+    with _use_fake_tiktoken():
+        preparer.prepare(cfg)
 
     # Should successfully create dataset from bundled input
     assert (ds_dir / "train.bin").exists()

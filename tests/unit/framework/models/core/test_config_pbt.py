@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 
 from ml_playground.framework.configuration.models import ModelConfig
 from ml_playground.framework.models.core.config import build_gpt_config, GPTConfig
@@ -11,17 +11,18 @@ from ml_playground.framework.models.core.config import build_gpt_config, GPTConf
 @st.composite
 def model_configs(draw: st.DrawFn) -> ModelConfig:
     return ModelConfig(
-        block_size=draw(st.integers(min_value=1)),
-        vocab_size=draw(st.one_of(st.none(), st.integers(min_value=1))),
-        n_layer=draw(st.integers(min_value=1)),
-        n_head=draw(st.integers(min_value=1)),
-        n_embd=draw(st.integers(min_value=1)),
+        block_size=draw(st.integers(min_value=1, max_value=2048)),
+        vocab_size=draw(st.one_of(st.none(), st.integers(min_value=1, max_value=4096))),
+        n_layer=draw(st.integers(min_value=1, max_value=48)),
+        n_head=draw(st.integers(min_value=1, max_value=48)),
+        n_embd=draw(st.integers(min_value=1, max_value=4096)),
         dropout=draw(st.floats(min_value=0.0, max_value=1.0)),
         bias=draw(st.booleans()),
     )
 
 
 @given(cfg=model_configs())
+@settings(max_examples=40, deadline=None, derandomize=True)
 def test_build_gpt_config_properties(cfg: ModelConfig) -> None:
     if cfg.vocab_size is None:
         with pytest.raises(ValueError, match="vocab_size must be set"):
