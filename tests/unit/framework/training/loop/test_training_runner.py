@@ -1040,3 +1040,15 @@ def test_trainer_skips_log_when_interval_not_met(
     )
     it, _best = fixture.run()
     assert it >= 1
+
+
+def test_trainer_logs_include_eta(
+    trainer_harness: TrainerHarness,
+) -> None:
+    fixture = trainer_harness.build(
+        evaluation=default_evaluation(),
+        max_iters=1,
+        log_interval=1,
+    )
+    fixture.run()
+    assert any("eta " in msg for msg in fixture.logger.messages)

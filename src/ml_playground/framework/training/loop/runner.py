@@ -210,9 +210,11 @@ class Trainer:
         self.logger.info("Starting training loop")
         inputs, targets = self.batches.get_batch("train")
         t0 = time.time()
+        loop_start_time = t0
         local_iter_num = 0
         raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
         running_mfu = -1.0
+        running_dt_ema: float | None = None
 
         should_save_checkpoint = True
 
@@ -265,7 +267,7 @@ class Trainer:
                 dt = t1 - t0
                 t0 = t1
                 if self.iter_num % self.cfg.runtime.log_interval == 0:
-                    running_mfu = log_training_step(
+                    running_mfu, running_dt_ema = log_training_step(
                         self.logger,
                         iter_num=self.iter_num,
                         loss_value=loss.item(),
@@ -275,6 +277,10 @@ class Trainer:
                         running_mfu=running_mfu,
                         batch_size=self.cfg.data.batch_size,
                         grad_accum_steps=self.cfg.data.grad_accum_steps,
+                        max_iters=self.cfg.runtime.max_iters,
+                        running_dt_ema=running_dt_ema,
+                        elapsed_seconds=t1 - loop_start_time,
+                        dt_ema_alpha=self.cfg.runtime.dt_ema_alpha,
                     )
                     # TensorBoard logging if update mode is 'log'
                     try:
