@@ -991,6 +991,53 @@ def test_sampler_uses_latest_checkpoint_when_configured(tmp_path: Path) -> None:
     assert sampler.cached_prompt_ids is not None
 
 
+def test_sampler_falls_back_to_latest_when_best_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sampler should fall back to latest checkpoint when read_policy=best and no best exists."""
+    out_dir = tmp_path / "best_missing_fallback"
+    out_dir.mkdir()
+    _write_char_meta(out_dir / "meta.pkl")
+
+    model = _make_minimal_model()
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": {},
+            "model_args": {
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 32,
+                "block_size": 16,
+                "bias": False,
+                "vocab_size": 256,
+                "dropout": 0.0,
+            },
+            "iter_num": 42,
+            "best_val_loss": 0.0,
+            "config": {},
+        },
+        out_dir / "ckpt_last_00000001.pt",
+    )
+
+    cfg = _sampler_cfg(out_dir, read_policy=READ_POLICY_BEST)
+    shared = MetadataConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    caplog.set_level("WARNING", logger="ml_playground.sampler")
+    sampler = Sampler(cfg, shared)
+    sampler.run()
+
+    assert "falling back to latest checkpoint" in caplog.text.lower()
+    assert sampler.cached_prompt_ids is not None
+
+
 # ---------------------------
 # Strict-mode enforcement tests (merged from test_strict_mode_enforcement.py)
 # ---------------------------

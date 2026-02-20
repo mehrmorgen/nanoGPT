@@ -19,7 +19,6 @@ from ml_playground.framework.core.project_config import get_default_host
 
 from .typer_helpers import extract_exp_config
 from .runners import (
-    create_default_cli_dependencies,
     get_cli_dependencies,
     run_prepare_cmd,
     run_sample_cmd,
@@ -299,8 +298,7 @@ def main(argv: list[str] | None = None) -> int | None:
 
 def main_entry() -> None:
     """Console entry point wrapping the Typer application."""
-    deps = create_default_cli_dependencies()
-    echo_fn = cast(Any, deps.echo if deps.echo is not None else typer.echo)  # type: ignore[reportAny]
+    echo_fn = cast(Any, typer.echo)  # type: ignore[reportAny]
     try:
         app()  # type: ignore[reportAny]
     except (typer.Exit, click.exceptions.Exit):

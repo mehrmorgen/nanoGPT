@@ -24,7 +24,11 @@ from ml_playground.framework.configuration.models import (
     RuntimeConfig,
     MetadataConfig,
 )
-from ml_playground.framework.core.error_handling import DataError, FileOperationError
+from ml_playground.framework.core.error_handling import (
+    CheckpointError,
+    DataError,
+    FileOperationError,
+)
 from ml_playground.framework.models.core.model import GPT
 from ml_playground.framework.data_pipeline.transforms.io import setup_tokenizer
 
@@ -183,9 +187,20 @@ class Sampler:
             return cast(Checkpoint, raw_ckpt_obj)
 
         if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
-            return ckpt_mgr.load_best_checkpoint(
-                device=self.runtime_cfg.device, logger=self.logger
-            )
+            try:
+                return ckpt_mgr.load_best_checkpoint(
+                    device=self.runtime_cfg.device, logger=self.logger
+                )
+            except CheckpointError as exc:
+                if getattr(exc, "reason", "") != "Best checkpoint rotation list is empty":
+                    raise
+                self.logger.warning(
+                    "No best checkpoints found in %s; falling back to latest checkpoint.",
+                    self.out_dir,
+                )
+                return ckpt_mgr.load_latest_checkpoint(
+                    device=self.runtime_cfg.device, logger=self.logger
+                )
         return ckpt_mgr.load_latest_checkpoint(
             device=self.runtime_cfg.device, logger=self.logger
         )
