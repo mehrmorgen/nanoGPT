@@ -353,12 +353,7 @@ class TestCoverageBadge:
             python: str | None = None,
             no_project: bool = False,
         ) -> ToolResult:
-            _is_json = args[:4] == ["python", "-m", "coverage", "json"] or args[:2] == [
-                "coverage",
-                "json",
-            ]
-            if _is_json:
-                json_path.parent.mkdir(parents=True, exist_ok=True)
+            if args[:3] == ["python", "-m", "slipcover"]:
                 json_path.write_text('{"totals": {"percent_covered": 75.0}}')
             return success_result
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -235,9 +236,15 @@ def test_initialize_components_compile_none_fallback_to_torch(tmp_path: Path) ->
     cfg = _make_config(compile=True)
     runtime = RuntimeContext(device_type="cpu", autocast_context=autocast_context())
 
-    compiled_model, _scaler, _ema, _writer = initialize_components(
-        model, cfg, runtime, log_dir=str(tmp_path), compile_fn=None
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"`torch\.jit\.script_method` is deprecated\.",
+            category=DeprecationWarning,
+        )
+        compiled_model, _scaler, _ema, _writer = initialize_components(
+            model, cfg, runtime, log_dir=str(tmp_path), compile_fn=None
+        )
 
     assert compiled_model is not None
 

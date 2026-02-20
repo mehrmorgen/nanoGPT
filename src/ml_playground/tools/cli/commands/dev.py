@@ -151,6 +151,42 @@ def dev_review_delete(
         )
 
 
+@app.command("review-resolve")
+def dev_review_resolve(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number")],
+    threads_file: Annotated[
+        Path,
+        typer.Option(
+            "--threads",
+            help="JSON file with list of comment/thread IDs or URLs to resolve",
+        ),
+    ],
+    remote: Annotated[
+        str, typer.Option("--remote", help="Git remote name for owner/repo inference")
+    ] = "origin",
+) -> None:
+    """Resolve GitHub PR review threads."""
+    try:
+        tools = get_dev_tools()
+        result = tools.review_resolve(
+            pr_number=pr_number,
+            threads_file=threads_file,
+            remote=remote,
+        )
+        handle_tool_result(result)
+    except (ToolExecutionError, ToolConfigurationError) as exc:
+        handle_tool_result(
+            ToolResult.create(
+                success=False,
+                exit_code=1,
+                namespace="tools",
+                category="dev",
+                command="generic-error",
+                stderr=str(exc),
+            )
+        )
+
+
 @app.command("cleanup-ignored-tracked")
 def dev_cleanup_ignored_tracked() -> None:
     """Clean up Git-ignored files that are still tracked."""

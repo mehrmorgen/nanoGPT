@@ -180,8 +180,7 @@ class RealSubprocessRunner:
         if len(args) >= 2 and args[0] == "pyrefly" and args[1] == "check":
             # uv can inject PYTHONPATH from host/dev-shell environments, which makes
             # pyrefly's module graph non-deterministic and emits environment warnings.
-            # Unsetting it prevents pyrefly from resolving incorrect host modules and
-            # forces strict project-local type checking behavior.
+            # Force an unset so typecheck behavior stays project-local and repeatable.
             uv_env["PYTHONPATH"] = ""
 
         recursion_depth = os.environ.get("UV_RUN_RECURSION_DEPTH", "0")

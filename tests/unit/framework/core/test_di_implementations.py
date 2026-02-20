@@ -84,8 +84,9 @@ def test_default_test_result_extractor() -> None:
 def test_default_coverage_data_extractor() -> None:
     extractor = DefaultCoverageDataExtractor()
     data: dict[str, object] = {"totals": {"percent_covered": 95.5}}
-    assert extractor.extract_totals(data) == {"percent_covered": 95.5}
-    assert extractor.extract_totals({"missing": {}}) == {}
+    totals = extractor.extract_totals(data)
+    assert totals.get("percent_covered") == 95.5
+    assert extractor.extract_totals({"missing": {}}).get("num_statements") == 0.0
 
     assert extractor.get_coverage_percent({"percent_covered": 88.8}) == 88.8
     assert extractor.get_coverage_percent({}) == 0.0
@@ -95,4 +96,4 @@ def test_default_coverage_data_extractor() -> None:
 def test_extract_totals_non_dict() -> None:
     """extract_totals returns {} when totals value is not a dict."""
     extractor = DefaultCoverageDataExtractor()
-    assert extractor.extract_totals({"totals": "not-a-dict"}) == {}
+    assert extractor.extract_totals({"totals": "not-a-dict"}).get("num_statements") == 0.0

@@ -8,6 +8,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - tools
           - test
           - regression
@@ -33,6 +35,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - yamlfix
           - ".github"
           - "docs"
@@ -50,6 +54,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - pyrefly
           - check
           - --error
@@ -73,6 +79,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - vulture
         language: system
         pass_filenames: false
@@ -84,6 +92,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - tools
           - test
           - coverage-threshold
@@ -96,6 +106,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - tools
           - test
           - integration
@@ -107,6 +119,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - tools
           - test
           - acceptance
@@ -118,6 +132,8 @@ repos:
         args:
           - run
           - --no-sync
+          - --project
+          - .
           - tools
           - test
           - e2e

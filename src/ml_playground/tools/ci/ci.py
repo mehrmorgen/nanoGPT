@@ -381,17 +381,22 @@ class CITools:
         # Ensure coverage JSON exists
         json_path = self.cache_dir / "coverage" / "coverage.json"
         if not json_path.exists():
-            # Generate coverage JSON directly with coverage.
+            # Generate coverage JSON directly with slipcover.
             coverage_result = self.subprocess_runner.run_uv_command(
                 [
                     "python",
                     "-m",
-                    "coverage",
-                    "run",
+                    "slipcover",
+                    "--branch",
+                    "--json",
+                    "--out",
+                    str(json_path),
+                    "--source",
+                    "src/ml_playground/framework",
                     "-m",
                     "pytest",
                     "-n",
-                    "auto",
+                    "0",
                     "tests/unit",
                     "tests/property",
                 ],
@@ -406,30 +411,10 @@ class CITools:
                     reason="Coverage report generation failed",
                     rationale="Badge generation requires valid coverage data",
                 )
-
-            combine_result = self.subprocess_runner.run_uv_command(
-                ["python", "-m", "coverage", "combine"],
-                cwd=self.root_path,
-                timeout=self.config.ci.timeout,
-                operation_id=operation_id,
-            )
-            if not combine_result.success:
+            if not json_path.exists():
                 raise ToolExecutionError(
                     "Failed to generate coverage JSON for badge creation",
-                    reason="Coverage report merging failed",
-                    rationale="Badge generation requires valid coverage data",
-                )
-
-            json_result = self.subprocess_runner.run_uv_command(
-                ["python", "-m", "coverage", "json", "-o", str(json_path)],
-                cwd=self.root_path,
-                timeout=self.config.ci.timeout,
-                operation_id=operation_id,
-            )
-            if not json_result.success or not json_path.exists():
-                raise ToolExecutionError(
-                    "Failed to generate coverage JSON for badge creation",
-                    reason="Coverage JSON file was not created by coverage json",
+                    reason="Coverage JSON file was not created by slipcover",
                     rationale="Badge generation requires valid coverage data",
                 )
 

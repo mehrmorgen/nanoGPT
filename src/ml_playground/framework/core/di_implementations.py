@@ -11,6 +11,7 @@ import importlib
 import json
 from typing import Iterator, Mapping, cast
 
+from ml_playground.framework.core.coverage_data import extract_coverage_totals
 from ml_playground.framework.core.protocols import (
     ConfigSectionExtractor,
     CoverageDataExtractor,
@@ -175,36 +176,7 @@ class DefaultCoverageDataExtractor(CoverageDataExtractor):
     """Default implementation for extracting coverage data."""
 
     def extract_totals(self, coverage_data: dict[str, object]) -> dict[str, object]:
-        totals = coverage_data.get("totals", {})
-        if isinstance(totals, dict):
-            normalized = cast(dict[str, object], totals)
-            if "num_statements" not in normalized:
-                covered_lines = normalized.get("covered_lines", 0)
-                missing_lines = normalized.get("missing_lines", 0)
-                if (
-                    ("covered_lines" in normalized or "missing_lines" in normalized)
-                    and isinstance(covered_lines, (int, float))
-                    and isinstance(missing_lines, (int, float))
-                ):
-                    normalized["num_statements"] = float(covered_lines) + float(
-                        missing_lines
-                    )
-            if "num_branches" not in normalized:
-                covered_branches = normalized.get("covered_branches", 0)
-                missing_branches = normalized.get("missing_branches", 0)
-                if (
-                    (
-                        "covered_branches" in normalized
-                        or "missing_branches" in normalized
-                    )
-                    and isinstance(covered_branches, (int, float))
-                    and isinstance(missing_branches, (int, float))
-                ):
-                    normalized["num_branches"] = float(covered_branches) + float(
-                        missing_branches
-                    )
-            return normalized
-        return {}
+        return cast(dict[str, object], extract_coverage_totals(coverage_data))
 
     def get_coverage_percent(self, totals: dict[str, object]) -> float:
         percent = totals.get("percent_covered", 0.0)

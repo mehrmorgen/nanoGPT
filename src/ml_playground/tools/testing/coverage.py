@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import List, Mapping, TypedDict, cast
 
+from ml_playground.framework.core.coverage_data import extract_coverage_totals
+
 from ..core.config import ToolsConfig
 from ..core.interfaces import OperationId, ToolResult
 from ..core.learning_mode import LearningModeEngine, VerbosityLevel
@@ -782,84 +784,8 @@ class _CoverageTotals(TypedDict):
     num_statements: float
 
 
-def _to_float(value: object | None) -> float:
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return 0.0
-    return 0.0
-
-
 def _extract_totals(coverage_data: Mapping[str, object]) -> _CoverageTotals:
-    files_section = coverage_data.get("files")
-    if isinstance(files_section, Mapping):
-        covered_lines_from_files = 0.0
-        missing_lines_from_files = 0.0
-        covered_branches_from_files = 0.0
-        missing_branches_from_files = 0.0
-        for raw_info in files_section.values():
-            if not isinstance(raw_info, Mapping):
-                continue
-            info = cast(Mapping[str, object], raw_info)
-            summary = info.get("summary")
-            if not isinstance(summary, Mapping):
-                continue
-            summary_map = cast(Mapping[str, object], summary)
-            covered_lines_from_files += _to_float(summary_map.get("covered_lines"))
-            missing_lines_from_files += _to_float(summary_map.get("missing_lines"))
-            covered_branches_from_files += _to_float(
-                summary_map.get("covered_branches")
-            )
-            missing_branches_from_files += _to_float(
-                summary_map.get("missing_branches")
-            )
-
-        num_statements_from_files = covered_lines_from_files + missing_lines_from_files
-        num_branches_from_files = (
-            covered_branches_from_files + missing_branches_from_files
-        )
-        if num_statements_from_files > 0:
-            return {
-                "num_branches": num_branches_from_files,
-                "covered_branches": covered_branches_from_files,
-                "missing_branches": missing_branches_from_files,
-                "covered_lines": covered_lines_from_files,
-                "missing_lines": missing_lines_from_files,
-                "num_statements": num_statements_from_files,
-            }
-
-    totals_section = coverage_data.get("totals")
-    if not isinstance(totals_section, Mapping):
-        totals_section = coverage_data.get("summary")
-    normalized_totals: Mapping[str, object]
-    if isinstance(totals_section, Mapping):
-        normalized_totals = cast(Mapping[str, object], totals_section)
-    else:
-        normalized_totals = {}
-
-    covered_lines = _to_float(normalized_totals.get("covered_lines"))
-    missing_lines = _to_float(normalized_totals.get("missing_lines"))
-    num_statements = _to_float(normalized_totals.get("num_statements"))
-    if num_statements <= 0:
-        num_statements = covered_lines + missing_lines
-
-    covered_branches = _to_float(normalized_totals.get("covered_branches"))
-    missing_branches = _to_float(normalized_totals.get("missing_branches"))
-    num_branches = _to_float(normalized_totals.get("num_branches"))
-    if num_branches <= 0:
-        num_branches = covered_branches + missing_branches
-
-    return {
-        "num_branches": num_branches,
-        "covered_branches": covered_branches,
-        "missing_branches": missing_branches,
-        "covered_lines": covered_lines,
-        "missing_lines": missing_lines,
-        "num_statements": num_statements,
-    }
+    return cast(_CoverageTotals, extract_coverage_totals(coverage_data))
 
 
 class _CoverageJsonData(TypedDict, total=False):

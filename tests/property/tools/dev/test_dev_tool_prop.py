@@ -54,6 +54,12 @@ st_comment = st.fixed_dictionaries(
 
 @st.composite
 def st_thread(draw: st.DrawFn) -> Thread:
+    thread_id = draw(
+        st.text(
+            min_size=1,
+            alphabet=st.characters(blacklist_categories=("Cs",), min_codepoint=32),
+        )
+    )
     url = draw(
         st.text(
             min_size=1,
@@ -74,7 +80,7 @@ def st_thread(draw: st.DrawFn) -> Thread:
         )
         for c in raw_comments
     ]
-    return Thread(url=url, is_resolved=is_resolved, comments=comments)
+    return Thread(id=thread_id, url=url, is_resolved=is_resolved, comments=comments)
 
 
 @st.composite

@@ -564,11 +564,14 @@ def test_apply_filters_logic(
     apply_filters = getattr(dev_module, "_apply_filters")
 
     threads = []
-    for t_dict in threads_data:
+    for i, t_dict in enumerate(threads_data):
         comments = [_Comment(**c_dict) for c_dict in t_dict["comments"]]
         threads.append(
             _Thread(
-                url=t_dict["url"], is_resolved=t_dict["is_resolved"], comments=comments
+                id=f"thread_{i}",
+                url=t_dict["url"],
+                is_resolved=t_dict["is_resolved"],
+                comments=comments,
             )
         )
 
@@ -638,7 +641,7 @@ def test_comment_lookup_logic(threads_data: list[dict[str, Any]]):
     counter = 0
 
     threads = []
-    for t_dict in threads_data:
+    for i, t_dict in enumerate(threads_data):
         unique_comments = []
         for c_dict in t_dict["comments"]:
             cid = f"cid_{counter}"
@@ -660,6 +663,7 @@ def test_comment_lookup_logic(threads_data: list[dict[str, Any]]):
 
         threads.append(
             _Thread(
+                id=f"thread_{i}",
                 url=t_dict["url"],
                 is_resolved=t_dict["is_resolved"],
                 comments=unique_comments,
