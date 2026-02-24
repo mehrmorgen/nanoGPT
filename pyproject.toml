@@ -30,8 +30,7 @@ dependencies = [
     "toml>=0.10.2",
     "hatchling>=1.27.0",
     "pip >= 25.3",
-    "torch==2.10.0+cpu; platform_system == 'Linux' and platform_machine == 'x86_64' and python_version < '3.13'",
-    "torch==2.10.0; platform_system == 'Linux' and platform_machine == 'x86_64' and python_version >= '3.13'",
+    "torch==2.10.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
     "torch==2.10.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
     "torch==2.10.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "torch==2.10.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
@@ -66,11 +65,8 @@ package = true
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
-
 [tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu", marker = "platform_system == 'Linux' and platform_machine == 'x86_64' and python_version < '3.13'" },
-]
+# torch resolved from PyPI for all platforms (cp313 wheels available for 2.10.0)
 
 [tool.ml_playground.cache]
 base_dir = ".cache"
