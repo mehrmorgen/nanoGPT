@@ -355,7 +355,9 @@ def test_run_analyze_validation(experiment: str) -> None:
     )
     if experiment != "bundestag_char":
         assert not result.success
-        assert "currently supports only" in (result.stderr or "")
+        assert "No analyzer registered" in (
+            result.stderr or ""
+        ) or "Analysis failed" in (result.stderr or "")
     else:
         assert result.success
         assert result.learning_info == {"explanation": "mock"}

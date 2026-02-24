@@ -38,9 +38,6 @@ def test_cache_directories_live_under_dot_cache() -> None:
     ruff_cfg = _as_mapping(tool_cfg.get("ruff"))
     _require_cache_prefix(str(ruff_cfg.get("cache-dir", "")), "ruff cache-dir")
 
-    mypy_cfg = _as_mapping(tool_cfg.get("mypy"))
-    _require_cache_prefix(str(mypy_cfg.get("cache_dir", "")), "mypy cache_dir")
-
     hypothesis_cfg = _as_mapping(tool_cfg.get("hypothesis"))
     _require_cache_prefix(
         str(hypothesis_cfg.get("database", "")), "hypothesis database"

@@ -58,6 +58,7 @@ Core development practices, quality standards, and workflow for ml_playground co
   avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
 - **Strict API Boundaries and Dependency Scoping.** External imports must be restricted to a defined public API surface.
   Production code must only import packages from the default dependency group; development dependencies are forbidden.
+  Follow [IMPORT_GUIDELINES.md](./IMPORT_GUIDELINES.md) for canonical import forms and layer-boundary rules.
 - **Explicit Error Contracts (Fail Fast).** All public functions must explicitly document the exceptions they raise.
   Catching broad exceptions (`except Exception:`, `except:`) is strictly forbidden.
 - **No test-only bypass of public APIs.** Tests must exercise the same public surface that production code uses. Public
@@ -68,7 +69,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
+Pre-commit and CI both execute `uv run tools ci quality-gate`, which wraps ruff lint/format, mdformat, pyrefly, and the targeted pytest slices. Override the default parallelism via `uv run tools ci quality-gate PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
 For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `tools ci` and `tools env` for coverage reports, property suites, and lint-only passes.
 
@@ -167,8 +168,7 @@ Ruff automatically applies modern Python best practices:
 **Centralized sections**:
 
 - `[tool.ruff]` for lint/format settings
-- `[tool.mypy]` for type checker settings
-- `[tool.pyright]` for static analysis include/exclude
+- `[tool.pyrefly]` for static type checking settings
 - `[tool.pytest.ini_options]` for pytest testpaths and options
 
 ## Dev Tooling Quick Reference

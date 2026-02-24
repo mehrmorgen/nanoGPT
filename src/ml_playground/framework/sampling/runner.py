@@ -231,6 +231,15 @@ class Sampler:
     def _get_start_ids(self) -> list[int]:
         """Resolve the configured prompt source and tokenize it."""
         start_text = self.sample_cfg.start
+
+        # Override start_text dynamically if 'speaker' is passed via sampling.extras
+        if "speaker" in self.cfg.extras:
+            speaker = self.cfg.extras["speaker"]
+            party = self.cfg.extras.get("party", "CDU/CSU")
+            topic_hint = self.cfg.extras.get("topic", "")
+            topic_str = f"{topic_hint} " if topic_hint else ""
+            start_text = f'<SP name="{speaker}" party="{party}">\n<SPEAKER>{speaker}:</SPEAKER>\n<P>{topic_str}'
+            self.logger.info(f"Dynamically generated prompt from extras:\n{start_text}")
         if start_text.startswith("FILE:"):
             prompt_path = Path(start_text[5:])
             try:

@@ -169,9 +169,13 @@ retaining example tests for narrative requirements and hard-to-oracle seams.
   - Examples of forbidden patterns: `if TESTING: ...`, checking `PYTEST_CURRENT_TEST`, special test-only parameters,
     alternate I/O paths only under tests.
 - Tests must exercise the same public API and code paths used in production.
+- Private symbols (underscore-prefixed names like `_helper`) are implementation details and must not be imported or
+  called by tests.
+- If a test needs a seam, introduce a documented public production seam (for example DI via constructor/function
+  parameters). Do not patch private helpers.
 - Make code testable via proper seams instead:
   - Dependency injection with sensible production defaults (e.g., pass Path, clock, RNG, HTTP client).
-  - Use pytest fixtures and mocks/monkeypatch for external boundaries (network, filesystem, time, env).
+  - Use pytest fixtures and deterministic fakes/adapters for external boundaries (network, filesystem, time, env).
 - Idempotency and determinism are product qualities, not test toggles. Implement them unconditionally where
   applicable.
 

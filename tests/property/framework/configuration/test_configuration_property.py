@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import hypothesis.strategies as st
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 import pytest
 import tomllib
 
@@ -200,7 +200,11 @@ class TestTomlReading:
     @given(  # type: ignore[reportAny]
         content=toml_dict_strategy()
     )
-    @settings(max_examples=50)
+    @settings(
+        max_examples=50,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
     def test_round_trip_toml_serialization(self, content: dict[str, Any]) -> None:
         """Test round trip toml serialization."""
         import tomli_w

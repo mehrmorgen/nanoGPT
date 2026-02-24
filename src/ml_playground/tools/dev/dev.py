@@ -41,14 +41,12 @@ from ml_playground.tools.utils.subprocess_utils import (
 
 from ml_playground.framework.core.di_implementations import DefaultJsonParser
 
-# Expose batch_review module for tests/overrides expecting run_batch_review attribute.
 batch_review = batch_review_module
 
 __all__ = [
     "DevTools",
     "batch_review",
     "psutil",
-    # Public testing-friendly aliases for previously private helpers
     "Comment",
     "Thread",
     "FetchResult",
@@ -117,20 +115,22 @@ class _Comment(BaseModel):
 class _Thread(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    id: str = ""
     url: str
     is_resolved: bool
     comments: list[_Comment]
 
     def __hash__(self) -> int:
-        return hash((self.url, self.is_resolved, tuple(self.comments)))
+        return hash((self.id, self.url, self.is_resolved, tuple(self.comments)))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, _Thread):
             return NotImplemented
         return (
-            self.url == other.url
+            self.id == other.id
+            and self.url == other.url
             and self.is_resolved == other.is_resolved
-            and tuple(self.comments) == tuple(other.comments)
+            and self.comments == other.comments
         )
 
 
@@ -142,7 +142,6 @@ class _FetchResult(BaseModel):
     pull_request_id: str | None = None
 
 
-# Public aliases for tests and policy compliance
 Comment = _Comment
 Thread = _Thread
 FetchResult = _FetchResult
@@ -238,6 +237,7 @@ def _fetch_review_threads(
         "   pullRequest(number:$pr){"
         "     id"
         "     reviewThreads(first:100){ nodes {"
+        "       id"
         "       isResolved"
         "       comments(first:50){ nodes {"
         "         author { login }"
@@ -367,6 +367,7 @@ def _fetch_review_threads(
         if comments:
             threads.append(
                 _Thread(
+                    id=str(t_dict.get("id") or ""),
                     url=comments[0].url or "",
                     is_resolved=is_resolved,
                     comments=comments,
@@ -433,6 +434,10 @@ def _review_module_default(
         comment_lookup: Callable[[_FetchResult], dict[str, str]]
         _load_comment_targets: Callable[[Path], list[str]]
         _comment_lookup: Callable[[_FetchResult], dict[str, str]]
+        resolve_threads: Callable[..., int]
+        _resolve_threads: Callable[..., int]
+        thread_lookup: Callable[[_FetchResult], dict[str, str]]
+        _thread_lookup: Callable[[_FetchResult], dict[str, str]]
 
     mod = _Module()
 
@@ -454,6 +459,14 @@ def _review_module_default(
             root_path=root_path,
         )
 
+    def resolve_threads_wrapper(*, fetch: _FetchResult, threads: Iterable[str]) -> int:
+        return _bulk_resolve(
+            fetch=fetch,
+            targets=list(threads),
+            subprocess_runner=subprocess_runner,
+            root_path=root_path,
+        )
+
     mod.infer_repo = infer_repo_wrapper
     mod._infer_repo = infer_repo_wrapper  # pyright: ignore[reportPrivateUsage]
     mod.fetch_review_threads = fetch_review_threads_wrapper
@@ -467,6 +480,10 @@ def _review_module_default(
     mod._load_comment_targets = _load_comment_targets  # pyright: ignore[reportPrivateUsage]
     mod.comment_lookup = _comment_lookup
     mod._comment_lookup = _comment_lookup  # pyright: ignore[reportPrivateUsage]
+    mod.resolve_threads = resolve_threads_wrapper
+    mod._resolve_threads = resolve_threads_wrapper  # pyright: ignore[reportPrivateUsage]
+    mod.thread_lookup = _thread_lookup
+    mod._thread_lookup = _thread_lookup  # pyright: ignore[reportPrivateUsage]
     return mod
 
 
@@ -550,6 +567,27 @@ def _load_comment_targets(path: Path) -> list[str]:
     return []
 
 
+def _thread_lookup(fetch: _FetchResult) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for th in fetch.threads:
+        thread_id = getattr(th, "id", "")
+        if not thread_id:
+            continue
+        comments = getattr(th, "comments", [])
+        for cm in comments:
+            comment_id = getattr(cm, "id", "")
+            comment_url = getattr(cm, "url", "")
+            if comment_id:
+                mapping.setdefault(comment_id, thread_id)
+            if comment_url:
+                mapping.setdefault(comment_url, thread_id)
+                if "#" in comment_url:
+                    anchor = comment_url.split("#")[-1]
+                    if anchor:
+                        mapping.setdefault(anchor, thread_id)
+    return mapping
+
+
 def _bulk_reply(
     *,
     fetch: _FetchResult,
@@ -605,6 +643,60 @@ def _bulk_reply(
             )
 
 
+def _bulk_resolve(
+    *,
+    fetch: _FetchResult,
+    targets: list[str],
+    subprocess_runner: SubprocessRunner,
+    root_path: Path,
+) -> int:
+    lookup = _thread_lookup(fetch)
+    if not targets:
+        return 0
+    mutation = (
+        "mutation($threadId:ID!){"
+        " resolveReviewThread(input:{threadId:$threadId}){"
+        "  thread { id isResolved }"
+        " }"
+        "}"
+    )
+    resolved = 0
+    for key in targets:
+        thread_id = lookup.get(key)
+        if thread_id is None and key.startswith("http"):
+            thread_id = lookup.get(key.split("#")[-1])
+        if thread_id is None:
+            continue
+        args = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={mutation}",
+            "-F",
+            f"threadId={thread_id}",
+        ]
+        result = _exec(
+            args,
+            operation_id=OperationId(
+                namespace="tools", category="dev", command="review-resolve-gql"
+            ),
+            subprocess_runner=subprocess_runner,
+            root_path=root_path,
+        )
+        if not result.success:
+            raise ToolExecutionError(
+                "Failed to resolve review thread",
+                reason=result.stderr or result.stdout or "gh api graphql failed",
+                rationale=(
+                    "Ensure your GitHub token has permission to resolve threads on the PR "
+                    "and that the provided identifier matches an existing thread."
+                ),
+            )
+        resolved += 1
+    return resolved
+
+
 @runtime_checkable
 class ReviewComment(Protocol):
     """Protocol for a GitHub review comment."""
@@ -618,6 +710,7 @@ class ReviewComment(Protocol):
 class ReviewThread(Protocol):
     """Protocol for a GitHub review thread."""
 
+    id: str
     url: str
     is_resolved: bool
 
@@ -649,6 +742,9 @@ class ReviewModule(Protocol):
     def load_comment_targets(self, path: Path) -> list[str]: ...
     def comment_lookup(self, fetch: "_FetchResult") -> dict[str, str]: ...
     def infer_repo(self, remote: str) -> tuple[str, str]: ...
+    def resolve_threads(
+        self, *, fetch: "_FetchResult", threads: Iterable[str]
+    ) -> int: ...
 
     # Private methods for internal bridging and testing
     def _infer_repo(self, remote: str) -> tuple[str, str]: ...
@@ -669,6 +765,9 @@ class ReviewModule(Protocol):
     ) -> None: ...
     def _load_comment_targets(self, path: Path) -> list[str]: ...
     def _comment_lookup(self, fetch: "_FetchResult") -> dict[str, str]: ...
+    def _resolve_threads(
+        self, *, fetch: "_FetchResult", threads: Iterable[str]
+    ) -> int: ...
 
 
 def run_review_list(
@@ -1127,6 +1226,92 @@ def run_review_delete(
         )
 
 
+def run_review_resolve(
+    *,
+    pr_number: int,
+    threads_file: Path,
+    remote: str,
+    subprocess_runner: SubprocessRunner,
+    root_path: Path,
+    review_module_factory: Optional[Callable[[], Any]] = None,
+) -> ToolResult:
+    """Resolve multiple review threads."""
+    operation_id = OperationId(
+        namespace="tools", category="dev", command="review-resolve"
+    )
+    try:
+        review_mod = cast(
+            ReviewModule,
+            _get_review_module(review_module_factory, subprocess_runner, root_path),
+        )
+
+        infer_repo_fn = getattr(review_mod, "infer_repo", None) or getattr(
+            review_mod, "_infer_repo", None
+        )
+        if not callable(infer_repo_fn):
+            raise ToolExecutionError(
+                "Failed to resolve threads",
+                reason="Review module missing infer_repo",
+                rationale="Ensure review module exposes infer_repo(remote)",
+            )
+        infer_repo_typed = cast(Callable[[str], tuple[str, str]], infer_repo_fn)
+        owner, repo = infer_repo_typed(remote)
+
+        fetch_threads_fn = getattr(review_mod, "fetch_review_threads", None) or getattr(
+            review_mod, "_fetch_review_threads", None
+        )
+        if not callable(fetch_threads_fn):
+            raise ToolExecutionError(
+                "Failed to resolve threads",
+                reason="Review module missing fetch_review_threads",
+                rationale="Ensure review module exposes fetch_review_threads(owner, repo, pr_number)",
+            )
+        fetch_result: _FetchResult = cast(
+            _FetchResult, fetch_threads_fn(owner, repo, pr_number)
+        )
+
+        load_targets_fn = getattr(review_mod, "load_comment_targets", None) or getattr(
+            review_mod, "_load_comment_targets", None
+        )
+        if not callable(load_targets_fn):
+            raise ToolExecutionError(
+                "Failed to resolve threads",
+                reason="Review module missing load_comment_targets",
+                rationale="Ensure review module exposes load_comment_targets(threads_file)",
+            )
+        targets = cast(Iterable[str], load_targets_fn(threads_file))
+
+        resolve_fn = getattr(review_mod, "resolve_threads", None) or getattr(
+            review_mod, "_resolve_threads", None
+        )
+        if not callable(resolve_fn):
+            raise ToolExecutionError(
+                "Failed to resolve threads",
+                reason="Review module missing resolve_threads",
+                rationale="Ensure review module exposes resolve_threads(fetch, threads)",
+            )
+
+        resolved = resolve_fn(fetch=fetch_result, threads=targets)
+
+        return ToolResult.create(
+            success=True,
+            exit_code=0,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stdout=f"Successfully resolved {resolved} threads in PR #{pr_number}",
+        )
+    except Exception as exc:
+        return ToolResult.create(
+            success=False,
+            exit_code=1,
+            namespace=operation_id.namespace,
+            category=operation_id.category,
+            command=operation_id.command,
+            stderr=f"Failed to resolve threads: {exc}",
+        )
+
+
 def run_cleanup_ignored_tracked(
     *, subprocess_runner: SubprocessRunner, root_path: Path
 ) -> ToolResult:
@@ -1349,6 +1534,18 @@ class DevTools:
         return run_review_delete(
             pr_number=pr_number,
             comments_file=comments_file,
+            remote=remote,
+            subprocess_runner=self._subprocess_runner,
+            root_path=self._root_path,
+            review_module_factory=self._review_module_factory,
+        )
+
+    def review_resolve(
+        self, pr_number: int, threads_file: Path, remote: str = "origin"
+    ) -> ToolResult:
+        return run_review_resolve(
+            pr_number=pr_number,
+            threads_file=threads_file,
             remote=remote,
             subprocess_runner=self._subprocess_runner,
             root_path=self._root_path,

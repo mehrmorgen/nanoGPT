@@ -109,54 +109,14 @@ def quality_deadcode(
         raise typer.Exit(1)
 
 
-@app.command("basedpyright")
-def quality_basedpyright(
-    args: Annotated[
-        Optional[list[str]], typer.Argument(help="Additional basedpyright arguments")
-    ] = None,
-) -> None:
-    """Run BasedPyright type checks."""
-    try:
-        tools = get_quality_tools()
-        run_tool_command(
-            tools.basedpyright,
-            args or [],
-            learning_mode=state.learning_mode,
-            verbosity_level=state.verbosity,
-        )
-    except ToolExecutionError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(1)
-
-
-@app.command("mypy")
-def quality_mypy(
-    args: Annotated[
-        Optional[list[str]], typer.Argument(help="Additional mypy arguments")
-    ] = None,
-) -> None:
-    """Run Mypy type checks."""
-    try:
-        tools = get_quality_tools()
-        run_tool_command(
-            tools.mypy,
-            args or [],
-            learning_mode=state.learning_mode,
-            verbosity_level=state.verbosity,
-        )
-    except ToolExecutionError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(1)
-
-
 @app.command("typecheck")
 def quality_typecheck(
     args: Annotated[
         Optional[list[str]],
-        typer.Argument(help="Additional arguments (applied to both tools)"),
+        typer.Argument(help="Additional typecheck arguments"),
     ] = None,
 ) -> None:
-    """Run both BasedPyright and Mypy type checks."""
+    """Run strict static type checks."""
     try:
         tools = get_quality_tools()
         run_tool_command(

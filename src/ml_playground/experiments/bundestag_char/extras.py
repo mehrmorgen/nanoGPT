@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,6 +14,18 @@ class BundestagCharPrepareExtras(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     dataset_dir_override: Path | str | None = None
+    dataset_source: Literal["auto", "seed", "germaparl_tei"] = "auto"
+    germaparl_ref: str = "main"
+    germaparl_repo: str = "PolMine/GermaParlTEI"
+    germaparl_cache_dir: Path | str | None = None
+    germaparl_include_stage: bool = True
+    germaparl_include_speaker_attrs: bool = True
+    germaparl_force_refresh: bool = False
+    germaparl_max_files: int | None = None
+    split: float | None = None
+    seed_policy: str | None = None
+    germaparl_tarball_bytes: bytes | None = None
+    germaparl_http_get: Callable[..., object] | None = None
 
 
 class BundestagCharTrainExtras(BaseModel):
@@ -32,6 +45,9 @@ class BundestagCharSampleExtras(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     require_adapters: bool | None = None
+    speaker: str | None = None
+    party: str | None = None
+    topic: str | None = None
 
 
 register_extras_model("bundestag_char", "prepare", BundestagCharPrepareExtras)

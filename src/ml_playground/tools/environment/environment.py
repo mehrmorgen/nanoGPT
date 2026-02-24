@@ -295,7 +295,7 @@ class EnvironmentTools:
             self._cache_dir / "pre-commit",
             self._cache_dir / "ruff",
             self._cache_dir / "uv",
-            self._cache_dir / "mypy",
+            self._cache_dir / "pyrefly",
         ]
 
         build_targets: list[Path] = [

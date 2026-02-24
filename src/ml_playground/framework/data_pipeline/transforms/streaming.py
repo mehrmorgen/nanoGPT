@@ -95,8 +95,8 @@ def _refresh_metadata(
             rationale="Streaming prep must update token counts incrementally",
         )
     refreshed = dict(existing)
-    existing_train_tokens = cast(int, existing["train_tokens"])
-    existing_val_tokens = cast(int, existing["val_tokens"])
+    existing_train_tokens = existing["train_tokens"]
+    existing_val_tokens = existing["val_tokens"]
     refreshed["train_tokens"] = existing_train_tokens + train_tokens_added
     refreshed["val_tokens"] = existing_val_tokens + val_tokens_added
     for key, value in updates.items():

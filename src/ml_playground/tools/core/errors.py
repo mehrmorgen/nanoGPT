@@ -125,7 +125,7 @@ def handle_subprocess_failure(
         or "timed out" in stderr_normalized
     ):
         timeout_msg = f" (timeout: {timeout_seconds}s)" if timeout_seconds else ""
-        raise TimeoutError(
+        raise ToolTimeoutError(
             f"Tool '{command}' timed out{timeout_msg}",
             reason="Process exceeded the configured timeout limit",
             rationale="Timeouts indicate environmental assumptions are wrong; choose timeouts based on expected operation duration",

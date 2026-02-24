@@ -125,10 +125,10 @@ class _CoverageFileInfo(TypedDict, total=False):
 
 def collect_undercovered_files(
     coverage_data: Mapping[str, object],
-) -> list[tuple[str, float, float | None]]:
+) -> list[tuple[str, float, float | None, int]]:
     """Return files with <100% line coverage and optional branch %.
 
-    Returns list of tuples (path, line_pct, branch_pct_or_None), sorted by
+    Returns list of tuples (path, line_pct, branch_pct_or_None, loc), sorted by
     (line_pct asc, path asc).
     """
     files_section = coverage_data.get("files")
@@ -136,7 +136,7 @@ def collect_undercovered_files(
         return []
 
     files = cast(Mapping[str, _CoverageFileInfo], files_section)
-    undercovered: list[tuple[str, float, float | None]] = []
+    undercovered: list[tuple[str, float, float | None, int]] = []
     for path, info in files.items():
         summary_section = info.get("summary")
         if not isinstance(summary_section, Mapping):
@@ -154,8 +154,29 @@ def collect_undercovered_files(
             continue
         percent_float = float(percent)
         branch_percent: float | None = None
+        loc = 0
+        statements_value = summary.get("num_statements")
+        if isinstance(statements_value, (int, float)):
+            loc = int(statements_value)
+        else:
+            covered_lines = summary.get("covered_lines")
+            missing_lines = summary.get("missing_lines")
+            if isinstance(covered_lines, (int, float)) and isinstance(
+                missing_lines, (int, float)
+            ):
+                loc = int(float(covered_lines) + float(missing_lines))
         num_branches_value = summary.get("num_branches")
         covered_branches = summary.get("covered_branches")
+        missing_branches = summary.get("missing_branches")
+        if (
+            (
+                not isinstance(num_branches_value, (int, float))
+                or num_branches_value <= 0
+            )
+            and isinstance(covered_branches, (int, float))
+            and isinstance(missing_branches, (int, float))
+        ):
+            num_branches_value = float(covered_branches) + float(missing_branches)
         if (
             isinstance(num_branches_value, (int, float))
             and num_branches_value
@@ -168,14 +189,12 @@ def collect_undercovered_files(
             except (TypeError, ZeroDivisionError):
                 branch_percent = None
         if percent_float < 100.0:
-            undercovered.append((path, percent_float, branch_percent))
+            undercovered.append((path, percent_float, branch_percent, loc))
     undercovered.sort(key=lambda item: (item[1], item[0]))
     return undercovered
 
 
-def format_undercovered_tree(
-    entries: list[tuple[str, float, float | None]],
-) -> list[str]:
+def format_undercovered_tree(entries: Sequence[_CoverageEntry]) -> list[str]:
     """Render a tree view for undercovered files."""
 
     class _TreeNode:
@@ -183,10 +202,10 @@ def format_undercovered_tree(
 
         def __init__(self) -> None:
             self.children: dict[str, "_TreeNode"] = {}
-            self.files: list[tuple[str, float, float | None]] = []
+            self.files: list[tuple[str, float, float | None, int]] = []
 
         def add_file(
-            self, parts: Sequence[str], file_info: tuple[str, float, float | None]
+            self, parts: Sequence[str], file_info: tuple[str, float, float | None, int]
         ) -> None:
             if not parts:
                 self.files.append(file_info)
@@ -210,23 +229,25 @@ def format_undercovered_tree(
             idx += 1
 
         sorted_files = sorted(node.files, key=lambda item: item[0])
-        for file_name, line_pct, branch_pct in sorted_files:
+        for file_name, line_pct, branch_pct, loc in sorted_files:
             is_last = idx == total_entries - 1
             connector = "└── " if is_last else "├── "
             branch_text = (
                 f" branch = {branch_pct:.2f}%" if branch_pct is not None else ""
             )
             lines.append(
-                f"{prefix}{connector}{file_name}: line = {line_pct:.2f}%{branch_text}"
+                f"{prefix}{connector}{file_name}: line = {line_pct:.2f}%{branch_text} loc = {loc}"
             )
             idx += 1
 
         return lines
 
     root = _TreeNode()
-    for path, line_pct, branch_pct in entries:
+    for entry in entries:
+        path, line_pct, branch_pct = entry[:3]
+        loc = entry[3] if len(entry) > 3 else 0
         parts = path.split("/")
-        root.add_file(parts[:-1], (parts[-1], line_pct, branch_pct))
+        root.add_file(parts[:-1], (parts[-1], line_pct, branch_pct, loc))
 
     return _render(root, "")
 
@@ -262,16 +283,18 @@ def expected_suite_for_path(path: str) -> str:
 
 
 def format_coverage_map(
-    entries: list[tuple[str, float, float | None]], root_path: Path
+    entries: Sequence[_CoverageEntry], root_path: Path
 ) -> list[str]:
     """Format coverage gaps with suite hints."""
     lines: list[str] = []
-    for path, line_pct, branch_pct in entries:
+    for entry in entries:
+        path, line_pct, branch_pct = entry[:3]
+        loc = entry[3] if len(entry) > 3 else 0
         display = normalize_coverage_path(path, root_path)
         suite_hint = expected_suite_for_path(display)
         branch_text = f", branch={branch_pct:.2f}%" if branch_pct is not None else ""
         lines.append(
-            f"- {display}: line={line_pct:.2f}%{branch_text} expected={suite_hint}"
+            f"- {display}: line={line_pct:.2f}%{branch_text}, loc={loc} expected={suite_hint}"
         )
     return lines
 
@@ -306,3 +329,8 @@ def format_coverage_status(
         f"[coverage] {icon} {label}: {metric} coverage "
         f"{percentage:.2f}% {comparator} {threshold:.2f}%."
     )
+
+
+_CoverageEntry3 = tuple[str, float, float | None]
+_CoverageEntry4 = tuple[str, float, float | None, int]
+_CoverageEntry = _CoverageEntry3 | _CoverageEntry4

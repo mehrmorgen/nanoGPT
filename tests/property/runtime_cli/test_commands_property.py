@@ -103,14 +103,15 @@ def _fake_dependencies() -> CLIDependencies:
     deps = CLIDependencies(
         load_experiment=cast(
             Any,
-            lambda *a, **k: SimpleNamespace(
-                prepare=SimpleNamespace(),
-                training=SimpleNamespace(),
-                sampling=SimpleNamespace(),
-                metadata=SimpleNamespace(
-                    config_path=Path("cfg"),
-                    train_out_dir=Path("train_out"),
-                    sample_out_dir=Path("sample_out"),
+            lambda *a, **k: __import__("types").SimpleNamespace(
+                prepare=__import__("types").SimpleNamespace(),
+                training=__import__("types").SimpleNamespace(),
+                sampling=__import__("types").SimpleNamespace(),
+                metadata=__import__("types").SimpleNamespace(
+                    config_path=Path(__import__("tempfile").mkdtemp()) / "cfg",
+                    train_out_dir=Path(__import__("tempfile").mkdtemp()) / "train_out",
+                    sample_out_dir=Path(__import__("tempfile").mkdtemp())
+                    / "sample_out",
                 ),
             ),
         ),
@@ -268,7 +269,9 @@ def _fake_functions() -> dict[str, object]:
     """Create fake functions for patching."""
 
     def _extract_exp_config(ctx: object) -> Path:
-        config_path = Path("/tmp/config.toml")
+        import tempfile
+
+        config_path = Path(tempfile.mkdtemp()) / "config.toml"
         obj = getattr(ctx, "obj", None)
         if isinstance(obj, dict):
             obj["exp_config"] = config_path

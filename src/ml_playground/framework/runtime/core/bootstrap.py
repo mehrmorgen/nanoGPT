@@ -30,6 +30,7 @@ class CLIDependencies:
         _default_noop
     )
     run_analyze: Callable[[str, str, int, bool, Any | None], Any] = _default_noop
+    list_experiments: Callable[[str], list[str]] = lambda _: []
     global_device_setup: Callable[..., None] = _default_noop
     log_command_status: Callable[[str, Any, Path | None, Any], None] = (
         lambda _s, _d, _p, _a: None  # type: ignore[reportAny]
@@ -59,6 +60,7 @@ def create_default_cli_dependencies() -> CLIDependencies:
     """Create a new instance of default CLI dependencies."""
 
     from ml_playground.framework.configuration import cli as config_cli
+    from ml_playground.framework.configuration import loading as config_loading
     from ml_playground.framework.data_pipeline.preparer import create_pipeline
     from ml_playground.framework.training.loop.runner import Trainer
     from ml_playground.framework.sampling.runner import Sampler
@@ -79,6 +81,7 @@ def create_default_cli_dependencies() -> CLIDependencies:
         run_train=cli_commands.run_train_impl,
         run_sample=cli_commands.run_sample_impl,
         run_analyze=cli_commands.run_analyze,
+        list_experiments=config_loading.list_experiments_with_config,
         global_device_setup=cli_device.global_device_setup,
         log_command_status=cli_commands.log_command_status,
         handle_tool_result=cli_commands.handle_tool_result,

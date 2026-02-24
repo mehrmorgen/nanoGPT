@@ -382,10 +382,13 @@ def write_manifest(root_path: Path, fingerprint: str) -> Path:
     return manifest_path
 
 
-def write_coverage_file(root_path: Path, payload: bytes = b"coverage-data") -> Path:
-    """Write a minimal coverage file payload."""
+def write_coverage_file(
+    root_path: Path,
+    payload: bytes = b'{"totals":{"covered_lines":1,"missing_lines":0},"files":{}}',
+) -> Path:
+    """Write a minimal coverage JSON payload."""
     coverage_dir = root_path / ".cache" / "coverage"
     coverage_dir.mkdir(parents=True, exist_ok=True)
-    coverage_path = coverage_dir / "coverage.sqlite"
+    coverage_path = coverage_dir / "coverage.json"
     coverage_path.write_bytes(payload)
     return coverage_path

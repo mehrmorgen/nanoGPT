@@ -157,7 +157,7 @@ class TestQualityGate:
 
         assert result.success is True
         assert result.exit_code == 0
-        assert "Pre-commit output:\npre ok" in (result.stdout or "")
+        assert "- pre-commit: PASS" in (result.stdout or "")
         assert len(fake_runner.calls) == 2
 
     def test_quality_gate_with_args(
@@ -389,7 +389,7 @@ class TestCoverageBadge:
             python: str | None = None,
             no_project: bool = False,
         ) -> ToolResult:
-            if "coverage" in args and "json" in args:
+            if args[:3] == ["python", "-m", "slipcover"]:
                 json_path.write_text('{"totals": {"percent_covered": 75.0}}')
             return success_result
 

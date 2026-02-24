@@ -991,6 +991,108 @@ def test_sampler_uses_latest_checkpoint_when_configured(tmp_path: Path) -> None:
     assert sampler.cached_prompt_ids is not None
 
 
+def test_sampler_dynamically_generates_prompt_from_extras(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sampler should generate start_text dynamically when 'speaker' is in config.extras."""
+    out_dir = tmp_path / "dynamic_prompt"
+    out_dir.mkdir()
+
+    meta = {
+        "meta_version": 1,
+        "kind": "char",
+        "dtype": "uint16",
+        "tokenizer_type": "char",
+        "stoi": {chr(i): i for i in range(1024)},
+        "itos": {i: chr(i) for i in range(1024)},
+    }
+    with (out_dir / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "extras": {"speaker": "Test", "party": "Party", "topic": "Topic"},
+            "sample": base_cfg.sample.model_copy(
+                update={"num_samples": 1, "max_new_tokens": 1}
+            ),
+        }
+    )
+
+    shared = MetadataConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    caplog.set_level("INFO", logger="ml_playground.sampler")
+    sampler.run()
+
+    assert "Dynamically generated prompt from extras:" in caplog.text
+    assert 'name="Test"' in caplog.text
+    assert 'party="Party"' in caplog.text
+    assert "<SPEAKER>Test:</SPEAKER>" in caplog.text
+    assert "<P>Topic " in caplog.text
+
+
+def test_sampler_dynamically_generates_prompt_from_extras_defaults(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sampler should use default party and topic when omitted from extras."""
+    out_dir = tmp_path / "dynamic_prompt_defaults"
+    out_dir.mkdir()
+
+    meta = {
+        "meta_version": 1,
+        "kind": "char",
+        "dtype": "uint16",
+        "tokenizer_type": "char",
+        "stoi": {chr(i): i for i in range(1024)},
+        "itos": {i: chr(i) for i in range(1024)},
+    }
+    with (out_dir / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "extras": {"speaker": "Test2"},
+            "sample": base_cfg.sample.model_copy(
+                update={"num_samples": 1, "max_new_tokens": 1}
+            ),
+        }
+    )
+
+    shared = MetadataConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    caplog.set_level("INFO", logger="ml_playground.sampler")
+    sampler.run()
+
+    assert "Dynamically generated prompt from extras:" in caplog.text
+    assert 'party="CDU/CSU"' in caplog.text
+    assert "<P>" in caplog.text
+    # "Topic " should not be there
+    assert "<P> " not in caplog.text
+
+
 # ---------------------------
 # Strict-mode enforcement tests (merged from test_strict_mode_enforcement.py)
 # ---------------------------

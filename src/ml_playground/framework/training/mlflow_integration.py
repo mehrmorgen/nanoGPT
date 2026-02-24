@@ -165,6 +165,28 @@ class MLflowManager:
         except Exception as exc:
             self.logger.debug(f"MLflow metric logging failed: {exc}")
 
+    def log_text(self, text: str, artifact_file: str) -> None:
+        """Log text as an artifact."""
+        if not self._active_run:
+            return
+
+        try:
+            self._mlflow.log_text(text, artifact_file)  # type: ignore[attr-defined]
+        except AttributeError:
+            # Fallback for mock clients that don't implement log_text directly
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as td:
+                tp = Path(td) / Path(artifact_file).name
+                tp.write_text(text, encoding="utf-8")
+                art_path = Path(artifact_file).parent
+                if str(art_path) == ".":
+                    self.log_artifact(tp)
+                else:
+                    self.log_artifact(tp, artifact_path=str(art_path))
+        except Exception as exc:
+            self.logger.warning(f"MLflow text logging failed: {exc}")
+
     def log_artifact(
         self, local_path: Path, artifact_path: Optional[str] = None
     ) -> None:

@@ -10,6 +10,15 @@ from ml_playground.tools.core.interfaces import OperationId, ToolResult
 from ml_playground.tools.core.learning_mode import LearningModeEngine, VerbosityLevel
 from ml_playground.tools.utils.subprocess_utils import SubprocessRunner, DEFAULT_RUNNER
 
+_STRICT_WARNING_KINDS = [
+    "redundant-cast",
+    "redundant-condition",
+    "unnecessary-comparison",
+    "unreachable",
+    "unused-ignore",
+    "deprecated",
+]
+
 
 class QualityTools:
     """Quality tools implementation."""
@@ -203,28 +212,22 @@ class QualityTools:
 
         return result
 
-    def basedpyright(
+    def _run_typechecker(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
-        """Run BasedPyright type checks."""
-        return self._basedpyright(
-            args, learning_mode=learning_mode, verbosity_level=verbosity_level
-        )
-
-    def _basedpyright(
-        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
-    ) -> ToolResult:
-        """Internal BasedPyright implementation."""
+        """Run strict static type checking."""
         operation_id = OperationId(
-            namespace="tools", category=self.category, command="basedpyright"
+            namespace="tools", category=self.category, command="typecheck"
         )
 
-        basedpyright_args = ["basedpyright", str(self._pkg_path)]
+        pyrefly_args = ["pyrefly", "check", str(self._pkg_path)]
+        for kind in _STRICT_WARNING_KINDS:
+            pyrefly_args.extend(["--error", kind])
         if args:
-            basedpyright_args.extend(args)
+            pyrefly_args.extend(args)
 
         result = self._subprocess_runner.run_uv_command(
-            basedpyright_args,
+            pyrefly_args,
             cwd=self._root_path,
             timeout=self._config.quality.timeout,
             operation_id=operation_id,
@@ -233,48 +236,10 @@ class QualityTools:
         if learning_mode:
             self._learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self._learning_engine.explain_command(
-                command="basedpyright",
-                context="Performing static type checking using BasedPyright",
+                command="typecheck",
+                context="Performing strict static type checking",
                 category=self.category,
-                executed_commands=[" ".join(basedpyright_args)],
-            )
-
-        return result
-
-    def mypy(
-        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
-    ) -> ToolResult:
-        """Run Mypy type checks."""
-        return self._mypy(
-            args, learning_mode=learning_mode, verbosity_level=verbosity_level
-        )
-
-    def _mypy(
-        self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
-    ) -> ToolResult:
-        """Internal Mypy implementation."""
-        operation_id = OperationId(
-            namespace="tools", category=self.category, command="mypy"
-        )
-
-        mypy_args = ["mypy", "--incremental", str(self._pkg_path)]
-        if args:
-            mypy_args.extend(args)
-
-        result = self._subprocess_runner.run_uv_command(
-            mypy_args,
-            cwd=self._root_path,
-            timeout=self._config.quality.timeout,
-            operation_id=operation_id,
-        )
-
-        if learning_mode:
-            self._learning_engine.verbosity = VerbosityLevel(verbosity_level)
-            result.learning_info = self._learning_engine.explain_command(
-                command="mypy",
-                context="Performing static type checking using MyPy",
-                category=self.category,
-                executed_commands=[" ".join(mypy_args)],
+                executed_commands=[" ".join(pyrefly_args)],
             )
 
         return result
@@ -282,7 +247,7 @@ class QualityTools:
     def typecheck(
         self, args: List[str], *, learning_mode: bool = False, verbosity_level: int = 1
     ) -> ToolResult:
-        """Run both BasedPyright and Mypy type checks."""
+        """Run strict static type checks."""
         return self._typecheck(
             args, learning_mode=learning_mode, verbosity_level=verbosity_level
         )
@@ -294,45 +259,17 @@ class QualityTools:
         operation_id = OperationId(
             namespace="tools", category=self.category, command="typecheck"
         )
-
-        # Run BasedPyright first
-        basedpyright_result = self._basedpyright(
+        pyrefly_result = self._run_typechecker(
             args,
             learning_mode=learning_mode,
             verbosity_level=verbosity_level,
-        )
-
-        # Run Mypy regardless of BasedPyright result
-        mypy_result = self._mypy(
-            args,
-            learning_mode=learning_mode,
-            verbosity_level=verbosity_level,
-        )
-
-        # Combine results
-        combined_stdout = ""
-        if basedpyright_result.stdout:
-            combined_stdout += f"BasedPyright:\n{basedpyright_result.stdout}\n"
-        if mypy_result.stdout:
-            combined_stdout += f"Mypy:\n{mypy_result.stdout}"
-
-        combined_stderr = ""
-        if basedpyright_result.stderr:
-            combined_stderr += f"BasedPyright errors:\n{basedpyright_result.stderr}\n"
-        if mypy_result.stderr:
-            combined_stderr += f"Mypy errors:\n{mypy_result.stderr}"
-
-        # Success only if both succeed
-        success = basedpyright_result.success and mypy_result.success
-        exit_code = (
-            0 if success else (basedpyright_result.exit_code or mypy_result.exit_code)
         )
 
         result = ToolResult(
-            success=success,
-            exit_code=exit_code,
-            stdout=combined_stdout,
-            stderr=combined_stderr,
+            success=pyrefly_result.success,
+            exit_code=pyrefly_result.exit_code,
+            stdout=pyrefly_result.stdout,
+            stderr=pyrefly_result.stderr,
             operation_id=operation_id,
         )
 
@@ -340,11 +277,10 @@ class QualityTools:
             self._learning_engine.verbosity = VerbosityLevel(verbosity_level)
             result.learning_info = self._learning_engine.explain_command(
                 command="typecheck",
-                context="Running multiple type checkers for comprehensive analysis",
+                context="Running strict static type checking",
                 category=self.category,
                 executed_commands=[
-                    f"basedpyright {self._pkg_path} {' '.join(args)}".strip(),
-                    f"mypy --incremental {self._pkg_path} {' '.join(args)}".strip(),
+                    f"pyrefly check {self._pkg_path} {' '.join(args)}".strip(),
                 ],
             )
 
@@ -422,8 +358,7 @@ class QualityTools:
                 category=self.category,
                 executed_commands=[
                     f"ruff check . {' '.join(args)}".strip(),
-                    f"basedpyright {self._pkg_path} {' '.join(args)}".strip(),
-                    f"mypy --incremental {self._pkg_path} {' '.join(args)}".strip(),
+                    f"pyrefly check {self._pkg_path} {' '.join(args)}".strip(),
                     f"vulture {self._pkg_path} --min-confidence 90 {' '.join(args)}".strip(),
                 ],
             )

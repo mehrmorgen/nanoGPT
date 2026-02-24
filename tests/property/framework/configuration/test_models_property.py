@@ -19,25 +19,26 @@ def _make_runtime(**overrides: Any) -> config_models.RuntimeConfig:
         "max_iters": 100,
     }
     params.update(overrides)
-    return config_models.RuntimeConfig(**params)
+    return config_models.RuntimeConfig.model_validate(params)
 
 
 def _build_trainer_config(
     *, model_block: int, data_block: int, schedule: config_models.LRSchedule
 ) -> config_models.TrainerConfig:
-    return config_models.TrainerConfig(
-        model=config_models.ModelConfig(block_size=model_block),
-        data=config_models.DataConfig(
-            batch_size=1,
-            block_size=data_block,
-            grad_accum_steps=1,
-            ngram_size=1,
-            tokenizer="char",
-        ),
-        optim=config_models.OptimConfig(),
-        schedule=schedule,
-        runtime=_make_runtime(),
-    )
+    payload = {
+        "model": {"block_size": model_block},
+        "data": {
+            "batch_size": 1,
+            "block_size": data_block,
+            "grad_accum_steps": 1,
+            "ngram_size": 1,
+            "tokenizer": "char",
+        },
+        "optim": {},
+        "schedule": schedule.model_dump(),
+        "runtime": _make_runtime().model_dump(),
+    }
+    return config_models.TrainerConfig.model_validate(payload)
 
 
 @settings(max_examples=25, deadline=None, derandomize=True)

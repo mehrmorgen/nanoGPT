@@ -80,7 +80,7 @@ def test_coverage_badge_generates_json_when_missing(
             python: str | None = None,
             no_project: bool = False,
         ) -> ToolResult:
-            if args[:2] == ["coverage", "json"]:
+            if args[:3] == ["python", "-m", "slipcover"]:
                 self._json_target.write_text(
                     '{"totals": {"percent_covered": 75.0}}', encoding="utf-8"
                 )

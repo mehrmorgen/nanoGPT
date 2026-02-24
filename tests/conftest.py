@@ -23,6 +23,15 @@ from tests.support.config_builders import create_metadata_config
 # Set Hypothesis storage directory before any Hypothesis imports or usage
 os.environ["HYPOTHESIS_STORAGE_DIRECTORY"] = ".cache/hypothesis"
 
+# Enable pytest-xdist parallel coverage natively
+if "COVERAGE_PROCESS_START" in os.environ:
+    try:
+        import coverage
+
+        coverage.process_startup()
+    except ImportError:
+        pass
+
 
 # Pyright struggles with pytest's decorator typing when using keyword arguments.
 @pytest.fixture(autouse=True, scope="session")  # type: ignore[arg-type]

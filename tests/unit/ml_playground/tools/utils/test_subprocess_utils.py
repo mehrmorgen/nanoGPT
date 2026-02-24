@@ -278,9 +278,7 @@ class TestRealSubprocessRunner:
         assert "--project" in recorded
         assert str(tmp_path) in recorded
         assert runner.envs[0] is not None
-        assert runner.envs[0]["PYTHONPATH"].split(os.pathsep)[0] == str(
-            tmp_path / "src"
-        )
+        assert "PYTHONPATH" not in runner.envs[0]
 
     def test_run_uv_command_no_project(self) -> None:
         class RecordingRunner(RealSubprocessRunner):

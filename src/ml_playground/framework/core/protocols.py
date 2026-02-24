@@ -5,6 +5,7 @@ from typing import (
     Any,
     ContextManager,
     Dict,
+    Iterable,
     Iterator,
     Literal,
     Mapping,
@@ -43,6 +44,11 @@ __all__ = [
     "ModuleImporter",
     "TestResultExtractor",
     "CoverageDataExtractor",
+    "LitDataset",
+    "LitDatasetModule",
+    "LitModel",
+    "LitModelModule",
+    "LitTypesModule",
 ]
 
 
@@ -205,6 +211,8 @@ class MLflowClient(Protocol):
 
     def set_tag(self, _key: str, _value: object, /) -> None: ...
 
+    def log_text(self, _text: str, _artifact_file: str, /) -> None: ...
+
 
 @runtime_checkable
 class OSModule(Protocol):
@@ -259,6 +267,7 @@ class ModuleImporter(Protocol):
     def import_model_module(self) -> object: ...
 
     def import_types_module(self) -> object: ...
+    def import_api_module(self) -> object: ...
 
 
 @runtime_checkable
@@ -277,3 +286,38 @@ class CoverageDataExtractor(Protocol):
     def extract_totals(self, coverage_data: dict[str, object]) -> dict[str, object]: ...
 
     def get_coverage_percent(self, totals: dict[str, object]) -> float: ...
+
+
+@runtime_checkable
+class LitDataset(Protocol):
+    def spec(self) -> dict[str, object]: ...
+
+    def __len__(self) -> int: ...
+
+    def __iter__(self) -> Iterator[Mapping[str, object]]: ...
+
+
+@runtime_checkable
+class LitDatasetModule(Protocol):
+    Dataset: type[LitDataset]
+
+
+@runtime_checkable
+class LitModel(Protocol):
+    def input_spec(self) -> dict[str, object]: ...
+
+    def output_spec(self) -> dict[str, object]: ...
+
+    def predict(
+        self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
+    ) -> list[Mapping[str, object]]: ...
+
+
+@runtime_checkable
+class LitModelModule(Protocol):
+    Model: type[LitModel]
+
+
+@runtime_checkable
+class LitTypesModule(Protocol):
+    def TextSegment(self) -> object: ...

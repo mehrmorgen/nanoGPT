@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 from pathlib import Path
 from typing import Callable, cast
@@ -8,7 +7,6 @@ from typing import Callable, cast
 import click
 import typer
 
-from ml_playground.framework.configuration import loading as config_loading
 from ml_playground.framework.core.logging_protocol import LoggerLike
 from ml_playground.framework.runtime.core.results import ToolResult
 from ml_playground.framework.runtime.protocols import MetadataConfigLike
@@ -43,7 +41,10 @@ def handle_tool_result(result: ToolResult, learning_mode: bool = False) -> None:
 
 def complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
     """Auto-complete experiment names based on directories with a config.toml."""
-    return config_loading.list_experiments_with_config(incomplete)
+    from ml_playground.framework.runtime.core.bootstrap import get_cli_dependencies
+
+    deps = get_cli_dependencies()
+    return deps.list_experiments(incomplete)
 
 
 def extract_exp_config(ctx: typer.Context) -> Path | None:
@@ -132,8 +133,6 @@ def log_command_status(
     logger: LoggerLike,
 ) -> None:
     """Log known file-based artifacts for the given config."""
-    if dataclasses.is_dataclass(metadata):
-        metadata = dataclasses.replace(metadata)
     try:
         dataset_dir = metadata.dataset_dir
     except (OSError, ValueError, TypeError, AttributeError):

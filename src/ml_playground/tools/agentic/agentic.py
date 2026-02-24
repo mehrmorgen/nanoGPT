@@ -523,7 +523,7 @@ This is a machine learning playground project with the following key components:
 ## Key Principles
 
 1. **No Mocking Policy**: Use dependency injection and lightweight fakes exclusively
-2. **Strict Typing**: All code must pass BasedPyright strict mode
+2. **Strict Typing**: All code must pass strict static type checking
 3. **100% Coverage**: Maintain complete test coverage for all code
 4. **TDD Approach**: Write tests first, implement, then refactor
 
@@ -544,7 +544,7 @@ This is a machine learning playground project with the following key components:
 ## Quality Standards
 
 - Ruff for linting and formatting
-- BasedPyright and MyPy for type checking
+- Pyrefly for strict static type checking
 - Vulture for dead code detection
 - Coverage thresholds enforced in CI
 
@@ -1596,10 +1596,11 @@ This is a machine learning playground project with the following key components:
             if callable(coverage_path_fn):
                 coverage_file = cast(Path, coverage_path_fn())
             else:
-                coverage_file = (
-                    self.root_path / ".cache" / "coverage" / "coverage.sqlite"
-                )
-            if not coverage_file.exists():
+                coverage_file = self.root_path / ".cache" / "coverage" / "coverage.json"
+            legacy_coverage_file = (
+                self.root_path / ".cache" / "coverage" / "coverage.sqlite"
+            )
+            if not coverage_file.exists() and not legacy_coverage_file.exists():
                 return {
                     "status": "not_available",
                     "message": "Run coverage-test to generate data",

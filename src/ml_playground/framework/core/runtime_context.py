@@ -139,7 +139,7 @@ def runtime_context(
 
     device_type = "cuda" if "cuda" in runtime.device else "cpu"
     dtype = _PT_DTYPES[runtime.dtype]
-    ctx: ContextManager[Any] = (
+    ctx: ContextManager[Any] = (  # type: ignore[assignment]
         nullcontext()
         if device_type == "cpu"
         else (

@@ -11,6 +11,7 @@ import importlib
 import json
 from typing import Iterator, Mapping, cast
 
+from ml_playground.framework.core.coverage_data import extract_coverage_totals
 from ml_playground.framework.core.protocols import (
     ConfigSectionExtractor,
     CoverageDataExtractor,
@@ -154,6 +155,9 @@ class DefaultModuleImporter(ModuleImporter):
     def import_types_module(self) -> object:
         return importlib.import_module("lit_nlp.api.types")
 
+    def import_api_module(self) -> object:
+        return importlib.import_module("lit_nlp.api")
+
 
 class DefaultTestResultExtractor(TestResultExtractor):
     """Default implementation for extracting test results."""
@@ -175,10 +179,7 @@ class DefaultCoverageDataExtractor(CoverageDataExtractor):
     """Default implementation for extracting coverage data."""
 
     def extract_totals(self, coverage_data: dict[str, object]) -> dict[str, object]:
-        totals = coverage_data.get("totals", {})
-        if isinstance(totals, dict):
-            return cast(dict[str, object], totals)
-        return {}
+        return cast(dict[str, object], extract_coverage_totals(coverage_data))
 
     def get_coverage_percent(self, totals: dict[str, object]) -> float:
         percent = totals.get("percent_covered", 0.0)

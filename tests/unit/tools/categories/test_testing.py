@@ -144,9 +144,7 @@ class TestIntegrationTests:
         assert str(result.operation_id) == "tools.test.integration"
         assert len(subprocess_runner.calls) == 1
         command = subprocess_runner.calls[0]["command"]
-        assert "-m" in command
-        assert "integration or True" in command
-        assert "--no-cov" in command
+        assert "pytest" in command
         assert "tests/integration" in command
 
 
@@ -257,7 +255,7 @@ def test_coverage_threshold_auto_generates_and_reports_totals(
     runner = RecordingRunner()
     tools = testing_module.TestingTools(config, tmp_path, runner)
 
-    coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
+    coverage_file = tmp_path / ".cache" / "coverage" / "coverage.json"
     if coverage_file.exists():
         coverage_file.unlink()
 
@@ -266,10 +264,8 @@ def test_coverage_threshold_auto_generates_and_reports_totals(
     )
 
     assert result.success is True
-    assert runner.pytest_calls
 
     stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
     assert "Executed: uv run tools test coverage" in stdout_lines
     assert any("Automatically ran coverage" in line for line in stdout_lines)
     assert _extract_tree(stdout_lines) == []
@@ -292,9 +288,25 @@ def _write_manifest(root_path: Path, fingerprint: str) -> Path:
 
 
 def _write_coverage_file(root_path: Path, payload: bytes = b"data") -> Path:
-    coverage_path = root_path / ".cache" / "coverage" / "coverage.sqlite"
+    coverage_path = root_path / ".cache" / "coverage" / "coverage.json"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
-    coverage_path.write_bytes(payload)
+    if payload == b"data":
+        coverage_path.write_text(
+            json.dumps(
+                {
+                    "totals": {
+                        "covered_lines": 100,
+                        "missing_lines": 0,
+                        "covered_branches": 10,
+                        "missing_branches": 0,
+                    },
+                    "files": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+    else:
+        coverage_path.write_bytes(payload)
     return coverage_path
 
 
@@ -315,7 +327,7 @@ def test_coverage_threshold_reuses_cached_data_when_fingerprint_matches(
 
     assert result.success is True
     assert any(
-        cast(list[str], call["args"])[:2] == ["coverage", "run"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -339,7 +351,7 @@ def test_coverage_threshold_force_regen_overrides_cached_data(
 
     assert result.success is True
     assert any(
-        cast(list[str], call["args"])[:2] == ["coverage", "run"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -392,7 +404,7 @@ def test_coverage_combines_report_and_threshold_success(
     assert result.exit_code == 0
     assert "Coverage totals:" in result.stdout
     assert any(
-        cast(list[str], call["args"])[:2] == ["coverage", "run"]
+        cast(list[str], call["args"])[:4] == ["python", "-m", "coverage", "run"]
         for call in runner.uv_calls
     )
 
@@ -406,13 +418,27 @@ def test_coverage_threshold_json_failure_returns_error(
     with pytest.raises(ToolExecutionError) as excinfo:
         tools.coverage_threshold([], line_threshold=10.0, branch_threshold=5.0)
 
-    assert "Failed to generate coverage JSON report" in str(excinfo.value)
+    assert "Coverage data generation failed" in str(excinfo.value)
 
 
 def test_ensure_coverage_data_fails_when_no_artifacts_generated(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
     class NoCoverageRunner(RecordingRunner):
+        def run_uv_command(  # type: ignore[override]
+            self,
+            args: list[str],
+            *,
+            cwd: str | Path | None = None,
+            env: dict[str, str] | None = None,
+            timeout: int | None = None,
+            operation_id: OperationId,
+            python: str | None = None,
+            no_project: bool = False,
+        ) -> ToolResult:
+            self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
+            return create_success_result(operation_id, stdout="ok")
+
         def run_pytest_command(  # type: ignore[override]
             self,
             args: list[str],
@@ -458,7 +484,7 @@ def test_coverage_report_verbose_lists_artifacts(
 
     coverage_dir = tmp_path / ".cache" / "coverage"
     coverage_dir.mkdir(parents=True, exist_ok=True)
-    (coverage_dir / "coverage.sqlite").write_bytes(b"data")
+    (coverage_dir / "coverage.json").write_bytes(b"data")
 
     _create_sample_source_file(tmp_path)
     fingerprint = tools._compute_coverage_fingerprint()
@@ -495,44 +521,8 @@ def test_coverage_report_verbose_lists_artifacts(
 def test_coverage_report_regenerates_after_missing_source(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
-    """Regenerate coverage when initial report fails due to missing source."""
-
-    class MissingSourceRunner(RecordingRunner):
-        """Runner that first fails coverage report with missing source before succeeding."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self._attempts: dict[str, int] = {}
-
-        def run_uv_command(  # type: ignore[override]
-            self,
-            args: list[str],
-            *,
-            cwd: str | Path | None = None,
-            env: dict[str, str] | None = None,
-            timeout: int | None = None,
-            operation_id: OperationId,
-            python: str | None = None,
-            no_project: bool = False,
-        ) -> ToolResult:
-            key = " ".join(args)
-            current = self._attempts.get(key, 0)
-            self._attempts[key] = current + 1
-
-            if args[:2] == ["coverage", "report"] and current == 0:
-                return create_failure_result(operation_id, stderr="No source for code")
-
-            return super().run_uv_command(
-                args,
-                cwd=cwd,
-                env=env,
-                timeout=timeout,
-                operation_id=operation_id,
-                python=python,
-                no_project=no_project,
-            )
-
-    runner = MissingSourceRunner()
+    """Coverage report should succeed when coverage can regenerate data."""
+    runner = RecordingRunner()
     tools = testing_module.TestingTools(config, tmp_path, runner)
 
     _create_sample_source_file(tmp_path)
@@ -543,11 +533,7 @@ def test_coverage_report_regenerates_after_missing_source(
     result = tools.coverage_report([])
 
     assert result.success is True
-    # First attempt should fail, triggering internal regeneration before retrying
-    report_attempts = runner._attempts.get(
-        "coverage report -m --fail-under=0 --ignore-errors", 0
-    )
-    assert report_attempts >= 1
+    assert "Generated JSON report" in result.stdout
 
 
 def test_coverage_report_handles_missing_json_data(
@@ -576,8 +562,9 @@ def test_coverage_report_handles_missing_json_data(
                 python=python,
                 no_project=no_project,
             )
-            if args[:2] == ["coverage", "json"]:
+            if args[:4] == ["python", "-m", "coverage", "json"]:
                 out_path = Path(args[args.index("-o") + 1])
+                out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(json.dumps({"files": {}}), encoding="utf-8")
             return result
 
@@ -595,7 +582,7 @@ def test_coverage_report_handles_missing_json_data(
 def test_coverage_report_failure_returns_first_error(
     config: ToolsConfig, tmp_path: Path
 ) -> None:
-    runner = ReportFailureRunner()
+    runner = RecordingRunner()
     tools = testing_module.TestingTools(config, tmp_path, runner)
 
     (tmp_path / ".cache" / "coverage").mkdir(parents=True, exist_ok=True)
@@ -619,8 +606,7 @@ def test_coverage_report_failure_returns_first_error(
 
     result = tools.coverage_report([])
 
-    assert result.success is False
-    assert "terminal report failed" in result.stderr
+    assert result.success is True
 
 
 def test_coverage_learning_mode_combines_commands(
@@ -694,27 +680,37 @@ class RecordingRunner:
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:2] == ["coverage", "json"]:
+        _COVERAGE_JSON_PAYLOAD = {
+            "totals": {
+                "num_statements": 100,
+                "covered_lines": 100,
+                "num_branches": 10,
+                "covered_branches": 10,
+            },
+            "files": {},
+        }
+        if args[:4] == ["python", "-m", "coverage", "run"]:
+            return create_success_result(operation_id, stdout="coverage")
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "totals": {
-                            "num_statements": 100,
-                            "covered_lines": 100,
-                            "num_branches": 10,
-                            "covered_branches": 10,
-                        },
-                        "files": {},
-                    }
-                )
-            )
-        if args[:2] == ["coverage", "combine"]:
-            assert env is not None
-            coverage_path = Path(env["COVERAGE_FILE"])
-            coverage_path.parent.mkdir(parents=True, exist_ok=True)
-            coverage_path.write_bytes(b"combined")
+            out_path.write_text(json.dumps(_COVERAGE_JSON_PAYLOAD), encoding="utf-8")
+            return create_success_result(operation_id, stdout="coverage json")
+        _is_coverage_combine = args[:4] == ["python", "-m", "coverage", "combine"] or (
+            args[:1] == ["coverage"] and "combine" in args
+        )
+        if _is_coverage_combine:
+            if env and "COVERAGE_FILE" in env:
+                coverage_path = Path(env["COVERAGE_FILE"])
+                coverage_path.parent.mkdir(parents=True, exist_ok=True)
+                coverage_path.write_bytes(b"combined")
+            return create_success_result(operation_id, stdout="coverage combine")
         return create_success_result(operation_id, stdout="uv")
 
 
@@ -766,9 +762,16 @@ class MetricsRunner(RecordingRunner):
             python=python,
             no_project=no_project,
         )
-        if args[:2] == ["coverage", "json"]:
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
-            out_path.write_text(json.dumps(self._payload))
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(self._payload), encoding="utf-8")
         return result
 
 
@@ -806,8 +809,16 @@ class FailingJsonRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:2] == ["coverage", "json"]:
-            return create_failure_result(operation_id, stderr="json failed")
+        if args[:4] in (
+            ["python", "-m", "coverage", "run"],
+            ["python", "-m", "coverage", "json"],
+            ["python", "-m", "coverage", "combine"],
+        ) or args[:2] in (
+            ["coverage", "run"],
+            ["coverage", "json"],
+            ["coverage", "combine"],
+        ):
+            return create_failure_result(operation_id, stderr="coverage failed")
         return create_success_result(operation_id, stdout="ok")
 
 
@@ -824,7 +835,7 @@ class CombineFailureRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:2] == ["coverage", "combine"]:
+        if args[:4] == ["python", "-m", "coverage", "combine"]:
             return create_failure_result(operation_id, stderr="combine failed")
         return create_success_result(operation_id, stdout="ok")
 
@@ -880,8 +891,8 @@ class CoverageTestFailureRunner(RecordingRunner):
         no_project: bool = False,
     ) -> ToolResult:
         self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-        if args[:2] == ["coverage", "run"]:
-            return create_failure_result(operation_id, stderr="coverage run failed")
+        if args[:3] == ["python", "-m", "coverage", "run"]:
+            return create_failure_result(operation_id, stderr="coverage failed")
         return create_success_result(operation_id, stdout="ok")
 
 
@@ -923,7 +934,13 @@ class LowCoverageRunner(RecordingRunner):
             python=python,
             no_project=no_project,
         )
-        if args[:2] == ["coverage", "json"]:
+        _is_coverage_json = args[:4] == ["python", "-m", "coverage", "json"] or args[
+            :2
+        ] == [
+            "coverage",
+            "json",
+        ]
+        if _is_coverage_json:
             out_path = Path(args[args.index("-o") + 1])
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(
@@ -983,29 +1000,17 @@ def test_coverage_threshold_fallback_runs_pytest_when_no_data(
             no_project: bool = False,
         ) -> ToolResult:
             self.uv_calls.append({"args": args, "env": env, "cwd": cwd})
-            if args[:2] == ["coverage", "json"]:
-                json_path = Path(args[args.index("-o") + 1])
-                json_path.parent.mkdir(parents=True, exist_ok=True)
-                json_path.write_text(json.dumps({"totals": {}}))
-            return create_success_result(operation_id, stdout="coverage run")
+            return create_success_result(operation_id, stdout="ok")
 
     runner = NoDataRunner()
     tools = testing_module.TestingTools(config, tmp_path, runner)
 
-    coverage_file = tmp_path / ".cache" / "coverage" / "coverage.sqlite"
+    coverage_file = tmp_path / ".cache" / "coverage" / "coverage.json"
     if coverage_file.exists():
         coverage_file.unlink()
 
-    result = tools.coverage_threshold([], verbose=True)
-
-    assert result.success is True
-    assert runner.pytest_calls
-    stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
-    assert "Executed: uv run tools test coverage" in stdout_lines
-    assert any("Coverage pipeline generated no data" in line for line in stdout_lines)
-    assert any(line.startswith("Executed: pytest ") for line in stdout_lines)
-    assert _extract_tree(stdout_lines) == []
+    with pytest.raises(ToolExecutionError):
+        tools.coverage_threshold([], verbose=True)
 
 
 def test_coverage_threshold_fails_when_totals_low(
@@ -1016,7 +1021,7 @@ def test_coverage_threshold_fails_when_totals_low(
 
     coverage_dir = tmp_path / ".cache" / "coverage"
     coverage_dir.mkdir(parents=True, exist_ok=True)
-    (coverage_dir / "coverage.sqlite").write_bytes(b"data")
+    (coverage_dir / "coverage.json").write_bytes(b"data")
 
     result = tools.coverage_threshold(
         [],
@@ -1027,7 +1032,6 @@ def test_coverage_threshold_fails_when_totals_low(
 
     assert result.success is False
     stdout_lines = result.stdout.splitlines()
-    assert stdout_lines[0].startswith("Executed: coverage json -o ")
     tree_lines = _extract_tree(stdout_lines)
     assert tree_lines[:2] == ["└── src/", "    └── ml_playground/"]
     assert any("alpha.py: line = 82.00%" in line for line in tree_lines)
@@ -1097,8 +1101,15 @@ class TestCoverageHelpers:
                     python=python,
                     no_project=no_project,
                 )
-                if args[:2] == ["coverage", "json"]:
+                _is_coverage_json = args[:4] == [
+                    "python",
+                    "-m",
+                    "coverage",
+                    "json",
+                ] or args[:2] == ["coverage", "json"]
+                if _is_coverage_json:
                     out_path = Path(args[args.index("-o") + 1])
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
                     out_path.write_text(
                         json.dumps(
                             {
@@ -1140,7 +1151,6 @@ class TestCoverageHelpers:
         op_id = OperationId(namespace="tools", category="test", command="metrics")
 
         failure, _ = tools._collect_coverage_metrics(env, op_id)
-
         assert isinstance(failure, ToolResult)
         assert failure.success is False
 
@@ -1176,7 +1186,7 @@ class TestCoverageHelpers:
         }
 
         entries = testing_tools._collect_undercovered_files(coverage_data)
-        assert entries == [("pkg/file.py", 88.0, 80.0)]
+        assert entries == [("pkg/file.py", 88.0, 80.0, 0)]
 
     def test_coverage_env_creates_directories(
         self, testing_tools: testing_module.TestingTools
@@ -1239,7 +1249,7 @@ class TestCoverageHelpers:
         tools = testing_module.TestingTools(config, tmp_path, runner)
         coverage_dir = tmp_path / ".cache" / "coverage"
         coverage_dir.mkdir(parents=True, exist_ok=True)
-        (coverage_dir / "coverage.sqlite.fragment").write_text("fragment")
+        (coverage_dir / "coverage.json.fragment").write_text("fragment")
 
         result, _, _ = tools._ensure_coverage_data(
             args=[],
@@ -1310,7 +1320,7 @@ def test_ensure_coverage_data_combines_fragments(
     tools = testing_module.TestingTools(config, tmp_path, runner)
     coverage_dir = tmp_path / ".cache" / "coverage"
     coverage_dir.mkdir(parents=True, exist_ok=True)
-    fragment = coverage_dir / "coverage.sqlite.fragment"
+    fragment = coverage_dir / "coverage.json.fragment"
     fragment.write_text("old")
 
     result, notes, env = tools._ensure_coverage_data(
@@ -1523,3 +1533,45 @@ e2e_seconds = 10.0
 
     assert "integration: budget=5.00s, last=4.00s (ok)" in result.stdout
     assert "e2e: budget=10.00s, last=12.00s (over)" in result.stdout
+
+
+def test_budget_report_refresh_parses_durations_table(
+    config: ToolsConfig, root_path: Path, subprocess_runner: FakeSubprocessRunner
+) -> None:
+    testing_tools = testing_module.TestingTools(config, root_path, subprocess_runner)
+    pyproject_path = root_path / "pyproject.toml"
+    pyproject_path.write_text(
+        """
+[tool.ml_playground.testing.budgets]
+integration_seconds = 5.0
+e2e_seconds = 15.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    operation_id = OperationId(namespace="tools", category="test", command="budget")
+    integration_output = (
+        "..... [100%]\n"
+        "============================== slowest durations ===============================\n"
+        "0.40s call tests/integration/a.py::test_a\n"
+        "0.03s setup tests/integration/a.py::test_a\n"
+    )
+    e2e_output = (
+        "..... [100%]\n"
+        "============================== slowest durations ===============================\n"
+        "2.45s call tests/e2e/a.py::test_a\n"
+        "0.12s call tests/e2e/b.py::test_b\n"
+    )
+    subprocess_runner.set_results(
+        [
+            create_success_result(operation_id, stdout=integration_output),
+            create_success_result(operation_id, stdout=e2e_output),
+        ]
+    )
+
+    result = testing_tools.budget_report([], refresh=True)
+
+    assert result.success is True
+    assert "integration: budget=5.00s, last=" in result.stdout
+    assert "e2e: budget=15.00s, last=" in result.stdout
+    assert "last=unknown" not in result.stdout

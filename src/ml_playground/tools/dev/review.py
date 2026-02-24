@@ -684,6 +684,14 @@ class ReviewModule:
                     ),
                 )
 
+    def resolve_threads(self, *, fetch: FetchLike, threads: Iterable[str]) -> int:
+        return self._resolve_threads(fetch=fetch, threads=threads)
+
+    def _resolve_threads(self, *, fetch: FetchLike, threads: Iterable[str]) -> int:
+        targets = list(threads)
+        self.bulk_resolve(fetch=fetch, targets=targets)
+        return len(targets)
+
     def load_comment_targets(self, path: Path) -> list[str]:
         import json
 

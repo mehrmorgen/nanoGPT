@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 from ml_playground.framework.core.project_config import get_default_host
 from ml_playground.framework.analysis.lit.integration import (
+    run_server_experiment as _run_server_experiment,
     run_server_bundestag_char as _run_server,
 )
 
@@ -34,6 +35,33 @@ def run_server_bundestag_char(
         _run_server(host=host, port=port, open_browser=open_browser)
 
 
+def run_server_experiment(
+    *,
+    experiment: str,
+    host: str,
+    port: int,
+    open_browser: bool,
+    logger: LoggerLike,
+    _run_server_override: Callable[..., None] | None = None,
+) -> None:
+    """Launch a LIT server for a specific experiment."""
+    if _run_server_override:
+        _run_server_override(
+            experiment=experiment,
+            host=host,
+            port=port,
+            open_browser=open_browser,
+        )
+    else:
+        _run_server_experiment(
+            experiment=experiment,
+            host=host,
+            port=port,
+            open_browser=open_browser,
+            logger=logger,
+        )
+
+
 def main(
     default_host: str | None = None,
     _run_server_override: Callable[..., None] | None = None,
@@ -47,8 +75,12 @@ def main(
         except (ValueError, TypeError):
             default_host = "localhost"
 
-    parser = argparse.ArgumentParser(
-        description="Run LIT server for bundestag_char PoC"
+    parser = argparse.ArgumentParser(description="Run experiment LIT server")
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        default="bundestag_char",
+        help="Experiment name owning the LIT integration",
     )
     parser.add_argument("--host", type=str, default=default_host, help="Host to bind")
     parser.add_argument(
@@ -63,7 +95,8 @@ def main(
     logging.basicConfig(level=logging.INFO)
     cli_logger = logging.getLogger(__name__)
 
-    run_server_bundestag_char(
+    run_server_experiment(
+        experiment=cast(str, args.experiment),
         host=cast(str, args.host),
         port=cast(int, args.port),
         open_browser=cast(bool, args.open_browser),

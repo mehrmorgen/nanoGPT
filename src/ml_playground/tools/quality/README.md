@@ -21,7 +21,7 @@ uv run tools quality lint
 # Run formatting (ruff format)
 uv run tools quality format
 
-# Run type checking (mypy, basedpyright)
+# Run type checking
 uv run tools quality typecheck
 
 # Check for dead code (vulture)
@@ -37,5 +37,5 @@ src/ml_playground/tools/quality/
 ├── formatting.py    # ruff format integration
 ├── linting.py       # ruff lint integration
 ├── quality.py       # main QualityTools class
-└── typing.py        # mypy/basedpyright integration
+└── typing.py        # strict typecheck integration
 ```

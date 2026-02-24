@@ -7,6 +7,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - tools
           - test
           - regression
@@ -31,6 +34,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - yamlfix
           - ".github"
           - "docs"
@@ -42,20 +48,29 @@ repos:
         pass_filenames: false
   - repo: local
     hooks:
-      - id: basedpyright
-        name: basedpyright (strict)
+      - id: typecheck
+        name: typecheck (strict)
         entry: uv
         args:
           - run
-          - basedpyright
-        language: system
-        pass_filenames: false
-      - id: mypy
-        name: mypy
-        entry: uv
-        args:
-          - run
-          - mypy
+          - --no-sync
+          - --project
+          - .
+          - pyrefly
+          - check
+          - --error
+          - redundant-cast
+          - --error
+          - redundant-condition
+          - --error
+          - unnecessary-comparison
+          - --error
+          - unreachable
+          - --error
+          - unused-ignore
+          - --error
+          - deprecated
+          - src/ml_playground
         language: system
         pass_filenames: false
       - id: vulture
@@ -63,6 +78,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - vulture
         language: system
         pass_filenames: false
@@ -73,6 +91,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - tools
           - test
           - coverage-threshold
@@ -84,6 +105,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - tools
           - test
           - integration
@@ -94,6 +118,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - tools
           - test
           - acceptance
@@ -104,6 +131,9 @@ repos:
         entry: uv
         args:
           - run
+          - --no-sync
+          - --project
+          - .
           - tools
           - test
           - e2e

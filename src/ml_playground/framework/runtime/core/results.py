@@ -167,13 +167,6 @@ _CATEGORY_TEMPLATES: dict[str, dict[str, list[str]]] = {
 }
 
 
-_COMMAND_OVERRIDES: dict[tuple[str, str], list[str]] = {
-    ("prepare", "bundestag_char"): [
-        "Converts raw text files into character-level tokens for the bundestag dataset.",
-    ],
-}
-
-
 class LearningModeEngine:
     """Lightweight educational helper for runtime commands."""
 
@@ -198,9 +191,6 @@ class LearningModeEngine:
             info.explanations.append(f"Context: {context}")
             if self.verbosity is VerbosityLevel.COMPREHENSIVE:
                 info.explanations.extend(templates.get("comprehensive", []))
-
-        # Command-specific enrichment
-        info.explanations.extend(_COMMAND_OVERRIDES.get((category, command), []))
 
         if self.verbosity is not VerbosityLevel.MINIMAL:
             info.best_practices.extend(templates.get("practices", []))

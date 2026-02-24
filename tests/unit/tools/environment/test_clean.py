@@ -37,7 +37,7 @@ def test_run_clean_removes_targets(tmp_path: Path) -> None:
     # Fake target modification in run_clean
     # We need to patch run_clean's cache_targets list or similar?
     # No, run_clean defines targets internally.
-    # It cleans: pytest, coverage, hypothesis, pre-commit, ruff, uv, mypy in .cache
+    # It cleans: pytest, coverage, hypothesis, pre-commit, ruff, uv, pyrefly in .cache
     # And build, dist, htmlcov, *.egg-info in root
 
     result = run_clean(config, tmp_path, cache_dir, [], runner)
@@ -136,10 +136,10 @@ def test_run_clean_file_targets(tmp_path: Path) -> None:
     cache_dir.mkdir()
 
     # Create a file where a dir is usually expected
-    (cache_dir / "mypy").write_text("not a dir")
+    (cache_dir / "pyrefly").write_text("not a dir")
 
     result = run_clean(config, tmp_path, cache_dir, [], runner)
 
     assert result.success is True
-    assert not (cache_dir / "mypy").exists()
-    assert "mypy" in result.stdout
+    assert not (cache_dir / "pyrefly").exists()
+    assert "pyrefly" in result.stdout

@@ -41,7 +41,7 @@ def test_format_undercovered_tree_represents_each_file(
         suffix = f"{Path(path).name}: line = {line_pct:.2f}%"
         if branch_pct is not None:
             suffix += f" branch = {branch_pct:.2f}%"
-        assert any(line.strip().endswith(suffix) for line in lines)
+        assert any(line.strip().endswith(f"{suffix} loc = 0") for line in lines)
 
     for line in lines:
         stripped = line.lstrip(" └├│")

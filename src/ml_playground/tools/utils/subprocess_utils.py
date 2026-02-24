@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Protocol, Union, cast
 
@@ -88,7 +89,12 @@ class RealSubprocessRunner:
         # Prepare environment
         run_env = os.environ.copy()
         if env:
-            run_env.update(env)
+            for key, value in env.items():
+                # Allow callers to request an unset for noisy inherited variables.
+                if key == "PYTHONPATH" and value == "":
+                    run_env.pop(key, None)
+                    continue
+                run_env[key] = value
 
         # Convert cwd to Path if string
         if isinstance(cwd, str):
@@ -169,26 +175,35 @@ class RealSubprocessRunner:
             ToolResult with execution details
         """
         # Build uv command
-        command = ["uv", "run"]
         project_root = Path(cwd) if cwd is not None else Path.cwd()
-        uv_env = dict(env) if env is not None else {}
+        uv_env: Dict[str, str] = dict(env) if env is not None else {}
+        if len(args) >= 2 and args[0] == "pyrefly" and args[1] == "check":
+            # uv can inject PYTHONPATH from host/dev-shell environments, which makes
+            # pyrefly's module graph non-deterministic and emits environment warnings.
+            # Force an unset so typecheck behavior stays project-local and repeatable.
+            uv_env["PYTHONPATH"] = ""
+
+        recursion_depth = os.environ.get("UV_RUN_RECURSION_DEPTH", "0")
+        inside_uv = recursion_depth.isdigit() and int(recursion_depth) > 0
+        is_python_module_run = (
+            len(args) >= 3 and args[0] == "python" and args[1] == "-m"
+        )
+        if inside_uv and is_python_module_run:
+            direct_command = [sys.executable, *args[1:]]
+            return self.run_subprocess(
+                direct_command,
+                cwd=cwd,
+                env=uv_env,
+                timeout=timeout,
+                operation_id=operation_id,
+            )
+
+        command = ["uv", "run", "--no-sync"]
 
         if no_project:
             command.append("--no-project")
         else:
             command.extend(["--project", str(project_root)])
-            src_path = project_root / "src"
-            if src_path.is_dir():
-                # Ensure src-layout imports resolve deterministically for spawned tools.
-                existing_pythonpath = uv_env.get("PYTHONPATH") or os.environ.get(
-                    "PYTHONPATH", ""
-                )
-                src_entry = str(src_path)
-                uv_env["PYTHONPATH"] = (
-                    src_entry
-                    if not existing_pythonpath
-                    else f"{src_entry}{os.pathsep}{existing_pythonpath}"
-                )
 
         if python:
             command.extend(["--python", python])
@@ -198,7 +213,7 @@ class RealSubprocessRunner:
         return self.run_subprocess(
             command,
             cwd=cwd,
-            env=uv_env or env,
+            env=uv_env,
             timeout=timeout,
             operation_id=operation_id,
         )

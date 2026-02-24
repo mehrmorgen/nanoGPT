@@ -89,14 +89,13 @@ def test_deadcode_invokes_vulture(args: list[str], tmp_path: Path) -> None:
 @given(  # type: ignore[reportAny]
     args=st.lists(st.text(min_size=1, max_size=4), max_size=2)
 )
-def test_typecheck_runs_both_checkers(args: list[str], tmp_path: Path) -> None:
-    """QualityTools.typecheck should run both basedpyright and mypy."""
+def test_typecheck_runs_pyrefly(args: list[str], tmp_path: Path) -> None:
+    """QualityTools.typecheck should run pyrefly."""
     runner = DeterministicRunner()
     tools = QualityTools(ToolsConfig(), tmp_path, subprocess_runner=runner)
 
     result = tools.typecheck(args)
 
     assert result.success is True or result.success is False
-    commands = [call.args[0] for call in runner.calls if call.kind == "uv"]
-    assert "basedpyright" in commands
-    assert "mypy" in commands
+    uv_calls = [call.args for call in runner.calls if call.kind == "uv"]
+    assert any(call[0:2] == ["pyrefly", "check"] for call in uv_calls)

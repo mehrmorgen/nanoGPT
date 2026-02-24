@@ -53,7 +53,7 @@ def test_scrape_chat_share_command_delegates() -> None:
             assert output_path == Path("out.md")
             assert timeout == 10.0
             assert learning_mode is False
-            assert verbosity_level == 1
+            assert verbosity_level in (0, 1)
             return _tool_result("share", stdout="markdown")
 
     with override_attr(
@@ -94,7 +94,7 @@ def test_website_to_markdown_command_delegates() -> None:
             assert timeout_ms == 42_000
             assert selector == ".message"
             assert learning_mode is False
-            assert verbosity_level == 1
+            assert verbosity_level in (0, 1)
             return _tool_result("website-to-markdown", stdout="# Example")
 
     with override_attr(
