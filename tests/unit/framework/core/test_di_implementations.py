@@ -96,4 +96,6 @@ def test_default_coverage_data_extractor() -> None:
 def test_extract_totals_non_dict() -> None:
     """extract_totals returns {} when totals value is not a dict."""
     extractor = DefaultCoverageDataExtractor()
-    assert extractor.extract_totals({"totals": "not-a-dict"}).get("num_statements") == 0.0
+    assert (
+        extractor.extract_totals({"totals": "not-a-dict"}).get("num_statements") == 0.0
+    )
