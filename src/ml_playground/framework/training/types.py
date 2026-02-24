@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Literal, Protocol
+from typing import Any, Callable, Literal, Protocol
 
 import torch
 
@@ -50,13 +50,10 @@ class OptimizerLike(Protocol):
 
     param_groups: list[dict[str, object]]
 
-    def state_dict(self) -> dict[str, object]: ...
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None: ...
-
-    def zero_grad(self, *, set_to_none: bool = True) -> None: ...  # noqa: F841
-
-    def step(self) -> None: ...
+    state_dict: Callable[..., Any]
+    load_state_dict: Callable[..., Any]
+    zero_grad: Callable[..., Any]
+    step: Callable[..., Any]
 
 
 class BatchProvider(Protocol):

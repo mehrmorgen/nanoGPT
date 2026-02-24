@@ -141,13 +141,16 @@ def setup_runtime(
 
     device_type = "cuda" if "cuda" in cfg.runtime.device else "cpu"
     dtype = _PT_DTYPES[cfg.runtime.dtype]
-    ctx: ContextManager[Any] = (
+    ctx: ContextManager[Any] = (  # type: ignore[assignment]
         nullcontext()
         if device_type == "cpu"
-        else (
-            autocast_func(device_type, dtype)
-            if autocast_func is not None
-            else autocast(device_type=device_type, dtype=dtype)
+        else cast(
+            ContextManager[Any],
+            (
+                autocast_func(device_type, dtype)
+                if autocast_func is not None
+                else autocast(device_type=device_type, dtype=dtype)
+            ),
         )
     )
     return RuntimeContext(device_type=device_type, autocast_context=ctx)

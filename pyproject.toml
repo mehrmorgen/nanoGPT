@@ -30,11 +30,11 @@ dependencies = [
     "toml>=0.10.2",
     "hatchling>=1.27.0",
     "pip >= 25.3",
-    "torch==2.10.0+cpu; platform_system == 'Linux' and platform_machine == 'x86_64' and python_version < '3.13'",
-    "torch==2.10.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
-    "torch==2.10.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
-    "torch==2.10.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
-    "torch==2.10.0; platform_system == 'Windows'",
+    "torch==2.6.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "torch==2.6.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
+    "torch==2.6.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+    "torch==2.6.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "torch==2.6.0; platform_system == 'Windows'",
     "transformers==4.57.1",
     "peft>=0.17.1",
     "tensorboard>=2.20.0",
@@ -68,7 +68,7 @@ explicit = true
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", marker = "platform_system == 'Linux' and platform_machine == 'x86_64' and python_version < '3.13'" },
+    { index = "pytorch-cpu", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
 ]
 
 [tool.ml_playground.cache]
