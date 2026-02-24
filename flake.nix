@@ -37,7 +37,7 @@
             export HYPOTHESIS_DATABASE_DIRECTORY=".cache/hypothesis"
 
             echo "[nix] dev shell ready (python: $(${python}/bin/python3.13 --version 2>&1))"
-            echo "[nix] run: uv sync --group all && uv pip install -e ."
+            echo "[nix] run: uv sync --group all"
           '';
         };
       }

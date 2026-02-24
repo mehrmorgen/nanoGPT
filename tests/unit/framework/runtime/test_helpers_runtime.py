@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, cast
+from typing import cast
 
 import typer
 from pytest import LogCaptureFixture
 
 from ml_playground.framework.runtime import helpers
-
-
-@contextmanager
-def override_attr(obj: object, name: str, value: Any) -> Iterator[None]:
-    original = getattr(obj, name)
-    object.__setattr__(obj, name, value)
-    try:
-        yield
-    finally:
-        object.__setattr__(obj, name, original)
+from ml_playground.framework.runtime.core.bootstrap import (
+    CLIDependencies,
+    override_cli_dependencies,
+)
 
 
 class _ListLogger:
@@ -43,16 +36,15 @@ class _ListLogger:
         self.messages.append(str(msg))
 
 
-def test_complete_experiments_delegates_to_loader() -> None:
+def test_complete_experiments_delegates_to_deps() -> None:
     captured: list[str] = []
 
     def fake_list(incomplete: str) -> list[str]:
         captured.append(incomplete)
         return ["a", "b"]
 
-    with override_attr(
-        helpers.config_loading, "list_experiments_with_config", fake_list
-    ):
+    deps = CLIDependencies(list_experiments=fake_list)
+    with override_cli_dependencies(deps):
         ctx = cast(typer.Context, object())
         assert helpers.complete_experiments(ctx=ctx, incomplete="demo") == [
             "a",

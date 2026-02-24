@@ -574,8 +574,8 @@ def test_global_options_sets_exp_config(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("[section]\nvalue=1\n", encoding="utf-8")
 
-    # Call _apply_global_options directly as global_options is now only a Typer callback
-    cli_main._apply_global_options(
+    # Call apply_global_options directly as global_options is now only a Typer callback
+    cli_main.apply_global_options(
         ctx, exp_config=cfg_path, learning_mode=False, verbosity=1
     )
 

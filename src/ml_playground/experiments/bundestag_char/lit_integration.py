@@ -5,43 +5,24 @@ import sys
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from types import ModuleType
-from typing import Protocol, cast
+from typing import Protocol
 
+from ml_playground.framework.runtime import protocols
 from ml_playground.framework.core.logging_protocol import LoggerLike
 from ml_playground.framework.core.project_config import get_default_host
+from ml_playground.framework.core.protocols import (
+    LitDataset,
+    LitDatasetModule,
+    LitModel,
+    LitModelModule,
+    LitTypesModule,
+)
 
 
-class LitDataset(Protocol):
-    def spec(self) -> dict[str, object]: ...
-
-    def __len__(self) -> int: ...
-
-    def __iter__(self) -> Iterable[Mapping[str, object]]: ...
-
-
-class LitDatasetModule(Protocol):
-    Dataset: type[LitDataset]
-
-
-class LitModel(Protocol):
-    def input_spec(self) -> dict[str, object]: ...
-
-    def output_spec(self) -> dict[str, object]: ...
-
-    def predict(
-        self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
-    ) -> list[Mapping[str, object]]: ...
-
-
-class LitModelModule(Protocol):
-    Model: type[LitModel]
-
-
-class LitTypesModule(Protocol):
-    def TextSegment(self) -> object: ...
-
-
+@protocols.runtime_checkable
 class LitServerFactory(Protocol):
+    """Protocol for the LIT server factory."""
+
     def __call__(
         self,
         models: dict[str, LitModel],
@@ -60,10 +41,13 @@ def run_server_bundestag_char(
     | None = None,
     _server_importer_override: Callable[[], ModuleType] | None = None,
     _path_resolver_override: Callable[[Path], Path] | None = None,
+    _get_default_host_override: Callable[[], str | None] | None = None,
 ) -> None:
     """Launch a minimal LIT server for the bundestag_char PoC."""
     if host is None:
-        host = get_default_host()
+        host = (
+            _get_default_host_override() if _get_default_host_override else None
+        ) or get_default_host()
 
     if logger is None:
         logger = logging.getLogger(__name__)
@@ -107,10 +91,16 @@ def run_server_bundestag_char(
         exp_dir = resolved.parent
         input_path = exp_dir / "datasets" / "input.txt"
         if input_path.exists():
-            text = input_path.read_text(encoding="utf-8", errors="ignore")
-            file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            file_lines: list[str] = []
+            with input_path.open("r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    ln = line.strip()
+                    if ln:
+                        file_lines.append(ln)
+                    if len(file_lines) >= 10:
+                        break
             if file_lines:
-                samples = file_lines[:10]
+                samples = file_lines
     except (OSError, UnicodeError):
         pass
 
@@ -152,8 +142,7 @@ def run_server_bundestag_char(
         server_factory_obj = getattr(server_module, "Server", None)
         if not callable(server_factory_obj):
             raise RuntimeError("LIT server module does not expose a Server factory")
-        server_factory = cast(LitServerFactory, server_factory_obj)
-        app = server_factory(models, datasets)
+        app = server_factory_obj(models, datasets)
     except (
         TypeError,
         AttributeError,
@@ -200,6 +189,7 @@ def run_server(
     | None = None,
     _server_importer_override: Callable[[], ModuleType] | None = None,
     _path_resolver_override: Callable[[Path], Path] | None = None,
+    _get_default_host_override: Callable[[], str | None] | None = None,
 ) -> None:
     """Preferred generic experiment LIT entrypoint."""
     run_server_bundestag_char(
@@ -210,4 +200,5 @@ def run_server(
         _loader_override=_loader_override,
         _server_importer_override=_server_importer_override,
         _path_resolver_override=_path_resolver_override,
+        _get_default_host_override=_get_default_host_override,
     )

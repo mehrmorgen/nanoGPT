@@ -2,51 +2,42 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional, cast
+from typing import Annotated, Any, Callable, Optional, cast
 
 import click
 import typer
-from typer.main import get_command
 
-from ml_playground.framework.configuration import loading as config_loading
-from ml_playground.framework.experiment_registry import registry
-from ml_playground.framework.runtime.core.bootstrap import CLIDependencies
+from ml_playground.framework.runtime import helpers
 from ml_playground.framework.runtime.core.results import (
     LearningModeEngine,
     VerbosityLevel,
 )
-from ml_playground.framework.core.project_config import get_default_host
 
-from .typer_helpers import extract_exp_config
 from .runners import (
-    create_default_cli_dependencies,
     get_cli_dependencies,
     run_prepare_cmd,
     run_sample_cmd,
     run_train_cmd,
 )
-from .typer_helpers import run_or_exit
+
+_CONTEXT_HOOK: Callable[..., Any] = click.get_current_context
+
+
+def set_click_context_hook(hook: Callable[..., Any]) -> None:
+    global _CONTEXT_HOOK
+    _CONTEXT_HOOK = hook
+
+
+def reset_click_context_hook() -> None:
+    set_click_context_hook(click.get_current_context)
+
 
 EXPERIMENT_HELP = "Experiment name (directory in src/ml_playground/experiments)"
 
-
-def _complete_experiments(incomplete: str) -> List[str]:
-    return config_loading.list_experiments_with_config(incomplete)
-
-
-ExperimentArg = Annotated[
-    str,
-    typer.Argument(help=EXPERIMENT_HELP, autocompletion=_complete_experiments),
-]
-
 app = typer.Typer(
-    invoke_without_command=True,
-    no_args_is_help=False,
-    help=(
-        "ML Playground CLI: prepare data, train models, sample outputs, and export models.\n"
-        "This CLI loads and validates TOML configs and injects the resulting configuration\n"
-        "objects into experiment code. Experiments must not read TOML directly."
-    ),
+    help="ML Playground CLI",
+    no_args_is_help=True,
+    add_completion=True,
 )
 
 
@@ -57,44 +48,50 @@ def global_options(
         Optional[Path],
         typer.Option(
             "--exp-config",
-            help=(
-                "Path to an experiment-specific config TOML. When provided, it replaces "
-                "the experiment's config.toml. default_config.toml is still loaded first."
-            ),
+            "-c",
+            help="Path to experiment config TOML (relative to experiment dir or absolute)",
+            exists=False,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
         ),
     ] = None,
     learning_mode: Annotated[
         bool,
         typer.Option(
             "--learning-mode",
-            help="Enable educational explanations for ML workflow operations",
+            "-l",
+            help="Enable learning mode (active research/development)",
         ),
     ] = False,
     verbosity: Annotated[
         int,
         typer.Option(
-            "--verbosity",
+            "--verbose",
             "-v",
-            help="Learning mode verbosity: 0=minimal, 1=standard, 2=comprehensive",
-            min=0,
+            count=True,
+            help="Show more output. Can be used twice (up to -vv).",
             max=2,
         ),
     ] = 1,
 ) -> None:
     """Global options applied to all subcommands."""
-    _apply_global_options(
+    apply_global_options(
         ctx,
-        exp_config,
-        learning_mode,
-        verbosity,
+        exp_config=exp_config,
+        learning_mode=learning_mode,
+        verbosity=verbosity,
     )
 
 
-def _apply_global_options(
+def apply_global_options(
     ctx: typer.Context,
-    exp_config: Path | None,
-    learning_mode: bool,
-    verbosity: int | VerbosityLevel,
+    exp_config: Annotated[
+        Optional[Path], typer.Option(help="Path to config TOML")
+    ] = None,
+    learning_mode: Annotated[bool, typer.Option(help="Enable learning mode")] = False,
+    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ) -> None:
     """Shared global options handler used by Typer callback and programmatic callers."""
 
@@ -106,225 +103,188 @@ def _apply_global_options(
             msg = f"Config file not found: {exp_config}"
             logger.error(msg)
             echo(msg, err=True)
-            raise typer.Exit(2)
-        if not exp_config.is_file():
-            msg = f"Config path is not a file: {exp_config}"
-            logger.error(msg)
-            echo(msg, err=True)
-            raise typer.Exit(2)
+            raise typer.Exit(code=2)
 
-    root_logger = logging.getLogger()
-    if not root_logger.handlers:
-        logging.basicConfig(level=logging.INFO, format="%(message)s")
-
-    try:
-        ctx.ensure_object(dict)
-    except (AttributeError, TypeError):
-        return
-
-    if not isinstance(ctx.obj, dict):
+    # Standardize on a dict object for the context
+    if ctx.obj is None:
         ctx.obj = {}
 
-    ctx_dict = cast(Dict[str, Any], ctx.obj)
+    if not isinstance(ctx.obj, dict):
+        try:
+            ctx.ensure_object(dict)
+        except (AttributeError, TypeError):
+            # Fallback for mock objects in tests
+            if ctx.obj is None:
+                ctx.obj = {}
+
+    ctx_dict = cast(dict[str, Any], ctx.obj)
 
     verbosity_level = (
         verbosity
         if isinstance(verbosity, VerbosityLevel)
-        else VerbosityLevel(verbosity)
+        else VerbosityLevel(min(2, max(0, verbosity)))
     )
 
     ctx_dict["exp_config"] = exp_config
-    if learning_mode:
-        ctx_dict["learning_mode"] = True
+    ctx_dict["learning_mode"] = learning_mode
     if verbosity_level != VerbosityLevel.STANDARD:
         ctx_dict["verbosity"] = verbosity_level
 
-    try:
-        context = click.get_current_context(silent=True)
-    except (TypeError, RuntimeError):
-        context = click.get_current_context()
 
-    if context is not None and getattr(context, "invoked_subcommand", None) is None:
-        echo("Welcome to ML Playground runtime CLI!", err=True)
-        echo(
-            "No workflow command was provided. Try `uv run ml-playground prepare <experiment>`.",
-            err=True,
-        )
-        echo("", err=True)
-        help_text: str = cast(str, getattr(context, "get_help", lambda: "")())
-        if help_text:
-            echo(help_text, err=True)
-        raise typer.Exit(2)
-
-
-def _deps_from_ctx(ctx: typer.Context) -> CLIDependencies:
-    obj = getattr(ctx, "obj", None)
-    if isinstance(obj, dict):
-        typed_obj = cast(dict[str, object], obj)
-        deps: object = typed_obj.get("cli_deps")
-        if deps:
-            return cast(CLIDependencies, deps)
-    return get_cli_dependencies()
+_apply_global_options = apply_global_options
 
 
 @app.command()
-def prepare(ctx: typer.Context, experiment: ExperimentArg) -> None:
-    exp_config_path = extract_exp_config(ctx)
-    learning_mode, learning_engine = _learning_from_ctx(ctx)
-    deps = _deps_from_ctx(ctx)
-    run_or_exit(
-        lambda: run_prepare_cmd(
-            experiment, exp_config_path, deps, learning_engine, learning_mode
-        ),
-        keyboard_interrupt_msg="Data preparation cancelled",
+def prepare(
+    ctx: typer.Context,
+    experiment: Annotated[str, typer.Argument(help=EXPERIMENT_HELP)],
+) -> None:
+    """Run data preparation for an experiment."""
+    deps = get_cli_dependencies()
+    exp_config, learning_mode, _, engine = deps_from_ctx(ctx)
+
+    run_prepare_cmd(
+        experiment,
+        exp_config,
+        deps,
+        learning_mode=learning_mode,
+        learning_engine=engine,
     )
 
 
 @app.command()
-def train(ctx: typer.Context, experiment: ExperimentArg) -> None:
-    exp_config_path = extract_exp_config(ctx)
-    learning_mode, learning_engine = _learning_from_ctx(ctx)
-    deps = _deps_from_ctx(ctx)
-    run_or_exit(
-        lambda: run_train_cmd(
-            experiment, exp_config_path, deps, learning_engine, learning_mode
-        ),
-        keyboard_interrupt_msg="Training cancelled",
+def train(
+    ctx: typer.Context,
+    experiment: Annotated[str, typer.Argument(help=EXPERIMENT_HELP)],
+) -> None:
+    """Run model training for an experiment."""
+    deps = get_cli_dependencies()
+    exp_config, learning_mode, _, engine = deps_from_ctx(ctx)
+
+    run_train_cmd(
+        experiment,
+        exp_config,
+        deps,
+        learning_mode=learning_mode,
+        learning_engine=engine,
     )
 
 
 @app.command()
-def sample(ctx: typer.Context, experiment: ExperimentArg) -> None:
-    exp_config_path = extract_exp_config(ctx)
-    learning_mode, learning_engine = _learning_from_ctx(ctx)
-    deps = _deps_from_ctx(ctx)
-    run_or_exit(
-        lambda: run_sample_cmd(
-            experiment, exp_config_path, deps, learning_engine, learning_mode
-        ),
-        keyboard_interrupt_msg="Sampling cancelled",
+def sample(
+    ctx: typer.Context,
+    experiment: Annotated[str, typer.Argument(help=EXPERIMENT_HELP)],
+) -> None:
+    """Run model sampling for an experiment."""
+    deps = get_cli_dependencies()
+    exp_config, learning_mode, _, engine = deps_from_ctx(ctx)
+
+    run_sample_cmd(
+        experiment,
+        exp_config,
+        deps,
+        learning_mode=learning_mode,
+        learning_engine=engine,
     )
-
-
-def _get_default_host() -> str:
-    try:
-        return get_default_host()
-    except (ValueError, TypeError):
-        return "127.0.0.1"
 
 
 @app.command()
 def analyze(
     ctx: typer.Context,
-    experiment: ExperimentArg,
-    host: str = typer.Option(
-        default_factory=_get_default_host,
-        help="Host for the analysis server (not implemented)",
-    ),
-    port: int = typer.Option(
-        8050, help="Port for the analysis server (not implemented)"
-    ),
-    open_browser: bool = typer.Option(
-        True, help="Whether to open the browser automatically (not implemented)"
-    ),
+    experiment: Annotated[str, typer.Argument(help=EXPERIMENT_HELP)],
+    host: Annotated[str, typer.Option(help="Server host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Server port")] = 5432,
+    open_browser: Annotated[
+        bool, typer.Option(help="Open browser automatically")
+    ] = False,
 ) -> None:
-    # TODO Remove placeholder: implement analysis server (e.g., Dash/Plotly) that visualizes
-    # training and sampling artifacts; should stream from experiment outputs and optionally
-    # auto-open a browser when ready.
-    learning_mode, learning_engine = _learning_from_ctx(ctx)
-    deps = _deps_from_ctx(ctx)
+    """Run interactive analysis (e.g. LIT) for an experiment."""
+    deps = get_cli_dependencies()
+    _, learning_mode, _, engine = deps_from_ctx(ctx)
 
-    run_or_exit(
-        lambda: deps.handle_tool_result(
-            deps.run_analyze(experiment, host, port, open_browser, learning_engine),
-            learning_mode,
-        ),
-        keyboard_interrupt_msg=f"Analysis for {experiment} cancelled by user",
+    result = deps.run_analyze(
+        experiment,
+        host,
+        port,
+        open_browser,
+        engine,
     )
+    deps.handle_tool_result(result, learning_mode)
 
 
-def _learning_from_ctx(ctx: typer.Context) -> tuple[bool, LearningModeEngine | None]:
-    # Use getattr to avoid Any tracking on ctx.obj
-    ctx_obj_raw: object = getattr(ctx, "obj", None)
+def complete_experiments(incomplete: str) -> list[str]:
+    """Typer shell completion for experiment names."""
+    deps = get_cli_dependencies()
+    return deps.list_experiments(incomplete)
 
-    learning_mode: bool = False
-    verbosity_raw: object = VerbosityLevel.STANDARD
-    injected_engine: LearningModeEngine | None = None
+
+def deps_from_ctx(
+    ctx: typer.Context,
+) -> tuple[Optional[Path], bool, VerbosityLevel, Optional[LearningModeEngine]]:
+    """Extract standard global options from context."""
+    ctx_obj_raw = getattr(ctx, "obj", None)
+    exp_config = None
+    learning_mode = False
+    verbosity = VerbosityLevel.STANDARD
+    injected_engine = None
 
     # Support both dict and objects with attributes
     if isinstance(ctx_obj_raw, dict):
-        ctx_dict = cast(Dict[str, object], ctx_obj_raw)
+        ctx_dict = cast(dict[str, object], ctx_obj_raw)
         learning_mode = bool(ctx_dict.get("learning_mode", False))
         verbosity_raw = ctx_dict.get("verbosity", VerbosityLevel.STANDARD)
         injected_engine = cast(
             Optional[LearningModeEngine], ctx_dict.get("learning_engine")
         )
-    elif ctx_obj_raw is not None:
-        learning_mode = bool(getattr(ctx_obj_raw, "learning_mode", False))
-        verbosity_raw = getattr(ctx_obj_raw, "verbosity", VerbosityLevel.STANDARD)
-        injected_engine = cast(
-            Optional[LearningModeEngine], getattr(ctx_obj_raw, "learning_engine", None)
-        )
+        exp_config = cast(Optional[Path], ctx_dict.get("exp_config"))
+    else:
+        # Fallback to extract from context if ctx.obj hasn't been populated by callback properly
+        exp_config = helpers.extract_exp_config(ctx)
+        learning_mode = False
+        verbosity_raw = VerbosityLevel.STANDARD
+        injected_engine = None
 
-    if injected_engine is not None:
-        if not issubclass(type(injected_engine), LearningModeEngine):
-            raise TypeError("learning_engine must be a LearningModeEngine")
-        return learning_mode, injected_engine
-
-    verbosity: VerbosityLevel
     if isinstance(verbosity_raw, VerbosityLevel):
         verbosity = verbosity_raw
-    else:
-        try:
-            verbosity = VerbosityLevel(verbosity_raw)
-        except (ValueError, TypeError):
-            verbosity = VerbosityLevel.STANDARD
+    elif isinstance(verbosity_raw, int):
+        verbosity = VerbosityLevel(min(2, max(0, verbosity_raw)))
 
-    learning_engine = LearningModeEngine(verbosity) if learning_mode else None
-    return learning_mode, learning_engine
+    return exp_config, learning_mode, verbosity, injected_engine
 
 
-def main(argv: list[str] | None = None) -> int | None:
-    """Programmatic entry point used by tests; returns status instead of exiting."""
-    registry.load_preparers()
-    cmd = get_command(app)
-    if argv is not None and len(argv) == 0:
-        raise click.exceptions.NoArgsIsHelpError(click.Context(cmd))
-    main_fn_raw: object = getattr(cmd, "main", None)
-    if callable(main_fn_raw):
-        res: object = main_fn_raw(args=argv or [], standalone_mode=False)
-        return cast(Optional[int], res)
-    return None
+def main(*args: Any, **kwargs: Any) -> None:
+    """Project-level entry point for runtime CLI.
+
+    Supports both console_script execution (no args) and e2e test calls (with args).
+    """
+    try:
+        if args:
+            # Typer app expects either no args (uses sys.argv) or a list of strings
+            if len(args) == 1 and isinstance(args[0], list):
+                app(args[0])
+            else:
+                app(list(args))
+        else:
+            app()
+    except SystemExit as exc:
+        if args:
+            # For programmatic calls, only re-raise if it's an actual error
+            if exc.code != 0:
+                raise
+        else:
+            # For console_script, always re-raise to ensure correct exit code
+            raise
 
 
 def main_entry() -> None:
-    """Console entry point wrapping the Typer application."""
-    deps = create_default_cli_dependencies()
-    echo_fn = cast(Any, deps.echo if deps.echo is not None else typer.echo)  # type: ignore[reportAny]
-    try:
-        app()  # type: ignore[reportAny]
-    except (typer.Exit, click.exceptions.Exit):
-        # Preserve explicit Typer/Click exit codes
-        raise
-    except KeyboardInterrupt:
-        if echo_fn is not None:
-            echo_fn("\nOperation cancelled by user", err=True)
-        raise typer.Exit(1)
-    except Exception as exc:
-        if echo_fn is not None:
-            echo_fn(f"Runtime CLI execution failed: {exc}", err=True)
-        raise typer.Exit(1) from exc
+    """Canonical entry point alias for pyproject.toml."""
+    main()
+
+
+def get_command(app: typer.Typer) -> Any:
+    """Get click command from Typer app (for testing)."""
+    return typer.main.get_command(app)
 
 
 if __name__ == "__main__":
-    main_entry()
-
-__all__ = [
-    "app",
-    "main",
-    "main_entry",
-    "prepare",
-    "train",
-    "sample",
-    "analyze",
-]
+    main()

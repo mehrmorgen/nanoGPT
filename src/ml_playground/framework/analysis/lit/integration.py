@@ -10,6 +10,7 @@ from typing import Protocol, cast
 from ml_playground.framework.core.di_implementations import DefaultModuleImporter
 from ml_playground.framework.core.logging_protocol import LoggerLike
 from ml_playground.framework.core.project_config import get_default_host
+from ml_playground.framework.core.protocols import ModuleImporter
 
 WSGIApp = Callable[..., Iterable[bytes]]
 
@@ -44,9 +45,12 @@ class LitTypesModule(Protocol):
     def TextSegment(self) -> object: ...
 
 
-def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
+def _load_lit_components(
+    importer: ModuleImporter | None = None,
+) -> tuple[LitDatasetModule, LitModelModule, LitTypesModule]:
+    importer = importer or DefaultModuleImporter()
     try:
-        importlib.import_module("lit_nlp.api")
+        importer.import_api_module()
     except ImportError as exc:
         message = (
             "LIT dependencies are unavailable. Install lit-nlp in an isolated environment "
@@ -55,10 +59,9 @@ def _load_lit_components() -> tuple[LitDatasetModule, LitModelModule, LitTypesMo
         )
         raise RuntimeError(message) from exc
 
-    module_importer = DefaultModuleImporter()
-    dataset_mod = cast(LitDatasetModule, module_importer.import_dataset_module())
-    model_mod = cast(LitModelModule, module_importer.import_model_module())
-    types_mod = cast(LitTypesModule, module_importer.import_types_module())
+    dataset_mod = cast(LitDatasetModule, importer.import_dataset_module())
+    model_mod = cast(LitModelModule, importer.import_model_module())
+    types_mod = cast(LitTypesModule, importer.import_types_module())
     return dataset_mod, model_mod, types_mod
 
 
@@ -70,7 +73,9 @@ class LitServerFactory(Protocol):
     ) -> object: ...
 
 
-def _import_lit_server() -> ModuleType:
+def _import_lit_server(
+    import_fn: Callable[[str], ModuleType] = importlib.import_module,
+) -> ModuleType:
     paths = (
         "lit_nlp.server",
         "lit_nlp.dev_server",
@@ -80,12 +85,12 @@ def _import_lit_server() -> ModuleType:
     last_err: Exception | None = None
     for candidate in paths:
         try:
-            return importlib.import_module(candidate)
+            return import_fn(candidate)
         except (ImportError, ModuleNotFoundError) as err:
             last_err = err
 
     try:
-        lit_pkg = importlib.import_module("lit_nlp")
+        lit_pkg = import_fn("lit_nlp")
         lit_ver = getattr(lit_pkg, "__version__", "<unknown>")
         ver_msg = f"(detected lit-nlp version: {lit_ver})"
     except (ImportError, AttributeError):
@@ -201,19 +206,20 @@ def run_server_bundestag_char(
     )
 
 
-def _parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
-    parser = argparse.ArgumentParser(description="Run experiment LIT server")
+def _parse_cli_args(
+    argv: Sequence[str] | None = None,
+    parser_factory: Callable[..., argparse.ArgumentParser] = argparse.ArgumentParser,
+) -> tuple[str, int, bool]:
+    parser = parser_factory(description="Run experiment LIT server")
     try:
         default_host = get_default_host()
     except (ValueError, TypeError):
         default_host = "127.0.0.1"
-    _host_arg = parser.add_argument(
-        "--host", type=str, default=default_host, help="Host to bind"
-    )
-    _port_arg = parser.add_argument(
+    parser.add_argument("--host", type=str, default=default_host, help="Host to bind")
+    parser.add_argument(
         "--port", type=int, default=5432, help="Port to bind (0 for auto)"
     )
-    _open_browser_arg = parser.add_argument(
+    parser.add_argument(
         "--open-browser", action="store_true", help="Open browser on start"
     )
     namespace = parser.parse_args(argv)
@@ -249,9 +255,12 @@ def import_lit_server() -> ModuleType:
     return _import_lit_server()
 
 
-def parse_cli_args(argv: Sequence[str] | None = None) -> tuple[str, int, bool]:
+def parse_cli_args(
+    argv: Sequence[str] | None = None,
+    parser_factory: Callable[..., argparse.ArgumentParser] = argparse.ArgumentParser,
+) -> tuple[str, int, bool]:
     """Public entry to parse CLI args for the lit server."""
-    return _parse_cli_args(argv)
+    return _parse_cli_args(argv, parser_factory=parser_factory)
 
 
 __all__ = [

@@ -155,6 +155,9 @@ class DefaultModuleImporter(ModuleImporter):
     def import_types_module(self) -> object:
         return importlib.import_module("lit_nlp.api.types")
 
+    def import_api_module(self) -> object:
+        return importlib.import_module("lit_nlp.api")
+
 
 class DefaultTestResultExtractor(TestResultExtractor):
     """Default implementation for extracting test results."""
